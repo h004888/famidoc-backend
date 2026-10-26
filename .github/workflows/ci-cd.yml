@@ -1,0 +1,109 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+    branches:
+      - main
+      - dev
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  quality-check:
+    name: 🧪 Quality Gates (Lint, Test, Build)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout mã nguồn
+        uses: actions/checkout@v4
+
+      - name: Cài đặt Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Cài đặt dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Kiểm tra Lint (oxlint)
+        run: npm run lint
+
+      - name: Chạy Unit Tests
+        run: npm test -- --forceExit
+
+      - name: Biên dịch NestJS (Build check)
+        run: npm run build
+
+  build-and-deploy:
+    name: 🚀 Build Docker Image & Deploy Dokploy
+    needs: quality-check
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout mã nguồn
+        uses: actions/checkout@v4
+
+      - name: Chuẩn hóa tên image repository viết thường
+        id: image-name
+        run: |
+          REPO_NAME="${{ github.repository }}"
+          echo "IMAGE_NAME=ghcr.io/${REPO_NAME,,}" >> $GITHUB_OUTPUT
+
+      - name: Thiết lập Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Đăng nhập vào GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tạo Docker Metadata & Tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image-name.outputs.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,format=short
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' }}
+
+      - name: Build và Push Docker Image lên GHCR
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Kích hoạt Dokploy Deploy Webhook
+        if: ${{ env.DOKPLOY_WEBHOOK != '' }}
+        env:
+          DOKPLOY_WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK_URL }}
+        run: |
+          echo "📡 Đang kích hoạt Dokploy Redeploy qua Webhook..."
+          curl -f -s -X POST \
+            -H "X-GitHub-Event: push" \
+            -H "Content-Type: application/json" \
+            -d "{\"ref\":\"${{ github.ref }}\"}" \
+            "$DOKPLOY_WEBHOOK" || {
+              echo "⚠️ Không thể gọi Dokploy Webhook hoặc Webhook chưa cấu hình."
+              exit 1
+            }
+          echo "✅ Đã gửi tín hiệu deploy thành công tới Dokploy."
