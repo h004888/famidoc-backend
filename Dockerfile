@@ -1,9 +1,10 @@
 # Stage 1: Builder
-FROM node:20-alpine AS builder
+FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl
+# Cài đặt OpenSSL cần thiết cho Prisma
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -16,11 +17,12 @@ RUN npx prisma generate
 RUN npm run build
 
 # Stage 2: Runner
-FROM node:20-alpine AS runner
+FROM node:20-bookworm-slim AS runner
 
 WORKDIR /app
 
-RUN apk add --no-cache openssl
+# Cài đặt OpenSSL cho Prisma runtime
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
 ENV PORT=4000
@@ -28,6 +30,7 @@ ENV PORT=4000
 COPY package*.json ./
 COPY prisma ./prisma/
 
+# Cài đặt production dependencies (argon2 tự nhận prebuild binary glibc, không cần python/g++)
 RUN npm ci --omit=dev
 
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
