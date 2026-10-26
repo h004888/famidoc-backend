@@ -30,7 +30,7 @@ ENV PORT=4000
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Cài đặt production dependencies (argon2 tự nhận prebuild binary glibc, không cần python/g++)
+# Cài đặt production dependencies (bcryptjs là pure JS)
 RUN npm ci --omit=dev
 
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
@@ -41,4 +41,4 @@ COPY --from=builder /app/dist ./dist
 
 EXPOSE 4000
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/main"]
