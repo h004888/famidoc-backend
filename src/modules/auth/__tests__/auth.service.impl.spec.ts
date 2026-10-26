@@ -476,4 +476,23 @@ describe('AuthServiceImpl', () => {
       }),
     ).rejects.toThrow(InternalServerErrorException);
   });
+
+  describe('Password Hashing & Verification (bcryptjs)', () => {
+    it('băm mật khẩu và so khớp thành công với mật khẩu đúng', async () => {
+      const plain = 'StrongPass@123';
+      const hash = await (service as any).hashPassword(plain);
+      expect(hash).toBeDefined();
+      expect(hash).not.toBe(plain);
+      expect(hash.startsWith('$2a$') || hash.startsWith('$2b$')).toBe(true);
+
+      const isValid = await (service as any).verifyPassword(plain, hash);
+      expect(isValid).toBe(true);
+    });
+
+    it('so khớp thất bại với mật khẩu sai', async () => {
+      const hash = await (service as any).hashPassword('CorrectPass@123');
+      const isValid = await (service as any).verifyPassword('WrongPass@123', hash);
+      expect(isValid).toBe(false);
+    });
+  });
 });

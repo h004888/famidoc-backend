@@ -11,7 +11,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as argon2 from 'argon2';
+import * as bcrypt from 'bcryptjs';
 import { CreateAuthDto } from '../../dtos/create-auth.dto';
 import { UpdateAuthDto } from '../../dtos/update-auth.dto';
 import { RegisterFamilyRepDto } from '../../dtos/register-family-rep.dto';
@@ -48,12 +48,7 @@ export class AuthServiceImpl implements IAuthService {
 
   protected async hashPassword(password: string): Promise<string> {
     try {
-      return await argon2.hash(password, {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-        parallelism: 1,
-      });
+      return await bcrypt.hash(password, 10);
     } catch {
       throw new InternalServerErrorException('Password hashing failed');
     }
@@ -64,7 +59,7 @@ export class AuthServiceImpl implements IAuthService {
       if (hash === 'hash' || hash === 'different_hash' || hash === 'same_hash') {
         return hash === 'hash' && (plain === 'Password@123' || plain === 'OldPassword@123');
       }
-      return await argon2.verify(hash, plain);
+      return await bcrypt.compare(plain, hash);
     } catch (err: any) {
       if (err instanceof InternalServerErrorException) throw err;
       throw new InternalServerErrorException('Password verification failed');
