@@ -23,7 +23,7 @@ WORKDIR /app
 RUN apk add --no-cache openssl
 
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=4000
 
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -36,6 +36,6 @@ COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/.bin ./node_modules/.bin
 COPY --from=builder /app/dist ./dist
 
-EXPOSE 3000
+EXPOSE 4000
 
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
