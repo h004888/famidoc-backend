@@ -98,12 +98,18 @@ jobs:
           DOKPLOY_WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK_URL }}
         run: |
           echo "📡 Đang kích hoạt Dokploy Redeploy qua Webhook..."
-          curl -f -s -X POST \
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             -H "X-GitHub-Event: push" \
             -H "Content-Type: application/json" \
             -d "{\"ref\":\"${{ github.ref }}\"}" \
-            "$DOKPLOY_WEBHOOK" || {
-              echo "⚠️ Không thể gọi Dokploy Webhook hoặc Webhook chưa cấu hình."
-              exit 1
-            }
-          echo "✅ Đã gửi tín hiệu deploy thành công tới Dokploy."
+            "$DOKPLOY_WEBHOOK")
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "Phản hồi từ Dokploy (HTTP $HTTP_STATUS): $BODY"
+
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "❌ Dokploy Webhook trả về lỗi HTTP $HTTP_STATUS: $BODY"
+            exit 1
+          fi
+          echo "✅ Đã kích hoạt Dokploy deploy thành công."
