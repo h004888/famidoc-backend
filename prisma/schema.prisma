@@ -1,0 +1,85 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserRole {
+  GUEST
+  FAMILY_REP
+  DOCTOR
+  HEALTHCARE_FACILITY
+  ADMIN
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  phone        String     @unique
+  passwordHash String
+  fullName     String
+  role         UserRole   @default(FAMILY_REP)
+  status       UserStatus @default(ACTIVE)
+  tokenVersion Int        @default(1)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  familyUnit   FamilyUnit? @relation(fields: [familyUnitId], references: [id])
+  familyUnitId String?
+
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+model FamilyUnit {
+  id                    String    @id @default(uuid())
+  headOfFamilyPatientId String?   @unique
+  homeAddress           String?
+  emergencyPhone        String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  users                 User[]
+  patients              Patient[]
+
+  @@map("family_units")
+}
+
+model Patient {
+  id                 String      @id @default(uuid())
+  familyUnitId       String
+  fullName           String
+  dob                DateTime?
+  gender             String?
+  relationshipToHead String?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  familyUnit         FamilyUnit  @relation(fields: [familyUnitId], references: [id], onDelete: Cascade)
+
+  @@map("patients")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
