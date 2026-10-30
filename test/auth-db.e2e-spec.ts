@@ -53,24 +53,23 @@ describe('AuthRepository Real DB Integration Test', () => {
     expect(user.phone).toBe(testPhone);
     expect(user.role).toBe('FAMILY_REP');
     expect(user.status).toBe('ACTIVE');
-    expect(user.familyUnitId).toBeDefined();
     createdUserId = user.id;
 
-    // Kiểm tra trực tiếp trên DB PostgreSQL thật
+    // Kiểm tra trực tiếp trên DB PostgreSQL thật theo quan hệ 3NF mới
     const dbFamily = await prisma.familyUnit.findUnique({
-      where: { id: user.familyUnitId! },
+      where: { representativeUserId: user.id },
     });
     expect(dbFamily).toBeDefined();
-    expect(dbFamily?.headOfFamilyPatientId).toBeDefined();
+    expect(dbFamily?.emergencyPhone).toBe(testPhone);
 
-    const dbPatient = await prisma.patient.findUnique({
-      where: { id: dbFamily!.headOfFamilyPatientId! },
+    const dbPatient = await prisma.patient.findFirst({
+      where: { familyId: dbFamily!.id },
     });
     expect(dbPatient).toBeDefined();
     expect(dbPatient?.fullName).toBe('Bác Sĩ Test DB');
 
     const dbAudit = await prisma.auditLog.findFirst({
-      where: { userId: user.id },
+      where: { actorUserId: user.id },
     });
     expect(dbAudit).toBeDefined();
     expect(dbAudit?.action).toBe('REGISTER_FAMILY_REP');
@@ -96,12 +95,10 @@ describe('AuthRepository Real DB Integration Test', () => {
     expect(updatedUser?.passwordHash).toBe(newHash);
   });
 
-  it('6. [UT-R-05] incrementTokenVersion tăng phiên bản token trên DB thật', async () => {
-    const newVersion = await repository.incrementTokenVersion(createdUserId);
-    expect(newVersion).toBe(2);
-
+  it('6. [UT-R-05] Ràng buộc toàn vẹn DDL: Thông tin người dùng đồng bộ theo chuẩn 29 bảng', async () => {
     const user = await prisma.user.findUnique({ where: { id: createdUserId } });
-    expect(user?.tokenVersion).toBe(2);
+    expect(user?.status).toBe('ACTIVE');
+    expect(user?.failedLoginAttempts).toBe(0);
   });
 
   it('7. Ràng buộc toàn vẹn: Không cho phép tạo trùng lặp Email hoặc Phone trên DB thật', async () => {

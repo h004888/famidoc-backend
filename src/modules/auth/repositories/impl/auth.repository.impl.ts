@@ -34,14 +34,7 @@ export class AuthRepositoryImpl
 
   async createFamilyRepWithProfile(data: CreateFamilyRepDbData): Promise<AuthEntity> {
     return this.prismaService.$transaction(async (tx) => {
-      // 1. Tạo FamilyUnit
-      const family = await tx.familyUnit.create({
-        data: {
-          emergencyPhone: data.phone,
-        },
-      });
-
-      // 2. Tạo User đại diện gắn vào familyUnit
+      // 1. Tạo User đại diện theo chuẩn 3NF
       const user = await tx.user.create({
         data: {
           email: data.email,
@@ -50,32 +43,39 @@ export class AuthRepositoryImpl
           fullName: data.fullName,
           role: 'FAMILY_REP',
           status: 'ACTIVE',
-          tokenVersion: 1,
-          familyUnitId: family.id,
         },
       });
 
-      // 3. Tạo Patient chủ hộ theo quy tắc BR-05
-      const patient = await tx.patient.create({
+      // 2. Tạo FamilyUnit gắn với representative_user_id (User.id)
+      const family = await tx.familyUnit.create({
         data: {
-          familyUnitId: family.id,
+          representativeUserId: user.id,
+          homeAddress: data.homeAddress || 'Chưa cập nhật địa chỉ',
+          emergencyPhone: data.phone,
+          status: 'ACTIVE',
+        },
+      });
+
+      // 3. Tạo Patient chủ hộ theo quy tắc BR-05 (gắn familyId)
+      await tx.patient.create({
+        data: {
+          familyId: family.id,
           fullName: data.fullName,
           relationshipToHead: 'SELF',
+          dateOfBirth: new Date('1990-01-01'),
+          gender: 'OTHER',
+          status: 'ACTIVE',
         },
       });
 
-      // 4. Cập nhật HeadOfFamily_PatientID vào FamilyUnit
-      await tx.familyUnit.update({
-        where: { id: family.id },
-        data: { headOfFamilyPatientId: patient.id },
-      });
-
-      // 5. Ghi Audit Log GB-16
+      // 4. Ghi Audit Log GB-16 & ISO 27799
       await tx.auditLog.create({
         data: {
-          userId: user.id,
+          actorUserId: user.id,
           action: 'REGISTER_FAMILY_REP',
-          details: `Registered family representative ${data.email}`,
+          resourceName: 'users',
+          resourceId: user.id,
+          clientIp: '127.0.0.1',
         },
       });
 
@@ -88,17 +88,5 @@ export class AuthRepositoryImpl
       where: { id: userId },
       data: { passwordHash },
     });
-  }
-
-  async incrementTokenVersion(userId: string): Promise<number> {
-    const updated = await this.prismaService.user.update({
-      where: { id: userId },
-      data: {
-        tokenVersion: {
-          increment: 1,
-        },
-      },
-    });
-    return updated.tokenVersion;
   }
 }

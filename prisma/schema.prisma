@@ -7,79 +7,797 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// =========================================================================
+// ENUMS (Ánh xạ các CHECK constraint trong SQL)
+// =========================================================================
+
 enum UserRole {
-  GUEST
-  FAMILY_REP
-  DOCTOR
-  HEALTHCARE_FACILITY
   ADMIN
+  HEALTHCARE_FACILITY
+  DOCTOR
+  FAMILY_REP
 }
 
 enum UserStatus {
-  PENDING_VERIFICATION
+  PENDING
   ACTIVE
   SUSPENDED
-  DEACTIVATED
+  LOCKED
 }
 
+enum FacilityVerificationStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum DoctorOnboardingStatus {
+  PENDING_SUBMISSION
+  FACILITY_VERIFIED
+  ACTIVE
+  SUSPENDED
+}
+
+enum DoctorCredentialType {
+  PRACTICE_LICENSE_CCHN
+  FAMILY_MEDICINE_CERT
+  DEGREE
+}
+
+enum ServicePackageStatus {
+  DRAFT
+  ACTIVE
+  DEPRECATED
+}
+
+enum B2bContractStatus {
+  PENDING_SIGNATURE
+  ACTIVE
+  EXPIRED
+  TERMINATED
+}
+
+enum FamilyUnitStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum PatientStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AllergenType {
+  DRUG
+  FOOD
+  ENVIRONMENTAL
+}
+
+enum AllergySeverity {
+  MILD
+  MODERATE
+  LIFE_THREATENING_ANAPHYLAXIS
+}
+
+enum PatientDocumentType {
+  LAB_RESULT
+  IMAGING_XRAY_CT
+  DISCHARGE_SUMMARY
+}
+
+enum MedicalContractStatus {
+  PENDING_APPROVAL
+  PENDING_PAYMENT
+  ACTIVE
+  EXPIRED
+  TERMINATED
+}
+
+enum SignerRole {
+  FAMILY_REP
+  ADMIN
+  HEALTHCARE_FACILITY
+  ASSIGNED_DOCTOR
+}
+
+enum AddendumType {
+  QUOTA_EXPANSION
+  TERM_EXTENSION
+  MEMBER_EXTENSION
+}
+
+enum AddendumStatus {
+  PENDING_PAYMENT
+  ACTIVE
+  CANCELLED
+}
+
+enum EncounterType {
+  HOME_VISIT
+  TELEHEALTH
+}
+
+enum EncounterCategory {
+  PERIODIC_ROUTINE
+  AD_HOC_ON_DEMAND
+}
+
+enum EncounterStatus {
+  REQUESTED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PrescriptionStatus {
+  ISSUED
+  EXPIRED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  EXPIRED
+  CANCELLED
+}
+
+enum DisbursementStatus {
+  PENDING
+  CONFIRMED
+  SETTLED
+  FAILED
+}
+
+enum ComplaintStatus {
+  SUBMITTED
+  INVESTIGATING
+  RESOLVED
+  CLOSED
+}
+
+// =========================================================================
+// 1. PHÂN HỆ XÁC THỰC, NGƯỜI DÙNG & RBAC (FE-01, FE-03)
+// =========================================================================
+
 model User {
-  id           String     @id @default(uuid())
-  email        String     @unique
-  phone        String     @unique
-  passwordHash String
-  fullName     String
-  role         UserRole   @default(FAMILY_REP)
-  status       UserStatus @default(ACTIVE)
-  tokenVersion Int        @default(1)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id                  String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  phone               String     @unique @db.VarChar(15)
+  email               String     @unique @db.VarChar(150)
+  passwordHash        String     @map("password_hash") @db.VarChar(255)
+  role                UserRole
+  fullName            String     @map("full_name") @db.VarChar(100)
+  avatarUrl           String?    @map("avatar_url") @db.VarChar(255)
+  status              UserStatus @default(PENDING)
+  failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?  @map("locked_until") @db.Timestamptz()
+  createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt           DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  familyUnit   FamilyUnit? @relation(fields: [familyUnitId], references: [id])
-  familyUnitId String?
-
-  auditLogs    AuditLog[]
+  // Relations
+  notifications                     Notification[]
+  healthcareFacility                HealthcareFacility?
+  doctor                            Doctor?
+  familyUnit                        FamilyUnit?
+  doctorCredentialsFacilityVerified DoctorCredential[]    @relation("FacilityVerifiedByUser")
+  doctorCredentialsPlatformApproved DoctorCredential[]    @relation("PlatformApprovedByUser")
+  contractSignatures                ContractSignature[]
+  complainantComplaints             Complaint[]           @relation("ComplaintComplainantUser")
+  targetComplaints                  Complaint[]           @relation("ComplaintTargetUser")
+  systemConfigurationsUpdated       SystemConfiguration[]
+  auditLogs                         AuditLog[]
 
   @@map("users")
 }
 
-model FamilyUnit {
-  id                    String    @id @default(uuid())
-  headOfFamilyPatientId String?   @unique
-  homeAddress           String?
-  emergencyPhone        String?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+model Notification {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  title       String   @db.VarChar(200)
+  content     String   @db.Text
+  type        String   @db.VarChar(50)
+  referenceId String?  @map("reference_id") @db.Uuid
+  isRead      Boolean  @default(false) @map("is_read")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  users                 User[]
-  patients              Patient[]
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+// =========================================================================
+// 2. PHÂN HỆ CƠ SỞ Y TẾ & BÁC SĨ (FE-02, FE-06)
+// =========================================================================
+
+model HealthcareFacility {
+  id                 String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String                     @unique @map("user_id") @db.Uuid
+  facilityName       String                     @map("facility_name") @db.VarChar(255)
+  licenseNumber      String                     @unique @map("license_number") @db.VarChar(50)
+  taxCode            String                     @unique @map("tax_code") @db.VarChar(20)
+  address            String                     @db.Text
+  hotline            String                     @db.VarChar(15)
+  bankName           String                     @map("bank_name") @db.VarChar(100)
+  bankAccountNumber  String                     @map("bank_account_number") @db.VarChar(50)
+  bankAccountHolder  String                     @map("bank_account_holder") @db.VarChar(100)
+  verificationStatus FacilityVerificationStatus @default(ACTIVE) @map("verification_status")
+  createdAt          DateTime                   @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt          DateTime                   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  user                User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  doctors             Doctor[]
+  doctorShifts        DoctorShift[]
+  staffingContracts   B2bStaffingContract[]
+  medicalContracts    MedicalContract[]
+  facilitySettlements FacilitySettlement[]
+
+  @@map("healthcare_facilities")
+}
+
+model Doctor {
+  id               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId           String                 @unique @map("user_id") @db.Uuid
+  facilityId       String                 @map("facility_id") @db.Uuid
+  doctorName       String                 @map("doctor_name") @db.VarChar(100)
+  specialty        String                 @db.VarChar(100)
+  academicTitle    String?                @map("academic_title") @db.VarChar(50)
+  experienceYears  Int                    @map("experience_years")
+  bio              String?                @db.Text
+  activePanelCount Int                    @default(0) @map("active_panel_count")
+  maxPanelCapacity Int                    @default(30) @map("max_panel_capacity")
+  ratingAvg        Decimal                @default(5.00) @map("rating_avg") @db.Decimal(3, 2)
+  totalReviews     Int                    @default(0) @map("total_reviews")
+  onboardingStatus DoctorOnboardingStatus @default(PENDING_SUBMISSION) @map("onboarding_status")
+  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  user             User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  facility         HealthcareFacility @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  credentials      DoctorCredential[]
+  shifts           DoctorShift[]
+  medicalContracts MedicalContract[]
+  encounters       Encounter[]
+  reviews          DoctorReview[]
+
+  @@map("doctors")
+}
+
+model DoctorCredential {
+  id                 String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  doctorId           String               @map("doctor_id") @db.Uuid
+  credentialType     DoctorCredentialType @map("credential_type")
+  certificateNumber  String               @map("certificate_number") @db.VarChar(100)
+  issueDate          DateTime             @map("issue_date") @db.Date
+  issuingAuthority   String               @map("issuing_authority") @db.VarChar(200)
+  fileUrl            String               @map("file_url") @db.VarChar(255)
+  facilityVerified   Boolean              @default(false) @map("facility_verified")
+  facilityVerifiedBy String?              @map("facility_verified_by") @db.Uuid
+  facilityVerifiedAt DateTime?            @map("facility_verified_at") @db.Timestamptz()
+  platformApproved   Boolean              @default(false) @map("platform_approved")
+  platformApprovedBy String?              @map("platform_approved_by") @db.Uuid
+  platformApprovedAt DateTime?            @map("platform_approved_at") @db.Timestamptz()
+  rejectionReason    String?              @map("rejection_reason") @db.Text
+
+  // Relations
+  doctor           Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  facilityVerifier User?  @relation("FacilityVerifiedByUser", fields: [facilityVerifiedBy], references: [id])
+  platformApprover User?  @relation("PlatformApprovedByUser", fields: [platformApprovedBy], references: [id])
+
+  @@map("doctor_credentials")
+}
+
+model DoctorShift {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  doctorId   String   @map("doctor_id") @db.Uuid
+  facilityId String   @map("facility_id") @db.Uuid
+  shiftDate  DateTime @map("shift_date") @db.Date
+  startTime  DateTime @map("start_time") @db.Time
+  endTime    DateTime @map("end_time") @db.Time
+  shiftType  String   @map("shift_type") @db.VarChar(50)
+  notes      String?  @db.Text
+
+  // Relations
+  doctor   Doctor             @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  facility HealthcareFacility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId, shiftDate], map: "idx_doctor_shifts_lookup")
+  @@map("doctor_shifts")
+}
+
+// =========================================================================
+// 3. PHÂN HỆ GÓI DỊCH VỤ & HỢP ĐỒNG PHÁP LÝ (FE-04, FE-05)
+// =========================================================================
+
+model ServicePackage {
+  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  packageCode         String               @unique @map("package_code") @db.VarChar(50)
+  packageName         String               @map("package_name") @db.VarChar(150)
+  durationMonths      Int                  @map("duration_months")
+  basePrice           Decimal              @map("base_price") @db.Decimal(12, 2)
+  periodicVisitsQuota Int                  @map("periodic_visits_quota")
+  telehealthQuota     Int                  @map("telehealth_quota")
+  maxMembers          Int                  @default(6) @map("max_members")
+  status              ServicePackageStatus @default(ACTIVE)
+  deletedAt           DateTime?            @map("deleted_at") @db.Timestamptz()
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt           DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  medicalContracts MedicalContract[]
+
+  @@map("service_packages")
+}
+
+model B2bStaffingContract {
+  id                     String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contractCode           String            @unique @map("contract_code") @db.VarChar(50)
+  facilityId             String            @map("facility_id") @db.Uuid
+  platformCommissionRate Decimal           @default(15.00) @map("platform_commission_rate") @db.Decimal(5, 2)
+  facilityRevenueRate    Decimal           @default(85.00) @map("facility_revenue_rate") @db.Decimal(5, 2)
+  startDate              DateTime          @map("start_date") @db.Date
+  endDate                DateTime          @map("end_date") @db.Date
+  signedPdfUrl           String?           @map("signed_pdf_url") @db.VarChar(255)
+  status                 B2bContractStatus @default(PENDING_SIGNATURE)
+  createdAt              DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt              DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  facility HealthcareFacility @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+
+  @@map("b2b_staffing_contracts")
+}
+
+// =========================================================================
+// 4. PHÂN HỆ HỘ GIA ĐÌNH & HỒ SƠ BỆNH ÁN DỌC (FE-07)
+// =========================================================================
+
+model FamilyUnit {
+  id                   String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  representativeUserId String           @unique @map("representative_user_id") @db.Uuid
+  homeAddress          String           @map("home_address") @db.Text
+  emergencyPhone       String           @map("emergency_phone") @db.VarChar(15)
+  status               FamilyUnitStatus @default(ACTIVE)
+  createdAt            DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt            DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  representativeUser User              @relation(fields: [representativeUserId], references: [id], onDelete: Restrict)
+  patients           Patient[]
+  medicalContracts   MedicalContract[]
+  doctorReviews      DoctorReview[]
 
   @@map("family_units")
 }
 
 model Patient {
-  id                 String      @id @default(uuid())
-  familyUnitId       String
-  fullName           String
-  dob                DateTime?
-  gender             String?
-  relationshipToHead String?
-  createdAt          DateTime    @default(now())
-  updatedAt          DateTime    @updatedAt
+  id                    String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  familyId              String        @map("family_id") @db.Uuid
+  fullName              String        @map("full_name") @db.VarChar(100)
+  dateOfBirth           DateTime      @map("date_of_birth") @db.Date
+  gender                Gender
+  relationshipToHead    String        @map("relationship_to_head") @db.VarChar(50)
+  citizenId             String?       @map("citizen_id") @db.VarChar(20)
+  healthInsuranceNumber String?       @map("health_insurance_number") @db.VarChar(30)
+  status                PatientStatus @default(ACTIVE)
+  createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt             DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
-  familyUnit         FamilyUnit  @relation(fields: [familyUnitId], references: [id], onDelete: Cascade)
+  // Relations
+  familyUnit FamilyUnit        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  allergies  PatientAllergy[]
+  documents  PatientDocument[]
+  encounters Encounter[]
+  vitalSigns VitalSign[]
 
   @@map("patients")
 }
 
-model AuditLog {
-  id        String   @id @default(uuid())
-  userId    String?
-  action    String
-  details   String?
-  ipAddress String?
-  createdAt DateTime @default(now())
+model PatientAllergy {
+  id                    String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId             String          @map("patient_id") @db.Uuid
+  allergenType          AllergenType    @map("allergen_type")
+  allergenName          String          @map("allergen_name") @db.VarChar(150)
+  severity              AllergySeverity
+  clinicalManifestation String?         @map("clinical_manifestation") @db.Text
+  createdAt             DateTime        @default(now()) @map("created_at") @db.Timestamptz()
 
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  // Relations
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("patient_allergies")
+}
+
+model PatientDocument {
+  id           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId    String              @map("patient_id") @db.Uuid
+  documentName String              @map("document_name") @db.VarChar(200)
+  documentType PatientDocumentType @map("document_type")
+  fileUrl      String              @map("file_url") @db.VarChar(255)
+  fileSizeKb   Int                 @map("file_size_kb")
+  recordedDate DateTime            @map("recorded_date") @db.Date
+  uploadedAt   DateTime            @default(now()) @map("uploaded_at") @db.Timestamptz()
+
+  // Relations
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("patient_documents")
+}
+
+// =========================================================================
+// HỢP ĐỒNG 4 BÊN & PHỤ LỤC (FE-05)
+// =========================================================================
+
+model MedicalContract {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contractNumber      String                @unique @map("contract_number") @db.VarChar(50)
+  familyId            String                @map("family_id") @db.Uuid
+  facilityId          String                @map("facility_id") @db.Uuid
+  doctorId            String                @map("doctor_id") @db.Uuid
+  packageId           String                @map("package_id") @db.Uuid
+  totalAmount         Decimal               @map("total_amount") @db.Decimal(12, 2)
+  remainingHomeVisits Int                   @map("remaining_home_visits")
+  remainingTelehealth Int                   @map("remaining_telehealth")
+  startDate           DateTime              @map("start_date") @db.Date
+  endDate             DateTime              @map("end_date") @db.Date
+  contractStatus      MedicalContractStatus @default(PENDING_APPROVAL) @map("contract_status")
+  terminationReason   String?               @map("termination_reason") @db.Text
+  terminatedAt        DateTime?             @map("terminated_at") @db.Timestamptz()
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt           DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  familyUnit     FamilyUnit          @relation(fields: [familyId], references: [id], onDelete: Restrict)
+  facility       HealthcareFacility  @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  doctor         Doctor              @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  servicePackage ServicePackage      @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  signatures     ContractSignature[]
+  addenda        ContractAddendum[]
+  encounters     Encounter[]
+  invoices       Invoice[]
+  complaints     Complaint[]
+
+  // BR-06 & GB-19: Mỗi hộ gia đình chỉ có duy nhất 1 hợp đồng ACTIVE
+  // Lưu ý: Chỉ mục UNIQUE có điều kiện WHERE contract_status = 'ACTIVE' được tạo ở tầng PostgreSQL migration:
+  // CREATE UNIQUE INDEX idx_unique_active_contract_per_family ON medical_contracts (family_id) WHERE contract_status = 'ACTIVE';
+  @@index([familyId], map: "idx_medical_contracts_family_id")
+  @@map("medical_contracts")
+}
+
+model ContractSignature {
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contractId    String     @map("contract_id") @db.Uuid
+  signerRole    SignerRole @map("signer_role")
+  signerUserId  String     @map("signer_user_id") @db.Uuid
+  signatureHash String     @map("signature_hash") @db.Text
+  signedAt      DateTime   @default(now()) @map("signed_at") @db.Timestamptz()
+  ipAddress     String     @map("ip_address") @db.VarChar(45)
+
+  // Relations
+  contract   MedicalContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  signerUser User            @relation(fields: [signerUserId], references: [id])
+
+  @@map("contract_signatures")
+}
+
+model ContractAddendum {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contractId       String         @map("contract_id") @db.Uuid
+  addendumNumber   String         @unique @map("addendum_number") @db.VarChar(50)
+  addendumType     AddendumType   @map("addendum_type")
+  additionalAmount Decimal        @map("additional_amount") @db.Decimal(12, 2)
+  extraHomeVisits  Int            @default(0) @map("extra_home_visits")
+  extraTelehealth  Int            @default(0) @map("extra_telehealth")
+  extendedEndDate  DateTime?      @map("extended_end_date") @db.Date
+  status           AddendumStatus @default(PENDING_PAYMENT)
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  contract MedicalContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  invoices Invoice[]
+
+  @@map("contract_addenda")
+}
+
+// =========================================================================
+// 5. PHÂN HỆ ĐIỀU PHỐI LỊCH HẸN & TELEHEALTH (FE-08)
+// =========================================================================
+
+model Encounter {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contractId      String            @map("contract_id") @db.Uuid
+  patientId       String            @map("patient_id") @db.Uuid
+  doctorId        String            @map("doctor_id") @db.Uuid
+  encounterType   EncounterType     @map("encounter_type")
+  category        EncounterCategory
+  scheduledDate   DateTime          @map("scheduled_date") @db.Date
+  scheduledTime   DateTime          @map("scheduled_time") @db.Time
+  rescheduleCount Int               @default(0) @map("reschedule_count")
+  encounterStatus EncounterStatus   @default(REQUESTED) @map("encounter_status")
+  cancelReason    String?           @map("cancel_reason") @db.Text
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  contract          MedicalContract    @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  patient           Patient            @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  doctor            Doctor             @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  telehealthSession TelehealthSession?
+  clinicalEmr       ClinicalEmr?
+  invoices          Invoice[]
+  doctorReview      DoctorReview?
+  complaints        Complaint[]
+
+  @@index([patientId, scheduledDate(sort: Desc), scheduledTime(sort: Desc)], map: "idx_encounters_patient_timeline")
+  @@index([doctorId, scheduledDate, scheduledTime], map: "idx_encounters_doctor_schedule")
+  @@map("encounters")
+}
+
+model TelehealthSession {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  encounterId         String    @unique @map("encounter_id") @db.Uuid
+  roomSid             String    @unique @map("room_sid") @db.VarChar(100)
+  startedAt           DateTime? @map("started_at") @db.Timestamptz()
+  endedAt             DateTime? @map("ended_at") @db.Timestamptz()
+  durationSeconds     Int       @default(0) @map("duration_seconds")
+  networkQualityScore String?   @map("network_quality_score") @db.VarChar(20)
+  isFallbackChat      Boolean   @default(false) @map("is_fallback_chat")
+
+  // Relations
+  encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+
+  @@map("telehealth_sessions")
+}
+
+// =========================================================================
+// 6. PHÂN HỆ BỆNH ÁN SOAP, SINH HIỆU & ĐƠN THUỐC (FE-09)
+// =========================================================================
+
+model ClinicalEmr {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  encounterId         String    @unique @map("encounter_id") @db.Uuid
+  chiefComplaint      String    @map("chief_complaint") @db.Text
+  anamnesis           String?   @db.Text
+  clinicalFindings    String    @map("clinical_findings") @db.Text
+  icd10Code           String    @map("icd10_code") @db.VarChar(10)
+  icd10Diagnosis      String    @map("icd10_diagnosis") @db.VarChar(255)
+  treatmentPlan       String    @map("treatment_plan") @db.Text
+  isFinalized         Boolean   @default(false) @map("is_finalized")
+  finalizedAt         DateTime? @map("finalized_at") @db.Timestamptz()
+  doctorSignatureHash String?   @map("doctor_signature_hash") @db.Text
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  encounter     Encounter      @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+  vitalSigns    VitalSign[]
+  prescriptions Prescription[]
+  referralOrder ReferralOrder?
+
+  @@map("clinical_emr")
+}
+
+model VitalSign {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  emrId           String?  @map("emr_id") @db.Uuid
+  patientId       String   @map("patient_id") @db.Uuid
+  systolicBp      Int?     @map("systolic_bp")
+  diastolicBp     Int?     @map("diastolic_bp")
+  heartRate       Int?     @map("heart_rate")
+  temperature     Decimal? @db.Decimal(4, 1)
+  spo2            Int?
+  respiratoryRate Int?     @map("respiratory_rate")
+  bloodGlucose    Decimal? @map("blood_glucose") @db.Decimal(5, 2)
+  isAbnormalAlert Boolean  @default(false) @map("is_abnormal_alert")
+  recordedAt      DateTime @default(now()) @map("recorded_at") @db.Timestamptz()
+
+  // Relations
+  clinicalEmr ClinicalEmr? @relation(fields: [emrId], references: [id], onDelete: SetNull)
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, recordedAt(sort: Desc)], map: "idx_abnormal_vital_signs")
+  @@map("vital_signs")
+}
+
+model Prescription {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  emrId            String             @map("emr_id") @db.Uuid
+  prescriptionCode String             @unique @map("prescription_code") @db.VarChar(50)
+  doctorSignature  String             @map("doctor_signature") @db.Text
+  prescribedDate   DateTime           @map("prescribed_date") @db.Date
+  validUntil       DateTime           @map("valid_until") @db.Date
+  instructions     String?            @db.Text
+  status           PrescriptionStatus @default(ISSUED)
+  createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  clinicalEmr ClinicalEmr          @relation(fields: [emrId], references: [id], onDelete: Restrict)
+  details     PrescriptionDetail[]
+
+  @@map("prescriptions")
+}
+
+model PrescriptionDetail {
+  id             String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  prescriptionId String @map("prescription_id") @db.Uuid
+  medicationName String @map("medication_name") @db.VarChar(150)
+  dosage         String @db.VarChar(50)
+  quantity       Int
+  unit           String @db.VarChar(30)
+  frequency      String @db.VarChar(100)
+  durationDays   Int    @map("duration_days")
+
+  // Relations
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@map("prescription_details")
+}
+
+model ReferralOrder {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  emrId                String   @unique @map("emr_id") @db.Uuid
+  referralCode         String   @unique @map("referral_code") @db.VarChar(50)
+  targetFacilityName   String   @map("target_facility_name") @db.VarChar(255)
+  reasonForReferral    String   @map("reason_for_referral") @db.Text
+  clinicalSummary      String   @map("clinical_summary") @db.Text
+  transportationMethod String?  @map("transportation_method") @db.VarChar(100)
+  issuedAt             DateTime @default(now()) @map("issued_at") @db.Timestamptz()
+
+  // Relations
+  clinicalEmr ClinicalEmr @relation(fields: [emrId], references: [id], onDelete: Restrict)
+
+  @@map("referral_orders")
+}
+
+// =========================================================================
+// 7. PHÂN HỆ TÀI CHÍNH, WEBHOOK & QUYẾT TOÁN B2B (FE-10)
+// =========================================================================
+
+model Invoice {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceCode    String        @unique @map("invoice_code") @db.VarChar(50)
+  contractId     String?       @map("contract_id") @db.Uuid
+  addendumId     String?       @map("addendum_id") @db.Uuid
+  encounterId    String?       @map("encounter_id") @db.Uuid
+  grossAmount    Decimal       @map("gross_amount") @db.Decimal(12, 2)
+  vatAmount      Decimal       @default(0.00) @map("vat_amount") @db.Decimal(12, 2)
+  totalPayable   Decimal       @map("total_payable") @db.Decimal(12, 2)
+  paymentGateway String        @default("VIETQR") @map("payment_gateway") @db.VarChar(50)
+  paymentStatus  PaymentStatus @default(PENDING) @map("payment_status")
+  expiredAt      DateTime      @map("expired_at") @db.Timestamptz()
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  contract            MedicalContract?     @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  addendum            ContractAddendum?    @relation(fields: [addendumId], references: [id], onDelete: Restrict)
+  encounter           Encounter?           @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+  paymentTransactions PaymentTransaction[]
+
+  @@map("invoices")
+}
+
+model PaymentTransaction {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceId            String   @map("invoice_id") @db.Uuid
+  gatewayTransactionId String   @unique @map("gateway_transaction_id") @db.VarChar(100)
+  amountReceived       Decimal  @map("amount_received") @db.Decimal(12, 2)
+  paymentTime          DateTime @map("payment_time") @db.Timestamptz()
+  signatureVerified    Boolean  @map("signature_verified")
+  webhookPayload       Json     @map("webhook_payload") @db.JsonB
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@map("payment_transactions")
+}
+
+model FacilitySettlement {
+  id                   String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  settlementCode       String             @unique @map("settlement_code") @db.VarChar(50)
+  facilityId           String             @map("facility_id") @db.Uuid
+  month                Int
+  year                 Int
+  totalRealizedRevenue Decimal            @map("total_realized_revenue") @db.Decimal(14, 2)
+  platformFeeAmount    Decimal            @map("platform_fee_amount") @db.Decimal(14, 2)
+  facilityPayoutAmount Decimal            @map("facility_payout_amount") @db.Decimal(14, 2)
+  disbursementStatus   DisbursementStatus @default(PENDING) @map("disbursement_status")
+  bankTransferOrderId  String?            @map("bank_transfer_order_id") @db.VarChar(100)
+  settledAt            DateTime?          @map("settled_at") @db.Timestamptz()
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  facility HealthcareFacility @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+
+  @@map("facility_settlements")
+}
+
+// =========================================================================
+// 8. PHÂN HỆ ĐÁNH GIÁ & KHIẾU NẠI PHI TÀI CHÍNH (FE-11)
+// =========================================================================
+
+model DoctorReview {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  encounterId   String   @unique @map("encounter_id") @db.Uuid
+  familyId      String   @map("family_id") @db.Uuid
+  doctorId      String   @map("doctor_id") @db.Uuid
+  ratingStars   Int      @map("rating_stars")
+  reviewComment String?  @map("review_comment") @db.Text
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  encounter  Encounter  @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+  familyUnit FamilyUnit @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  doctor     Doctor     @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@map("doctor_reviews")
+}
+
+model Complaint {
+  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  complaintCode       String          @unique @map("complaint_code") @db.VarChar(50)
+  contractId          String          @map("contract_id") @db.Uuid
+  encounterId         String?         @map("encounter_id") @db.Uuid
+  complainantUserId   String          @map("complainant_user_id") @db.Uuid
+  targetUserId        String          @map("target_user_id") @db.Uuid
+  complaintCategory   String          @map("complaint_category") @db.VarChar(50)
+  description         String          @db.Text
+  evidenceAttachments Json?           @map("evidence_attachments") @db.JsonB
+  resolutionOutcome   String?         @map("resolution_outcome") @db.VarChar(50)
+  resolutionNotes     String?         @map("resolution_notes") @db.Text
+  status              ComplaintStatus @default(SUBMITTED)
+  resolvedAt          DateTime?       @map("resolved_at") @db.Timestamptz()
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt           DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  contract        MedicalContract @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  encounter       Encounter?      @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+  complainantUser User            @relation("ComplaintComplainantUser", fields: [complainantUserId], references: [id], onDelete: Restrict)
+  targetUser      User            @relation("ComplaintTargetUser", fields: [targetUserId], references: [id], onDelete: Restrict)
+
+  @@map("complaints")
+}
+
+// =========================================================================
+// 9. PHÂN HỆ CẤU HÌNH & NHẬT KÝ KIỂM TOÁN BẤT BIẾN (ISO 27799)
+// =========================================================================
+
+model SystemConfiguration {
+  configKey   String   @id @map("config_key") @db.VarChar(50)
+  configValue String   @map("config_value") @db.VarChar(255)
+  description String   @db.VarChar(255)
+  updatedBy   String   @map("updated_by") @db.Uuid
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  updatedByUser User @relation(fields: [updatedBy], references: [id])
+
+  @@map("system_configurations")
+}
+
+model AuditLog {
+  id           BigInt   @id @default(autoincrement())
+  actorUserId  String?  @map("actor_user_id") @db.Uuid
+  action       String   @db.VarChar(50)
+  resourceName String   @map("resource_name") @db.VarChar(50)
+  resourceId   String   @map("resource_id") @db.VarChar(100)
+  clientIp     String   @map("client_ip") @db.VarChar(45)
+  userAgent    String?  @map("user_agent") @db.VarChar(255)
+  timestamp    DateTime @default(now()) @db.Timestamptz()
+
+  // Relations
+  actorUser User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@map("audit_logs")
 }

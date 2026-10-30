@@ -31,7 +31,6 @@ import {
   AUTH_REPOSITORY_TOKEN,
 } from '../../repositories/interfaces/auth.repository.interface';
 import type { IAuthRepository } from '../../repositories/interfaces/auth.repository.interface';
-import { AUTH_SERVICE_TOKEN } from '../interfaces/auth.service.interface';
 import type { IAuthService } from '../interfaces/auth.service.interface';
 
 @Injectable()
@@ -229,7 +228,7 @@ export class AuthServiceImpl implements IAuthService {
         );
       }
 
-      if (user.status === 'SUSPENDED' || user.status === 'DEACTIVATED') {
+      if (user.status === 'SUSPENDED' || user.status === 'LOCKED') {
         throw new ForbiddenException(
           'Your account cannot be used to sign in. Please contact support.',
         );
@@ -257,10 +256,9 @@ export class AuthServiceImpl implements IAuthService {
         sub: user.id,
         email: user.email,
         role: user.role,
-        tokenVersion: user.tokenVersion,
       };
 
-      if (user.role === 'DOCTOR' && user.status === 'PENDING_VERIFICATION') {
+      if (user.role === 'DOCTOR' && user.status === 'PENDING') {
         payload.scope = 'ONBOARDING_ONLY';
       }
 
@@ -340,7 +338,12 @@ export class AuthServiceImpl implements IAuthService {
 
     const newHash = await this.hashPassword(dto.newPassword);
     await this.authRepository.updatePassword(user.id, newHash);
-    await this.authRepository.incrementTokenVersion(user.id);
+    await this.redisClient.set(
+      `token:revoked:${user.id}`,
+      Math.floor(Date.now() / 1000).toString(),
+      'EX',
+      7 * 86400,
+    );
     await this.redisClient.del(`otp:reset:${dto.email}`);
 
     return {
@@ -376,7 +379,12 @@ export class AuthServiceImpl implements IAuthService {
 
     const newHash = await this.hashPassword(dto.newPassword);
     await this.authRepository.updatePassword(userId, newHash);
-    await this.authRepository.incrementTokenVersion(userId);
+    await this.redisClient.set(
+      `token:revoked:${userId}`,
+      Math.floor(Date.now() / 1000).toString(),
+      'EX',
+      7 * 86400,
+    );
 
     return {
       message: 'Update password successfully',

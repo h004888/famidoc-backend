@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../../core/database/prisma.service';
 import { AuthRepositoryImpl } from '../repositories/impl/auth.repository.impl';
+import { AuthEntity } from '../repositories/interfaces/auth.repository.interface';
 
 describe('AuthRepositoryImpl', () => {
   let repository: AuthRepositoryImpl;
@@ -69,14 +70,13 @@ describe('AuthRepositoryImpl', () => {
   });
 
   it('[UT-R-03] createFamilyRepWithProfile thực hiện transaction tạo User, FamilyUnit, Patient', async () => {
-    const mockFamily = { id: 'f-1' };
     const mockUser = { id: 'u-1', email: 'rep@famidoc.vn', role: 'FAMILY_REP' };
-    const mockPatient = { id: 'p-1' };
+    const mockFamily = { id: 'f-1', representativeUserId: 'u-1' };
+    const mockPatient = { id: 'p-1', familyId: 'f-1' };
 
-    prismaService.familyUnit.create.mockResolvedValue(mockFamily);
     prismaService.user.create.mockResolvedValue(mockUser);
+    prismaService.familyUnit.create.mockResolvedValue(mockFamily);
     prismaService.patient.create.mockResolvedValue(mockPatient);
-    prismaService.familyUnit.update.mockResolvedValue({ ...mockFamily, headOfFamilyPatientId: 'p-1' });
     prismaService.auditLog.create.mockResolvedValue({ id: 'a-1' });
 
     const result = await repository.createFamilyRepWithProfile({
@@ -84,14 +84,42 @@ describe('AuthRepositoryImpl', () => {
       phone: '0912345678',
       passwordHash: 'hash123',
       fullName: 'Nguyen Van A',
+      homeAddress: '123 Đường Y Tế',
     });
 
     expect(prismaService.$transaction).toHaveBeenCalled();
-    expect(prismaService.familyUnit.create).toHaveBeenCalledWith({
-      data: { emergencyPhone: '0912345678' },
+    expect(prismaService.user.create).toHaveBeenCalledWith({
+      data: {
+        email: 'rep@famidoc.vn',
+        phone: '0912345678',
+        passwordHash: 'hash123',
+        fullName: 'Nguyen Van A',
+        role: 'FAMILY_REP',
+        status: 'ACTIVE',
+      },
     });
-    expect(prismaService.user.create).toHaveBeenCalled();
-    expect(prismaService.patient.create).toHaveBeenCalled();
+    expect(prismaService.familyUnit.create).toHaveBeenCalledWith({
+      data: {
+        representativeUserId: 'u-1',
+        homeAddress: '123 Đường Y Tế',
+        emergencyPhone: '0912345678',
+        status: 'ACTIVE',
+      },
+    });
+    expect(prismaService.patient.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        familyId: 'f-1',
+        fullName: 'Nguyen Van A',
+        relationshipToHead: 'SELF',
+      }),
+    });
+    expect(prismaService.auditLog.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        actorUserId: 'u-1',
+        action: 'REGISTER_FAMILY_REP',
+        resourceName: 'users',
+      }),
+    });
     expect(result).toEqual(mockUser);
   });
 
@@ -103,17 +131,6 @@ describe('AuthRepositoryImpl', () => {
       where: { id: 'u-1' },
       data: { passwordHash: 'new_hash' },
     });
-  });
-
-  it('[UT-R-05] incrementTokenVersion tăng trường tokenVersion lên 1', async () => {
-    prismaService.user.update.mockResolvedValue({ id: 'u-1', tokenVersion: 2 });
-
-    const result = await repository.incrementTokenVersion('u-1');
-    expect(prismaService.user.update).toHaveBeenCalledWith({
-      where: { id: 'u-1' },
-      data: { tokenVersion: { increment: 1 } },
-    });
-    expect(result).toBe(2);
   });
 
   it('[FI-06] createFamilyRepWithProfile rollback khi patient create gặp sự cố', async () => {
@@ -129,5 +146,21 @@ describe('AuthRepositoryImpl', () => {
         fullName: 'Nguyen Van A',
       }),
     ).rejects.toThrow('Patient creation failed');
+  });
+
+  it('[UT-R-06] AuthEntity contract matches 29-table DDL without tokenVersion', () => {
+    const entity: AuthEntity = {
+      id: 'u-1',
+      email: 'test@famidoc.vn',
+      phone: '0912345678',
+      passwordHash: 'hash',
+      fullName: 'Test User',
+      role: 'FAMILY_REP',
+      status: 'ACTIVE',
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+      avatarUrl: null,
+    };
+    expect(entity.id).toBe('u-1');
   });
 });
