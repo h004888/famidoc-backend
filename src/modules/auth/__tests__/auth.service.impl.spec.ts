@@ -33,7 +33,6 @@ describe('AuthServiceImpl', () => {
       findByPhone: jest.fn(),
       createFamilyRepWithProfile: jest.fn(),
       updatePassword: jest.fn(),
-      incrementTokenVersion: jest.fn(),
     };
 
     redisService = {
@@ -216,7 +215,6 @@ describe('AuthServiceImpl', () => {
       passwordHash: 'hash',
       role: 'FAMILY_REP',
       status: 'ACTIVE',
-      tokenVersion: 1,
     };
     repository.findByEmail.mockResolvedValue(mockUser);
     jwtService.sign.mockReturnValue('jwt_token_123');
@@ -309,8 +307,7 @@ describe('AuthServiceImpl', () => {
       email: 'doctor@famidoc.vn',
       passwordHash: 'hash',
       role: 'DOCTOR',
-      status: 'PENDING_VERIFICATION',
-      tokenVersion: 1,
+      status: 'PENDING',
     };
     repository.findByEmail.mockResolvedValue(mockUser);
     jwtService.sign.mockReturnValue('jwt_onboarding_token');
@@ -362,7 +359,12 @@ describe('AuthServiceImpl', () => {
 
     expect(res.success).toBe(true);
     expect(repository.updatePassword).toHaveBeenCalled();
-    expect(repository.incrementTokenVersion).toHaveBeenCalledWith('u-1');
+    expect(redisService.set).toHaveBeenCalledWith(
+      'token:revoked:u-1',
+      expect.any(String),
+      'EX',
+      expect.any(Number),
+    );
     expect(redisService.del).toHaveBeenCalled();
   });
 
@@ -379,7 +381,12 @@ describe('AuthServiceImpl', () => {
     });
     expect(res.success).toBe(true);
     expect(repository.updatePassword).toHaveBeenCalled();
-    expect(repository.incrementTokenVersion).toHaveBeenCalledWith('u-1');
+    expect(redisService.set).toHaveBeenCalledWith(
+      'token:revoked:u-1',
+      expect.any(String),
+      'EX',
+      expect.any(Number),
+    );
   });
 
   it('[UT-S-22] Đổi mật khẩu thất bại do nhập sai mật khẩu cũ', async () => {

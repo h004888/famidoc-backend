@@ -10,10 +10,11 @@ export interface AuthEntity {
   phone: string;
   passwordHash: string;
   fullName: string;
-  role: 'GUEST' | 'FAMILY_REP' | 'DOCTOR' | 'HEALTHCARE_FACILITY' | 'ADMIN';
-  status: 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED';
-  tokenVersion: number;
-  familyUnitId?: string | null;
+  role: 'ADMIN' | 'HEALTHCARE_FACILITY' | 'DOCTOR' | 'FAMILY_REP';
+  avatarUrl?: string | null;
+  status: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'LOCKED';
+  failedLoginAttempts?: number;
+  lockedUntil?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -23,6 +24,7 @@ export interface CreateFamilyRepDbData {
   phone: string;
   passwordHash: string;
   fullName: string;
+  homeAddress?: string;
 }
 
 export interface IAuthRepository
@@ -31,5 +33,4 @@ export interface IAuthRepository
   findByPhone(phone: string): Promise<AuthEntity | null>;
   createFamilyRepWithProfile(data: CreateFamilyRepDbData): Promise<AuthEntity>;
   updatePassword(userId: string, passwordHash: string): Promise<void>;
-  incrementTokenVersion(userId: string): Promise<number>;
 }
