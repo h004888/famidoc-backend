@@ -1,13 +1,13 @@
+import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import {
   Body,
   Controller,
-  Delete,
-  Get,
   Inject,
   Param,
   Post,
   Put,
   Req,
+  UseGuards,
 } from '@nestjs/common';
 import { CreateAuthDto } from '../dtos/create-auth.dto';
 import { UpdateAuthDto } from '../dtos/update-auth.dto';
@@ -28,27 +28,22 @@ export class AuthController {
     private readonly authService: IAuthService,
   ) {}
 
-  @Get()
   findAll() {
     return this.authService.findAll();
   }
 
-  @Get(':id')
   findOne(@Param('id') id: string) {
     return this.authService.findOne(id);
   }
 
-  @Post()
   create(@Body() dto: CreateAuthDto) {
     return this.authService.create(dto);
   }
 
-  @Put(':id')
   update(@Param('id') id: string, @Body() dto: UpdateAuthDto) {
     return this.authService.update(id, dto);
   }
 
-  @Delete(':id')
   remove(@Param('id') id: string) {
     return this.authService.remove(id);
   }
@@ -59,8 +54,10 @@ export class AuthController {
   }
 
   @Post('verify-email-otp')
-  verifyEmailOtp(@Body() dto: VerifyEmailOtpDto) {
-    return this.authService.verifyEmailOtp(dto);
+  async verifyEmailOtp(@Body() dto: VerifyEmailOtpDto) {
+    const { passwordHash: _hash, ...user } =
+      await this.authService.verifyEmailOtp(dto);
+    return user;
   }
 
   @Post('resend-email-otp')
@@ -73,6 +70,7 @@ export class AuthController {
     return this.authService.login(dto, req?.ip);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Post('logout')
   logout(@Req() req: any) {
     const authHeader = req?.headers?.authorization || '';
@@ -89,6 +87,7 @@ export class AuthController {
     return this.authService.resetPassword(dto);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Put('change-password')
   changePassword(@Req() req: any, @Body() dto: ChangePasswordDto) {
     return this.authService.changePassword(req?.user?.id, dto);
