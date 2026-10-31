@@ -23,6 +23,7 @@ export interface IAuthService {
   update(id: string, dto: UpdateAuthDto): Promise<AuthEntity>;
   remove(id: string): Promise<AuthEntity>;
 
+  registerFamilyRepresentative(dto: RegisterFamilyRepDto): Promise<RegisterInitiateResponse>;
   registerFamilyRep(dto: RegisterFamilyRepDto): Promise<RegisterInitiateResponse>;
   resendEmailOtp(dto: ResendEmailOtpDto): Promise<ApiResponseMessage>;
   verifyEmailOtp(dto: VerifyEmailOtpDto): Promise<AuthEntity>;

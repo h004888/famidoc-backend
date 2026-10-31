@@ -16,6 +16,7 @@ describe('AuthController', () => {
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
+      registerFamilyRepresentative: jest.fn(),
       registerFamilyRep: jest.fn(),
       verifyEmailOtp: jest.fn(),
       resendEmailOtp: jest.fn(),
@@ -43,7 +44,31 @@ describe('AuthController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('[UT-C-01] registerFamilyRep ủy quyền gọi service.registerFamilyRep', async () => {
+  it('[UT-C-01] registerFamilyRepresentative ủy quyền gọi service.registerFamilyRepresentative', async () => {
+    const dto = {
+      fullName: 'Nguyen Van A',
+      phone: '0912345678',
+      email: 'a@famidoc.vn',
+      password: 'Password@123',
+      acceptedTerms: true,
+      homeAddress: '123 Đường Láng, Hà Nội',
+    };
+    service.registerFamilyRepresentative.mockResolvedValue({
+      message: 'OTP sent',
+      email: dto.email,
+      expiresInSeconds: 300,
+    });
+
+    const res = await controller.registerFamilyRepresentative(dto);
+    expect(service.registerFamilyRepresentative).toHaveBeenCalledWith(dto);
+    expect(res).toEqual({
+      message: 'OTP sent',
+      email: dto.email,
+      expiresInSeconds: 300,
+    });
+  });
+
+  it('[UT-C-01b] registerFamilyRep ủy quyền gọi service.registerFamilyRepresentative', async () => {
     const dto = {
       fullName: 'Nguyen Van A',
       phone: '0912345678',
@@ -51,14 +76,14 @@ describe('AuthController', () => {
       password: 'Password@123',
       acceptedTerms: true,
     };
-    service.registerFamilyRep.mockResolvedValue({
+    service.registerFamilyRepresentative.mockResolvedValue({
       message: 'OTP sent',
       email: dto.email,
       expiresInSeconds: 300,
     });
 
     const res = await controller.registerFamilyRep(dto);
-    expect(service.registerFamilyRep).toHaveBeenCalledWith(dto);
+    expect(service.registerFamilyRepresentative).toHaveBeenCalledWith(dto);
     expect(res).toEqual({
       message: 'OTP sent',
       email: dto.email,
