@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsNotEmpty, IsString, Length, Matches } from 'class-validator';
+import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString, Length, Matches } from 'class-validator';
 
 export class RegisterFamilyRepDto {
   @IsString()
@@ -20,4 +20,8 @@ export class RegisterFamilyRepDto {
 
   @IsBoolean()
   acceptedTerms!: boolean;
+
+  @IsOptional()
+  @IsString()
+  homeAddress?: string;
 }

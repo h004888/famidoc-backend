@@ -30,7 +30,7 @@ import { AuthServiceImpl } from './services/impl/auth.service.impl';
     {
       provide: 'MAILER_SERVICE',
       useValue: {
-        sendMail: async (options: any) => {
+        sendMail: async (_options: any) => {
           return true;
         },
       },

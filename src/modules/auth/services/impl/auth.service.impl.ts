@@ -89,7 +89,7 @@ export class AuthServiceImpl implements IAuthService {
     return this.authRepository.delete(id);
   }
 
-  async registerFamilyRep(dto: RegisterFamilyRepDto): Promise<RegisterInitiateResponse> {
+  async registerFamilyRepresentative(dto: RegisterFamilyRepDto): Promise<RegisterInitiateResponse> {
     if (!dto.acceptedTerms) {
       throw new BadRequestException('You must accept terms and privacy policy');
     }
@@ -120,6 +120,7 @@ export class AuthServiceImpl implements IAuthService {
           fullName: dto.fullName,
           phone: dto.phone,
           password: dto.password,
+          homeAddress: dto.homeAddress,
           otp,
         }),
         'EX',
@@ -130,7 +131,7 @@ export class AuthServiceImpl implements IAuthService {
 
       await this.mailerService.sendMail({
         to: dto.email,
-        subject: 'FamiDoc - Xác thực đăng ký tài khoản',
+        subject: 'FamiDoc - Xác thực đăng ký tài khoản đại diện gia đình',
         text: `Mã OTP xác thực đăng ký của bạn là: ${otp} (hiệu lực 5 phút).`,
       });
 
@@ -148,6 +149,10 @@ export class AuthServiceImpl implements IAuthService {
       }
       throw new ServiceUnavailableException('Service unavailable, please try again later');
     }
+  }
+
+  async registerFamilyRep(dto: RegisterFamilyRepDto): Promise<RegisterInitiateResponse> {
+    return this.registerFamilyRepresentative(dto);
   }
 
   async resendEmailOtp(dto: ResendEmailOtpDto): Promise<ApiResponseMessage> {
@@ -200,13 +205,14 @@ export class AuthServiceImpl implements IAuthService {
       phone: data.phone,
       passwordHash,
       fullName: data.fullName,
+      homeAddress: data.homeAddress,
     });
 
     await this.redisClient.del(`otp:reg:${dto.email}`);
     return user;
   }
 
-  async login(dto: LoginDto, clientIp?: string): Promise<LoginSuccessResponse> {
+  async login(dto: LoginDto, _clientIp?: string): Promise<LoginSuccessResponse> {
     try {
       const isLocked = await this.redisClient.get(`login:lock:${dto.identifier}`);
       if (isLocked) {

@@ -103,6 +103,33 @@ describe('AuthServiceImpl', () => {
     expect(mailerService.sendMail).toHaveBeenCalled();
   });
 
+  it('[UT-S-01b] registerFamilyRepresentative hỗ trợ địa chỉ nhà và lưu tạm Redis', async () => {
+    repository.findByEmail.mockResolvedValue(null);
+    repository.findByPhone.mockResolvedValue(null);
+    redisService.ttl.mockResolvedValue(-2);
+    redisService.set.mockResolvedValue('OK');
+    mailerService.sendMail.mockResolvedValue(true);
+
+    const res = await service.registerFamilyRepresentative({
+      fullName: 'Nguyen Van A',
+      phone: '0912345678',
+      email: 'rep@famidoc.vn',
+      password: 'Password@123',
+      acceptedTerms: true,
+      homeAddress: 'Số 10 Phố Huế, Hà Nội',
+    });
+
+    expect(res.expiresInSeconds).toBe(300);
+    expect(res.email).toBe('rep@famidoc.vn');
+    expect(redisService.set).toHaveBeenCalledWith(
+      'otp:reg:rep@famidoc.vn',
+      expect.stringContaining('Số 10 Phố Huế, Hà Nội'),
+      'EX',
+      300,
+    );
+    expect(mailerService.sendMail).toHaveBeenCalled();
+  });
+
   it('[UT-S-02] Từ chối đăng ký do Email đã tồn tại', async () => {
     repository.findByEmail.mockResolvedValue({ id: '1' } as any);
 
