@@ -1,4 +1,12 @@
-import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString, Length, Matches } from 'class-validator';
+import {
+  IsBoolean,
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Length,
+  Matches,
+} from 'class-validator';
 
 export class RegisterFamilyRepDto {
   @IsString()
@@ -7,7 +15,9 @@ export class RegisterFamilyRepDto {
 
   @IsString()
   @IsNotEmpty()
-  @Matches(/^[0-9]{10,11}$/, { message: 'Phone must be a valid 10-11 digit phone number' })
+  @Matches(/^[0-9]{10,11}$/, {
+    message: 'Phone must be a valid 10-11 digit phone number',
+  })
   phone!: string;
 
   @IsEmail({}, { message: 'Email must be a valid email address' })

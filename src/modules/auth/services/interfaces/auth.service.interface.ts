@@ -23,13 +23,20 @@ export interface IAuthService {
   update(id: string, dto: UpdateAuthDto): Promise<AuthEntity>;
   remove(id: string): Promise<AuthEntity>;
 
-  registerFamilyRepresentative(dto: RegisterFamilyRepDto): Promise<RegisterInitiateResponse>;
-  registerFamilyRep(dto: RegisterFamilyRepDto): Promise<RegisterInitiateResponse>;
+  registerFamilyRepresentative(
+    dto: RegisterFamilyRepDto,
+  ): Promise<RegisterInitiateResponse>;
+  registerFamilyRep(
+    dto: RegisterFamilyRepDto,
+  ): Promise<RegisterInitiateResponse>;
   resendEmailOtp(dto: ResendEmailOtpDto): Promise<ApiResponseMessage>;
   verifyEmailOtp(dto: VerifyEmailOtpDto): Promise<AuthEntity>;
   login(dto: LoginDto, clientIp?: string): Promise<LoginSuccessResponse>;
   logout(userId: string, token: string): Promise<void>;
   forgotPassword(dto: ForgotPasswordDto): Promise<ApiResponseMessage>;
   resetPassword(dto: ResetPasswordDto): Promise<ApiResponseMessage>;
-  changePassword(userId: string, dto: ChangePasswordDto): Promise<ApiResponseMessage>;
+  changePassword(
+    userId: string,
+    dto: ChangePasswordDto,
+  ): Promise<ApiResponseMessage>;
 }

@@ -1,3 +1,4 @@
+import { compareSync, hashSync } from 'bcryptjs';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
@@ -121,6 +122,13 @@ describe('AuthServiceImpl', () => {
 
     expect(res.expiresInSeconds).toBe(300);
     expect(res.email).toBe('rep@famidoc.vn');
+    const registrationCall = redisService.set.mock.calls.find(
+      ([key]: [string]) => key === 'otp:reg:rep@famidoc.vn',
+    );
+    const registration = JSON.parse(registrationCall[1]);
+    expect(registration.homeAddress).toBe('Số 10 Phố Huế, Hà Nội');
+    expect(registration.password).toBeUndefined();
+    expect(compareSync('Password@123', registration.passwordHash)).toBe(true);
     expect(redisService.set).toHaveBeenCalledWith(
       'otp:reg:rep@famidoc.vn',
       expect.stringContaining('Số 10 Phố Huế, Hà Nội'),
@@ -175,7 +183,8 @@ describe('AuthServiceImpl', () => {
     const cachedData = JSON.stringify({
       fullName: 'Nguyen Van A',
       phone: '0912345678',
-      password: 'Password@123',
+      passwordHash: hashSync('Password@123', 4),
+      homeAddress: 'Số 10 Phố Huế, Hà Nội',
       otp: '123456',
     });
     redisService.get.mockResolvedValue(cachedData);
@@ -186,17 +195,22 @@ describe('AuthServiceImpl', () => {
       status: 'ACTIVE',
     } as any);
 
-    const user = await service.verifyEmailOtp({ email: 'a@famidoc.vn', otp: '123456' });
+    const user = await service.verifyEmailOtp({
+      email: 'a@famidoc.vn',
+      otp: '123456',
+    });
     expect(user.id).toBe('u-1');
     expect(redisService.del).toHaveBeenCalled();
-    expect(repository.createFamilyRepWithProfile).toHaveBeenCalled();
+    expect(repository.createFamilyRepWithProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ homeAddress: 'Số 10 Phố Huế, Hà Nội' }),
+    );
   });
 
   it('[UT-S-06] Xác thực Email OTP thất bại do mã OTP sai', async () => {
     const cachedData = JSON.stringify({
       fullName: 'Nguyen Van A',
       phone: '0912345678',
-      password: 'Password@123',
+      passwordHash: hashSync('Password@123', 4),
       otp: '123456',
     });
     redisService.get.mockResolvedValue(cachedData);
@@ -217,14 +231,16 @@ describe('AuthServiceImpl', () => {
   it('[UT-S-08] Gửi lại OTP bị từ chối do còn trong thời gian Cooldown (< 60s)', async () => {
     redisService.ttl.mockResolvedValue(45);
 
-    await expect(service.resendEmailOtp({ email: 'a@famidoc.vn' })).rejects.toThrow(
-      HttpException,
-    );
+    await expect(
+      service.resendEmailOtp({ email: 'a@famidoc.vn' }),
+    ).rejects.toThrow(HttpException);
   });
 
   it('[UT-S-09] Gửi lại OTP thành công khi hết thời gian Cooldown (> 60s)', async () => {
     redisService.ttl.mockResolvedValue(-2);
-    redisService.get.mockResolvedValue(JSON.stringify({ fullName: 'A', phone: '09', password: 'P' }));
+    redisService.get.mockResolvedValue(
+      JSON.stringify({ fullName: 'A', phone: '09', password: 'P' }),
+    );
     redisService.set.mockResolvedValue('OK');
     mailerService.sendMail.mockResolvedValue(true);
 
@@ -239,7 +255,7 @@ describe('AuthServiceImpl', () => {
     const mockUser: any = {
       id: 'u-1',
       email: 'a@famidoc.vn',
-      passwordHash: 'hash',
+      passwordHash: hashSync('Password@123', 4),
       role: 'FAMILY_REP',
       status: 'ACTIVE',
     };
@@ -247,7 +263,10 @@ describe('AuthServiceImpl', () => {
     jwtService.sign.mockReturnValue('jwt_token_123');
 
     // Giả lập password match trong implementation
-    const res = await service.login({ identifier: 'a@famidoc.vn', password: 'Password@123' });
+    const res = await service.login({
+      identifier: 'a@famidoc.vn',
+      password: 'Password@123',
+    });
     expect(res.accessToken).toBe('jwt_token_123');
     expect(redisService.del).toHaveBeenCalledWith('login:fail:a@famidoc.vn');
   });
@@ -268,7 +287,7 @@ describe('AuthServiceImpl', () => {
     const mockUser: any = {
       id: 'u-1',
       email: 'a@famidoc.vn',
-      passwordHash: 'different_hash',
+      passwordHash: hashSync('DifferentPassword@123', 4),
       status: 'ACTIVE',
     };
     repository.findByEmail.mockResolvedValue(mockUser);
@@ -285,7 +304,7 @@ describe('AuthServiceImpl', () => {
     const mockUser: any = {
       id: 'u-1',
       email: 'a@famidoc.vn',
-      passwordHash: 'different_hash',
+      passwordHash: hashSync('DifferentPassword@123', 4),
       status: 'ACTIVE',
     };
     repository.findByEmail.mockResolvedValue(mockUser);
@@ -308,7 +327,10 @@ describe('AuthServiceImpl', () => {
     repository.findByPhone.mockResolvedValue(null);
 
     await expect(
-      service.login({ identifier: 'notfound@famidoc.vn', password: 'Password@123' }),
+      service.login({
+        identifier: 'notfound@famidoc.vn',
+        password: 'Password@123',
+      }),
     ).rejects.toThrow(UnauthorizedException);
   });
 
@@ -317,7 +339,7 @@ describe('AuthServiceImpl', () => {
     const mockUser: any = {
       id: 'u-1',
       email: 'a@famidoc.vn',
-      passwordHash: 'hash',
+      passwordHash: hashSync('Password@123', 4),
       status: 'SUSPENDED',
     };
     repository.findByEmail.mockResolvedValue(mockUser);
@@ -332,7 +354,7 @@ describe('AuthServiceImpl', () => {
     const mockUser: any = {
       id: 'd-1',
       email: 'doctor@famidoc.vn',
-      passwordHash: 'hash',
+      passwordHash: hashSync('Password@123', 4),
       role: 'DOCTOR',
       status: 'PENDING',
     };
@@ -348,7 +370,10 @@ describe('AuthServiceImpl', () => {
 
   // --- UC-03 LOGOUT ---
   it('[UT-S-17] Đăng xuất an toàn (Logout - Đưa Token vào Redis Blacklist)', async () => {
-    jwtService.decode.mockReturnValue({ jti: 'token-uuid', exp: Math.floor(Date.now() / 1000) + 600 });
+    jwtService.decode.mockReturnValue({
+      jti: 'token-uuid',
+      exp: Math.floor(Date.now() / 1000) + 600,
+    });
     redisService.set.mockResolvedValue('OK');
 
     await service.logout('u-1', 'Bearer token_abc');
@@ -357,7 +382,10 @@ describe('AuthServiceImpl', () => {
 
   // --- UC-04 FORGOT & RESET PASSWORD ---
   it('[UT-S-18] Quên mật khẩu: Gửi OTP reset qua Email cho tài khoản tồn tại', async () => {
-    repository.findByEmail.mockResolvedValue({ id: 'u-1', email: 'a@famidoc.vn' } as any);
+    repository.findByEmail.mockResolvedValue({
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+    } as any);
     redisService.set.mockResolvedValue('OK');
     mailerService.sendMail.mockResolvedValue(true);
 
@@ -376,7 +404,10 @@ describe('AuthServiceImpl', () => {
 
   it('[UT-S-20] Đặt lại mật khẩu (Reset Password) thành công bằng OTP', async () => {
     redisService.get.mockResolvedValue('654321');
-    repository.findByEmail.mockResolvedValue({ id: 'u-1', email: 'a@famidoc.vn' } as any);
+    repository.findByEmail.mockResolvedValue({
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+    } as any);
 
     const res = await service.resetPassword({
       email: 'a@famidoc.vn',
@@ -399,7 +430,7 @@ describe('AuthServiceImpl', () => {
   it('[UT-S-21] Đổi mật khẩu (Change Password) thành công khi nhập đúng mật khẩu cũ', async () => {
     repository.findById.mockResolvedValue({
       id: 'u-1',
-      passwordHash: 'hash',
+      passwordHash: hashSync('OldPassword@123', 4),
     } as any);
 
     const res = await service.changePassword('u-1', {
@@ -419,7 +450,7 @@ describe('AuthServiceImpl', () => {
   it('[UT-S-22] Đổi mật khẩu thất bại do nhập sai mật khẩu cũ', async () => {
     repository.findById.mockResolvedValue({
       id: 'u-1',
-      passwordHash: 'different_hash',
+      passwordHash: hashSync('DifferentPassword@123', 4),
     } as any);
 
     await expect(
@@ -499,9 +530,14 @@ describe('AuthServiceImpl', () => {
   });
 
   it('[FI-05] Hasher gặp sự cố ném InternalServerErrorException', async () => {
-    repository.findById.mockResolvedValue({ id: 'u-1', passwordHash: 'hash' } as any);
+    repository.findById.mockResolvedValue({
+      id: 'u-1',
+      passwordHash: hashSync('Password@123', 4),
+    } as any);
     // giả lập lỗi crash bộ nhớ
-    jest.spyOn(service as any, 'verifyPassword' as any).mockRejectedValue(new Error('Memory allocation failed'));
+    jest
+      .spyOn(service as any, 'verifyPassword' as any)
+      .mockRejectedValue(new Error('Memory allocation failed'));
 
     await expect(
       service.changePassword('u-1', {
@@ -525,7 +561,10 @@ describe('AuthServiceImpl', () => {
 
     it('so khớp thất bại với mật khẩu sai', async () => {
       const hash = await (service as any).hashPassword('CorrectPass@123');
-      const isValid = await (service as any).verifyPassword('WrongPass@123', hash);
+      const isValid = await (service as any).verifyPassword(
+        'WrongPass@123',
+        hash,
+      );
       expect(isValid).toBe(false);
     });
   });

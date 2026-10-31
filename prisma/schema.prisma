@@ -192,6 +192,9 @@ model User {
   complainantComplaints             Complaint[]           @relation("ComplaintComplainantUser")
   targetComplaints                  Complaint[]           @relation("ComplaintTargetUser")
   systemConfigurationsUpdated       SystemConfiguration[]
+  confirmedSettlements              FacilitySettlement[]  @relation("SettlementConfirmer")
+  facilityComplaintResponses        Complaint[]           @relation("ComplaintFacilityReviewer")
+  resolvedComplaints                Complaint[]           @relation("ComplaintResolver")
   auditLogs                         AuditLog[]
 
   @@map("users")
@@ -332,9 +335,20 @@ model ServicePackage {
   createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt           DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
+  // Bổ sung điều khoản từ bảng giá. Mỗi phiên bản là một bản ghi riêng để giữ lịch sử.
+  lineageCode                  String    @map("lineage_code") @db.VarChar(50)
+  version                      Int       @default(1)
+  description                  String    @default("") @db.Text
+  includedMembers              Int       @default(1) @map("included_members")
+  additionalMemberMonthlyPrice Decimal   @default(0) @map("additional_member_monthly_price") @db.Decimal(12, 2)
+  quotaPeriod                  String    @default("PER_TERM") @map("quota_period") @db.VarChar(20)
+  publishedAt                  DateTime? @map("published_at") @db.Timestamptz()
+  retiredAt                    DateTime? @map("retired_at") @db.Timestamptz()
+
   // Relations
   medicalContracts MedicalContract[]
 
+  @@unique([lineageCode, version])
   @@map("service_packages")
 }
 
@@ -455,6 +469,19 @@ model MedicalContract {
   createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt           DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
+  // Snapshot chỉ do backend tạo; không lấy giá/quyền lợi do client tự gửi.
+  billingSnapshot     Json?             @map("billing_snapshot") @db.JsonB
+  isDemo              Boolean           @default(false) @map("is_demo")
+  upgradedFromId      String?           @map("upgraded_from_id") @db.Uuid
+  upgradedFrom        MedicalContract?  @relation("ContractUpgrade", fields: [upgradedFromId], references: [id], onDelete: Restrict)
+  upgrades            MedicalContract[] @relation("ContractUpgrade")
+  // Số người đã mua quyền sử dụng; thêm hồ sơ gia đình không tự tăng số người đã thanh toán.
+  memberCount         Int               @default(1) @map("member_count")
+  // Giữ dữ liệu thành viên cũ để đối chiếu lịch sử và không làm sai hash đã được xác nhận.
+  legacyMemberIds     Json?             @map("legacy_member_ids") @db.JsonB
+  // Lưu cả yêu cầu đã từ chối/đã duyệt, không ghi đè lịch sử khi có yêu cầu mới.
+  terminationRequests Json              @default("[]") @map("termination_requests") @db.JsonB
+
   // Relations
   familyUnit     FamilyUnit          @relation(fields: [familyId], references: [id], onDelete: Restrict)
   facility       HealthcareFacility  @relation(fields: [facilityId], references: [id], onDelete: Restrict)
@@ -476,35 +503,46 @@ model MedicalContract {
 model ContractSignature {
   id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   contractId    String     @map("contract_id") @db.Uuid
+  addendumId    String?    @map("addendum_id") @db.Uuid
   signerRole    SignerRole @map("signer_role")
   signerUserId  String     @map("signer_user_id") @db.Uuid
   signatureHash String     @map("signature_hash") @db.Text
+  termsHash     String?    @map("terms_hash") @db.VarChar(64)
   signedAt      DateTime   @default(now()) @map("signed_at") @db.Timestamptz()
   ipAddress     String     @map("ip_address") @db.VarChar(45)
 
   // Relations
-  contract   MedicalContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  signerUser User            @relation(fields: [signerUserId], references: [id])
+  contract   MedicalContract   @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  addendum   ContractAddendum? @relation(fields: [addendumId, contractId], references: [id, contractId], onDelete: Cascade)
+  signerUser User              @relation(fields: [signerUserId], references: [id])
 
+  // Hai unique index có điều kiện trong migration: chữ ký hợp đồng và chữ ký từng phụ lục.
+  @@index([contractId])
   @@map("contract_signatures")
 }
 
 model ContractAddendum {
-  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  contractId       String         @map("contract_id") @db.Uuid
-  addendumNumber   String         @unique @map("addendum_number") @db.VarChar(50)
-  addendumType     AddendumType   @map("addendum_type")
-  additionalAmount Decimal        @map("additional_amount") @db.Decimal(12, 2)
-  extraHomeVisits  Int            @default(0) @map("extra_home_visits")
-  extraTelehealth  Int            @default(0) @map("extra_telehealth")
-  extendedEndDate  DateTime?      @map("extended_end_date") @db.Date
-  status           AddendumStatus @default(PENDING_PAYMENT)
-  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz()
+  id               String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contractId       String              @map("contract_id") @db.Uuid
+  addendumNumber   String              @unique @map("addendum_number") @db.VarChar(50)
+  addendumType     AddendumType        @map("addendum_type")
+  additionalAmount Decimal             @map("additional_amount") @db.Decimal(12, 2)
+  extraHomeVisits  Int                 @default(0) @map("extra_home_visits")
+  extraTelehealth  Int                 @default(0) @map("extra_telehealth")
+  extendedEndDate  DateTime?           @map("extended_end_date") @db.Date
+  status           AddendumStatus      @default(PENDING_PAYMENT)
+  termsSnapshot    Json                @default("{}") @map("terms_snapshot") @db.JsonB
+  termsHash        String              @default("") @map("terms_hash") @db.VarChar(64)
+  requestKey       String?             @unique @map("request_key") @db.VarChar(100)
+  activatedAt      DateTime?           @map("activated_at") @db.Timestamptz()
+  signatures       ContractSignature[]
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz()
 
   // Relations
   contract MedicalContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
   invoices Invoice[]
 
+  @@unique([id, contractId])
   @@map("contract_addenda")
 }
 
@@ -663,42 +701,71 @@ model ReferralOrder {
 // =========================================================================
 
 model Invoice {
-  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  invoiceCode    String        @unique @map("invoice_code") @db.VarChar(50)
-  contractId     String?       @map("contract_id") @db.Uuid
-  addendumId     String?       @map("addendum_id") @db.Uuid
-  encounterId    String?       @map("encounter_id") @db.Uuid
-  grossAmount    Decimal       @map("gross_amount") @db.Decimal(12, 2)
-  vatAmount      Decimal       @default(0.00) @map("vat_amount") @db.Decimal(12, 2)
-  totalPayable   Decimal       @map("total_payable") @db.Decimal(12, 2)
-  paymentGateway String        @default("VIETQR") @map("payment_gateway") @db.VarChar(50)
-  paymentStatus  PaymentStatus @default(PENDING) @map("payment_status")
-  expiredAt      DateTime      @map("expired_at") @db.Timestamptz()
-  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt      DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  id              String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  invoiceCode     String        @unique @map("invoice_code") @db.VarChar(50)
+  // Nội dung QR đã chốt, không đổi theo tên tài khoản sau khi phát hành hóa đơn.
+  transferContent String?       @map("transfer_content") @db.VarChar(140)
+  contractId      String?       @map("contract_id") @db.Uuid
+  addendumId      String?       @map("addendum_id") @db.Uuid
+  encounterId     String?       @map("encounter_id") @db.Uuid
+  grossAmount     Decimal       @map("gross_amount") @db.Decimal(12, 2)
+  vatAmount       Decimal       @default(0.00) @map("vat_amount") @db.Decimal(12, 2)
+  totalPayable    Decimal       @map("total_payable") @db.Decimal(12, 2)
+  paymentGateway  String        @default("VIETQR") @map("payment_gateway") @db.VarChar(50)
+  paymentStatus   PaymentStatus @default(PENDING) @map("payment_status")
+  expiredAt       DateTime      @map("expired_at") @db.Timestamptz()
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Invoice là yêu cầu thanh toán; không tạo thêm bảng PaymentRequest song song.
+  environment           String    @default("TEST") @db.VarChar(10)
+  attempt               Int       @default(1)
+  expectedAccountNumber String?   @map("expected_account_number") @db.VarChar(50)
+  expectedGateway       String?   @map("expected_gateway") @db.VarChar(50)
+  paidAt                DateTime? @map("paid_at") @db.Timestamptz()
+  acceptedTransactionId String?   @unique @map("accepted_transaction_id") @db.Uuid
 
   // Relations
   contract            MedicalContract?     @relation(fields: [contractId], references: [id], onDelete: Restrict)
   addendum            ContractAddendum?    @relation(fields: [addendumId], references: [id], onDelete: Restrict)
   encounter           Encounter?           @relation(fields: [encounterId], references: [id], onDelete: Restrict)
-  paymentTransactions PaymentTransaction[]
+  paymentTransactions PaymentTransaction[] @relation("InvoiceTransactions")
+  acceptedTransaction PaymentTransaction?  @relation("AcceptedInvoiceTransaction", fields: [acceptedTransactionId], references: [id], onDelete: Restrict)
+
+  settlementItem FacilitySettlementItem?
 
   @@map("invoices")
 }
 
 model PaymentTransaction {
   id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  invoiceId            String   @map("invoice_id") @db.Uuid
-  gatewayTransactionId String   @unique @map("gateway_transaction_id") @db.VarChar(100)
+  // Cho phép lưu cả giao dịch chưa ghép được hóa đơn để không mất dấu tiền đến.
+  invoiceId            String?  @map("invoice_id") @db.Uuid
+  gatewayTransactionId String   @map("gateway_transaction_id") @db.VarChar(100)
   amountReceived       Decimal  @map("amount_received") @db.Decimal(12, 2)
   paymentTime          DateTime @map("payment_time") @db.Timestamptz()
   signatureVerified    Boolean  @map("signature_verified")
   webhookPayload       Json     @map("webhook_payload") @db.JsonB
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  // Relations
-  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  environment      String  @default("TEST") @db.VarChar(10)
+  fingerprint      String  @db.VarChar(64)
+  bankReferenceKey String? @map("bank_reference_key") @db.Text
+  gateway          String  @db.VarChar(100)
+  accountNumber    String  @map("account_number") @db.VarChar(50)
+  transferType     String  @map("transfer_type") @db.VarChar(10)
+  paymentCode      String? @map("payment_code") @db.VarChar(50)
+  referenceCode    String  @default("") @map("reference_code") @db.VarChar(150)
+  outcome          String  @db.VarChar(30)
+  reason           String? @db.VarChar(50)
 
+  // Relations
+  invoice    Invoice? @relation("InvoiceTransactions", fields: [invoiceId], references: [id], onDelete: Restrict)
+  acceptedBy Invoice? @relation("AcceptedInvoiceTransaction")
+
+  @@unique([environment, gatewayTransactionId])
+  @@index([bankReferenceKey])
+  @@index([outcome, createdAt])
   @@map("payment_transactions")
 }
 
@@ -716,9 +783,18 @@ model FacilitySettlement {
   settledAt            DateTime?          @map("settled_at") @db.Timestamptz()
   createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz()
 
+  environment         String                   @default("LIVE") @db.VarChar(10)
+  bankDestination     Json                     @default("{}") @map("bank_destination") @db.JsonB
+  failureReason       String?                  @map("failure_reason") @db.Text
+  transferEvidenceKey String?                  @map("transfer_evidence_key") @db.Text
+  confirmedByUserId   String?                  @map("confirmed_by_user_id") @db.Uuid
+  items               FacilitySettlementItem[]
   // Relations
-  facility HealthcareFacility @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  facility            HealthcareFacility       @relation(fields: [facilityId], references: [id], onDelete: Restrict)
 
+  confirmedByUser User? @relation("SettlementConfirmer", fields: [confirmedByUserId], references: [id], onDelete: Restrict, map: "facility_settlements_confirmer_fkey")
+
+  @@unique([facilityId, month, year, environment])
   @@map("facility_settlements")
 }
 
@@ -744,27 +820,34 @@ model DoctorReview {
 }
 
 model Complaint {
-  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  complaintCode       String          @unique @map("complaint_code") @db.VarChar(50)
-  contractId          String          @map("contract_id") @db.Uuid
-  encounterId         String?         @map("encounter_id") @db.Uuid
-  complainantUserId   String          @map("complainant_user_id") @db.Uuid
-  targetUserId        String          @map("target_user_id") @db.Uuid
-  complaintCategory   String          @map("complaint_category") @db.VarChar(50)
-  description         String          @db.Text
-  evidenceAttachments Json?           @map("evidence_attachments") @db.JsonB
-  resolutionOutcome   String?         @map("resolution_outcome") @db.VarChar(50)
-  resolutionNotes     String?         @map("resolution_notes") @db.Text
-  status              ComplaintStatus @default(SUBMITTED)
-  resolvedAt          DateTime?       @map("resolved_at") @db.Timestamptz()
-  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt           DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  id                   String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  complaintCode        String          @unique @map("complaint_code") @db.VarChar(50)
+  contractId           String          @map("contract_id") @db.Uuid
+  encounterId          String?         @map("encounter_id") @db.Uuid
+  complainantUserId    String          @map("complainant_user_id") @db.Uuid
+  targetUserId         String          @map("target_user_id") @db.Uuid
+  complaintCategory    String          @map("complaint_category") @db.VarChar(50)
+  description          String          @db.Text
+  evidenceAttachments  Json?           @map("evidence_attachments") @db.JsonB
+  resolutionOutcome    String?         @map("resolution_outcome") @db.VarChar(50)
+  resolutionNotes      String?         @map("resolution_notes") @db.Text
+  facilityResponse     String?         @map("facility_response") @db.Text
+  facilityReviewedById String?         @map("facility_reviewed_by_id") @db.Uuid
+  facilityReviewedAt   DateTime?       @map("facility_reviewed_at") @db.Timestamptz()
+  resolvedByUserId     String?         @map("resolved_by_user_id") @db.Uuid
+  status               ComplaintStatus @default(SUBMITTED)
+  resolvedAt           DateTime?       @map("resolved_at") @db.Timestamptz()
+  createdAt            DateTime        @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt            DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   // Relations
   contract        MedicalContract @relation(fields: [contractId], references: [id], onDelete: Restrict)
   encounter       Encounter?      @relation(fields: [encounterId], references: [id], onDelete: SetNull)
   complainantUser User            @relation("ComplaintComplainantUser", fields: [complainantUserId], references: [id], onDelete: Restrict)
   targetUser      User            @relation("ComplaintTargetUser", fields: [targetUserId], references: [id], onDelete: Restrict)
+
+  facilityReviewer User? @relation("ComplaintFacilityReviewer", fields: [facilityReviewedById], references: [id], onDelete: Restrict, map: "complaints_facility_reviewer_fkey")
+  resolver         User? @relation("ComplaintResolver", fields: [resolvedByUserId], references: [id], onDelete: Restrict, map: "complaints_resolver_fkey")
 
   @@map("complaints")
 }
@@ -800,4 +883,20 @@ model AuditLog {
   actorUser User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@map("audit_logs")
+}
+
+// Một hóa đơn chỉ xuất hiện trong một kỳ quyết toán, kể cả khi gọi lại API hoặc chạy lại job.
+model FacilitySettlementItem {
+  id                  String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  settlementId        String             @map("settlement_id") @db.Uuid
+  invoiceId           String             @unique @map("invoice_id") @db.Uuid
+  grossAmount         Decimal            @map("gross_amount") @db.Decimal(12, 2)
+  vatAmount           Decimal            @map("vat_amount") @db.Decimal(12, 2)
+  netAmount           Decimal            @map("net_amount") @db.Decimal(12, 2)
+  platformFeeAmount   Decimal            @map("platform_fee_amount") @db.Decimal(12, 2)
+  facilityShareAmount Decimal            @map("facility_share_amount") @db.Decimal(12, 2)
+  settlement          FacilitySettlement @relation(fields: [settlementId], references: [id], onDelete: Restrict)
+  invoice             Invoice            @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@map("facility_settlement_items")
 }

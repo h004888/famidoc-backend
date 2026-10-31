@@ -1,3 +1,4 @@
+import { randomInt, randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -53,11 +54,11 @@ export class AuthServiceImpl implements IAuthService {
     }
   }
 
-  protected async verifyPassword(plain: string, hash: string): Promise<boolean> {
+  protected async verifyPassword(
+    plain: string,
+    hash: string,
+  ): Promise<boolean> {
     try {
-      if (hash === 'hash' || hash === 'different_hash' || hash === 'same_hash') {
-        return hash === 'hash' && (plain === 'Password@123' || plain === 'OldPassword@123');
-      }
       return await bcrypt.compare(plain, hash);
     } catch (err: any) {
       if (err instanceof InternalServerErrorException) throw err;
@@ -89,7 +90,9 @@ export class AuthServiceImpl implements IAuthService {
     return this.authRepository.delete(id);
   }
 
-  async registerFamilyRepresentative(dto: RegisterFamilyRepDto): Promise<RegisterInitiateResponse> {
+  async registerFamilyRepresentative(
+    dto: RegisterFamilyRepDto,
+  ): Promise<RegisterInitiateResponse> {
     if (!dto.acceptedTerms) {
       throw new BadRequestException('You must accept terms and privacy policy');
     }
@@ -113,13 +116,13 @@ export class AuthServiceImpl implements IAuthService {
         );
       }
 
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otp = randomInt(100000, 1000000).toString();
       await this.redisClient.set(
         `otp:reg:${dto.email}`,
         JSON.stringify({
           fullName: dto.fullName,
           phone: dto.phone,
-          password: dto.password,
+          passwordHash: await this.hashPassword(dto.password),
           homeAddress: dto.homeAddress,
           otp,
         }),
@@ -141,17 +144,25 @@ export class AuthServiceImpl implements IAuthService {
         expiresInSeconds: 300,
       };
     } catch (err: any) {
-      if (err instanceof ConflictException || err instanceof BadRequestException || err instanceof HttpException) {
+      if (
+        err instanceof ConflictException ||
+        err instanceof BadRequestException ||
+        err instanceof HttpException
+      ) {
         throw err;
       }
       if (err.code === 'P2002') {
         throw new ConflictException('This email/phone is already registered');
       }
-      throw new ServiceUnavailableException('Service unavailable, please try again later');
+      throw new ServiceUnavailableException(
+        'Service unavailable, please try again later',
+      );
     }
   }
 
-  async registerFamilyRep(dto: RegisterFamilyRepDto): Promise<RegisterInitiateResponse> {
+  async registerFamilyRep(
+    dto: RegisterFamilyRepDto,
+  ): Promise<RegisterInitiateResponse> {
     return this.registerFamilyRepresentative(dto);
   }
 
@@ -166,14 +177,21 @@ export class AuthServiceImpl implements IAuthService {
 
     const cached = await this.redisClient.get(`otp:reg:${dto.email}`);
     if (!cached) {
-      throw new BadRequestException('No pending registration found for this email');
+      throw new BadRequestException(
+        'No pending registration found for this email',
+      );
     }
 
     const data = JSON.parse(cached);
-    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const newOtp = randomInt(100000, 1000000).toString();
     data.otp = newOtp;
 
-    await this.redisClient.set(`otp:reg:${dto.email}`, JSON.stringify(data), 'EX', 300);
+    await this.redisClient.set(
+      `otp:reg:${dto.email}`,
+      JSON.stringify(data),
+      'EX',
+      300,
+    );
     await this.redisClient.set(`otp:cooldown:${dto.email}`, '1', 'EX', 60);
 
     await this.mailerService.sendMail({
@@ -199,7 +217,12 @@ export class AuthServiceImpl implements IAuthService {
       throw new UnauthorizedException('Invalid or expired OTP');
     }
 
-    const passwordHash = await this.hashPassword(data.password);
+    // Chỉ lưu hash trong Redis, không lưu mật khẩu đăng ký dạng rõ.
+    if (!data.passwordHash)
+      throw new UnauthorizedException(
+        'Registration expired; please register again',
+      );
+    const passwordHash = data.passwordHash;
     const user = await this.authRepository.createFamilyRepWithProfile({
       email: dto.email,
       phone: data.phone,
@@ -212,9 +235,14 @@ export class AuthServiceImpl implements IAuthService {
     return user;
   }
 
-  async login(dto: LoginDto, _clientIp?: string): Promise<LoginSuccessResponse> {
+  async login(
+    dto: LoginDto,
+    _clientIp?: string,
+  ): Promise<LoginSuccessResponse> {
     try {
-      const isLocked = await this.redisClient.get(`login:lock:${dto.identifier}`);
+      const isLocked = await this.redisClient.get(
+        `login:lock:${dto.identifier}`,
+      );
       if (isLocked) {
         throw new ForbiddenException(
           'Account temporarily locked. Please try again in 20 minutes',
@@ -240,9 +268,14 @@ export class AuthServiceImpl implements IAuthService {
         );
       }
 
-      const isValid = await this.verifyPassword(dto.password, user.passwordHash);
+      const isValid = await this.verifyPassword(
+        dto.password,
+        user.passwordHash,
+      );
       if (!isValid) {
-        const failCount = await this.redisClient.incr(`login:fail:${dto.identifier}`);
+        const failCount = await this.redisClient.incr(
+          `login:fail:${dto.identifier}`,
+        );
         if (failCount >= 5) {
           await this.redisClient.set(
             `login:lock:${dto.identifier}`,
@@ -260,6 +293,7 @@ export class AuthServiceImpl implements IAuthService {
 
       const payload: any = {
         sub: user.id,
+        jti: randomUUID(),
         email: user.email,
         role: user.role,
       };
@@ -288,7 +322,9 @@ export class AuthServiceImpl implements IAuthService {
       ) {
         throw err;
       }
-      throw new ServiceUnavailableException('Authentication service unavailable');
+      throw new ServiceUnavailableException(
+        'Authentication service unavailable',
+      );
     }
   }
 
@@ -316,7 +352,7 @@ export class AuthServiceImpl implements IAuthService {
       };
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = randomInt(100000, 1000000).toString();
     await this.redisClient.set(`otp:reset:${dto.email}`, otp, 'EX', 600);
 
     await this.mailerService.sendMail({

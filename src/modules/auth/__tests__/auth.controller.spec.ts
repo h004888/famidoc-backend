@@ -1,3 +1,4 @@
+import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from '../controllers/auth.controller';
 import {
@@ -35,7 +36,10 @@ describe('AuthController', () => {
           useValue: service,
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<AuthController>(AuthController);
   });
@@ -103,7 +107,10 @@ describe('AuthController', () => {
 
   it('[UT-C-03] resendEmailOtp ủy quyền gọi service.resendEmailOtp', async () => {
     const dto = { email: 'a@famidoc.vn' };
-    service.resendEmailOtp.mockResolvedValue({ message: 'Resent', success: true });
+    service.resendEmailOtp.mockResolvedValue({
+      message: 'Resent',
+      success: true,
+    });
 
     const res = await controller.resendEmailOtp(dto);
     expect(service.resendEmailOtp).toHaveBeenCalledWith(dto);
@@ -122,7 +129,10 @@ describe('AuthController', () => {
   });
 
   it('[UT-C-05] logout ủy quyền gọi service.logout', async () => {
-    const req: any = { user: { id: 'u-1' }, headers: { authorization: 'Bearer token_xyz' } };
+    const req: any = {
+      user: { id: 'u-1' },
+      headers: { authorization: 'Bearer token_xyz' },
+    };
     service.logout.mockResolvedValue();
 
     await controller.logout(req);
@@ -131,7 +141,10 @@ describe('AuthController', () => {
 
   it('[UT-C-06] forgotPassword ủy quyền gọi service.forgotPassword', async () => {
     const dto = { email: 'a@famidoc.vn' };
-    service.forgotPassword.mockResolvedValue({ message: 'Sent', success: true });
+    service.forgotPassword.mockResolvedValue({
+      message: 'Sent',
+      success: true,
+    });
 
     const res = await controller.forgotPassword(dto);
     expect(service.forgotPassword).toHaveBeenCalledWith(dto);
@@ -139,8 +152,15 @@ describe('AuthController', () => {
   });
 
   it('[UT-C-07] resetPassword ủy quyền gọi service.resetPassword', async () => {
-    const dto = { email: 'a@famidoc.vn', otp: '123456', newPassword: 'NewPassword@123' };
-    service.resetPassword.mockResolvedValue({ message: 'Reset ok', success: true });
+    const dto = {
+      email: 'a@famidoc.vn',
+      otp: '123456',
+      newPassword: 'NewPassword@123',
+    };
+    service.resetPassword.mockResolvedValue({
+      message: 'Reset ok',
+      success: true,
+    });
 
     const res = await controller.resetPassword(dto);
     expect(service.resetPassword).toHaveBeenCalledWith(dto);
@@ -150,7 +170,10 @@ describe('AuthController', () => {
   it('[UT-C-08] changePassword ủy quyền gọi service.changePassword', async () => {
     const dto = { oldPassword: 'Old', newPassword: 'NewPassword@123' };
     const req: any = { user: { id: 'u-1' } };
-    service.changePassword.mockResolvedValue({ message: 'Changed ok', success: true });
+    service.changePassword.mockResolvedValue({
+      message: 'Changed ok',
+      success: true,
+    });
 
     const res = await controller.changePassword(req, dto);
     expect(service.changePassword).toHaveBeenCalled();
