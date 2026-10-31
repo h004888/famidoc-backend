@@ -48,9 +48,14 @@ export class AuthController {
     return this.authService.remove(id);
   }
 
+  @Post('register-representative')
+  registerFamilyRepresentative(@Body() dto: RegisterFamilyRepDto) {
+    return this.authService.registerFamilyRepresentative(dto);
+  }
+
   @Post('register')
   registerFamilyRep(@Body() dto: RegisterFamilyRepDto) {
-    return this.authService.registerFamilyRep(dto);
+    return this.authService.registerFamilyRepresentative(dto);
   }
 
   @Post('verify-email-otp')

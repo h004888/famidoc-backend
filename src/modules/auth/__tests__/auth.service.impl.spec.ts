@@ -1,4 +1,4 @@
-import { hashSync } from 'bcryptjs';
+import { compareSync, hashSync } from 'bcryptjs';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
@@ -104,6 +104,40 @@ describe('AuthServiceImpl', () => {
     expect(mailerService.sendMail).toHaveBeenCalled();
   });
 
+  it('[UT-S-01b] registerFamilyRepresentative hỗ trợ địa chỉ nhà và lưu tạm Redis', async () => {
+    repository.findByEmail.mockResolvedValue(null);
+    repository.findByPhone.mockResolvedValue(null);
+    redisService.ttl.mockResolvedValue(-2);
+    redisService.set.mockResolvedValue('OK');
+    mailerService.sendMail.mockResolvedValue(true);
+
+    const res = await service.registerFamilyRepresentative({
+      fullName: 'Nguyen Van A',
+      phone: '0912345678',
+      email: 'rep@famidoc.vn',
+      password: 'Password@123',
+      acceptedTerms: true,
+      homeAddress: 'Số 10 Phố Huế, Hà Nội',
+    });
+
+    expect(res.expiresInSeconds).toBe(300);
+    expect(res.email).toBe('rep@famidoc.vn');
+    const registrationCall = redisService.set.mock.calls.find(
+      ([key]: [string]) => key === 'otp:reg:rep@famidoc.vn',
+    );
+    const registration = JSON.parse(registrationCall[1]);
+    expect(registration.homeAddress).toBe('Số 10 Phố Huế, Hà Nội');
+    expect(registration.password).toBeUndefined();
+    expect(compareSync('Password@123', registration.passwordHash)).toBe(true);
+    expect(redisService.set).toHaveBeenCalledWith(
+      'otp:reg:rep@famidoc.vn',
+      expect.stringContaining('Số 10 Phố Huế, Hà Nội'),
+      'EX',
+      300,
+    );
+    expect(mailerService.sendMail).toHaveBeenCalled();
+  });
+
   it('[UT-S-02] Từ chối đăng ký do Email đã tồn tại', async () => {
     repository.findByEmail.mockResolvedValue({ id: '1' } as any);
 
@@ -150,6 +184,7 @@ describe('AuthServiceImpl', () => {
       fullName: 'Nguyen Van A',
       phone: '0912345678',
       passwordHash: hashSync('Password@123', 4),
+      homeAddress: 'Số 10 Phố Huế, Hà Nội',
       otp: '123456',
     });
     redisService.get.mockResolvedValue(cachedData);
@@ -166,7 +201,9 @@ describe('AuthServiceImpl', () => {
     });
     expect(user.id).toBe('u-1');
     expect(redisService.del).toHaveBeenCalled();
-    expect(repository.createFamilyRepWithProfile).toHaveBeenCalled();
+    expect(repository.createFamilyRepWithProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ homeAddress: 'Số 10 Phố Huế, Hà Nội' }),
+    );
   });
 
   it('[UT-S-06] Xác thực Email OTP thất bại do mã OTP sai', async () => {

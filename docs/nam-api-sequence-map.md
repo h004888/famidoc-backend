@@ -389,8 +389,8 @@ Tài liệu kỹ thuật SePay đã đối chiếu:
 
 ## Kết quả kiểm tra ngày 31/10/2026
 
-- 187 unit test đạt, gồm 19 test đối chiếu route/tên hàm trong tài liệu này.
-- 36 integration test với PostgreSQL/Redis local đạt; có luồng đầy đủ cho cả 16 API.
+- 189 unit test đạt, gồm 19 test đối chiếu route/tên hàm trong tài liệu này.
+- 38 integration test với PostgreSQL/Redis local đạt; có luồng đầy đủ cho cả 16 API và 2 route đăng ký sau khi gộp dev.
 - 31 lượt smoke HTTP tới bản backend nối DB VPS đạt.
 - Nest build, TypeScript check và Docker image build đạt. Lint không có error; còn cảnh báo unbound-method trong test cũ.
 - DB VPS có 30 bảng nghiệp vụ và 1 bảng migration; schema khớp Prisma, không có drift. Đã sao lưu trước cập nhật. Migration gộp bảng đã được thử trên bản sao riêng với chữ ký phụ lục và yêu cầu chấm dứt có dữ liệu; dữ liệu chuyển đủ, unique index vẫn chặn ký trùng.
