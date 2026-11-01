@@ -34,6 +34,8 @@ describe('AuthServiceImpl', () => {
       findByPhone: jest.fn(),
       createFamilyRepWithProfile: jest.fn(),
       updatePassword: jest.fn(),
+      updateFailedAttempts: jest.fn(),
+      resetFailedAttempts: jest.fn(),
     };
 
     redisService = {
@@ -271,6 +273,23 @@ describe('AuthServiceImpl', () => {
     expect(redisService.del).toHaveBeenCalledWith('login:fail:a@famidoc.vn');
   });
 
+  it('[UT-S-10b] Đăng nhập thành công khi user có failedLoginAttempts > 0 -> Gọi repository.resetFailedAttempts', async () => {
+    redisService.get.mockResolvedValue(null);
+    const mockUser: any = {
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+      passwordHash: hashSync('Password@123', 4),
+      role: 'FAMILY_REP',
+      status: 'ACTIVE',
+      failedLoginAttempts: 2,
+    };
+    repository.findByEmail.mockResolvedValue(mockUser);
+    jwtService.sign.mockReturnValue('jwt_token_123');
+
+    await service.login({ identifier: 'a@famidoc.vn', password: 'Password@123' });
+    expect(repository.resetFailedAttempts).toHaveBeenCalledWith('u-1');
+  });
+
   it('[UT-S-11] Đăng nhập thất bại do tài khoản đang bị khóa Brute-force', async () => {
     redisService.get.mockImplementation((key: string) => {
       if (key.includes('login:lock:')) return Promise.resolve('1');
@@ -280,6 +299,32 @@ describe('AuthServiceImpl', () => {
     await expect(
       service.login({ identifier: 'a@famidoc.vn', password: 'Any' }),
     ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('[UT-S-11b] Đăng nhập thất bại do tài khoản bị khóa -> Thông báo chuẩn 30 minutes và kiểm tra lockedUntil từ DB', async () => {
+    redisService.get.mockImplementation((key: string) => {
+      if (key.includes('login:lock:')) return Promise.resolve('1');
+      return Promise.resolve(null);
+    });
+
+    await expect(
+      service.login({ identifier: 'a@famidoc.vn', password: 'Any' }),
+    ).rejects.toThrow('Account temporarily locked. Please try again in 30 minutes');
+
+    // Trường hợp Redis không còn key nhưng DB có lockedUntil còn hiệu lực
+    redisService.get.mockResolvedValue(null);
+    const lockedUser: any = {
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+      passwordHash: 'hash',
+      status: 'ACTIVE',
+      lockedUntil: new Date(Date.now() + 1000 * 60 * 15), // còn 15 phút
+    };
+    repository.findByEmail.mockResolvedValue(lockedUser);
+
+    await expect(
+      service.login({ identifier: 'a@famidoc.vn', password: 'Any' }),
+    ).rejects.toThrow('Account temporarily locked. Please try again in 30 minutes');
   });
 
   it('[UT-S-12] Đăng nhập thất bại do sai mật khẩu lần thứ 1 đến 4', async () => {
@@ -297,6 +342,23 @@ describe('AuthServiceImpl', () => {
       service.login({ identifier: 'a@famidoc.vn', password: 'WrongPassword' }),
     ).rejects.toThrow(UnauthorizedException);
     expect(redisService.incr).toHaveBeenCalled();
+  });
+
+  it('[UT-S-12b] Đăng nhập sai mật khẩu lần 1 đến 4 -> Đồng bộ số lần sai xuống DB với lockedUntil là null', async () => {
+    redisService.get.mockResolvedValue(null);
+    const mockUser: any = {
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+      passwordHash: 'different_hash',
+      status: 'ACTIVE',
+    };
+    repository.findByEmail.mockResolvedValue(mockUser);
+    redisService.incr.mockResolvedValue(2);
+
+    await expect(
+      service.login({ identifier: 'a@famidoc.vn', password: 'WrongPassword' }),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(repository.updateFailedAttempts).toHaveBeenCalledWith('u-1', 2, null);
   });
 
   it('[UT-S-13] Đăng nhập sai mật khẩu lần thứ 5 -> Kích hoạt khóa tài khoản 30 phút', async () => {
@@ -318,6 +380,27 @@ describe('AuthServiceImpl', () => {
       '1',
       'EX',
       1800,
+    );
+  });
+
+  it('[UT-S-13b] Đăng nhập sai mật khẩu lần thứ 5 -> Đồng bộ lockedUntil 30 phút xuống DB', async () => {
+    redisService.get.mockResolvedValue(null);
+    const mockUser: any = {
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+      passwordHash: 'different_hash',
+      status: 'ACTIVE',
+    };
+    repository.findByEmail.mockResolvedValue(mockUser);
+    redisService.incr.mockResolvedValue(5);
+
+    await expect(
+      service.login({ identifier: 'a@famidoc.vn', password: 'WrongPassword' }),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(repository.updateFailedAttempts).toHaveBeenCalledWith(
+      'u-1',
+      5,
+      expect.any(Date),
     );
   });
 
@@ -567,5 +650,44 @@ describe('AuthServiceImpl', () => {
       );
       expect(isValid).toBe(false);
     });
+  });
+
+  it('[UT-S-24] Toàn vẹn chuỗi vòng đời khóa tài khoản: Sai 4 lần (chưa lock) -> Sai lần 5 (lock 30 phút trên cả Redis & DB) -> Đúng mật khẩu (reset fail về 0 trên DB)', async () => {
+    const mockUser: any = {
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+      passwordHash: hashSync('Password@123', 4),
+      role: 'FAMILY_REP',
+      status: 'ACTIVE',
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+    };
+    repository.findByEmail.mockResolvedValue(mockUser);
+    jwtService.sign.mockReturnValue('jwt_token_valid');
+
+    // 1. Sai lần 4
+    redisService.get.mockResolvedValue(null);
+    redisService.incr.mockResolvedValueOnce(4);
+    await expect(
+      service.login({ identifier: 'a@famidoc.vn', password: 'WrongPassword' }),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(repository.updateFailedAttempts).toHaveBeenCalledWith('u-1', 4, null);
+    expect(redisService.set).not.toHaveBeenCalledWith('login:lock:a@famidoc.vn', expect.anything(), expect.anything(), expect.anything());
+
+    // 2. Sai lần 5 -> Lock 30 phút cả Redis & DB
+    redisService.incr.mockResolvedValueOnce(5);
+    await expect(
+      service.login({ identifier: 'a@famidoc.vn', password: 'WrongPassword' }),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(repository.updateFailedAttempts).toHaveBeenCalledWith('u-1', 5, expect.any(Date));
+    expect(redisService.set).toHaveBeenCalledWith('login:lock:a@famidoc.vn', '1', 'EX', 1800);
+
+    // 3. Đăng nhập thành công khi hết hạn lock -> Reset DB failedAttempts về 0
+    mockUser.failedLoginAttempts = 5;
+    mockUser.lockedUntil = null;
+    redisService.get.mockResolvedValue(null);
+    const successRes = await service.login({ identifier: 'a@famidoc.vn', password: 'Password@123' });
+    expect(successRes.accessToken).toBe('jwt_token_valid');
+    expect(repository.resetFailedAttempts).toHaveBeenCalledWith('u-1');
   });
 });

@@ -33,4 +33,10 @@ export interface IAuthRepository
   findByPhone(phone: string): Promise<AuthEntity | null>;
   createFamilyRepWithProfile(data: CreateFamilyRepDbData): Promise<AuthEntity>;
   updatePassword(userId: string, passwordHash: string): Promise<void>;
+  updateFailedAttempts(
+    userId: string,
+    attempts: number,
+    lockedUntil?: Date | null,
+  ): Promise<void>;
+  resetFailedAttempts(userId: string): Promise<void>;
 }
