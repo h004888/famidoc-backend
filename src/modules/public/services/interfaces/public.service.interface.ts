@@ -6,6 +6,8 @@ import { LookupHealthcareFacilitiesDto } from '../../dtos/lookup-facilities.dto'
 import { PublicFacilitiesResponseDto } from '../../dtos/public-facilities-response.dto';
 import { LookupDoctorDirectoryDto } from '../../dtos/lookup-doctors.dto';
 import { PublicDoctorsResponseDto } from '../../dtos/public-doctors-response.dto';
+import { SubmitConsultationRequestDto } from '../../dtos/submit-consultation-request.dto';
+import { ConsultationRequestResponseDto } from '../../dtos/consultation-request-response.dto';
 
 export const PUBLIC_SERVICE_TOKEN = Symbol('IPublicService');
 
@@ -21,4 +23,9 @@ export interface IPublicService {
   lookupDoctorDirectory(
     dto: LookupDoctorDirectoryDto,
   ): Promise<PublicDoctorsResponseDto>;
+  submitConsultationRequest(
+    dto: SubmitConsultationRequestDto,
+    clientIp?: string,
+    userAgent?: string,
+  ): Promise<ConsultationRequestResponseDto>;
 }

@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../../../core/database/prisma.service';
 import { IPublicService } from '../interfaces/public.service.interface';
 import {
@@ -13,10 +18,16 @@ import { LookupHealthcareFacilitiesDto } from '../../dtos/lookup-facilities.dto'
 import { PublicFacilitiesResponseDto } from '../../dtos/public-facilities-response.dto';
 import { LookupDoctorDirectoryDto } from '../../dtos/lookup-doctors.dto';
 import { PublicDoctorsResponseDto } from '../../dtos/public-doctors-response.dto';
+import { SubmitConsultationRequestDto } from '../../dtos/submit-consultation-request.dto';
+import { ConsultationRequestResponseDto } from '../../dtos/consultation-request-response.dto';
 
 @Injectable()
 export class PublicServiceImpl implements IPublicService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject('REDIS_CLIENT')
+    private readonly redisClient: any,
+  ) {}
 
   async getPublicPortalOverview(): Promise<PortalOverviewResponseDto> {
     const [
@@ -417,6 +428,67 @@ export class PublicServiceImpl implements IPublicService {
         limit,
         totalPages: Math.ceil(total / limit) || 1,
       },
+    };
+  }
+
+  async submitConsultationRequest(
+    dto: SubmitConsultationRequestDto,
+    clientIp?: string,
+    userAgent?: string,
+  ): Promise<ConsultationRequestResponseDto> {
+    if (dto.preferredPackageId) {
+      const pkg = await this.prisma.servicePackage.findUnique({
+        where: { id: dto.preferredPackageId },
+      });
+      if (!pkg || pkg.status !== 'ACTIVE' || pkg.deletedAt !== null) {
+        throw new BadRequestException(
+          'Gói chăm sóc sức khỏe được chọn không hợp lệ hoặc đã ngừng áp dụng',
+        );
+      }
+    }
+
+    const timestampPart = Date.now().toString(36).toUpperCase();
+    const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const ticketId = `CRQ-${timestampPart}-${randomPart}`;
+    const submittedAt = new Date();
+
+    if (this.redisClient) {
+      await this.redisClient.set(
+        `consultation:request:${ticketId}`,
+        JSON.stringify({
+          ticketId,
+          fullName: dto.fullName,
+          phone: dto.phone,
+          email: dto.email,
+          address: dto.address || null,
+          preferredPackageId: dto.preferredPackageId || null,
+          healthNeeds: dto.healthNeeds,
+          familyMemberCount: dto.familyMemberCount,
+          status: 'RECEIVED',
+          submittedAt: submittedAt.toISOString(),
+        }),
+        'EX',
+        30 * 86400,
+      );
+    }
+
+    await this.prisma.auditLog.create({
+      data: {
+        action: 'CONSULTATION_REQUEST_SUBMITTED',
+        resourceName: 'ConsultationRequest',
+        resourceId: ticketId,
+        clientIp: clientIp || '127.0.0.1',
+        userAgent: userAgent || 'PublicPortal',
+        timestamp: submittedAt,
+      },
+    });
+
+    return {
+      ticketId,
+      status: 'RECEIVED',
+      message:
+        'Yêu cầu tư vấn của bạn đã được tiếp nhận thành công. Đội ngũ bác sĩ và nhân viên y tế FamiDoc sẽ liên hệ tư vấn trong thời gian sớm nhất.',
+      submittedAt,
     };
   }
 }

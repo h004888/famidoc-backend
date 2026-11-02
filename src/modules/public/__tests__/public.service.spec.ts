@@ -1,13 +1,19 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PublicServiceImpl } from '../services/impl/public.service.impl';
 import { PrismaService } from '../../../core/database/prisma.service';
 
 describe('PublicServiceImpl', () => {
   let service: PublicServiceImpl;
   let prismaService: any;
+  let redisClient: any;
 
   beforeEach(async () => {
+    redisClient = {
+      set: jest.fn().mockResolvedValue('OK'),
+      get: jest.fn(),
+    };
+
     prismaService = {
       healthcareFacility: {
         count: jest.fn().mockResolvedValue(15),
@@ -44,6 +50,9 @@ describe('PublicServiceImpl', () => {
       familyUnit: {
         count: jest.fn().mockResolvedValue(150),
       },
+      auditLog: {
+        create: jest.fn().mockResolvedValue({ id: 1n }),
+      },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -52,6 +61,10 @@ describe('PublicServiceImpl', () => {
         {
           provide: PrismaService,
           useValue: prismaService,
+        },
+        {
+          provide: 'REDIS_CLIENT',
+          useValue: redisClient,
         },
       ],
     }).compile();
@@ -423,6 +436,79 @@ describe('PublicServiceImpl', () => {
         select: expect.any(Object),
         orderBy: { ratingAvg: 'desc' },
       });
+    });
+  });
+
+  describe('submitConsultationRequest', () => {
+    const validDto = {
+      fullName: 'Nguyễn Văn Minh',
+      phone: '0912345678',
+      email: 'minh.nguyen@famidoc.vn',
+      address: 'Số 25 Phố Huế, Hà Nội',
+      preferredPackageId: 'pkg-valid-id',
+      healthNeeds: 'Cần bác sĩ gia đình thăm khám định kỳ cho bố mẹ cao tuổi',
+      familyMemberCount: 4,
+    };
+
+    it('should submit consultation request with valid preferred package and save to Redis & AuditLog', async () => {
+      prismaService.servicePackage.findUnique.mockResolvedValue({
+        id: 'pkg-valid-id',
+        status: 'ACTIVE',
+        deletedAt: null,
+      });
+
+      const result = await service.submitConsultationRequest(
+        validDto,
+        '192.168.1.1',
+        'Mozilla/5.0',
+      );
+
+      expect(result).toBeDefined();
+      expect(result.ticketId).toMatch(/^CRQ-/);
+      expect(result.status).toBe('RECEIVED');
+      expect(result.message).toContain('tiếp nhận thành công');
+      expect(result.submittedAt).toBeInstanceOf(Date);
+
+      expect(prismaService.servicePackage.findUnique).toHaveBeenCalledWith({
+        where: { id: 'pkg-valid-id' },
+      });
+      expect(redisClient.set).toHaveBeenCalledWith(
+        expect.stringContaining(`consultation:request:${result.ticketId}`),
+        expect.stringContaining('Nguyễn Văn Minh'),
+        'EX',
+        30 * 86400,
+      );
+      expect(prismaService.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'CONSULTATION_REQUEST_SUBMITTED',
+          resourceName: 'ConsultationRequest',
+          resourceId: result.ticketId,
+          clientIp: '192.168.1.1',
+          userAgent: 'Mozilla/5.0',
+        }),
+      });
+    });
+
+    it('should submit consultation request without preferred package successfully', async () => {
+      const { preferredPackageId: _preferredPackageId, ...dtoWithoutPkg } =
+        validDto;
+
+      const result = await service.submitConsultationRequest(dtoWithoutPkg);
+
+      expect(result).toBeDefined();
+      expect(result.ticketId).toMatch(/^CRQ-/);
+      expect(result.status).toBe('RECEIVED');
+      expect(prismaService.servicePackage.findUnique).not.toHaveBeenCalled();
+      expect(redisClient.set).toHaveBeenCalled();
+      expect(prismaService.auditLog.create).toHaveBeenCalled();
+    });
+
+    it('should throw BadRequestException if preferred package does not exist or not active', async () => {
+      prismaService.servicePackage.findUnique.mockResolvedValue(null);
+
+      await expect(service.submitConsultationRequest(validDto)).rejects.toThrow(
+        BadRequestException,
+      );
     });
   });
 });

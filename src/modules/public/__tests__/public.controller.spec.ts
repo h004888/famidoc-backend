@@ -23,6 +23,7 @@ describe('PublicController', () => {
       getPublicPackageDetail: jest.fn(),
       lookupHealthcareFacilities: jest.fn(),
       lookupDoctorDirectory: jest.fn(),
+      submitConsultationRequest: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -240,6 +241,47 @@ describe('PublicController', () => {
 
       expect(result).toBe(mockResponse);
       expect(doctorSpy).toHaveBeenCalledWith(query);
+    });
+  });
+
+  describe('submitConsultationRequest', () => {
+    it('should delegate to publicService.submitConsultationRequest with client IP and user agent', async () => {
+      const dto = {
+        fullName: 'Nguyễn Văn Minh',
+        phone: '0912345678',
+        email: 'minh.nguyen@famidoc.vn',
+        healthNeeds: 'Cần bác sĩ thăm khám gia đình',
+        familyMemberCount: 4,
+      };
+
+      const mockReq = {
+        headers: {
+          'x-forwarded-for': '203.0.113.195',
+          'user-agent': 'Chrome/120.0',
+        },
+        socket: {
+          remoteAddress: '127.0.0.1',
+        },
+      } as any;
+
+      const mockResponse = {
+        ticketId: 'CRQ-L9X4K2-A1B2',
+        status: 'RECEIVED',
+        message: 'Tiếp nhận thành công',
+        submittedAt: new Date(),
+      };
+
+      const submitSpy = jest.spyOn(service, 'submitConsultationRequest');
+      submitSpy.mockResolvedValue(mockResponse);
+
+      const result = await controller.submitConsultationRequest(dto, mockReq);
+
+      expect(result).toBe(mockResponse);
+      expect(submitSpy).toHaveBeenCalledWith(
+        dto,
+        '203.0.113.195',
+        'Chrome/120.0',
+      );
     });
   });
 });

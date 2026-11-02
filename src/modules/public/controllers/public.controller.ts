@@ -1,14 +1,26 @@
 import {
+  Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Inject,
   Param,
   ParseUUIDPipe,
+  Post,
   Query,
+  Req,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
+import type { Request } from 'express';
+import {
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { IPublicService } from '../services/interfaces/public.service.interface';
 import { PUBLIC_SERVICE_TOKEN } from '../services/interfaces/public.service.interface';
 import { PortalOverviewResponseDto } from '../dtos/portal-overview-response.dto';
@@ -19,6 +31,8 @@ import { LookupHealthcareFacilitiesDto } from '../dtos/lookup-facilities.dto';
 import { PublicFacilitiesResponseDto } from '../dtos/public-facilities-response.dto';
 import { LookupDoctorDirectoryDto } from '../dtos/lookup-doctors.dto';
 import { PublicDoctorsResponseDto } from '../dtos/public-doctors-response.dto';
+import { SubmitConsultationRequestDto } from '../dtos/submit-consultation-request.dto';
+import { ConsultationRequestResponseDto } from '../dtos/consultation-request-response.dto';
 
 @ApiTags('Public Portal')
 @Controller('api/v1/public')
@@ -129,6 +143,38 @@ export class PublicController {
     @Query() query: LookupDoctorDirectoryDto,
   ): Promise<PublicDoctorsResponseDto> {
     return this.publicService.lookupDoctorDirectory(query);
+  }
+
+  @Post('consultation-requests')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Gửi yêu cầu tư vấn gói dịch vụ chăm sóc gia đình (STT 12 - UC-09)',
+    description:
+      'Khách hàng hoặc đại diện gia đình gửi thông tin liên hệ và nhu cầu chăm sóc để đội ngũ tư vấn viên/bác sĩ liên hệ tư vấn gói phù hợp.',
+  })
+  @ApiBody({ type: SubmitConsultationRequestDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Tiếp nhận yêu cầu tư vấn thành công.',
+    type: ConsultationRequestResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Dữ liệu đầu vào không hợp lệ hoặc gói dịch vụ chỉ định không tồn tại.',
+  })
+  async submitConsultationRequest(
+    @Body() dto: SubmitConsultationRequestDto,
+    @Req() req: Request,
+  ): Promise<ConsultationRequestResponseDto> {
+    const clientIp =
+      (req.headers['x-forwarded-for'] as string) || req.socket?.remoteAddress;
+    const userAgent = req.headers['user-agent'];
+    return this.publicService.submitConsultationRequest(
+      dto,
+      clientIp,
+      userAgent,
+    );
   }
 }
 
