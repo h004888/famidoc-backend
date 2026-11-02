@@ -437,12 +437,13 @@ export class AuthServiceImpl implements IAuthService {
   }
 
   async resetPassword(dto: ResetPasswordDto): Promise<ApiResponseMessage> {
-    const cachedOtp = await this.redisClient.get(`otp:reset:${dto.email}`);
+    const email = dto.email.trim().toLowerCase();
+    const cachedOtp = await this.redisClient.get(`otp:reset:${email}`);
     if (!cachedOtp || cachedOtp !== dto.otp) {
       throw new UnauthorizedException('Invalid or expired OTP');
     }
 
-    const user = await this.authRepository.findByEmail(dto.email);
+    const user = await this.authRepository.findByEmail(email);
     if (!user) {
       throw new BadRequestException('User not found');
     }
@@ -455,7 +456,19 @@ export class AuthServiceImpl implements IAuthService {
       'EX',
       7 * 86400,
     );
-    await this.redisClient.del(`otp:reset:${dto.email}`);
+    await this.redisClient.del(`otp:reset:${email}`);
+    await this.redisClient.del(`otp:cooldown:reset:${email}`);
+
+    // Mở khóa đăng nhập và reset số lần sai mật khẩu nếu tài khoản đang bị khóa
+    await this.redisClient.del(`login:lock:${email}`);
+    await this.redisClient.del(`login:fail:${email}`);
+    if (user.phone) {
+      await this.redisClient.del(`login:lock:${user.phone}`);
+      await this.redisClient.del(`login:fail:${user.phone}`);
+    }
+    if (user.failedLoginAttempts && user.failedLoginAttempts > 0) {
+      await this.authRepository.resetFailedAttempts(user.id);
+    }
 
     return {
       message: 'Update password successfully',

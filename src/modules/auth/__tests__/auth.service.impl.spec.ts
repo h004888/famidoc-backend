@@ -628,6 +628,66 @@ describe('AuthServiceImpl', () => {
     expect(redisService.del).toHaveBeenCalled();
   });
 
+  it('[UT-S-20b] Đặt lại mật khẩu thất bại do mã OTP không khớp', async () => {
+    redisService.get.mockResolvedValue('123456');
+
+    await expect(
+      service.resetPassword({
+        email: 'a@famidoc.vn',
+        otp: '999999',
+        newPassword: 'NewPassword@123',
+      }),
+    ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('[UT-S-20c] Đặt lại mật khẩu thất bại do OTP đã hết hạn (không tồn tại trong Redis)', async () => {
+    redisService.get.mockResolvedValue(null);
+
+    await expect(
+      service.resetPassword({
+        email: 'a@famidoc.vn',
+        otp: '123456',
+        newPassword: 'NewPassword@123',
+      }),
+    ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('[UT-S-20d] Đặt lại mật khẩu thất bại do email không tồn tại trong DB', async () => {
+    redisService.get.mockResolvedValue('123456');
+    repository.findByEmail.mockResolvedValue(null);
+
+    await expect(
+      service.resetPassword({
+        email: 'notfound@famidoc.vn',
+        otp: '123456',
+        newPassword: 'NewPassword@123',
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('[UT-S-20e] Đặt lại mật khẩu tự động mở khóa brute-force và reset failed attempts khi thành công', async () => {
+    redisService.get.mockResolvedValue('654321');
+    repository.findByEmail.mockResolvedValue({
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+      phone: '0912345678',
+      failedLoginAttempts: 3,
+    } as any);
+
+    const res = await service.resetPassword({
+      email: '  A@FAMIDOC.VN  ',
+      otp: '654321',
+      newPassword: 'NewPassword@123',
+    });
+
+    expect(res.success).toBe(true);
+    expect(repository.resetFailedAttempts).toHaveBeenCalledWith('u-1');
+    expect(redisService.del).toHaveBeenCalledWith('login:lock:a@famidoc.vn');
+    expect(redisService.del).toHaveBeenCalledWith('login:fail:a@famidoc.vn');
+    expect(redisService.del).toHaveBeenCalledWith('login:lock:0912345678');
+    expect(redisService.del).toHaveBeenCalledWith('login:fail:0912345678');
+  });
+
   // --- UC-05 CHANGE PASSWORD ---
   it('[UT-S-21] Đổi mật khẩu (Change Password) thành công khi nhập đúng mật khẩu cũ', async () => {
     repository.findById.mockResolvedValue({

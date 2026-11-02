@@ -131,9 +131,11 @@ export class AuthController {
   }
 
   @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Đặt lại mật khẩu mới bằng OTP' })
   @ApiBody({ type: ResetPasswordDto })
-  @ApiResponse({ status: 201, description: 'Đặt lại mật khẩu thành công' })
+  @ApiResponse({ status: 200, description: 'Đặt lại mật khẩu thành công' })
+  @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ hoặc không tìm thấy người dùng' })
   @ApiResponse({ status: 401, description: 'OTP không hợp lệ hoặc đã hết hạn' })
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
