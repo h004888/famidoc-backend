@@ -20,7 +20,7 @@ export class LookupHealthcareFacilitiesDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  page: number = 1;
+  page?: number = 1;
 
   @ApiPropertyOptional({
     description: 'Số lượng cơ sở y tế mỗi trang (tối đa 50)',
@@ -32,5 +32,5 @@ export class LookupHealthcareFacilitiesDto {
   @IsInt()
   @Min(1)
   @Max(50)
-  limit: number = 10;
+  limit?: number = 10;
 }

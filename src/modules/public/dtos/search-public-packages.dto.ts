@@ -80,7 +80,7 @@ export class SearchPublicPackagesDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  page: number = 1;
+  page?: number = 1;
 
   @ApiPropertyOptional({
     description: 'Số lượng gói mỗi trang (tối đa 50)',
@@ -92,7 +92,7 @@ export class SearchPublicPackagesDto {
   @IsInt()
   @Min(1)
   @Max(50)
-  limit: number = 10;
+  limit?: number = 10;
 
   @ApiPropertyOptional({
     description: 'Trường sắp xếp kết quả',
@@ -101,7 +101,7 @@ export class SearchPublicPackagesDto {
   })
   @IsOptional()
   @IsEnum(PackageSortBy)
-  sortBy: PackageSortBy = PackageSortBy.BASE_PRICE;
+  sortBy?: PackageSortBy = PackageSortBy.BASE_PRICE;
 
   @ApiPropertyOptional({
     description: 'Thứ tự sắp xếp (asc: tăng dần, desc: giảm dần)',
@@ -110,5 +110,5 @@ export class SearchPublicPackagesDto {
   })
   @IsOptional()
   @IsEnum(SortOrder)
-  sortOrder: SortOrder = SortOrder.ASC;
+  sortOrder?: SortOrder = SortOrder.ASC;
 }

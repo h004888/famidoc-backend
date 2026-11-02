@@ -61,7 +61,7 @@ export class LookupDoctorDirectoryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  page: number = 1;
+  page?: number = 1;
 
   @ApiPropertyOptional({
     description: 'Số lượng bác sĩ mỗi trang (tối đa 50)',
@@ -73,7 +73,7 @@ export class LookupDoctorDirectoryDto {
   @IsInt()
   @Min(1)
   @Max(50)
-  limit: number = 10;
+  limit?: number = 10;
 
   @ApiPropertyOptional({
     description: 'Trường sắp xếp kết quả',
@@ -82,7 +82,7 @@ export class LookupDoctorDirectoryDto {
   })
   @IsOptional()
   @IsEnum(DoctorSortBy)
-  sortBy: DoctorSortBy = DoctorSortBy.RATING_AVG;
+  sortBy?: DoctorSortBy = DoctorSortBy.RATING_AVG;
 
   @ApiPropertyOptional({
     description: 'Thứ tự sắp xếp (asc: tăng dần, desc: giảm dần)',
@@ -91,5 +91,5 @@ export class LookupDoctorDirectoryDto {
   })
   @IsOptional()
   @IsEnum(SortOrder)
-  sortOrder: SortOrder = SortOrder.DESC;
+  sortOrder?: SortOrder = SortOrder.DESC;
 }

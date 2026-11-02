@@ -129,7 +129,7 @@ describe('JwtAuthGuard', () => {
       status: 'PENDING',
       familyUnit: null,
     });
-    reflector.getAllAndOverride.mockImplementation((key: string) => {
+    reflector.getAllAndOverride.mockImplementation((key: any) => {
       return key === ALLOW_ONBOARDING_KEY;
     });
 

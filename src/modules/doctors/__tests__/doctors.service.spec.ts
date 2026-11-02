@@ -16,19 +16,19 @@ describe('DoctorsServiceImpl', () => {
   const adminUser: AuthenticatedUser = {
     id: 'admin-uuid-1',
     role: 'ADMIN',
-    email: 'admin@famidoc.vn',
+    familyUnitId: null,
   };
 
   const facilityUser: AuthenticatedUser = {
     id: 'facility-user-uuid-1',
     role: 'HEALTHCARE_FACILITY',
-    email: 'bv.hoanmy@famidoc.vn',
+    familyUnitId: null,
   };
 
   const doctorUser: AuthenticatedUser = {
     id: 'doctor-user-uuid-1',
     role: 'DOCTOR',
-    email: 'bs.an@famidoc.vn',
+    familyUnitId: null,
   };
 
   const mockFacility = {
@@ -198,7 +198,7 @@ describe('DoctorsServiceImpl', () => {
       const otherDoctor: AuthenticatedUser = {
         id: 'other-doc-uuid',
         role: 'DOCTOR',
-        email: 'other@famidoc.vn',
+        familyUnitId: null,
       };
 
       await expect(

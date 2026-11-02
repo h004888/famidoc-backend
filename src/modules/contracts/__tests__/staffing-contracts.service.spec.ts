@@ -22,19 +22,19 @@ describe('ContractsServiceImpl - Staffing Contracts', () => {
   const adminUser: AuthenticatedUser = {
     id: 'admin-uuid-1',
     role: 'ADMIN',
-    email: 'admin@famidoc.vn',
+    familyUnitId: null,
   };
 
   const facilityUser: AuthenticatedUser = {
     id: 'facility-user-uuid-1',
     role: 'HEALTHCARE_FACILITY',
-    email: 'bv.hoanmy@famidoc.vn',
+    familyUnitId: null,
   };
 
   const doctorUser: AuthenticatedUser = {
     id: 'doctor-user-uuid-1',
     role: 'DOCTOR',
-    email: 'bs.nam@famidoc.vn',
+    familyUnitId: null,
   };
 
   const mockFacility = {
@@ -247,7 +247,7 @@ describe('ContractsServiceImpl - Staffing Contracts', () => {
       const anotherFacilityUser: AuthenticatedUser = {
         id: 'another-facility-user',
         role: 'HEALTHCARE_FACILITY',
-        email: 'bv2@famidoc.vn',
+        familyUnitId: null,
       };
 
       await expect(
