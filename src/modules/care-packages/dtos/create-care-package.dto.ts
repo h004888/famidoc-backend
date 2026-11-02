@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsDefined,
@@ -85,11 +86,20 @@ export class CarePackageTermsDto {
   additionalMemberMonthlyPriceVnd: number;
 
   // Chọn hạn mức cho toàn kỳ hoặc cho từng tháng hợp đồng.
+  @ApiProperty({
+    enum: QuotaPeriod,
+    enumName: 'QuotaPeriod',
+    description: 'Kỳ hạn áp dụng hạn mức gói (PER_TERM hoặc PER_MONTH)',
+  })
   @IsEnum(QuotaPeriod)
   quotaPeriod: QuotaPeriod;
 
   // Bắt buộc có object quotas và kiểm tra đủ ba trường bên trong.
   // @Type giúp dữ liệu JSON lồng nhau trở thành DTO để @ValidateNested hoạt động.
+  @ApiProperty({
+    type: () => CarePackageQuotasDto,
+    description: 'Chi tiết các hạn mức quyền lợi gói',
+  })
   @IsDefined()
   @IsObject()
   @ValidateNested()

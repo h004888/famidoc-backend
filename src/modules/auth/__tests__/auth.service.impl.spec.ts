@@ -451,6 +451,67 @@ describe('AuthServiceImpl', () => {
     expect(res.accessToken).toBe('jwt_onboarding_token');
   });
 
+  it('[UT-S-16b] Đăng nhập bằng Số điện thoại thành công (tìm kiếm qua findByPhone)', async () => {
+    redisService.get.mockResolvedValue(null);
+    const mockUser: any = {
+      id: 'u-phone',
+      phone: '0912345678',
+      email: 'rep@famidoc.vn',
+      passwordHash: hashSync('Password@123', 4),
+      role: 'FAMILY_REP',
+      status: 'ACTIVE',
+    };
+    repository.findByPhone.mockResolvedValue(mockUser);
+    jwtService.sign.mockReturnValue('jwt_phone_token');
+
+    const res = await service.login({
+      identifier: '0912345678',
+      password: 'Password@123',
+    });
+    expect(repository.findByPhone).toHaveBeenCalledWith('0912345678');
+    expect(res.accessToken).toBe('jwt_phone_token');
+    expect(res.user.phone).toBe('0912345678');
+  });
+
+  it('[UT-S-16c] Đăng nhập bị từ chối nếu người dùng thông thường (không phải DOCTOR) ở trạng thái PENDING', async () => {
+    redisService.get.mockResolvedValue(null);
+    const mockUser: any = {
+      id: 'u-pending',
+      email: 'pending@famidoc.vn',
+      passwordHash: hashSync('Password@123', 4),
+      role: 'FAMILY_REP',
+      status: 'PENDING',
+    };
+    repository.findByEmail.mockResolvedValue(mockUser);
+
+    await expect(
+      service.login({
+        identifier: 'pending@famidoc.vn',
+        password: 'Password@123',
+      }),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('[UT-S-16d] Đăng nhập tự động cắt bỏ khoảng trắng thừa ở identifier (trim)', async () => {
+    redisService.get.mockResolvedValue(null);
+    const mockUser: any = {
+      id: 'u-trim',
+      email: 'trim@famidoc.vn',
+      passwordHash: hashSync('Password@123', 4),
+      role: 'FAMILY_REP',
+      status: 'ACTIVE',
+    };
+    repository.findByEmail.mockResolvedValue(mockUser);
+    jwtService.sign.mockReturnValue('jwt_trim_token');
+
+    const res = await service.login({
+      identifier: '  trim@famidoc.vn  ',
+      password: 'Password@123',
+    });
+    expect(repository.findByEmail).toHaveBeenCalledWith('trim@famidoc.vn');
+    expect(res.accessToken).toBe('jwt_trim_token');
+  });
+
   // --- UC-03 LOGOUT ---
   it('[UT-S-17] Đăng xuất an toàn (Logout - Đưa Token vào Redis Blacklist)', async () => {
     jwtService.decode.mockReturnValue({

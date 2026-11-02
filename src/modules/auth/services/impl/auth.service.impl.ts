@@ -240,9 +240,10 @@ export class AuthServiceImpl implements IAuthService {
     _clientIp?: string,
   ): Promise<LoginSuccessResponse> {
     const LOCKOUT_DURATION_SECONDS = 1800; // 30 minutes (SRS Security Section IV.2.3)
+    const identifier = dto.identifier.trim();
     try {
       const isLocked = await this.redisClient.get(
-        `login:lock:${dto.identifier}`,
+        `login:lock:${identifier}`,
       );
       if (isLocked) {
         throw new ForbiddenException(
@@ -251,10 +252,10 @@ export class AuthServiceImpl implements IAuthService {
       }
 
       let user: AuthEntity | null = null;
-      if (dto.identifier.includes('@')) {
-        user = await this.authRepository.findByEmail(dto.identifier);
+      if (identifier.includes('@')) {
+        user = await this.authRepository.findByEmail(identifier);
       } else {
-        user = await this.authRepository.findByPhone(dto.identifier);
+        user = await this.authRepository.findByPhone(identifier);
       }
 
       if (!user) {
@@ -269,7 +270,11 @@ export class AuthServiceImpl implements IAuthService {
         );
       }
 
-      if (user.status === 'SUSPENDED' || user.status === 'LOCKED') {
+      if (
+        user.status === 'SUSPENDED' ||
+        user.status === 'LOCKED' ||
+        (user.status === 'PENDING' && user.role !== 'DOCTOR')
+      ) {
         throw new ForbiddenException(
           'Your account cannot be used to sign in. Please contact support.',
         );
@@ -281,15 +286,24 @@ export class AuthServiceImpl implements IAuthService {
       );
       if (!isValid) {
         const failCount = await this.redisClient.incr(
-          `login:fail:${dto.identifier}`,
+          `login:fail:${identifier}`,
         );
+        if (
+          failCount === 1 &&
+          typeof this.redisClient.expire === 'function'
+        ) {
+          await this.redisClient.expire(
+            `login:fail:${identifier}`,
+            LOCKOUT_DURATION_SECONDS,
+          );
+        }
         const lockedUntil =
           failCount >= 5
             ? new Date(Date.now() + LOCKOUT_DURATION_SECONDS * 1000)
             : null;
         if (failCount >= 5) {
           await this.redisClient.set(
-            `login:lock:${dto.identifier}`,
+            `login:lock:${identifier}`,
             '1',
             'EX',
             LOCKOUT_DURATION_SECONDS,
@@ -303,7 +317,7 @@ export class AuthServiceImpl implements IAuthService {
         );
       }
 
-      await this.redisClient.del(`login:fail:${dto.identifier}`);
+      await this.redisClient.del(`login:fail:${identifier}`);
 
       if (user.failedLoginAttempts && user.failedLoginAttempts > 0) {
         await this.authRepository.resetFailedAttempts(user.id);
@@ -328,9 +342,11 @@ export class AuthServiceImpl implements IAuthService {
         user: {
           id: user.id,
           email: user.email,
+          phone: user.phone,
           fullName: user.fullName,
           role: user.role,
           status: user.status,
+          avatarUrl: user.avatarUrl,
         },
       };
     } catch (err: any) {

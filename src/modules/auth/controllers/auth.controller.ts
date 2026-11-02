@@ -2,6 +2,8 @@ import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import {
   Body,
   Controller,
+  HttpCode,
+  HttpStatus,
   Inject,
   Param,
   Patch,
@@ -94,6 +96,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Đăng nhập hệ thống (Email/SĐT và mật khẩu)' })
   @ApiBody({ type: LoginDto })
   @ApiResponse({ status: 200, description: 'Đăng nhập thành công, trả về JWT Access Token' })
@@ -105,6 +108,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
+  @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Đăng xuất và thu hồi Access Token' })
   @ApiResponse({ status: 200, description: 'Đăng xuất thành công' })
