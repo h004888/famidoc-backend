@@ -2,6 +2,8 @@ import { PortalOverviewResponseDto } from '../../dtos/portal-overview-response.d
 import { SearchPublicPackagesDto } from '../../dtos/search-public-packages.dto';
 import { PublicPackagesResponseDto } from '../../dtos/public-packages-response.dto';
 import { PublicPackageDetailDto } from '../../dtos/public-package-detail.dto';
+import { LookupHealthcareFacilitiesDto } from '../../dtos/lookup-facilities.dto';
+import { PublicFacilitiesResponseDto } from '../../dtos/public-facilities-response.dto';
 
 export const PUBLIC_SERVICE_TOKEN = Symbol('IPublicService');
 
@@ -11,4 +13,7 @@ export interface IPublicService {
     dto: SearchPublicPackagesDto,
   ): Promise<PublicPackagesResponseDto>;
   getPublicPackageDetail(id: string): Promise<PublicPackageDetailDto>;
+  lookupHealthcareFacilities(
+    dto: LookupHealthcareFacilitiesDto,
+  ): Promise<PublicFacilitiesResponseDto>;
 }

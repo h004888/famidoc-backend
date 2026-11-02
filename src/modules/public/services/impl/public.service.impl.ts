@@ -9,6 +9,8 @@ import {
 import { SearchPublicPackagesDto } from '../../dtos/search-public-packages.dto';
 import { PublicPackagesResponseDto } from '../../dtos/public-packages-response.dto';
 import { PublicPackageDetailDto } from '../../dtos/public-package-detail.dto';
+import { LookupHealthcareFacilitiesDto } from '../../dtos/lookup-facilities.dto';
+import { PublicFacilitiesResponseDto } from '../../dtos/public-facilities-response.dto';
 
 @Injectable()
 export class PublicServiceImpl implements IPublicService {
@@ -263,6 +265,67 @@ export class PublicServiceImpl implements IPublicService {
           'Chính sách chấm dứt hợp đồng: Được quyền yêu cầu hủy gói và hoàn tiền theo chính sách trọng tài và điều khoản hợp đồng dịch vụ y tế (UC-19, UC-38).',
         dataPrivacyPolicy:
           'Bảo mật y tế: Toàn bộ hồ sơ bệnh án điện tử và dữ liệu lâm sàng được bảo mật theo tiêu chuẩn ISO 27799:2016 và Nghị định 13/2023/NĐ-CP.',
+      },
+    };
+  }
+
+  async lookupHealthcareFacilities(
+    dto: LookupHealthcareFacilitiesDto,
+  ): Promise<PublicFacilitiesResponseDto> {
+    const page = Math.max(1, dto.page || 1);
+    const limit = Math.min(50, Math.max(1, dto.limit || 10));
+    const skip = (page - 1) * limit;
+
+    const where: Record<string, any> = {
+      verificationStatus: 'ACTIVE',
+    };
+
+    if (dto.search?.trim()) {
+      const keyword = dto.search.trim();
+      where.OR = [
+        { facilityName: { contains: keyword, mode: 'insensitive' } },
+        { address: { contains: keyword, mode: 'insensitive' } },
+      ];
+    }
+
+    const [total, facilities] = await Promise.all([
+      this.prisma.healthcareFacility.count({ where }),
+      this.prisma.healthcareFacility.findMany({
+        where,
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          facilityName: true,
+          licenseNumber: true,
+          address: true,
+          hotline: true,
+          _count: {
+            select: {
+              doctors: {
+                where: { onboardingStatus: 'ACTIVE' },
+              },
+            },
+          },
+        },
+        orderBy: { facilityName: 'asc' },
+      }),
+    ]);
+
+    return {
+      items: facilities.map((fac) => ({
+        id: fac.id,
+        facilityName: fac.facilityName,
+        licenseNumber: fac.licenseNumber,
+        address: fac.address,
+        hotline: fac.hotline,
+        totalActiveDoctors: fac._count.doctors,
+      })),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
       },
     };
   }

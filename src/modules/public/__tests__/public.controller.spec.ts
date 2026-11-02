@@ -21,6 +21,7 @@ describe('PublicController', () => {
       getPublicPortalOverview: jest.fn(),
       searchPublicPackages: jest.fn(),
       getPublicPackageDetail: jest.fn(),
+      lookupHealthcareFacilities: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -155,6 +156,43 @@ describe('PublicController', () => {
 
       expect(result).toBe(mockDetail);
       expect(detailSpy).toHaveBeenCalledWith('pkg-1');
+    });
+  });
+
+  describe('lookupHealthcareFacilities', () => {
+    it('should delegate to publicService.lookupHealthcareFacilities', async () => {
+      const query = {
+        search: 'Hà Nội',
+        page: 1,
+        limit: 10,
+      };
+
+      const mockResponse = {
+        items: [
+          {
+            id: 'fac-1',
+            facilityName: 'Phòng khám Hà Nội',
+            licenseNumber: 'GPHN-01',
+            address: 'Hà Nội',
+            hotline: '1900 6868',
+            totalActiveDoctors: 5,
+          },
+        ],
+        meta: {
+          total: 1,
+          page: 1,
+          limit: 10,
+          totalPages: 1,
+        },
+      };
+
+      const facilitySpy = jest.spyOn(service, 'lookupHealthcareFacilities');
+      facilitySpy.mockResolvedValue(mockResponse);
+
+      const result = await controller.lookupHealthcareFacilities(query);
+
+      expect(result).toBe(mockResponse);
+      expect(facilitySpy).toHaveBeenCalledWith(query);
     });
   });
 });

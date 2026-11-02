@@ -269,4 +269,78 @@ describe('PublicServiceImpl', () => {
       ).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('lookupHealthcareFacilities', () => {
+    it('should return paginated active facilities with totalActiveDoctors count', async () => {
+      const mockFacilities = [
+        {
+          id: 'fac-1',
+          facilityName: 'Phòng khám Đa khoa FamiDoc Hà Nội',
+          licenseNumber: 'GPHN-01',
+          address: '10 Phố Huế, Hà Nội',
+          hotline: '1900 6868',
+          _count: { doctors: 5 },
+        },
+      ];
+
+      prismaService.healthcareFacility.count.mockResolvedValue(1);
+      prismaService.healthcareFacility.findMany.mockResolvedValue(mockFacilities);
+
+      const result = await service.lookupHealthcareFacilities({
+        page: 1,
+        limit: 10,
+      });
+
+      expect(result).toBeDefined();
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('fac-1');
+      expect(result.items[0].totalActiveDoctors).toBe(5);
+      expect(result.meta).toEqual({
+        total: 1,
+        page: 1,
+        limit: 10,
+        totalPages: 1,
+      });
+
+      expect(prismaService.healthcareFacility.findMany).toHaveBeenCalledWith({
+        where: { verificationStatus: 'ACTIVE' },
+        skip: 0,
+        take: 10,
+        select: expect.objectContaining({
+          id: true,
+          facilityName: true,
+          licenseNumber: true,
+          address: true,
+          hotline: true,
+          _count: expect.any(Object),
+        }),
+        orderBy: { facilityName: 'asc' },
+      });
+    });
+
+    it('should filter facilities by search keyword in facilityName or address', async () => {
+      prismaService.healthcareFacility.count.mockResolvedValue(0);
+      prismaService.healthcareFacility.findMany.mockResolvedValue([]);
+
+      await service.lookupHealthcareFacilities({
+        search: 'Hà Nội',
+        page: 2,
+        limit: 5,
+      });
+
+      expect(prismaService.healthcareFacility.findMany).toHaveBeenCalledWith({
+        where: {
+          verificationStatus: 'ACTIVE',
+          OR: [
+            { facilityName: { contains: 'Hà Nội', mode: 'insensitive' } },
+            { address: { contains: 'Hà Nội', mode: 'insensitive' } },
+          ],
+        },
+        skip: 5,
+        take: 5,
+        select: expect.any(Object),
+        orderBy: { facilityName: 'asc' },
+      });
+    });
+  });
 });

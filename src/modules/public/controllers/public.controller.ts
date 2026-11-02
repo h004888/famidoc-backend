@@ -15,6 +15,8 @@ import { PortalOverviewResponseDto } from '../dtos/portal-overview-response.dto'
 import { SearchPublicPackagesDto } from '../dtos/search-public-packages.dto';
 import { PublicPackagesResponseDto } from '../dtos/public-packages-response.dto';
 import { PublicPackageDetailDto } from '../dtos/public-package-detail.dto';
+import { LookupHealthcareFacilitiesDto } from '../dtos/lookup-facilities.dto';
+import { PublicFacilitiesResponseDto } from '../dtos/public-facilities-response.dto';
 
 @ApiTags('Public Portal')
 @Controller('api/v1/public')
@@ -89,6 +91,24 @@ export class PublicController {
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ): Promise<PublicPackageDetailDto> {
     return this.publicService.getPublicPackageDetail(id);
+  }
+
+  @Get('facilities')
+  @ApiOperation({
+    summary:
+      'Tra cứu danh bạ cơ sở y tế đối tác công khai (STT 10 - UC-08)',
+    description:
+      'Cho phép tra cứu các bệnh viện, phòng khám đa khoa đối tác đã được thẩm định hoạt động (ACTIVE) kèm số lượng bác sĩ đang liên kết.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách các cơ sở y tế đối tác thỏa mãn điều kiện lọc.',
+    type: PublicFacilitiesResponseDto,
+  })
+  async lookupHealthcareFacilities(
+    @Query() query: LookupHealthcareFacilitiesDto,
+  ): Promise<PublicFacilitiesResponseDto> {
+    return this.publicService.lookupHealthcareFacilities(query);
   }
 }
 
