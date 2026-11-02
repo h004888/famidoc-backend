@@ -20,6 +20,7 @@ describe('PublicController', () => {
     service = {
       getPublicPortalOverview: jest.fn(),
       searchPublicPackages: jest.fn(),
+      getPublicPackageDetail: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -115,6 +116,45 @@ describe('PublicController', () => {
 
       expect(result).toBe(mockResponse);
       expect(searchSpy).toHaveBeenCalledWith(query);
+    });
+  });
+
+  describe('getPublicPackageDetail', () => {
+    it('should delegate to publicService.getPublicPackageDetail', async () => {
+      const mockDetail = {
+        id: 'pkg-1',
+        packageCode: 'PKG-STANDARD',
+        packageName: 'Gói Tiêu Chuẩn',
+        durationMonths: 12,
+        basePrice: 12000000,
+        periodicVisitsQuota: 4,
+        telehealthQuota: 12,
+        maxMembers: 4,
+        includedMembers: 4,
+        additionalMemberMonthlyPrice: 200000,
+        quotaPeriod: 'PER_TERM',
+        description: 'Mô tả',
+        publishedAt: new Date(),
+        benefits: {
+          periodicVisitsQuota: 4,
+          telehealthQuota: 12,
+          clinicalServices: ['Khám định kỳ'],
+          emergencySupport: 'Hotline 24/7',
+        },
+        sampleTerms: {
+          rescheduleNoticeHours: '4 giờ',
+          cancellationPolicy: 'Chính sách hủy',
+          dataPrivacyPolicy: 'ISO 27799',
+        },
+      };
+
+      const detailSpy = jest.spyOn(service, 'getPublicPackageDetail');
+      detailSpy.mockResolvedValue(mockDetail as any);
+
+      const result = await controller.getPublicPackageDetail('pkg-1');
+
+      expect(result).toBe(mockDetail);
+      expect(detailSpy).toHaveBeenCalledWith('pkg-1');
     });
   });
 });

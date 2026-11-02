@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { NotFoundException } from '@nestjs/common';
 import { PublicServiceImpl } from '../services/impl/public.service.impl';
 import { PrismaService } from '../../../core/database/prisma.service';
 
@@ -37,6 +38,7 @@ describe('PublicServiceImpl', () => {
             description: 'Gói cơ bản chăm sóc y tế gia đình',
           },
         ]),
+        findUnique: jest.fn(),
       },
       familyUnit: {
         count: jest.fn().mockResolvedValue(150),
@@ -193,6 +195,78 @@ describe('PublicServiceImpl', () => {
         take: 5,
         orderBy: { packageName: 'desc' },
       });
+    });
+  });
+
+  describe('getPublicPackageDetail', () => {
+    const mockPackage = {
+      id: 'pkg-uuid-detail',
+      packageCode: 'PKG-PREMIUM',
+      packageName: 'Gói Cao Cấp',
+      durationMonths: 12,
+      basePrice: '18000000',
+      periodicVisitsQuota: 6,
+      telehealthQuota: 24,
+      maxMembers: 6,
+      includedMembers: 4,
+      additionalMemberMonthlyPrice: '250000',
+      quotaPeriod: 'PER_TERM',
+      status: 'ACTIVE',
+      deletedAt: null,
+      description: 'Gói chăm sóc y tế toàn diện cao cấp cho đại gia đình',
+      publishedAt: new Date('2026-01-01'),
+    };
+
+    it('should return package detail with benefits and sample contract terms', async () => {
+      prismaService.servicePackage.findUnique.mockResolvedValue(mockPackage);
+
+      const result = await service.getPublicPackageDetail('pkg-uuid-detail');
+
+      expect(result).toBeDefined();
+      expect(result.id).toBe('pkg-uuid-detail');
+      expect(result.basePrice).toBe(18000000);
+      expect(typeof result.basePrice).toBe('number');
+      expect(result.benefits.periodicVisitsQuota).toBe(6);
+      expect(result.benefits.telehealthQuota).toBe(24);
+      expect(result.benefits.clinicalServices.length).toBeGreaterThan(0);
+      expect(result.benefits.emergencySupport).toBeDefined();
+      expect(result.sampleTerms.rescheduleNoticeHours).toContain('4 giờ');
+      expect(result.sampleTerms.cancellationPolicy).toBeDefined();
+      expect(result.sampleTerms.dataPrivacyPolicy).toContain('ISO 27799');
+
+      expect(prismaService.servicePackage.findUnique).toHaveBeenCalledWith({
+        where: { id: 'pkg-uuid-detail' },
+      });
+    });
+
+    it('should throw NotFoundException if package does not exist', async () => {
+      prismaService.servicePackage.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.getPublicPackageDetail('non-existing-id'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw NotFoundException if package is not ACTIVE', async () => {
+      prismaService.servicePackage.findUnique.mockResolvedValue({
+        ...mockPackage,
+        status: 'DRAFT',
+      });
+
+      await expect(
+        service.getPublicPackageDetail('pkg-uuid-detail'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw NotFoundException if package is deleted', async () => {
+      prismaService.servicePackage.findUnique.mockResolvedValue({
+        ...mockPackage,
+        deletedAt: new Date(),
+      });
+
+      await expect(
+        service.getPublicPackageDetail('pkg-uuid-detail'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

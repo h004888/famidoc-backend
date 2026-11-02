@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../../core/database/prisma.service';
 import { IPublicService } from '../interfaces/public.service.interface';
 import {
@@ -8,6 +8,7 @@ import {
 } from '../../dtos/portal-overview-response.dto';
 import { SearchPublicPackagesDto } from '../../dtos/search-public-packages.dto';
 import { PublicPackagesResponseDto } from '../../dtos/public-packages-response.dto';
+import { PublicPackageDetailDto } from '../../dtos/public-package-detail.dto';
 
 @Injectable()
 export class PublicServiceImpl implements IPublicService {
@@ -216,6 +217,52 @@ export class PublicServiceImpl implements IPublicService {
         page,
         limit,
         totalPages: Math.ceil(total / limit) || 1,
+      },
+    };
+  }
+
+  async getPublicPackageDetail(id: string): Promise<PublicPackageDetailDto> {
+    const pkg = await this.prisma.servicePackage.findUnique({
+      where: { id },
+    });
+
+    if (!pkg || pkg.status !== 'ACTIVE' || pkg.deletedAt !== null) {
+      throw new NotFoundException('Không tìm thấy gói chăm sóc sức khỏe');
+    }
+
+    return {
+      id: pkg.id,
+      packageCode: pkg.packageCode,
+      packageName: pkg.packageName,
+      durationMonths: pkg.durationMonths,
+      basePrice: Number(pkg.basePrice),
+      periodicVisitsQuota: pkg.periodicVisitsQuota,
+      telehealthQuota: pkg.telehealthQuota,
+      maxMembers: pkg.maxMembers,
+      includedMembers: pkg.includedMembers,
+      additionalMemberMonthlyPrice: Number(pkg.additionalMemberMonthlyPrice),
+      quotaPeriod: pkg.quotaPeriod,
+      description: pkg.description,
+      publishedAt: pkg.publishedAt,
+      benefits: {
+        periodicVisitsQuota: pkg.periodicVisitsQuota,
+        telehealthQuota: pkg.telehealthQuota,
+        clinicalServices: [
+          'Khám lâm sàng tổng quát toàn diện định kỳ tại nhà',
+          'Đo dấu hiệu sinh tồn chuẩn y tế (Huyết áp, Nhịp tim, SpO2, Thân nhiệt)',
+          'Xét nghiệm đường huyết mao mạch và kiểm tra sức khỏe tại chỗ',
+          'Cập nhật và theo dõi Hồ sơ sức khỏe điện tử (EHR) liên tục',
+          'Kê đơn thuốc điện tử chuẩn Thông tư 04/2022/TT-BYT',
+        ],
+        emergencySupport: 'Đường dây nóng hỗ trợ điều phối y tế gia đình 24/7',
+      },
+      sampleTerms: {
+        rescheduleNoticeHours:
+          'Chính sách đổi lịch hẹn: Thông báo trước tối thiểu 4 giờ (CFG-07) trước giờ khám dự kiến.',
+        cancellationPolicy:
+          'Chính sách chấm dứt hợp đồng: Được quyền yêu cầu hủy gói và hoàn tiền theo chính sách trọng tài và điều khoản hợp đồng dịch vụ y tế (UC-19, UC-38).',
+        dataPrivacyPolicy:
+          'Bảo mật y tế: Toàn bộ hồ sơ bệnh án điện tử và dữ liệu lâm sàng được bảo mật theo tiêu chuẩn ISO 27799:2016 và Nghị định 13/2023/NĐ-CP.',
       },
     };
   }

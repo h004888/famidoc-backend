@@ -2,16 +2,19 @@ import {
   Controller,
   Get,
   Inject,
+  Param,
+  ParseUUIDPipe,
   Query,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import type { IPublicService } from '../services/interfaces/public.service.interface';
 import { PUBLIC_SERVICE_TOKEN } from '../services/interfaces/public.service.interface';
 import { PortalOverviewResponseDto } from '../dtos/portal-overview-response.dto';
 import { SearchPublicPackagesDto } from '../dtos/search-public-packages.dto';
 import { PublicPackagesResponseDto } from '../dtos/public-packages-response.dto';
+import { PublicPackageDetailDto } from '../dtos/public-package-detail.dto';
 
 @ApiTags('Public Portal')
 @Controller('api/v1/public')
@@ -59,6 +62,33 @@ export class PublicController {
     @Query() query: SearchPublicPackagesDto,
   ): Promise<PublicPackagesResponseDto> {
     return this.publicService.searchPublicPackages(query);
+  }
+
+  @Get('packages/:id')
+  @ApiOperation({
+    summary:
+      'Xem chi tiết gói chăm sóc sức khỏe công khai theo ID (STT 9 - UC-07)',
+    description:
+      'Trả về đầy đủ thông tin chi tiết của gói chăm sóc: hạn mức thăm khám tại nhà, tư vấn từ xa, quyền lợi lâm sàng và điều khoản hợp đồng mẫu.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID của gói dịch vụ chăm sóc sức khỏe',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Chi tiết gói chăm sóc sức khỏe.',
+    type: PublicPackageDetailDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy gói chăm sóc sức khỏe hoặc gói đã ngừng áp dụng.',
+  })
+  async getPublicPackageDetail(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<PublicPackageDetailDto> {
+    return this.publicService.getPublicPackageDetail(id);
   }
 }
 
