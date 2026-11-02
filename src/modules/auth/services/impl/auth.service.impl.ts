@@ -510,6 +510,19 @@ export class AuthServiceImpl implements IAuthService {
       7 * 86400,
     );
 
+    // Mở khóa đăng nhập và reset số lần sai mật khẩu nếu có
+    if (user.email) {
+      await this.redisClient.del(`login:lock:${user.email}`);
+      await this.redisClient.del(`login:fail:${user.email}`);
+    }
+    if (user.phone) {
+      await this.redisClient.del(`login:lock:${user.phone}`);
+      await this.redisClient.del(`login:fail:${user.phone}`);
+    }
+    if (user.failedLoginAttempts && user.failedLoginAttempts > 0) {
+      await this.authRepository.resetFailedAttempts(user.id);
+    }
+
     return {
       message: 'Update password successfully',
       success: true,

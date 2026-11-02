@@ -737,6 +737,39 @@ describe('AuthServiceImpl', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
+  it('[UT-S-24] Đổi mật khẩu thất bại do không tìm thấy user theo userId', async () => {
+    repository.findById.mockResolvedValue(null);
+
+    await expect(
+      service.changePassword('u-notfound', {
+        oldPassword: 'OldPassword@123',
+        newPassword: 'NewPassword@123',
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('[UT-S-25] Đổi mật khẩu tự động dọn dẹp các khóa đăng nhập và reset failed attempts khi thành công', async () => {
+    repository.findById.mockResolvedValue({
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+      phone: '0912345678',
+      passwordHash: hashSync('OldPassword@123', 4),
+      failedLoginAttempts: 2,
+    } as any);
+
+    const res = await service.changePassword('u-1', {
+      oldPassword: 'OldPassword@123',
+      newPassword: 'NewPassword@456',
+    });
+
+    expect(res.success).toBe(true);
+    expect(repository.resetFailedAttempts).toHaveBeenCalledWith('u-1');
+    expect(redisService.del).toHaveBeenCalledWith('login:lock:a@famidoc.vn');
+    expect(redisService.del).toHaveBeenCalledWith('login:fail:a@famidoc.vn');
+    expect(redisService.del).toHaveBeenCalledWith('login:lock:0912345678');
+    expect(redisService.del).toHaveBeenCalledWith('login:fail:0912345678');
+  });
+
   // --- FAULT INJECTION TESTS ---
   it('[FI-01] Prisma error P2002 chuyển đổi thành ConflictException', async () => {
     repository.findByEmail.mockRejectedValue({ code: 'P2002' });
