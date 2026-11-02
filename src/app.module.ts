@@ -12,6 +12,7 @@ import { HealthController } from './core/health/health.controller';
 import { AuthModule } from './modules/auth/auth.module';
 
 import { PublicModule } from './modules/public/public.module';
+import { DoctorsModule } from './modules/doctors/doctors.module';
 import { CarePackagesModule } from './modules/care-packages/care-packages.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 
@@ -20,6 +21,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
   imports: [
     PrismaModule,
     PublicModule,
+    DoctorsModule,
     AuthModule,
     CarePackagesModule,
     PaymentsModule,
