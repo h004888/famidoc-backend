@@ -123,7 +123,11 @@ export class AuthController {
   @ApiBody({ type: ForgotPasswordDto })
   @ApiResponse({ status: 201, description: 'Đã gửi OTP khôi phục mật khẩu nếu email tồn tại' })
   forgotPassword(@Body() dto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(dto);
+    return this.authService.requestForgotPassword(dto);
+  }
+
+  requestForgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.requestForgotPassword(dto);
   }
 
   @Post('reset-password')

@@ -25,6 +25,7 @@ describe('AuthController', () => {
       login: jest.fn(),
       logout: jest.fn(),
       forgotPassword: jest.fn(),
+      requestForgotPassword: jest.fn(),
       resetPassword: jest.fn(),
       changePassword: jest.fn(),
     };
@@ -147,15 +148,27 @@ describe('AuthController', () => {
     });
   });
 
-  it('[UT-C-06] forgotPassword ủy quyền gọi service.forgotPassword', async () => {
+  it('[UT-C-06] forgotPassword ủy quyền gọi service.requestForgotPassword', async () => {
     const dto = { email: 'a@famidoc.vn' };
-    service.forgotPassword.mockResolvedValue({
+    service.requestForgotPassword.mockResolvedValue({
       message: 'Sent',
       success: true,
     });
 
     const res = await controller.forgotPassword(dto);
-    expect(service.forgotPassword).toHaveBeenCalledWith(dto);
+    expect(service.requestForgotPassword).toHaveBeenCalledWith(dto);
+    expect(res).toEqual({ message: 'Sent', success: true });
+  });
+
+  it('[UT-C-06b] requestForgotPassword ủy quyền gọi service.requestForgotPassword', async () => {
+    const dto = { email: 'a@famidoc.vn' };
+    service.requestForgotPassword.mockResolvedValue({
+      message: 'Sent',
+      success: true,
+    });
+
+    const res = await controller.requestForgotPassword(dto);
+    expect(service.requestForgotPassword).toHaveBeenCalledWith(dto);
     expect(res).toEqual({ message: 'Sent', success: true });
   });
 

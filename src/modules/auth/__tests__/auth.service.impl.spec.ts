@@ -574,6 +574,28 @@ describe('AuthServiceImpl', () => {
     expect(mailerService.sendMail).toHaveBeenCalled();
   });
 
+  it('[UT-S-18b] Quên mật khẩu: Bị từ chối do còn trong thời gian Cooldown (< 60s)', async () => {
+    redisService.ttl.mockResolvedValue(45);
+
+    await expect(
+      service.requestForgotPassword({ email: 'a@famidoc.vn' }),
+    ).rejects.toThrow(HttpException);
+  });
+
+  it('[UT-S-18c] Quên mật khẩu: requestForgotPassword tự động trim và lowercase email', async () => {
+    redisService.ttl.mockResolvedValue(-2);
+    repository.findByEmail.mockResolvedValue({
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+    } as any);
+    redisService.set.mockResolvedValue('OK');
+    mailerService.sendMail.mockResolvedValue(true);
+
+    const res = await service.requestForgotPassword({ email: '  A@FAMIDOC.VN  ' });
+    expect(repository.findByEmail).toHaveBeenCalledWith('a@famidoc.vn');
+    expect(res.success).toBe(true);
+  });
+
   it('[UT-S-19] Quên mật khẩu: Email không tồn tại trong hệ thống (Bảo mật GB-05)', async () => {
     repository.findByEmail.mockResolvedValue(null);
 

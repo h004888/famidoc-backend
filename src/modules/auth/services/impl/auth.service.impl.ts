@@ -393,28 +393,47 @@ export class AuthServiceImpl implements IAuthService {
     };
   }
 
-  async forgotPassword(dto: ForgotPasswordDto): Promise<ApiResponseMessage> {
-    const user = await this.authRepository.findByEmail(dto.email);
+  async requestForgotPassword(
+    dto: ForgotPasswordDto,
+  ): Promise<ApiResponseMessage> {
+    const email = dto.email.trim().toLowerCase();
+    const cooldown =
+      typeof this.redisClient.ttl === 'function'
+        ? (await this.redisClient.ttl(`otp:cooldown:reset:${email}`)) || 0
+        : 0;
+    if (cooldown > 0) {
+      throw new HttpException(
+        `Please wait ${cooldown} seconds before requesting a new OTP`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    const user = await this.authRepository.findByEmail(email);
     if (!user) {
       return {
-        message: `A confirmation email has been sent to ${dto.email}`,
+        message: `A confirmation email has been sent to ${email}`,
         success: true,
       };
     }
 
     const otp = randomInt(100000, 1000000).toString();
-    await this.redisClient.set(`otp:reset:${dto.email}`, otp, 'EX', 600);
+    await this.redisClient.set(`otp:reset:${email}`, otp, 'EX', 600);
+    await this.redisClient.set(`otp:cooldown:reset:${email}`, '1', 'EX', 60);
 
     await this.mailerService.sendMail({
-      to: dto.email,
+      to: email,
       subject: 'FamiDoc - Yêu cầu khôi phục mật khẩu',
-      text: `Mã OTP đặt lại mật khẩu của bạn là: ${otp} (hiệu lực 10 phút).`,
+      text: `Mã OTP đặt lại mật khẩu của bạn là: ${otp} (hiệu lực 10 phút). Vui lòng không chia sẻ mã này cho bất kỳ ai.`,
     });
 
     return {
-      message: `A confirmation email has been sent to ${dto.email}`,
+      message: `A confirmation email has been sent to ${email}`,
       success: true,
     };
+  }
+
+  async forgotPassword(dto: ForgotPasswordDto): Promise<ApiResponseMessage> {
+    return this.requestForgotPassword(dto);
   }
 
   async resetPassword(dto: ResetPasswordDto): Promise<ApiResponseMessage> {

@@ -34,6 +34,7 @@ export interface IAuthService {
   login(dto: LoginDto, clientIp?: string): Promise<LoginSuccessResponse>;
   logout(userId: string, token: string): Promise<ApiResponseMessage>;
   forgotPassword(dto: ForgotPasswordDto): Promise<ApiResponseMessage>;
+  requestForgotPassword(dto: ForgotPasswordDto): Promise<ApiResponseMessage>;
   resetPassword(dto: ResetPasswordDto): Promise<ApiResponseMessage>;
   changePassword(
     userId: string,
