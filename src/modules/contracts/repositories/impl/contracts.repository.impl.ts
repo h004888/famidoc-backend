@@ -7,7 +7,7 @@ import type {
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { activateAddendumRights } from '../../activation/activate-addendum';
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, type B2bContractStatus } from '@prisma/client';
 import { PrismaService } from '../../../../core/database/prisma.service';
 import { serializable } from '../../../../core/database/prisma-transaction';
 import {
@@ -245,5 +245,94 @@ class PrismaContractsSession implements ContractsSession {
       'Hợp đồng hoặc phụ lục có cập nhật. Vui lòng mở hồ sơ để xem điều khoản.',
       'CONTRACT',
     );
+  }
+
+  findFacilityById(id: string) {
+    return this.tx.healthcareFacility.findUnique({ where: { id } });
+  }
+
+  findFacilityByUserId(userId: string) {
+    return this.tx.healthcareFacility.findUnique({ where: { userId } });
+  }
+
+  findConflictingStaffingContract(
+    facilityId: string,
+    startDate: Date,
+    endDate: Date,
+  ) {
+    return this.tx.b2bStaffingContract.findFirst({
+      where: {
+        facilityId,
+        status: { in: ['ACTIVE', 'PENDING_SIGNATURE'] },
+        startDate: { lte: endDate },
+        endDate: { gte: startDate },
+      },
+    });
+  }
+
+  createStaffingContract(data: Prisma.B2bStaffingContractUncheckedCreateInput) {
+    return this.tx.b2bStaffingContract.create({
+      data,
+      include: { facility: true },
+    });
+  }
+
+  findStaffingContract(id: string) {
+    return this.tx.b2bStaffingContract.findUnique({
+      where: { id },
+      include: { facility: true },
+    });
+  }
+
+  updateStaffingContractStatus(
+    id: string,
+    status: B2bContractStatus,
+    signedPdfUrl?: string,
+  ) {
+    return this.tx.b2bStaffingContract.update({
+      where: { id },
+      data: {
+        status,
+        ...(signedPdfUrl ? { signedPdfUrl } : {}),
+        updatedAt: new Date(),
+      },
+      include: { facility: true },
+    });
+  }
+
+  async listStaffingContracts(
+    where: Prisma.B2bStaffingContractWhereInput,
+    skip: number,
+    take: number,
+  ) {
+    const [total, items] = await Promise.all([
+      this.tx.b2bStaffingContract.count({ where }),
+      this.tx.b2bStaffingContract.findMany({
+        where,
+        skip,
+        take,
+        include: { facility: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+    return { items, total };
+  }
+
+  async recordStaffingAudit(
+    actorId: string,
+    action: string,
+    resourceId: string,
+    ip: string,
+  ) {
+    await this.tx.auditLog.create({
+      data: {
+        actorUserId: actorId,
+        action,
+        resourceName: 'B2bStaffingContract',
+        resourceId,
+        clientIp: ip || '127.0.0.1',
+        timestamp: new Date(),
+      },
+    });
   }
 }

@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
   UsePipes,
@@ -22,6 +23,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
+import { RolesGuard, Roles } from '../../../core/auth/roles.guard';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
 import {
   CreateContractAddendumDto,
@@ -29,6 +31,12 @@ import {
   SignContractChangeDto,
   TerminateContractDto,
 } from '../dtos/contract-change.dto';
+import {
+  CreateStaffingContractDto,
+  SignStaffingContractDto,
+  ListStaffingContractsDto,
+  StaffingContractResponseDto,
+} from '../dtos/staffing-contract.dto';
 import {
   CONTRACTS_SERVICE_TOKEN,
   type IContractsService,
@@ -50,6 +58,91 @@ export class ContractsController {
     @Inject(CONTRACTS_SERVICE_TOKEN)
     private readonly service: IContractsService,
   ) {}
+
+  @Post('staffing')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'HEALTHCARE_FACILITY')
+  @ApiOperation({
+    summary: 'Thiết lập hợp đồng cung ứng nhân lực y tế B2B (STT 13 - UC-15)',
+    description:
+      'Thiết lập hợp đồng khung cung ứng nhân lực y tế giữa Nền tảng và Cơ sở y tế đối tác, xác lập tỷ lệ phân chia doanh thu và thời hạn hiệu lực.',
+  })
+  @ApiBody({ type: CreateStaffingContractDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Tạo hợp đồng nhân lực B2B thành công, chờ ký xác nhận.',
+    type: StaffingContractResponseDto,
+  })
+  createStaffingContract(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: CreateStaffingContractDto,
+  ) {
+    return this.service.createStaffingContract(
+      req.user,
+      dto,
+      req.ip ?? 'unknown',
+    );
+  }
+
+  @Put('staffing/:id/sign')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'HEALTHCARE_FACILITY')
+  @ApiOperation({
+    summary: 'Ký số điện tử hợp đồng cung ứng nhân lực B2B (STT 14 - UC-15)',
+    description:
+      'Đại diện Nền tảng (Admin) hoặc Đại diện Cơ sở y tế thực hiện ký số điện tử để kích hoạt hợp đồng cung ứng nhân lực sang trạng thái ACTIVE.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng cung ứng nhân lực' })
+  @ApiBody({ type: SignStaffingContractDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Ký số thành công, hợp đồng đã được kích hoạt có hiệu lực.',
+    type: StaffingContractResponseDto,
+  })
+  signStaffingContract(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: SignStaffingContractDto,
+  ) {
+    return this.service.signStaffingContract(
+      req.user,
+      id,
+      dto,
+      req.ip ?? 'unknown',
+    );
+  }
+
+  @Get('staffing')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'HEALTHCARE_FACILITY')
+  @ApiOperation({ summary: 'Xem danh sách hợp đồng cung ứng nhân lực B2B' })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách hợp đồng cung ứng nhân lực.',
+  })
+  listStaffingContracts(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: ListStaffingContractsDto,
+  ) {
+    return this.service.listStaffingContracts(req.user, query);
+  }
+
+  @Get('staffing/:id')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'HEALTHCARE_FACILITY')
+  @ApiOperation({ summary: 'Xem chi tiết hợp đồng cung ứng nhân lực B2B' })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng cung ứng nhân lực' })
+  @ApiResponse({
+    status: 200,
+    description: 'Chi tiết hợp đồng cung ứng nhân lực.',
+    type: StaffingContractResponseDto,
+  })
+  getStaffingContract(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.service.getStaffingContract(req.user, id);
+  }
 
   @Post(':id/addendums')
   @ApiOperation({ summary: 'Tạo phụ lục hợp đồng (thay đổi thành viên hoặc dịch vụ)' })

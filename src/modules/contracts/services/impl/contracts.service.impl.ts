@@ -36,6 +36,12 @@ import type {
   SignContractChangeDto,
   TerminateContractDto,
 } from '../../dtos/contract-change.dto';
+import type {
+  CreateStaffingContractDto,
+  SignStaffingContractDto,
+  ListStaffingContractsDto,
+  StaffingContractResponseDto,
+} from '../../dtos/staffing-contract.dto';
 import {
   calculateHomeVisitAddendum,
   calculateMemberAddendum,
@@ -59,6 +65,246 @@ export class ContractsServiceImpl implements IContractsService {
     @Inject(CONTRACTS_REPOSITORY_TOKEN)
     private readonly repository: IContractsRepository,
   ) {}
+
+  async createStaffingContract(
+    actor: AuthenticatedUser,
+    dto: CreateStaffingContractDto,
+    ip: string,
+  ): Promise<StaffingContractResponseDto> {
+    const platformCommissionRate = dto.platformCommissionRate ?? 15.0;
+    const facilityRevenueRate = dto.facilityRevenueRate ?? 85.0;
+
+    if (platformCommissionRate + facilityRevenueRate !== 100.0) {
+      throw new BadRequestException(
+        'Tổng tỷ lệ hoa hồng nền tảng và doanh thu cơ sở y tế phải đúng bằng 100%',
+      );
+    }
+
+    const startDate = new Date(dto.startDate);
+    const endDate = new Date(dto.endDate);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      throw new BadRequestException('Ngày bắt đầu hoặc kết thúc không hợp lệ');
+    }
+    if (endDate <= startDate) {
+      throw new BadRequestException('Ngày kết thúc hợp đồng phải sau ngày bắt đầu');
+    }
+
+    return this.repository.transaction(async (session) => {
+      let targetFacilityId: string;
+
+      if (actor.role === 'ADMIN') {
+        if (!dto.facilityId) {
+          throw new BadRequestException(
+            'Vui lòng chỉ định cơ sở y tế đối tác (facilityId)',
+          );
+        }
+        const facility = await session.findFacilityById(dto.facilityId);
+        if (!facility || facility.verificationStatus !== 'ACTIVE') {
+          throw new BadRequestException(
+            'Cơ sở y tế không tồn tại hoặc chưa được kích hoạt hoạt động',
+          );
+        }
+        targetFacilityId = facility.id;
+      } else if (actor.role === 'HEALTHCARE_FACILITY') {
+        const facility = await session.findFacilityByUserId(actor.id);
+        if (!facility || facility.verificationStatus !== 'ACTIVE') {
+          throw new BadRequestException(
+            'Tài khoản của bạn chưa liên kết với cơ sở y tế hợp lệ',
+          );
+        }
+        targetFacilityId = facility.id;
+      } else {
+        throw new ForbiddenException(
+          'Chỉ Quản trị viên hoặc Cơ sở y tế mới có quyền tạo hợp đồng nhân lực',
+        );
+      }
+
+      const conflict = await session.findConflictingStaffingContract(
+        targetFacilityId,
+        startDate,
+        endDate,
+      );
+      if (conflict) {
+        throw new ConflictException(
+          'Cơ sở y tế đã có hợp đồng cung ứng nhân lực hiệu lực hoặc đang chờ ký trong khoảng thời gian này',
+        );
+      }
+
+      const year = new Date().getFullYear();
+      const randomSuffix = randomUUID().substring(0, 8).toUpperCase();
+      const contractCode = `STF-${year}-${randomSuffix}`;
+
+      const created = await session.createStaffingContract({
+        contractCode,
+        facilityId: targetFacilityId,
+        platformCommissionRate: new Prisma.Decimal(platformCommissionRate),
+        facilityRevenueRate: new Prisma.Decimal(facilityRevenueRate),
+        startDate,
+        endDate,
+        signedPdfUrl: dto.signedPdfUrl || null,
+        status: 'PENDING_SIGNATURE',
+      });
+
+      await session.recordStaffingAudit(
+        actor.id,
+        'STAFFING_CONTRACT_CREATED',
+        created.id,
+        ip,
+      );
+
+      return this.formatStaffingContract(created);
+    });
+  }
+
+  async signStaffingContract(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: SignStaffingContractDto,
+    ip: string,
+  ): Promise<StaffingContractResponseDto> {
+    return this.repository.transaction(async (session) => {
+      const contract = await session.findStaffingContract(id);
+      if (!contract) {
+        throw new NotFoundException('Không tìm thấy hợp đồng cung ứng nhân lực');
+      }
+
+      if (actor.role === 'HEALTHCARE_FACILITY') {
+        if (contract.facility.userId !== actor.id) {
+          throw new ForbiddenException(
+            'Bạn không có quyền ký hợp đồng của cơ sở y tế khác',
+          );
+        }
+      } else if (actor.role !== 'ADMIN') {
+        throw new ForbiddenException(
+          'Chỉ Quản trị viên hoặc Đại diện CSYT mới có quyền ký hợp đồng nhân lực',
+        );
+      }
+
+      if (contract.status !== 'PENDING_SIGNATURE') {
+        throw new ConflictException(
+          'Hợp đồng không ở trạng thái chờ ký hoặc đã có hiệu lực',
+        );
+      }
+
+      const signedPdfUrl =
+        dto.signedPdfUrl ||
+        contract.signedPdfUrl ||
+        `https://cdn.famidoc.vn/contracts/staffing/${contract.contractCode}-signed.pdf`;
+
+      const updated = await session.updateStaffingContractStatus(
+        id,
+        'ACTIVE',
+        signedPdfUrl,
+      );
+
+      await session.recordStaffingAudit(
+        actor.id,
+        'STAFFING_CONTRACT_SIGNED',
+        id,
+        ip,
+      );
+
+      return this.formatStaffingContract(updated);
+    });
+  }
+
+  async listStaffingContracts(
+    actor: AuthenticatedUser,
+    query: ListStaffingContractsDto,
+  ): Promise<{ items: StaffingContractResponseDto[]; total: number }> {
+    const page = Math.max(1, query.page || 1);
+    const limit = Math.min(50, Math.max(1, query.limit || 10));
+    const skip = (page - 1) * limit;
+
+    return this.repository.transaction(async (session) => {
+      const where: Prisma.B2bStaffingContractWhereInput = {};
+
+      if (actor.role === 'HEALTHCARE_FACILITY') {
+        const facility = await session.findFacilityByUserId(actor.id);
+        if (!facility) {
+          return { items: [], total: 0 };
+        }
+        where.facilityId = facility.id;
+      } else if (actor.role === 'ADMIN') {
+        if (query.facilityId) {
+          where.facilityId = query.facilityId;
+        }
+      } else {
+        throw new ForbiddenException('Bạn không có quyền xem hợp đồng nhân lực');
+      }
+
+      if (query.status) {
+        where.status = query.status;
+      }
+
+      const { items, total } = await session.listStaffingContracts(
+        where,
+        skip,
+        limit,
+      );
+
+      return {
+        items: items.map((item) => this.formatStaffingContract(item)),
+        total,
+      };
+    });
+  }
+
+  async getStaffingContract(
+    actor: AuthenticatedUser,
+    id: string,
+  ): Promise<StaffingContractResponseDto> {
+    return this.repository.transaction(async (session) => {
+      const contract = await session.findStaffingContract(id);
+      if (!contract) {
+        throw new NotFoundException('Không tìm thấy hợp đồng cung ứng nhân lực');
+      }
+
+      if (
+        actor.role === 'HEALTHCARE_FACILITY' &&
+        contract.facility.userId !== actor.id
+      ) {
+        throw new ForbiddenException(
+          'Bạn không có quyền xem hợp đồng của cơ sở y tế khác',
+        );
+      } else if (
+        actor.role !== 'ADMIN' &&
+        actor.role !== 'HEALTHCARE_FACILITY'
+      ) {
+        throw new ForbiddenException('Bạn không có quyền xem hợp đồng nhân lực');
+      }
+
+      return this.formatStaffingContract(contract);
+    });
+  }
+
+  private formatStaffingContract(contract: any): StaffingContractResponseDto {
+    return {
+      id: contract.id,
+      contractCode: contract.contractCode,
+      facilityId: contract.facilityId,
+      platformCommissionRate: Number(contract.platformCommissionRate),
+      facilityRevenueRate: Number(contract.facilityRevenueRate),
+      startDate: contract.startDate,
+      endDate: contract.endDate,
+      signedPdfUrl: contract.signedPdfUrl,
+      status: contract.status,
+      createdAt: contract.createdAt,
+      updatedAt: contract.updatedAt,
+      ...(contract.facility
+        ? {
+            facility: {
+              id: contract.facility.id,
+              facilityName: contract.facility.facilityName,
+              licenseNumber: contract.facility.licenseNumber,
+              address: contract.facility.address,
+              hotline: contract.facility.hotline,
+            },
+          }
+        : {}),
+    };
+  }
+
   // Lập điều khoản và tính phí trước; ở bước này chưa cộng người hoặc lượt khám.
   createContractAddendum(
     actor: AuthenticatedUser,

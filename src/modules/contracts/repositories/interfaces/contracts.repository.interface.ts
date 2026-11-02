@@ -3,6 +3,9 @@ import {
   type ContractAddendum,
   type ServicePackage,
   type ContractSignature,
+  type B2bStaffingContract,
+  type HealthcareFacility,
+  type B2bContractStatus,
 } from '@prisma/client';
 import type {
   TerminationRequest,
@@ -77,6 +80,38 @@ export interface ContractsSession {
     contract: ChangeContract,
     action: string,
     resourceId: string,
+  ): Promise<void>;
+  findFacilityById(id: string): Promise<HealthcareFacility | null>;
+  findFacilityByUserId(userId: string): Promise<HealthcareFacility | null>;
+  findConflictingStaffingContract(
+    facilityId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<B2bStaffingContract | null>;
+  createStaffingContract(
+    data: Prisma.B2bStaffingContractUncheckedCreateInput,
+  ): Promise<B2bStaffingContract & { facility: HealthcareFacility }>;
+  findStaffingContract(
+    id: string,
+  ): Promise<(B2bStaffingContract & { facility: HealthcareFacility }) | null>;
+  updateStaffingContractStatus(
+    id: string,
+    status: B2bContractStatus,
+    signedPdfUrl?: string,
+  ): Promise<B2bStaffingContract & { facility: HealthcareFacility }>;
+  listStaffingContracts(
+    where: Prisma.B2bStaffingContractWhereInput,
+    skip: number,
+    take: number,
+  ): Promise<{
+    items: (B2bStaffingContract & { facility: HealthcareFacility })[];
+    total: number;
+  }>;
+  recordStaffingAudit(
+    actorId: string,
+    action: string,
+    resourceId: string,
+    ip: string,
   ): Promise<void>;
 }
 export interface IContractsRepository {
