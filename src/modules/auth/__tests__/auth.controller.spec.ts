@@ -1,3 +1,4 @@
+import { RequestMethod } from '@nestjs/common';
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from '../controllers/auth.controller';
@@ -178,5 +179,12 @@ describe('AuthController', () => {
     const res = await controller.changePassword(req, dto);
     expect(service.changePassword).toHaveBeenCalled();
     expect(res).toEqual({ message: 'Changed ok', success: true });
+  });
+
+  it('[UT-C-09] changePassword được định tuyến bằng decorator @Patch("change-password")', () => {
+    const httpMethod = Reflect.getMetadata('method', controller.changePassword);
+    const path = Reflect.getMetadata('path', controller.changePassword);
+    expect(httpMethod).toBe(RequestMethod.PATCH);
+    expect(path).toBe('change-password');
   });
 });

@@ -148,6 +148,27 @@ describe('AuthRepositoryImpl', () => {
     ).rejects.toThrow('Patient creation failed');
   });
 
+  it('[UT-R-07] updateFailedAttempts cập nhật failedLoginAttempts và lockedUntil trên user', async () => {
+    const lockDate = new Date(Date.now() + 1800 * 1000);
+    prismaService.user.update.mockResolvedValue({ id: 'u-1', failedLoginAttempts: 5, lockedUntil: lockDate });
+
+    await repository.updateFailedAttempts('u-1', 5, lockDate);
+    expect(prismaService.user.update).toHaveBeenCalledWith({
+      where: { id: 'u-1' },
+      data: { failedLoginAttempts: 5, lockedUntil: lockDate },
+    });
+  });
+
+  it('[UT-R-08] resetFailedAttempts đặt lại failedLoginAttempts về 0 và lockedUntil về null', async () => {
+    prismaService.user.update.mockResolvedValue({ id: 'u-1', failedLoginAttempts: 0, lockedUntil: null });
+
+    await repository.resetFailedAttempts('u-1');
+    expect(prismaService.user.update).toHaveBeenCalledWith({
+      where: { id: 'u-1' },
+      data: { failedLoginAttempts: 0, lockedUntil: null },
+    });
+  });
+
   it('[UT-R-06] AuthEntity contract matches 29-table DDL without tokenVersion', () => {
     const entity: AuthEntity = {
       id: 'u-1',

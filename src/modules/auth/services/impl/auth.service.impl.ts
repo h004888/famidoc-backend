@@ -239,13 +239,14 @@ export class AuthServiceImpl implements IAuthService {
     dto: LoginDto,
     _clientIp?: string,
   ): Promise<LoginSuccessResponse> {
+    const LOCKOUT_DURATION_SECONDS = 1800; // 30 minutes (SRS Security Section IV.2.3)
     try {
       const isLocked = await this.redisClient.get(
         `login:lock:${dto.identifier}`,
       );
       if (isLocked) {
         throw new ForbiddenException(
-          'Account temporarily locked. Please try again in 20 minutes',
+          'Account temporarily locked. Please try again in 30 minutes',
         );
       }
 
@@ -259,6 +260,12 @@ export class AuthServiceImpl implements IAuthService {
       if (!user) {
         throw new UnauthorizedException(
           'Incorrect username or password. Please check again.',
+        );
+      }
+
+      if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+        throw new ForbiddenException(
+          'Account temporarily locked. Please try again in 30 minutes',
         );
       }
 
@@ -276,20 +283,31 @@ export class AuthServiceImpl implements IAuthService {
         const failCount = await this.redisClient.incr(
           `login:fail:${dto.identifier}`,
         );
+        const lockedUntil =
+          failCount >= 5
+            ? new Date(Date.now() + LOCKOUT_DURATION_SECONDS * 1000)
+            : null;
         if (failCount >= 5) {
           await this.redisClient.set(
             `login:lock:${dto.identifier}`,
             '1',
             'EX',
-            1800,
+            LOCKOUT_DURATION_SECONDS,
           );
         }
+
+        await this.authRepository.updateFailedAttempts(user.id, failCount, lockedUntil);
+
         throw new UnauthorizedException(
           'Incorrect username or password. Please check again.',
         );
       }
 
       await this.redisClient.del(`login:fail:${dto.identifier}`);
+
+      if (user.failedLoginAttempts && user.failedLoginAttempts > 0) {
+        await this.authRepository.resetFailedAttempts(user.id);
+      }
 
       const payload: any = {
         sub: user.id,
