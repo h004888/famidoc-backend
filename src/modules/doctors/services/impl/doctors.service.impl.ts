@@ -330,6 +330,11 @@ export class DoctorsServiceImpl implements IDoctorsService {
           },
         });
 
+        await tx.user.update({
+          where: { id: doctor.userId },
+          data: { status: 'ACTIVE' },
+        });
+
         const doc = await tx.doctor.update({
           where: { id: doctorId },
           data: {

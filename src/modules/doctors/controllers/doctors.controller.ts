@@ -22,6 +22,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import { RolesGuard, Roles } from '../../../core/auth/roles.guard';
+import { AllowOnboarding } from '../../../core/auth/allow-onboarding.decorator';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
 import { SubmitDoctorCredentialsDto } from '../dtos/submit-credentials.dto';
 import {
@@ -53,6 +54,7 @@ export class DoctorsController {
 
   @Put(':id/credentials')
   @Roles('DOCTOR', 'ADMIN')
+  @AllowOnboarding()
   @ApiOperation({
     summary: 'Bác sĩ tải lên hồ sơ văn bằng, chứng chỉ hành nghề (STT 16 - UC-21)',
     description:
@@ -133,6 +135,7 @@ export class DoctorsController {
   }
 
   @Get(':id')
+  @AllowOnboarding()
   @ApiOperation({ summary: 'Xem chi tiết hồ sơ bác sĩ' })
   @ApiParam({ name: 'id', description: 'UUID của hồ sơ Bác sĩ' })
   @ApiResponse({

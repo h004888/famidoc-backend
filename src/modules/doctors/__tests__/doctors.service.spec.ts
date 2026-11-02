@@ -66,6 +66,7 @@ describe('DoctorsServiceImpl', () => {
       user: {
         findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({ id: 'new-user-uuid-1' }),
+        update: jest.fn().mockResolvedValue({ id: 'new-user-uuid-1', status: 'ACTIVE' }),
       },
       doctor: {
         findUnique: jest.fn().mockResolvedValue(mockDoctor),

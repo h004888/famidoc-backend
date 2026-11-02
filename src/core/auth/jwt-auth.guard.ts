@@ -4,13 +4,16 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Optional,
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type Redis from 'ioredis';
 import { PrismaService } from '../database/prisma.service';
 import type { AuthenticatedRequest } from './authenticated-request';
+import { ALLOW_ONBOARDING_KEY } from './allow-onboarding.decorator';
 
 interface AccessClaims {
   sub: string;
@@ -26,6 +29,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
+    @Optional() private readonly reflector?: Reflector,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -77,8 +81,26 @@ export class JwtAuthGuard implements CanActivate {
       },
     });
     if (!user) throw new UnauthorizedException('Account not found');
-    if (user.status !== 'ACTIVE' || claims.scope === 'ONBOARDING_ONLY')
+
+    const allowOnboarding = Boolean(
+      this.reflector?.getAllAndOverride<boolean>(ALLOW_ONBOARDING_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]),
+    );
+
+    const isPendingDoctorOnboarding =
+      allowOnboarding &&
+      user.role === 'DOCTOR' &&
+      (user.status === 'PENDING' || user.status === 'ACTIVE') &&
+      claims.scope === 'ONBOARDING_ONLY';
+
+    if (
+      (!isPendingDoctorOnboarding && user.status !== 'ACTIVE') ||
+      (!isPendingDoctorOnboarding && claims.scope === 'ONBOARDING_ONLY')
+    ) {
       throw new ForbiddenException('Account is not active for this operation');
+    }
     // Dùng vai trò/gia đình từ DB hiện tại, không tin familyId hoặc role do client gửi.
     request.user = {
       id: user.id,
