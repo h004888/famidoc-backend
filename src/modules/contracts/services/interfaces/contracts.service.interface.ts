@@ -11,8 +11,33 @@ import type {
   SignContractChangeDto,
   TerminateContractDto,
 } from '../../dtos/contract-change.dto';
+import type {
+  CreateStaffingContractDto,
+  SignStaffingContractDto,
+  ListStaffingContractsDto,
+  StaffingContractResponseDto,
+} from '../../dtos/staffing-contract.dto';
 export const CONTRACTS_SERVICE_TOKEN = Symbol('IContractsService');
 export interface IContractsService {
+  createStaffingContract(
+    actor: AuthenticatedUser,
+    dto: CreateStaffingContractDto,
+    ip: string,
+  ): Promise<StaffingContractResponseDto>;
+  signStaffingContract(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: SignStaffingContractDto,
+    ip: string,
+  ): Promise<StaffingContractResponseDto>;
+  listStaffingContracts(
+    actor: AuthenticatedUser,
+    query: ListStaffingContractsDto,
+  ): Promise<{ items: StaffingContractResponseDto[]; total: number }>;
+  getStaffingContract(
+    actor: AuthenticatedUser,
+    id: string,
+  ): Promise<StaffingContractResponseDto>;
   createContractAddendum(
     actor: AuthenticatedUser,
     id: string,

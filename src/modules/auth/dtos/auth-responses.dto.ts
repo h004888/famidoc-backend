@@ -10,9 +10,11 @@ export interface LoginSuccessResponse {
   user: {
     id: string;
     email: string;
+    phone?: string | null;
     fullName: string;
     role: string;
     status: string;
+    avatarUrl?: string | null;
   };
 }
 

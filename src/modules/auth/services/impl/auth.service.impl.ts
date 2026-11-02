@@ -240,9 +240,10 @@ export class AuthServiceImpl implements IAuthService {
     _clientIp?: string,
   ): Promise<LoginSuccessResponse> {
     const LOCKOUT_DURATION_SECONDS = 1800; // 30 minutes (SRS Security Section IV.2.3)
+    const identifier = dto.identifier.trim();
     try {
       const isLocked = await this.redisClient.get(
-        `login:lock:${dto.identifier}`,
+        `login:lock:${identifier}`,
       );
       if (isLocked) {
         throw new ForbiddenException(
@@ -251,10 +252,10 @@ export class AuthServiceImpl implements IAuthService {
       }
 
       let user: AuthEntity | null = null;
-      if (dto.identifier.includes('@')) {
-        user = await this.authRepository.findByEmail(dto.identifier);
+      if (identifier.includes('@')) {
+        user = await this.authRepository.findByEmail(identifier);
       } else {
-        user = await this.authRepository.findByPhone(dto.identifier);
+        user = await this.authRepository.findByPhone(identifier);
       }
 
       if (!user) {
@@ -269,7 +270,11 @@ export class AuthServiceImpl implements IAuthService {
         );
       }
 
-      if (user.status === 'SUSPENDED' || user.status === 'LOCKED') {
+      if (
+        user.status === 'SUSPENDED' ||
+        user.status === 'LOCKED' ||
+        (user.status === 'PENDING' && user.role !== 'DOCTOR')
+      ) {
         throw new ForbiddenException(
           'Your account cannot be used to sign in. Please contact support.',
         );
@@ -281,15 +286,24 @@ export class AuthServiceImpl implements IAuthService {
       );
       if (!isValid) {
         const failCount = await this.redisClient.incr(
-          `login:fail:${dto.identifier}`,
+          `login:fail:${identifier}`,
         );
+        if (
+          failCount === 1 &&
+          typeof this.redisClient.expire === 'function'
+        ) {
+          await this.redisClient.expire(
+            `login:fail:${identifier}`,
+            LOCKOUT_DURATION_SECONDS,
+          );
+        }
         const lockedUntil =
           failCount >= 5
             ? new Date(Date.now() + LOCKOUT_DURATION_SECONDS * 1000)
             : null;
         if (failCount >= 5) {
           await this.redisClient.set(
-            `login:lock:${dto.identifier}`,
+            `login:lock:${identifier}`,
             '1',
             'EX',
             LOCKOUT_DURATION_SECONDS,
@@ -303,7 +317,7 @@ export class AuthServiceImpl implements IAuthService {
         );
       }
 
-      await this.redisClient.del(`login:fail:${dto.identifier}`);
+      await this.redisClient.del(`login:fail:${identifier}`);
 
       if (user.failedLoginAttempts && user.failedLoginAttempts > 0) {
         await this.authRepository.resetFailedAttempts(user.id);
@@ -328,9 +342,11 @@ export class AuthServiceImpl implements IAuthService {
         user: {
           id: user.id,
           email: user.email,
+          phone: user.phone,
           fullName: user.fullName,
           role: user.role,
           status: user.status,
+          avatarUrl: user.avatarUrl,
         },
       };
     } catch (err: any) {
@@ -346,52 +362,88 @@ export class AuthServiceImpl implements IAuthService {
     }
   }
 
-  async logout(userId: string, token: string): Promise<void> {
-    const rawToken = token.replace('Bearer ', '');
+  async logout(userId: string, token: string): Promise<ApiResponseMessage> {
+    const rawToken = token.replace(/^Bearer\s+/i, '').trim();
+    if (!rawToken) {
+      return { message: 'Logged out successfully', success: true };
+    }
     const decoded: any = this.jwtService.decode(rawToken);
     const ttl = decoded?.exp
       ? Math.max(decoded.exp - Math.floor(Date.now() / 1000), 60)
       : 3600;
 
+    if (decoded?.jti) {
+      await this.redisClient.set(
+        `blacklist:${decoded.jti}`,
+        'revoked',
+        'EX',
+        ttl,
+      );
+    }
     await this.redisClient.set(
-      `blacklist:${decoded?.jti || rawToken}`,
+      `blacklist:${rawToken}`,
       'revoked',
       'EX',
       ttl,
     );
+
+    return {
+      message: 'Logged out successfully',
+      success: true,
+    };
   }
 
-  async forgotPassword(dto: ForgotPasswordDto): Promise<ApiResponseMessage> {
-    const user = await this.authRepository.findByEmail(dto.email);
+  async requestForgotPassword(
+    dto: ForgotPasswordDto,
+  ): Promise<ApiResponseMessage> {
+    const email = dto.email.trim().toLowerCase();
+    const cooldown =
+      typeof this.redisClient.ttl === 'function'
+        ? (await this.redisClient.ttl(`otp:cooldown:reset:${email}`)) || 0
+        : 0;
+    if (cooldown > 0) {
+      throw new HttpException(
+        `Please wait ${cooldown} seconds before requesting a new OTP`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    const user = await this.authRepository.findByEmail(email);
     if (!user) {
       return {
-        message: `A confirmation email has been sent to ${dto.email}`,
+        message: `A confirmation email has been sent to ${email}`,
         success: true,
       };
     }
 
     const otp = randomInt(100000, 1000000).toString();
-    await this.redisClient.set(`otp:reset:${dto.email}`, otp, 'EX', 600);
+    await this.redisClient.set(`otp:reset:${email}`, otp, 'EX', 600);
+    await this.redisClient.set(`otp:cooldown:reset:${email}`, '1', 'EX', 60);
 
     await this.mailerService.sendMail({
-      to: dto.email,
+      to: email,
       subject: 'FamiDoc - Yêu cầu khôi phục mật khẩu',
-      text: `Mã OTP đặt lại mật khẩu của bạn là: ${otp} (hiệu lực 10 phút).`,
+      text: `Mã OTP đặt lại mật khẩu của bạn là: ${otp} (hiệu lực 10 phút). Vui lòng không chia sẻ mã này cho bất kỳ ai.`,
     });
 
     return {
-      message: `A confirmation email has been sent to ${dto.email}`,
+      message: `A confirmation email has been sent to ${email}`,
       success: true,
     };
   }
 
+  async forgotPassword(dto: ForgotPasswordDto): Promise<ApiResponseMessage> {
+    return this.requestForgotPassword(dto);
+  }
+
   async resetPassword(dto: ResetPasswordDto): Promise<ApiResponseMessage> {
-    const cachedOtp = await this.redisClient.get(`otp:reset:${dto.email}`);
+    const email = dto.email.trim().toLowerCase();
+    const cachedOtp = await this.redisClient.get(`otp:reset:${email}`);
     if (!cachedOtp || cachedOtp !== dto.otp) {
       throw new UnauthorizedException('Invalid or expired OTP');
     }
 
-    const user = await this.authRepository.findByEmail(dto.email);
+    const user = await this.authRepository.findByEmail(email);
     if (!user) {
       throw new BadRequestException('User not found');
     }
@@ -404,7 +456,19 @@ export class AuthServiceImpl implements IAuthService {
       'EX',
       7 * 86400,
     );
-    await this.redisClient.del(`otp:reset:${dto.email}`);
+    await this.redisClient.del(`otp:reset:${email}`);
+    await this.redisClient.del(`otp:cooldown:reset:${email}`);
+
+    // Mở khóa đăng nhập và reset số lần sai mật khẩu nếu tài khoản đang bị khóa
+    await this.redisClient.del(`login:lock:${email}`);
+    await this.redisClient.del(`login:fail:${email}`);
+    if (user.phone) {
+      await this.redisClient.del(`login:lock:${user.phone}`);
+      await this.redisClient.del(`login:fail:${user.phone}`);
+    }
+    if (user.failedLoginAttempts && user.failedLoginAttempts > 0) {
+      await this.authRepository.resetFailedAttempts(user.id);
+    }
 
     return {
       message: 'Update password successfully',
@@ -445,6 +509,19 @@ export class AuthServiceImpl implements IAuthService {
       'EX',
       7 * 86400,
     );
+
+    // Mở khóa đăng nhập và reset số lần sai mật khẩu nếu có
+    if (user.email) {
+      await this.redisClient.del(`login:lock:${user.email}`);
+      await this.redisClient.del(`login:fail:${user.email}`);
+    }
+    if (user.phone) {
+      await this.redisClient.del(`login:lock:${user.phone}`);
+      await this.redisClient.del(`login:fail:${user.phone}`);
+    }
+    if (user.failedLoginAttempts && user.failedLoginAttempts > 0) {
+      await this.authRepository.resetFailedAttempts(user.id);
+    }
 
     return {
       message: 'Update password successfully',

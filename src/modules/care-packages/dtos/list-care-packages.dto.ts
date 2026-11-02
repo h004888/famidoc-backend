@@ -1,3 +1,4 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsEnum, IsInt, Max, Min, ValidateIf } from 'class-validator';
 import { CarePackageStatus } from '../entities/care-package.entity';
@@ -25,6 +26,11 @@ export class ListCarePackagesDto {
 
 export class AdminListCarePackagesDto extends ListCarePackagesDto {
   // Chỉ API quản trị mới nhận bộ lọc trạng thái; không gửi thì xem mọi trạng thái.
+  @ApiPropertyOptional({
+    enum: CarePackageStatus,
+    enumName: 'CarePackageStatus',
+    description: 'Bộ lọc trạng thái gói chăm sóc',
+  })
   @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsEnum(CarePackageStatus)
   status?: CarePackageStatus;

@@ -2,6 +2,8 @@ import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import {
   Body,
   Controller,
+  HttpCode,
+  HttpStatus,
   Inject,
   Param,
   Patch,
@@ -94,6 +96,7 @@ export class AuthController {
   }
 
   @Post('login')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Đăng nhập hệ thống (Email/SĐT và mật khẩu)' })
   @ApiBody({ type: LoginDto })
   @ApiResponse({ status: 200, description: 'Đăng nhập thành công, trả về JWT Access Token' })
@@ -105,6 +108,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post('logout')
+  @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Đăng xuất và thu hồi Access Token' })
   @ApiResponse({ status: 200, description: 'Đăng xuất thành công' })
@@ -119,13 +123,19 @@ export class AuthController {
   @ApiBody({ type: ForgotPasswordDto })
   @ApiResponse({ status: 201, description: 'Đã gửi OTP khôi phục mật khẩu nếu email tồn tại' })
   forgotPassword(@Body() dto: ForgotPasswordDto) {
-    return this.authService.forgotPassword(dto);
+    return this.authService.requestForgotPassword(dto);
+  }
+
+  requestForgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.requestForgotPassword(dto);
   }
 
   @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Đặt lại mật khẩu mới bằng OTP' })
   @ApiBody({ type: ResetPasswordDto })
-  @ApiResponse({ status: 201, description: 'Đặt lại mật khẩu thành công' })
+  @ApiResponse({ status: 200, description: 'Đặt lại mật khẩu thành công' })
+  @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ hoặc không tìm thấy người dùng' })
   @ApiResponse({ status: 401, description: 'OTP không hợp lệ hoặc đã hết hạn' })
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto);
