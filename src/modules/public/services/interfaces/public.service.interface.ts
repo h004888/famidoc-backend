@@ -4,6 +4,8 @@ import { PublicPackagesResponseDto } from '../../dtos/public-packages-response.d
 import { PublicPackageDetailDto } from '../../dtos/public-package-detail.dto';
 import { LookupHealthcareFacilitiesDto } from '../../dtos/lookup-facilities.dto';
 import { PublicFacilitiesResponseDto } from '../../dtos/public-facilities-response.dto';
+import { LookupDoctorDirectoryDto } from '../../dtos/lookup-doctors.dto';
+import { PublicDoctorsResponseDto } from '../../dtos/public-doctors-response.dto';
 
 export const PUBLIC_SERVICE_TOKEN = Symbol('IPublicService');
 
@@ -16,4 +18,7 @@ export interface IPublicService {
   lookupHealthcareFacilities(
     dto: LookupHealthcareFacilitiesDto,
   ): Promise<PublicFacilitiesResponseDto>;
+  lookupDoctorDirectory(
+    dto: LookupDoctorDirectoryDto,
+  ): Promise<PublicDoctorsResponseDto>;
 }

@@ -22,6 +22,7 @@ describe('PublicServiceImpl', () => {
       },
       doctor: {
         count: jest.fn().mockResolvedValue(50),
+        findMany: jest.fn(),
       },
       servicePackage: {
         count: jest.fn().mockResolvedValue(8),
@@ -340,6 +341,87 @@ describe('PublicServiceImpl', () => {
         take: 5,
         select: expect.any(Object),
         orderBy: { facilityName: 'asc' },
+      });
+    });
+  });
+
+  describe('lookupDoctorDirectory', () => {
+    it('should return paginated active doctors with calculated availability', async () => {
+      const mockDoctors = [
+        {
+          id: 'doc-1',
+          doctorName: 'BS. CKI Nguyễn Văn A',
+          specialty: 'Y học gia đình',
+          academicTitle: 'ThS.BS',
+          experienceYears: 10,
+          bio: 'Chuyên gia Y học gia đình',
+          ratingAvg: '4.90',
+          totalReviews: 30,
+          activePanelCount: 20,
+          maxPanelCapacity: 30,
+          facility: {
+            id: 'fac-1',
+            facilityName: 'Phòng khám Hà Nội',
+            address: 'Hà Nội',
+            hotline: '1900 6868',
+          },
+        },
+      ];
+
+      prismaService.doctor.count.mockResolvedValue(1);
+      prismaService.doctor.findMany.mockResolvedValue(mockDoctors);
+
+      const result = await service.lookupDoctorDirectory({
+        page: 1,
+        limit: 10,
+      });
+
+      expect(result).toBeDefined();
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('doc-1');
+      expect(result.items[0].ratingAvg).toBe(4.9);
+      expect(typeof result.items[0].ratingAvg).toBe('number');
+      expect(result.items[0].isAvailable).toBe(true);
+      expect(result.items[0].facility.facilityName).toBe('Phòng khám Hà Nội');
+
+      expect(prismaService.doctor.findMany).toHaveBeenCalledWith({
+        where: { onboardingStatus: 'ACTIVE' },
+        skip: 0,
+        take: 10,
+        select: expect.any(Object),
+        orderBy: { ratingAvg: 'desc' },
+      });
+    });
+
+    it('should filter doctors by search, specialty, facilityId and minExperienceYears', async () => {
+      prismaService.doctor.count.mockResolvedValue(0);
+      prismaService.doctor.findMany.mockResolvedValue([]);
+
+      await service.lookupDoctorDirectory({
+        search: 'Nguyễn',
+        specialty: 'Y học gia đình',
+        facilityId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+        minExperienceYears: 5,
+        page: 2,
+        limit: 5,
+      });
+
+      expect(prismaService.doctor.findMany).toHaveBeenCalledWith({
+        where: {
+          onboardingStatus: 'ACTIVE',
+          OR: [
+            { doctorName: { contains: 'Nguyễn', mode: 'insensitive' } },
+            { specialty: { contains: 'Nguyễn', mode: 'insensitive' } },
+            { bio: { contains: 'Nguyễn', mode: 'insensitive' } },
+          ],
+          specialty: { contains: 'Y học gia đình', mode: 'insensitive' },
+          facilityId: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+          experienceYears: { gte: 5 },
+        },
+        skip: 5,
+        take: 5,
+        select: expect.any(Object),
+        orderBy: { ratingAvg: 'desc' },
       });
     });
   });

@@ -22,6 +22,7 @@ describe('PublicController', () => {
       searchPublicPackages: jest.fn(),
       getPublicPackageDetail: jest.fn(),
       lookupHealthcareFacilities: jest.fn(),
+      lookupDoctorDirectory: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -193,6 +194,52 @@ describe('PublicController', () => {
 
       expect(result).toBe(mockResponse);
       expect(facilitySpy).toHaveBeenCalledWith(query);
+    });
+  });
+
+  describe('lookupDoctorDirectory', () => {
+    it('should delegate to publicService.lookupDoctorDirectory', async () => {
+      const query = {
+        search: 'Nguyễn Văn A',
+        page: 1,
+        limit: 10,
+      };
+
+      const mockResponse = {
+        items: [
+          {
+            id: 'doc-1',
+            doctorName: 'BS. Nguyễn Văn A',
+            specialty: 'Y học gia đình',
+            academicTitle: 'ThS.BS',
+            experienceYears: 10,
+            bio: 'Tiểu sử',
+            ratingAvg: 4.9,
+            totalReviews: 30,
+            isAvailable: true,
+            facility: {
+              id: 'fac-1',
+              facilityName: 'Phòng khám Hà Nội',
+              address: 'Hà Nội',
+              hotline: '1900 6868',
+            },
+          },
+        ],
+        meta: {
+          total: 1,
+          page: 1,
+          limit: 10,
+          totalPages: 1,
+        },
+      };
+
+      const doctorSpy = jest.spyOn(service, 'lookupDoctorDirectory');
+      doctorSpy.mockResolvedValue(mockResponse as any);
+
+      const result = await controller.lookupDoctorDirectory(query as any);
+
+      expect(result).toBe(mockResponse);
+      expect(doctorSpy).toHaveBeenCalledWith(query);
     });
   });
 });

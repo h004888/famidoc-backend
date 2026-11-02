@@ -11,6 +11,8 @@ import { PublicPackagesResponseDto } from '../../dtos/public-packages-response.d
 import { PublicPackageDetailDto } from '../../dtos/public-package-detail.dto';
 import { LookupHealthcareFacilitiesDto } from '../../dtos/lookup-facilities.dto';
 import { PublicFacilitiesResponseDto } from '../../dtos/public-facilities-response.dto';
+import { LookupDoctorDirectoryDto } from '../../dtos/lookup-doctors.dto';
+import { PublicDoctorsResponseDto } from '../../dtos/public-doctors-response.dto';
 
 @Injectable()
 export class PublicServiceImpl implements IPublicService {
@@ -320,6 +322,94 @@ export class PublicServiceImpl implements IPublicService {
         address: fac.address,
         hotline: fac.hotline,
         totalActiveDoctors: fac._count.doctors,
+      })),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    };
+  }
+
+  async lookupDoctorDirectory(
+    dto: LookupDoctorDirectoryDto,
+  ): Promise<PublicDoctorsResponseDto> {
+    const page = Math.max(1, dto.page || 1);
+    const limit = Math.min(50, Math.max(1, dto.limit || 10));
+    const skip = (page - 1) * limit;
+
+    const where: Record<string, any> = {
+      onboardingStatus: 'ACTIVE',
+    };
+
+    if (dto.search?.trim()) {
+      const keyword = dto.search.trim();
+      where.OR = [
+        { doctorName: { contains: keyword, mode: 'insensitive' } },
+        { specialty: { contains: keyword, mode: 'insensitive' } },
+        { bio: { contains: keyword, mode: 'insensitive' } },
+      ];
+    }
+
+    if (dto.facilityId) {
+      where.facilityId = dto.facilityId;
+    }
+
+    if (dto.specialty?.trim()) {
+      where.specialty = { contains: dto.specialty.trim(), mode: 'insensitive' };
+    }
+
+    if (dto.minExperienceYears !== undefined) {
+      where.experienceYears = { gte: dto.minExperienceYears };
+    }
+
+    const orderBy = {
+      [dto.sortBy || 'ratingAvg']: dto.sortOrder || 'desc',
+    };
+
+    const [total, doctors] = await Promise.all([
+      this.prisma.doctor.count({ where }),
+      this.prisma.doctor.findMany({
+        where,
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          doctorName: true,
+          specialty: true,
+          academicTitle: true,
+          experienceYears: true,
+          bio: true,
+          ratingAvg: true,
+          totalReviews: true,
+          activePanelCount: true,
+          maxPanelCapacity: true,
+          facility: {
+            select: {
+              id: true,
+              facilityName: true,
+              address: true,
+              hotline: true,
+            },
+          },
+        },
+        orderBy,
+      }),
+    ]);
+
+    return {
+      items: doctors.map((doc) => ({
+        id: doc.id,
+        doctorName: doc.doctorName,
+        specialty: doc.specialty,
+        academicTitle: doc.academicTitle,
+        experienceYears: doc.experienceYears,
+        bio: doc.bio,
+        ratingAvg: Number(doc.ratingAvg),
+        totalReviews: doc.totalReviews,
+        isAvailable: doc.activePanelCount < doc.maxPanelCapacity,
+        facility: doc.facility,
       })),
       meta: {
         total,

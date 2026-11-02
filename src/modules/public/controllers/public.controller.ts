@@ -17,6 +17,8 @@ import { PublicPackagesResponseDto } from '../dtos/public-packages-response.dto'
 import { PublicPackageDetailDto } from '../dtos/public-package-detail.dto';
 import { LookupHealthcareFacilitiesDto } from '../dtos/lookup-facilities.dto';
 import { PublicFacilitiesResponseDto } from '../dtos/public-facilities-response.dto';
+import { LookupDoctorDirectoryDto } from '../dtos/lookup-doctors.dto';
+import { PublicDoctorsResponseDto } from '../dtos/public-doctors-response.dto';
 
 @ApiTags('Public Portal')
 @Controller('api/v1/public')
@@ -109,6 +111,24 @@ export class PublicController {
     @Query() query: LookupHealthcareFacilitiesDto,
   ): Promise<PublicFacilitiesResponseDto> {
     return this.publicService.lookupHealthcareFacilities(query);
+  }
+
+  @Get('doctors')
+  @ApiOperation({
+    summary:
+      'Tra cứu danh bạ bác sĩ gia đình công khai (STT 11 - UC-08)',
+    description:
+      'Cho phép tìm kiếm và tra cứu hồ sơ bác sĩ theo họ tên, chuyên khoa, số năm kinh nghiệm, cơ sở y tế trực thuộc và trạng thái khả dụng tiếp nhận hộ gia đình.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách các bác sĩ gia đình thỏa mãn điều kiện lọc.',
+    type: PublicDoctorsResponseDto,
+  })
+  async lookupDoctorDirectory(
+    @Query() query: LookupDoctorDirectoryDto,
+  ): Promise<PublicDoctorsResponseDto> {
+    return this.publicService.lookupDoctorDirectory(query);
   }
 }
 
