@@ -134,10 +134,17 @@ describe('AuthController', () => {
       user: { id: 'u-1' },
       headers: { authorization: 'Bearer token_xyz' },
     };
-    service.logout.mockResolvedValue();
+    service.logout.mockResolvedValue({
+      message: 'Logged out successfully',
+      success: true,
+    });
 
-    await controller.logout(req);
-    expect(service.logout).toHaveBeenCalled();
+    const res = await controller.logout(req);
+    expect(service.logout).toHaveBeenCalledWith('u-1', 'Bearer token_xyz');
+    expect(res).toEqual({
+      message: 'Logged out successfully',
+      success: true,
+    });
   });
 
   it('[UT-C-06] forgotPassword ủy quyền gọi service.forgotPassword', async () => {

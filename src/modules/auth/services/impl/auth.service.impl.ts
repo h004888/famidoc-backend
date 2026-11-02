@@ -362,19 +362,35 @@ export class AuthServiceImpl implements IAuthService {
     }
   }
 
-  async logout(userId: string, token: string): Promise<void> {
-    const rawToken = token.replace('Bearer ', '');
+  async logout(userId: string, token: string): Promise<ApiResponseMessage> {
+    const rawToken = token.replace(/^Bearer\s+/i, '').trim();
+    if (!rawToken) {
+      return { message: 'Logged out successfully', success: true };
+    }
     const decoded: any = this.jwtService.decode(rawToken);
     const ttl = decoded?.exp
       ? Math.max(decoded.exp - Math.floor(Date.now() / 1000), 60)
       : 3600;
 
+    if (decoded?.jti) {
+      await this.redisClient.set(
+        `blacklist:${decoded.jti}`,
+        'revoked',
+        'EX',
+        ttl,
+      );
+    }
     await this.redisClient.set(
-      `blacklist:${decoded?.jti || rawToken}`,
+      `blacklist:${rawToken}`,
       'revoked',
       'EX',
       ttl,
     );
+
+    return {
+      message: 'Logged out successfully',
+      success: true,
+    };
   }
 
   async forgotPassword(dto: ForgotPasswordDto): Promise<ApiResponseMessage> {

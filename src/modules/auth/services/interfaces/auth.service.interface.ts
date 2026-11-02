@@ -32,7 +32,7 @@ export interface IAuthService {
   resendEmailOtp(dto: ResendEmailOtpDto): Promise<ApiResponseMessage>;
   verifyEmailOtp(dto: VerifyEmailOtpDto): Promise<AuthEntity>;
   login(dto: LoginDto, clientIp?: string): Promise<LoginSuccessResponse>;
-  logout(userId: string, token: string): Promise<void>;
+  logout(userId: string, token: string): Promise<ApiResponseMessage>;
   forgotPassword(dto: ForgotPasswordDto): Promise<ApiResponseMessage>;
   resetPassword(dto: ResetPasswordDto): Promise<ApiResponseMessage>;
   changePassword(

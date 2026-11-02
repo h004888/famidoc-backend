@@ -520,8 +520,44 @@ describe('AuthServiceImpl', () => {
     });
     redisService.set.mockResolvedValue('OK');
 
-    await service.logout('u-1', 'Bearer token_abc');
+    const res = await service.logout('u-1', 'Bearer token_abc');
     expect(redisService.set).toHaveBeenCalled();
+    expect(res.success).toBe(true);
+  });
+
+  it('[UT-S-17b] Đăng xuất đưa cả JTI và raw token vào Blacklist với TTL chính xác', async () => {
+    const expTime = Math.floor(Date.now() / 1000) + 900;
+    jwtService.decode.mockReturnValue({
+      jti: 'jti-unique-123',
+      exp: expTime,
+    });
+    redisService.set.mockResolvedValue('OK');
+
+    const res = await service.logout('u-1', 'Bearer token_full_value');
+    expect(redisService.set).toHaveBeenCalledWith(
+      'blacklist:jti-unique-123',
+      'revoked',
+      'EX',
+      expect.any(Number),
+    );
+    expect(redisService.set).toHaveBeenCalledWith(
+      'blacklist:token_full_value',
+      'revoked',
+      'EX',
+      expect.any(Number),
+    );
+    expect(res).toEqual({
+      message: 'Logged out successfully',
+      success: true,
+    });
+  });
+
+  it('[UT-S-17c] Đăng xuất xử lý an toàn khi token rỗng', async () => {
+    const res = await service.logout('u-1', '');
+    expect(res).toEqual({
+      message: 'Logged out successfully',
+      success: true,
+    });
   });
 
   // --- UC-04 FORGOT & RESET PASSWORD ---
