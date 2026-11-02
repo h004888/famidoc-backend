@@ -5,6 +5,12 @@ import {
   PUBLIC_SERVICE_TOKEN,
 } from '../services/interfaces/public.service.interface';
 import { PortalOverviewResponseDto } from '../dtos/portal-overview-response.dto';
+import {
+  PackageSortBy,
+  SearchPublicPackagesDto,
+  SortOrder,
+} from '../dtos/search-public-packages.dto';
+import { PublicPackagesResponseDto } from '../dtos/public-packages-response.dto';
 
 describe('PublicController', () => {
   let controller: PublicController;
@@ -13,6 +19,7 @@ describe('PublicController', () => {
   beforeEach(async () => {
     service = {
       getPublicPortalOverview: jest.fn(),
+      searchPublicPackages: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -54,12 +61,61 @@ describe('PublicController', () => {
         featuredPackages: [],
       };
 
-      service.getPublicPortalOverview.mockResolvedValue(mockResult);
+      const overviewSpy = jest.spyOn(service, 'getPublicPortalOverview');
+      overviewSpy.mockResolvedValue(mockResult);
 
       const result = await controller.getPublicPortalOverview();
 
       expect(result).toBe(mockResult);
-      expect(service.getPublicPortalOverview).toHaveBeenCalledTimes(1);
+      expect(overviewSpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('searchPublicPackages', () => {
+    it('should delegate to publicService.searchPublicPackages', async () => {
+      const query: SearchPublicPackagesDto = {
+        search: 'Tiêu chuẩn',
+        durationMonths: 12,
+        page: 1,
+        limit: 10,
+        sortBy: PackageSortBy.BASE_PRICE,
+        sortOrder: SortOrder.ASC,
+      };
+
+      const mockResponse: PublicPackagesResponseDto = {
+        items: [
+          {
+            id: 'pkg-1',
+            packageCode: 'PKG-STANDARD',
+            packageName: 'Gói Tiêu Chuẩn',
+            durationMonths: 12,
+            basePrice: 12000000,
+            periodicVisitsQuota: 4,
+            telehealthQuota: 12,
+            maxMembers: 4,
+            includedMembers: 4,
+            additionalMemberMonthlyPrice: 200000,
+            quotaPeriod: 'PER_TERM',
+            description: 'Mô tả',
+            publishedAt: new Date(),
+          },
+        ],
+        meta: {
+          total: 1,
+          page: 1,
+          limit: 10,
+          totalPages: 1,
+        },
+      };
+
+      const searchSpy = jest.spyOn(service, 'searchPublicPackages');
+      searchSpy.mockResolvedValue(mockResponse);
+
+      const result = await controller.searchPublicPackages(query);
+
+      expect(result).toBe(mockResponse);
+      expect(searchSpy).toHaveBeenCalledWith(query);
     });
   });
 });
+

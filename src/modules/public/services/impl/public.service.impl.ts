@@ -6,6 +6,8 @@ import {
   HeroBannerDto,
   CorePillarDto,
 } from '../../dtos/portal-overview-response.dto';
+import { SearchPublicPackagesDto } from '../../dtos/search-public-packages.dto';
+import { PublicPackagesResponseDto } from '../../dtos/public-packages-response.dto';
 
 @Injectable()
 export class PublicServiceImpl implements IPublicService {
@@ -137,6 +139,84 @@ export class PublicServiceImpl implements IPublicService {
         ...pkg,
         basePrice: Number(pkg.basePrice),
       })),
+    };
+  }
+
+  async searchPublicPackages(
+    dto: SearchPublicPackagesDto,
+  ): Promise<PublicPackagesResponseDto> {
+    const page = Math.max(1, dto.page || 1);
+    const limit = Math.min(50, Math.max(1, dto.limit || 10));
+    const skip = (page - 1) * limit;
+
+    const where: Record<string, any> = {
+      status: 'ACTIVE',
+      deletedAt: null,
+    };
+
+    if (dto.search?.trim()) {
+      const keyword = dto.search.trim();
+      where.OR = [
+        { packageName: { contains: keyword, mode: 'insensitive' } },
+        { packageCode: { contains: keyword, mode: 'insensitive' } },
+        { description: { contains: keyword, mode: 'insensitive' } },
+      ];
+    }
+
+    if (dto.durationMonths) {
+      where.durationMonths = dto.durationMonths;
+    }
+
+    if (dto.minPrice !== undefined || dto.maxPrice !== undefined) {
+      where.basePrice = {};
+      if (dto.minPrice !== undefined) {
+        where.basePrice.gte = dto.minPrice;
+      }
+      if (dto.maxPrice !== undefined) {
+        where.basePrice.lte = dto.maxPrice;
+      }
+    }
+
+    if (dto.maxMembers) {
+      where.maxMembers = { gte: dto.maxMembers };
+    }
+
+    const orderBy = {
+      [dto.sortBy || 'basePrice']: dto.sortOrder || 'asc',
+    };
+
+    const [total, packages] = await Promise.all([
+      this.prisma.servicePackage.count({ where }),
+      this.prisma.servicePackage.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy,
+      }),
+    ]);
+
+    return {
+      items: packages.map((pkg) => ({
+        id: pkg.id,
+        packageCode: pkg.packageCode,
+        packageName: pkg.packageName,
+        durationMonths: pkg.durationMonths,
+        basePrice: Number(pkg.basePrice),
+        periodicVisitsQuota: pkg.periodicVisitsQuota,
+        telehealthQuota: pkg.telehealthQuota,
+        maxMembers: pkg.maxMembers,
+        includedMembers: pkg.includedMembers,
+        additionalMemberMonthlyPrice: Number(pkg.additionalMemberMonthlyPrice),
+        quotaPeriod: pkg.quotaPeriod,
+        description: pkg.description,
+        publishedAt: pkg.publishedAt,
+      })),
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
     };
   }
 }

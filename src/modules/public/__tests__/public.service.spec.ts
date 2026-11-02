@@ -101,4 +101,98 @@ describe('PublicServiceImpl', () => {
       });
     });
   });
+
+  describe('searchPublicPackages', () => {
+    it('should search and return paginated packages with default parameters', async () => {
+      const mockPackages = [
+        {
+          id: 'pkg-1',
+          packageCode: 'PKG-STANDARD',
+          packageName: 'Gói Tiêu Chuẩn',
+          durationMonths: 12,
+          basePrice: '12000000',
+          periodicVisitsQuota: 4,
+          telehealthQuota: 12,
+          maxMembers: 4,
+          includedMembers: 4,
+          additionalMemberMonthlyPrice: '200000',
+          quotaPeriod: 'PER_TERM',
+          description: 'Gói chăm sóc tiêu chuẩn',
+          publishedAt: new Date('2026-01-01'),
+        },
+      ];
+
+      prismaService.servicePackage.count.mockResolvedValue(1);
+      prismaService.servicePackage.findMany.mockResolvedValue(mockPackages);
+
+      const result = await service.searchPublicPackages({
+        page: 1,
+        limit: 10,
+        sortBy: 'basePrice' as any,
+        sortOrder: 'asc' as any,
+      });
+
+      expect(result).toBeDefined();
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('pkg-1');
+      expect(result.items[0].basePrice).toBe(12000000);
+      expect(result.items[0].additionalMemberMonthlyPrice).toBe(200000);
+      expect(result.meta).toEqual({
+        total: 1,
+        page: 1,
+        limit: 10,
+        totalPages: 1,
+      });
+
+      expect(prismaService.servicePackage.findMany).toHaveBeenCalledWith({
+        where: {
+          status: 'ACTIVE',
+          deletedAt: null,
+        },
+        skip: 0,
+        take: 10,
+        orderBy: { basePrice: 'asc' },
+      });
+    });
+
+    it('should filter by search keyword, price range, durationMonths and maxMembers', async () => {
+      prismaService.servicePackage.count.mockResolvedValue(0);
+      prismaService.servicePackage.findMany.mockResolvedValue([]);
+
+      await service.searchPublicPackages({
+        search: 'Tiêu chuẩn',
+        durationMonths: 12,
+        minPrice: 5000000,
+        maxPrice: 15000000,
+        maxMembers: 4,
+        page: 2,
+        limit: 5,
+        sortBy: 'packageName' as any,
+        sortOrder: 'desc' as any,
+      });
+
+      expect(prismaService.servicePackage.findMany).toHaveBeenCalledWith({
+        where: {
+          status: 'ACTIVE',
+          deletedAt: null,
+          OR: [
+            { packageName: { contains: 'Tiêu chuẩn', mode: 'insensitive' } },
+            { packageCode: { contains: 'Tiêu chuẩn', mode: 'insensitive' } },
+            { description: { contains: 'Tiêu chuẩn', mode: 'insensitive' } },
+          ],
+          durationMonths: 12,
+          basePrice: {
+            gte: 5000000,
+            lte: 15000000,
+          },
+          maxMembers: {
+            gte: 4,
+          },
+        },
+        skip: 5,
+        take: 5,
+        orderBy: { packageName: 'desc' },
+      });
+    });
+  });
 });
