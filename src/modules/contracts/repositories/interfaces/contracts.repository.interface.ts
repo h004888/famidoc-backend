@@ -75,6 +75,9 @@ export interface ContractsSession {
   saveUpgradeSignature(
     data: Prisma.ContractSignatureUncheckedCreateInput,
   ): Promise<ContractSignature>;
+  saveSignature?(
+    data: Prisma.ContractSignatureUncheckedCreateInput,
+  ): Promise<ContractSignature>;
   recordChange(
     actorId: string,
     contract: ChangeContract,
@@ -83,6 +86,11 @@ export interface ContractsSession {
   ): Promise<void>;
   findFacilityById(id: string): Promise<HealthcareFacility | null>;
   findFacilityByUserId(userId: string): Promise<HealthcareFacility | null>;
+  findDoctorById(id: string): Promise<any | null>;
+  findFamilyById(id: string): Promise<any | null>;
+  createMedicalContract(
+    data: Prisma.MedicalContractUncheckedCreateInput,
+  ): Promise<ChangeContract>;
   findConflictingStaffingContract(
     facilityId: string,
     startDate: Date,

@@ -28,7 +28,7 @@ import {
 
 @ApiTags('Notifications')
 @ApiBearerAuth('JWT-auth')
-@Controller('api/v1/notifications')
+@Controller(['api/v1/notifications', 'api/v1/me/notifications'])
 @UseGuards(JwtAuthGuard)
 @UsePipes(
   new ValidationPipe({
@@ -56,7 +56,10 @@ export class NotificationsController {
   @Patch(':id/read')
   @ApiOperation({ summary: 'Đánh dấu thông báo đã đọc theo ID' })
   @ApiParam({ name: 'id', description: 'UUID của thông báo' })
-  @ApiResponse({ status: 200, description: 'Đã đánh dấu thông báo đọc thành công' })
+  @ApiResponse({
+    status: 200,
+    description: 'Đã đánh dấu thông báo đọc thành công',
+  })
   @ApiResponse({ status: 404, description: 'Không tìm thấy thông báo' })
   markNotificationAsRead(
     @Req() req: AuthenticatedRequest,

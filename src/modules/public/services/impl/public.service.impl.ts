@@ -431,6 +431,95 @@ export class PublicServiceImpl implements IPublicService {
     };
   }
 
+  async getPublicFacilityDetail(id: string): Promise<any> {
+    const facility = await this.prisma.healthcareFacility.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        facilityName: true,
+        licenseNumber: true,
+        address: true,
+        hotline: true,
+        email: true,
+        verificationStatus: true,
+        operatingStatus: true,
+        createdAt: true,
+        _count: {
+          select: {
+            doctors: {
+              where: { onboardingStatus: 'ACTIVE' },
+            },
+          },
+        },
+      },
+    });
+
+    if (!facility || facility.verificationStatus !== 'ACTIVE') {
+      throw new NotFoundException(
+        'Không tìm thấy cơ sở y tế hoặc cơ sở y tế chưa được kích hoạt',
+      );
+    }
+
+    return {
+      id: facility.id,
+      facilityName: facility.facilityName,
+      licenseNumber: facility.licenseNumber,
+      address: facility.address,
+      hotline: facility.hotline,
+      email: facility.email,
+      verificationStatus: facility.verificationStatus,
+      operatingStatus: facility.operatingStatus,
+      totalActiveDoctors: facility._count.doctors,
+      createdAt: facility.createdAt,
+    };
+  }
+
+  async getPublicDoctorDetail(id: string): Promise<any> {
+    const doctor = await this.prisma.doctor.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        doctorName: true,
+        specialty: true,
+        academicTitle: true,
+        experienceYears: true,
+        bio: true,
+        ratingAvg: true,
+        totalReviews: true,
+        activePanelCount: true,
+        maxPanelCapacity: true,
+        onboardingStatus: true,
+        facility: {
+          select: {
+            id: true,
+            facilityName: true,
+            address: true,
+            hotline: true,
+          },
+        },
+      },
+    });
+
+    if (!doctor || doctor.onboardingStatus !== 'ACTIVE') {
+      throw new NotFoundException(
+        'Không tìm thấy bác sĩ hoặc bác sĩ chưa được kích hoạt',
+      );
+    }
+
+    return {
+      id: doctor.id,
+      doctorName: doctor.doctorName,
+      specialty: doctor.specialty,
+      academicTitle: doctor.academicTitle,
+      experienceYears: doctor.experienceYears,
+      bio: doctor.bio,
+      ratingAvg: Number(doctor.ratingAvg),
+      totalReviews: doctor.totalReviews,
+      isAvailable: doctor.activePanelCount < doctor.maxPanelCapacity,
+      facility: doctor.facility,
+    };
+  }
+
   async submitConsultationRequest(
     dto: SubmitConsultationRequestDto,
     clientIp?: string,

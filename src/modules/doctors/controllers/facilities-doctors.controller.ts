@@ -29,7 +29,7 @@ import {
 
 @ApiTags('Doctors & Facilities Management')
 @ApiBearerAuth('JWT-auth')
-@Controller('api/v1/facilities/doctors')
+@Controller(['api/v1/facilities/doctors', 'api/v1/facilities'])
 @UseGuards(JwtAuthGuard, RolesGuard)
 @UsePipes(
   new ValidationPipe({
@@ -44,7 +44,7 @@ export class FacilitiesDoctorsController {
     private readonly service: IDoctorsService,
   ) {}
 
-  @Post()
+  @Post(['', ':id/doctors'])
   @Roles('HEALTHCARE_FACILITY', 'ADMIN')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
@@ -60,7 +60,8 @@ export class FacilitiesDoctorsController {
   })
   @ApiResponse({
     status: 409,
-    description: 'Email hoặc số điện thoại của bác sĩ đã tồn tại trên hệ thống.',
+    description:
+      'Email hoặc số điện thoại của bác sĩ đã tồn tại trên hệ thống.',
   })
   provisionDoctorAccount(
     @Req() req: AuthenticatedRequest,

@@ -23,6 +23,8 @@ export interface IPublicService {
   lookupDoctorDirectory(
     dto: LookupDoctorDirectoryDto,
   ): Promise<PublicDoctorsResponseDto>;
+  getPublicFacilityDetail(id: string): Promise<any>;
+  getPublicDoctorDetail(id: string): Promise<any>;
   submitConsultationRequest(
     dto: SubmitConsultationRequestDto,
     clientIp?: string,

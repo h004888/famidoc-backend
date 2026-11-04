@@ -144,4 +144,50 @@ describe('ContractsController - Staffing Endpoints', () => {
       );
     });
   });
+
+  describe('Termination Aliases (UC-19)', () => {
+    it('should delegate requestTermination to service.terminateContract with action REQUEST', async () => {
+      const dto = {
+        reason: 'Gia đình chuyển nơi sinh sống sang tỉnh khác',
+      };
+
+      await (controller as any).requestTermination(
+        mockReq,
+        'contract-uuid-1',
+        dto,
+      );
+
+      expect(service.terminateContract).toHaveBeenCalledWith(
+        mockAdminUser,
+        'contract-uuid-1',
+        expect.objectContaining({
+          action: 'REQUEST',
+          reason: dto.reason,
+        }),
+      );
+    });
+
+    it('should delegate decideTermination to service.terminateContract with decision body', async () => {
+      const decisionDto = {
+        contractId: 'contract-uuid-1',
+        action: 'APPROVE',
+        termsHash: 'a'.repeat(64),
+      };
+
+      await (controller as any).decideTermination(
+        mockReq,
+        'req-uuid-1',
+        decisionDto,
+      );
+
+      expect(service.terminateContract).toHaveBeenCalledWith(
+        mockAdminUser,
+        'contract-uuid-1',
+        expect.objectContaining({
+          action: 'APPROVE',
+          requestId: 'req-uuid-1',
+        }),
+      );
+    });
+  });
 });

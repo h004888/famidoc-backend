@@ -37,6 +37,7 @@ import {
   ListStaffingContractsDto,
   StaffingContractResponseDto,
 } from '../dtos/staffing-contract.dto';
+import { CreateMedicalContractDto } from '../dtos/create-medical-contract.dto';
 import {
   CONTRACTS_SERVICE_TOKEN,
   type IContractsService,
@@ -58,6 +59,53 @@ export class ContractsController {
     @Inject(CONTRACTS_SERVICE_TOKEN)
     private readonly service: IContractsService,
   ) {}
+
+  @Post('medical')
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_REP', 'ADMIN')
+  @ApiOperation({
+    summary: 'Khởi tạo hợp đồng dịch vụ y tế 4 bên ban đầu (STT 19 - UC-16)',
+    description:
+      'Đại diện gia đình (hoặc Admin) tạo bản thảo hợp đồng y tế ban đầu, snapshot quyền lợi gói và khởi tạo trạng thái PENDING_APPROVAL.',
+  })
+  @ApiBody({ type: CreateMedicalContractDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Tạo bản thảo hợp đồng y tế thành công.',
+  })
+  createInitialMedicalContract(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: CreateMedicalContractDto,
+  ) {
+    return this.service.createInitialMedicalContract(req.user, dto);
+  }
+
+  @Put(['medical/:id/sign', 'medical/:id/signatures'])
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_REP', 'ADMIN', 'HEALTHCARE_FACILITY', 'DOCTOR')
+  @ApiOperation({
+    summary: 'Ký số điện tử hợp đồng y tế 4 bên ban đầu (STT 20 - UC-16)',
+    description:
+      'Tuần tự ký số 4 bên: FAMILY_REP -> ADMIN -> HEALTHCARE_FACILITY -> ASSIGNED_DOCTOR. Sau khi đủ 4 chữ ký sẽ chuyển sang PENDING_PAYMENT.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng y tế' })
+  @ApiBody({ type: SignContractChangeDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Ký số thành công.',
+  })
+  signInitialMedicalContract(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: SignContractChangeDto,
+  ) {
+    return this.service.signInitialMedicalContract(
+      req.user,
+      id,
+      dto,
+      req.ip ?? 'unknown',
+    );
+  }
 
   @Post('staffing')
   @UseGuards(RolesGuard)
@@ -85,6 +133,7 @@ export class ContractsController {
   }
 
   @Put('staffing/:id/sign')
+  @Post('staffing/:id/sign')
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'HEALTHCARE_FACILITY')
   @ApiOperation({
@@ -145,7 +194,9 @@ export class ContractsController {
   }
 
   @Post(':id/addendums')
-  @ApiOperation({ summary: 'Tạo phụ lục hợp đồng (thay đổi thành viên hoặc dịch vụ)' })
+  @ApiOperation({
+    summary: 'Tạo phụ lục hợp đồng (thay đổi thành viên hoặc dịch vụ)',
+  })
   @ApiParam({ name: 'id', description: 'UUID của hợp đồng chính' })
   @ApiBody({ type: CreateContractAddendumDto })
   @ApiResponse({ status: 201, description: 'Tạo phụ lục hợp đồng thành công' })
@@ -183,10 +234,65 @@ export class ContractsController {
     return this.service.terminateContract(req.user, id, dto);
   }
 
+  @Post(':id/termination')
+  @ApiOperation({ summary: 'Gửi yêu cầu chấm dứt hợp đồng (UC-19 alias)' })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng cần chấm dứt' })
+  @ApiResponse({
+    status: 200,
+    description: 'Tiếp nhận yêu cầu chấm dứt hợp đồng',
+  })
+  requestTermination(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: { reason?: string },
+  ) {
+    return this.service.terminateContract(req.user, id, {
+      action: 'REQUEST',
+      reason: dto.reason,
+    });
+  }
+
+  @Post('terminations/:id/decision')
+  @ApiOperation({
+    summary:
+      'Phê duyệt/từ chối hoặc đồng thuận chấm dứt hợp đồng (UC-19 alias)',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID của yêu cầu chấm dứt (requestId)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Quyết định chấm dứt hợp đồng thành công',
+  })
+  decideTermination(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body()
+    dto: {
+      contractId: string;
+      action: 'APPROVE' | 'REJECT' | 'CONSENT';
+      reason?: string;
+      termsHash?: string;
+    },
+  ) {
+    return this.service.terminateContract(req.user, dto.contractId, {
+      action: dto.action,
+      requestId: id,
+      reason: dto.reason,
+      termsHash: dto.termsHash,
+    });
+  }
+
   @Get(':id/terms')
-  @ApiOperation({ summary: 'Xem các điều khoản thay đổi của hợp đồng nâng cấp' })
+  @ApiOperation({
+    summary: 'Xem các điều khoản thay đổi của hợp đồng nâng cấp',
+  })
   @ApiParam({ name: 'id', description: 'UUID của hợp đồng' })
-  @ApiResponse({ status: 200, description: 'Nội dung điều khoản và mã hash hợp đồng' })
+  @ApiResponse({
+    status: 200,
+    description: 'Nội dung điều khoản và mã hash hợp đồng',
+  })
   getContractChangeTerms(
     @Req() req: AuthenticatedRequest,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,

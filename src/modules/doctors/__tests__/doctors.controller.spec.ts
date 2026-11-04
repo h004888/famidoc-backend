@@ -55,18 +55,14 @@ describe('Doctors & Facilities Controllers', () => {
     service = {
       provisionDoctorAccount: jest.fn().mockResolvedValue(mockDoctorResponse),
       submitDoctorCredentials: jest.fn().mockResolvedValue(mockDoctorResponse),
-      approveDoctorCredentialsByFacility: jest
-        .fn()
-        .mockResolvedValue({
-          ...mockDoctorResponse,
-          onboardingStatus: DoctorOnboardingStatus.FACILITY_VERIFIED,
-        }),
-      approveDoctorCredentialsByPlatform: jest
-        .fn()
-        .mockResolvedValue({
-          ...mockDoctorResponse,
-          onboardingStatus: DoctorOnboardingStatus.ACTIVE,
-        }),
+      approveDoctorCredentialsByFacility: jest.fn().mockResolvedValue({
+        ...mockDoctorResponse,
+        onboardingStatus: DoctorOnboardingStatus.FACILITY_VERIFIED,
+      }),
+      approveDoctorCredentialsByPlatform: jest.fn().mockResolvedValue({
+        ...mockDoctorResponse,
+        onboardingStatus: DoctorOnboardingStatus.ACTIVE,
+      }),
       getDoctorProfile: jest.fn().mockResolvedValue(mockDoctorResponse),
     };
 
@@ -143,25 +139,54 @@ describe('Doctors & Facilities Controllers', () => {
         '127.0.0.1',
       );
     });
+
+    it('should delegate submitMyCredentials with "me" alias', async () => {
+      const dto = {
+        credentials: [
+          {
+            credentialType: DoctorCredentialType.PRACTICE_LICENSE_CCHN,
+            certificateNumber: 'CCHN-123',
+            issueDate: '2020-01-01',
+            issuingAuthority: 'Bộ Y tế',
+            fileUrl: 'https://cdn.famidoc.vn/cchn.pdf',
+          },
+        ],
+      };
+
+      const result = await (doctorsController as any).submitMyCredentials(
+        mockDoctorReq,
+        dto,
+      );
+
+      expect(result).toBe(mockDoctorResponse);
+      expect(service.submitDoctorCredentials).toHaveBeenCalledWith(
+        mockDoctorReq.user,
+        'me',
+        dto,
+        '127.0.0.1',
+      );
+    });
   });
 
   describe('DoctorsController - approveDoctorCredentialsByFacility (STT 17)', () => {
     it('should delegate to service.approveDoctorCredentialsByFacility', async () => {
       const dto = { approved: true };
 
-      const result =
-        await doctorsController.approveDoctorCredentialsByFacility(
-          mockAdminReq,
-          'doc-uuid-1',
-          dto,
-        );
+      const result = await doctorsController.approveDoctorCredentialsByFacility(
+        mockAdminReq,
+        'doc-uuid-1',
+        dto,
+      );
 
       expect(result.onboardingStatus).toBe(
         DoctorOnboardingStatus.FACILITY_VERIFIED,
       );
-      expect(
-        service.approveDoctorCredentialsByFacility,
-      ).toHaveBeenCalledWith(mockAdminReq.user, 'doc-uuid-1', dto, '127.0.0.1');
+      expect(service.approveDoctorCredentialsByFacility).toHaveBeenCalledWith(
+        mockAdminReq.user,
+        'doc-uuid-1',
+        dto,
+        '127.0.0.1',
+      );
     });
   });
 
@@ -169,17 +194,19 @@ describe('Doctors & Facilities Controllers', () => {
     it('should delegate to service.approveDoctorCredentialsByPlatform', async () => {
       const dto = { approved: true };
 
-      const result =
-        await doctorsController.approveDoctorCredentialsByPlatform(
-          mockAdminReq,
-          'doc-uuid-1',
-          dto,
-        );
+      const result = await doctorsController.approveDoctorCredentialsByPlatform(
+        mockAdminReq,
+        'doc-uuid-1',
+        dto,
+      );
 
       expect(result.onboardingStatus).toBe(DoctorOnboardingStatus.ACTIVE);
-      expect(
-        service.approveDoctorCredentialsByPlatform,
-      ).toHaveBeenCalledWith(mockAdminReq.user, 'doc-uuid-1', dto, '127.0.0.1');
+      expect(service.approveDoctorCredentialsByPlatform).toHaveBeenCalledWith(
+        mockAdminReq.user,
+        'doc-uuid-1',
+        dto,
+        '127.0.0.1',
+      );
     });
   });
 
@@ -194,6 +221,53 @@ describe('Doctors & Facilities Controllers', () => {
       expect(service.getDoctorProfile).toHaveBeenCalledWith(
         mockAdminReq.user,
         'doc-uuid-1',
+      );
+    });
+  });
+
+  describe('DoctorsController - reviewDoctorCredentials', () => {
+    it('should delegate tier 1 review to service.approveDoctorCredentialsByFacility', async () => {
+      const reviewDto = {
+        tier: 1,
+        approved: true,
+        verificationNotes: 'Đầy đủ CCHN',
+      };
+
+      const result = await (doctorsController as any).reviewDoctorCredentials(
+        mockAdminReq,
+        'doc-uuid-1',
+        reviewDto,
+      );
+
+      expect(result.onboardingStatus).toBe(
+        DoctorOnboardingStatus.FACILITY_VERIFIED,
+      );
+      expect(service.approveDoctorCredentialsByFacility).toHaveBeenCalledWith(
+        mockAdminReq.user,
+        'doc-uuid-1',
+        expect.objectContaining({ approved: true }),
+        '127.0.0.1',
+      );
+    });
+
+    it('should delegate tier 2 review to service.approveDoctorCredentialsByPlatform', async () => {
+      const reviewDto = {
+        tier: 2,
+        approved: true,
+      };
+
+      const result = await (doctorsController as any).reviewDoctorCredentials(
+        mockAdminReq,
+        'doc-uuid-1',
+        reviewDto,
+      );
+
+      expect(result.onboardingStatus).toBe(DoctorOnboardingStatus.ACTIVE);
+      expect(service.approveDoctorCredentialsByPlatform).toHaveBeenCalledWith(
+        mockAdminReq.user,
+        'doc-uuid-1',
+        expect.objectContaining({ approved: true }),
+        '127.0.0.1',
       );
     });
   });

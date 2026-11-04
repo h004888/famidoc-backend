@@ -17,6 +17,14 @@ export class FacilityVerifyCredentialsDto {
   @IsOptional()
   @IsString()
   rejectionReason?: string;
+
+  @ApiPropertyOptional({
+    description: 'Ghi chú thẩm định hồ sơ của CSYT',
+    example: 'Đã đối chiếu văn bằng gốc tại đơn vị.',
+  })
+  @IsOptional()
+  @IsString()
+  verificationNotes?: string;
 }
 
 export class PlatformApproveCredentialsDto {
@@ -36,4 +44,12 @@ export class PlatformApproveCredentialsDto {
   @IsOptional()
   @IsString()
   rejectionReason?: string;
+
+  @ApiPropertyOptional({
+    description: 'Đồng thuận kiểm tra lý lịch / tư pháp ngành y tế',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  backgroundCheckConsent?: boolean;
 }
