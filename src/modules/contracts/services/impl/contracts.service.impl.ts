@@ -8,7 +8,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, type SignerRole } from '@prisma/client';
+import { Prisma, type SignerRole, type ContractSignature } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
 import {

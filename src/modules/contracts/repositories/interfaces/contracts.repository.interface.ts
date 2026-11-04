@@ -75,6 +75,9 @@ export interface ContractsSession {
   saveUpgradeSignature(
     data: Prisma.ContractSignatureUncheckedCreateInput,
   ): Promise<ContractSignature>;
+  saveSignature?(
+    data: Prisma.ContractSignatureUncheckedCreateInput,
+  ): Promise<ContractSignature>;
   recordChange(
     actorId: string,
     contract: ChangeContract,

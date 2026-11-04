@@ -225,6 +225,9 @@ class PrismaContractsSession implements ContractsSession {
   saveUpgradeSignature(data: Prisma.ContractSignatureUncheckedCreateInput) {
     return this.tx.contractSignature.create({ data });
   }
+  saveSignature(data: Prisma.ContractSignatureUncheckedCreateInput) {
+    return this.tx.contractSignature.create({ data });
+  }
   async recordChange(
     actorId: string,
     contract: ChangeContract,
