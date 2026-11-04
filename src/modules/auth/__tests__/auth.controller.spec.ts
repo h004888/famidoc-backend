@@ -1,3 +1,5 @@
+import { RequestMethod } from '@nestjs/common';
+import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from '../controllers/auth.controller';
 import {
@@ -16,12 +18,14 @@ describe('AuthController', () => {
       create: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
+      registerFamilyRepresentative: jest.fn(),
       registerFamilyRep: jest.fn(),
       verifyEmailOtp: jest.fn(),
       resendEmailOtp: jest.fn(),
       login: jest.fn(),
       logout: jest.fn(),
       forgotPassword: jest.fn(),
+      requestForgotPassword: jest.fn(),
       resetPassword: jest.fn(),
       changePassword: jest.fn(),
     };
@@ -34,7 +38,10 @@ describe('AuthController', () => {
           useValue: service,
         },
       ],
-    }).compile();
+    })
+      .overrideGuard(JwtAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<AuthController>(AuthController);
   });
@@ -43,7 +50,31 @@ describe('AuthController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('[UT-C-01] registerFamilyRep ủy quyền gọi service.registerFamilyRep', async () => {
+  it('[UT-C-01] registerFamilyRepresentative ủy quyền gọi service.registerFamilyRepresentative', async () => {
+    const dto = {
+      fullName: 'Nguyen Van A',
+      phone: '0912345678',
+      email: 'a@famidoc.vn',
+      password: 'Password@123',
+      acceptedTerms: true,
+      homeAddress: '123 Đường Láng, Hà Nội',
+    };
+    service.registerFamilyRepresentative.mockResolvedValue({
+      message: 'OTP sent',
+      email: dto.email,
+      expiresInSeconds: 300,
+    });
+
+    const res = await controller.registerFamilyRepresentative(dto);
+    expect(service.registerFamilyRepresentative).toHaveBeenCalledWith(dto);
+    expect(res).toEqual({
+      message: 'OTP sent',
+      email: dto.email,
+      expiresInSeconds: 300,
+    });
+  });
+
+  it('[UT-C-01b] registerFamilyRep ủy quyền gọi service.registerFamilyRepresentative', async () => {
     const dto = {
       fullName: 'Nguyen Van A',
       phone: '0912345678',
@@ -51,14 +82,14 @@ describe('AuthController', () => {
       password: 'Password@123',
       acceptedTerms: true,
     };
-    service.registerFamilyRep.mockResolvedValue({
+    service.registerFamilyRepresentative.mockResolvedValue({
       message: 'OTP sent',
       email: dto.email,
       expiresInSeconds: 300,
     });
 
     const res = await controller.registerFamilyRep(dto);
-    expect(service.registerFamilyRep).toHaveBeenCalledWith(dto);
+    expect(service.registerFamilyRepresentative).toHaveBeenCalledWith(dto);
     expect(res).toEqual({
       message: 'OTP sent',
       email: dto.email,
@@ -78,7 +109,10 @@ describe('AuthController', () => {
 
   it('[UT-C-03] resendEmailOtp ủy quyền gọi service.resendEmailOtp', async () => {
     const dto = { email: 'a@famidoc.vn' };
-    service.resendEmailOtp.mockResolvedValue({ message: 'Resent', success: true });
+    service.resendEmailOtp.mockResolvedValue({
+      message: 'Resent',
+      success: true,
+    });
 
     const res = await controller.resendEmailOtp(dto);
     expect(service.resendEmailOtp).toHaveBeenCalledWith(dto);
@@ -97,25 +131,57 @@ describe('AuthController', () => {
   });
 
   it('[UT-C-05] logout ủy quyền gọi service.logout', async () => {
-    const req: any = { user: { id: 'u-1' }, headers: { authorization: 'Bearer token_xyz' } };
-    service.logout.mockResolvedValue();
+    const req: any = {
+      user: { id: 'u-1' },
+      headers: { authorization: 'Bearer token_xyz' },
+    };
+    service.logout.mockResolvedValue({
+      message: 'Logged out successfully',
+      success: true,
+    });
 
-    await controller.logout(req);
-    expect(service.logout).toHaveBeenCalled();
+    const res = await controller.logout(req);
+    expect(service.logout).toHaveBeenCalledWith('u-1', 'Bearer token_xyz');
+    expect(res).toEqual({
+      message: 'Logged out successfully',
+      success: true,
+    });
   });
 
-  it('[UT-C-06] forgotPassword ủy quyền gọi service.forgotPassword', async () => {
+  it('[UT-C-06] forgotPassword ủy quyền gọi service.requestForgotPassword', async () => {
     const dto = { email: 'a@famidoc.vn' };
-    service.forgotPassword.mockResolvedValue({ message: 'Sent', success: true });
+    service.requestForgotPassword.mockResolvedValue({
+      message: 'Sent',
+      success: true,
+    });
 
     const res = await controller.forgotPassword(dto);
-    expect(service.forgotPassword).toHaveBeenCalledWith(dto);
+    expect(service.requestForgotPassword).toHaveBeenCalledWith(dto);
+    expect(res).toEqual({ message: 'Sent', success: true });
+  });
+
+  it('[UT-C-06b] requestForgotPassword ủy quyền gọi service.requestForgotPassword', async () => {
+    const dto = { email: 'a@famidoc.vn' };
+    service.requestForgotPassword.mockResolvedValue({
+      message: 'Sent',
+      success: true,
+    });
+
+    const res = await controller.requestForgotPassword(dto);
+    expect(service.requestForgotPassword).toHaveBeenCalledWith(dto);
     expect(res).toEqual({ message: 'Sent', success: true });
   });
 
   it('[UT-C-07] resetPassword ủy quyền gọi service.resetPassword', async () => {
-    const dto = { email: 'a@famidoc.vn', otp: '123456', newPassword: 'NewPassword@123' };
-    service.resetPassword.mockResolvedValue({ message: 'Reset ok', success: true });
+    const dto = {
+      email: 'a@famidoc.vn',
+      otp: '123456',
+      newPassword: 'NewPassword@123',
+    };
+    service.resetPassword.mockResolvedValue({
+      message: 'Reset ok',
+      success: true,
+    });
 
     const res = await controller.resetPassword(dto);
     expect(service.resetPassword).toHaveBeenCalledWith(dto);
@@ -125,10 +191,20 @@ describe('AuthController', () => {
   it('[UT-C-08] changePassword ủy quyền gọi service.changePassword', async () => {
     const dto = { oldPassword: 'Old', newPassword: 'NewPassword@123' };
     const req: any = { user: { id: 'u-1' } };
-    service.changePassword.mockResolvedValue({ message: 'Changed ok', success: true });
+    service.changePassword.mockResolvedValue({
+      message: 'Changed ok',
+      success: true,
+    });
 
     const res = await controller.changePassword(req, dto);
     expect(service.changePassword).toHaveBeenCalled();
     expect(res).toEqual({ message: 'Changed ok', success: true });
+  });
+
+  it('[UT-C-09] changePassword được định tuyến bằng decorator @Patch("change-password")', () => {
+    const httpMethod = Reflect.getMetadata('method', controller.changePassword);
+    const path = Reflect.getMetadata('path', controller.changePassword);
+    expect(httpMethod).toBe(RequestMethod.PATCH);
+    expect(path).toBe('change-password');
   });
 });

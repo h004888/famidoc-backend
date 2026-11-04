@@ -1,3 +1,4 @@
+import { compareSync, hashSync } from 'bcryptjs';
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
@@ -33,7 +34,8 @@ describe('AuthServiceImpl', () => {
       findByPhone: jest.fn(),
       createFamilyRepWithProfile: jest.fn(),
       updatePassword: jest.fn(),
-      incrementTokenVersion: jest.fn(),
+      updateFailedAttempts: jest.fn(),
+      resetFailedAttempts: jest.fn(),
     };
 
     redisService = {
@@ -104,6 +106,40 @@ describe('AuthServiceImpl', () => {
     expect(mailerService.sendMail).toHaveBeenCalled();
   });
 
+  it('[UT-S-01b] registerFamilyRepresentative hỗ trợ địa chỉ nhà và lưu tạm Redis', async () => {
+    repository.findByEmail.mockResolvedValue(null);
+    repository.findByPhone.mockResolvedValue(null);
+    redisService.ttl.mockResolvedValue(-2);
+    redisService.set.mockResolvedValue('OK');
+    mailerService.sendMail.mockResolvedValue(true);
+
+    const res = await service.registerFamilyRepresentative({
+      fullName: 'Nguyen Van A',
+      phone: '0912345678',
+      email: 'rep@famidoc.vn',
+      password: 'Password@123',
+      acceptedTerms: true,
+      homeAddress: 'Số 10 Phố Huế, Hà Nội',
+    });
+
+    expect(res.expiresInSeconds).toBe(300);
+    expect(res.email).toBe('rep@famidoc.vn');
+    const registrationCall = redisService.set.mock.calls.find(
+      ([key]: [string]) => key === 'otp:reg:rep@famidoc.vn',
+    );
+    const registration = JSON.parse(registrationCall[1]);
+    expect(registration.homeAddress).toBe('Số 10 Phố Huế, Hà Nội');
+    expect(registration.password).toBeUndefined();
+    expect(compareSync('Password@123', registration.passwordHash)).toBe(true);
+    expect(redisService.set).toHaveBeenCalledWith(
+      'otp:reg:rep@famidoc.vn',
+      expect.stringContaining('Số 10 Phố Huế, Hà Nội'),
+      'EX',
+      300,
+    );
+    expect(mailerService.sendMail).toHaveBeenCalled();
+  });
+
   it('[UT-S-02] Từ chối đăng ký do Email đã tồn tại', async () => {
     repository.findByEmail.mockResolvedValue({ id: '1' } as any);
 
@@ -149,7 +185,8 @@ describe('AuthServiceImpl', () => {
     const cachedData = JSON.stringify({
       fullName: 'Nguyen Van A',
       phone: '0912345678',
-      password: 'Password@123',
+      passwordHash: hashSync('Password@123', 4),
+      homeAddress: 'Số 10 Phố Huế, Hà Nội',
       otp: '123456',
     });
     redisService.get.mockResolvedValue(cachedData);
@@ -160,17 +197,22 @@ describe('AuthServiceImpl', () => {
       status: 'ACTIVE',
     } as any);
 
-    const user = await service.verifyEmailOtp({ email: 'a@famidoc.vn', otp: '123456' });
+    const user = await service.verifyEmailOtp({
+      email: 'a@famidoc.vn',
+      otp: '123456',
+    });
     expect(user.id).toBe('u-1');
     expect(redisService.del).toHaveBeenCalled();
-    expect(repository.createFamilyRepWithProfile).toHaveBeenCalled();
+    expect(repository.createFamilyRepWithProfile).toHaveBeenCalledWith(
+      expect.objectContaining({ homeAddress: 'Số 10 Phố Huế, Hà Nội' }),
+    );
   });
 
   it('[UT-S-06] Xác thực Email OTP thất bại do mã OTP sai', async () => {
     const cachedData = JSON.stringify({
       fullName: 'Nguyen Van A',
       phone: '0912345678',
-      password: 'Password@123',
+      passwordHash: hashSync('Password@123', 4),
       otp: '123456',
     });
     redisService.get.mockResolvedValue(cachedData);
@@ -191,14 +233,16 @@ describe('AuthServiceImpl', () => {
   it('[UT-S-08] Gửi lại OTP bị từ chối do còn trong thời gian Cooldown (< 60s)', async () => {
     redisService.ttl.mockResolvedValue(45);
 
-    await expect(service.resendEmailOtp({ email: 'a@famidoc.vn' })).rejects.toThrow(
-      HttpException,
-    );
+    await expect(
+      service.resendEmailOtp({ email: 'a@famidoc.vn' }),
+    ).rejects.toThrow(HttpException);
   });
 
   it('[UT-S-09] Gửi lại OTP thành công khi hết thời gian Cooldown (> 60s)', async () => {
     redisService.ttl.mockResolvedValue(-2);
-    redisService.get.mockResolvedValue(JSON.stringify({ fullName: 'A', phone: '09', password: 'P' }));
+    redisService.get.mockResolvedValue(
+      JSON.stringify({ fullName: 'A', phone: '09', password: 'P' }),
+    );
     redisService.set.mockResolvedValue('OK');
     mailerService.sendMail.mockResolvedValue(true);
 
@@ -213,18 +257,37 @@ describe('AuthServiceImpl', () => {
     const mockUser: any = {
       id: 'u-1',
       email: 'a@famidoc.vn',
-      passwordHash: 'hash',
+      passwordHash: hashSync('Password@123', 4),
       role: 'FAMILY_REP',
       status: 'ACTIVE',
-      tokenVersion: 1,
     };
     repository.findByEmail.mockResolvedValue(mockUser);
     jwtService.sign.mockReturnValue('jwt_token_123');
 
     // Giả lập password match trong implementation
-    const res = await service.login({ identifier: 'a@famidoc.vn', password: 'Password@123' });
+    const res = await service.login({
+      identifier: 'a@famidoc.vn',
+      password: 'Password@123',
+    });
     expect(res.accessToken).toBe('jwt_token_123');
     expect(redisService.del).toHaveBeenCalledWith('login:fail:a@famidoc.vn');
+  });
+
+  it('[UT-S-10b] Đăng nhập thành công khi user có failedLoginAttempts > 0 -> Gọi repository.resetFailedAttempts', async () => {
+    redisService.get.mockResolvedValue(null);
+    const mockUser: any = {
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+      passwordHash: hashSync('Password@123', 4),
+      role: 'FAMILY_REP',
+      status: 'ACTIVE',
+      failedLoginAttempts: 2,
+    };
+    repository.findByEmail.mockResolvedValue(mockUser);
+    jwtService.sign.mockReturnValue('jwt_token_123');
+
+    await service.login({ identifier: 'a@famidoc.vn', password: 'Password@123' });
+    expect(repository.resetFailedAttempts).toHaveBeenCalledWith('u-1');
   });
 
   it('[UT-S-11] Đăng nhập thất bại do tài khoản đang bị khóa Brute-force', async () => {
@@ -238,12 +301,38 @@ describe('AuthServiceImpl', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
+  it('[UT-S-11b] Đăng nhập thất bại do tài khoản bị khóa -> Thông báo chuẩn 30 minutes và kiểm tra lockedUntil từ DB', async () => {
+    redisService.get.mockImplementation((key: string) => {
+      if (key.includes('login:lock:')) return Promise.resolve('1');
+      return Promise.resolve(null);
+    });
+
+    await expect(
+      service.login({ identifier: 'a@famidoc.vn', password: 'Any' }),
+    ).rejects.toThrow('Account temporarily locked. Please try again in 30 minutes');
+
+    // Trường hợp Redis không còn key nhưng DB có lockedUntil còn hiệu lực
+    redisService.get.mockResolvedValue(null);
+    const lockedUser: any = {
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+      passwordHash: 'hash',
+      status: 'ACTIVE',
+      lockedUntil: new Date(Date.now() + 1000 * 60 * 15), // còn 15 phút
+    };
+    repository.findByEmail.mockResolvedValue(lockedUser);
+
+    await expect(
+      service.login({ identifier: 'a@famidoc.vn', password: 'Any' }),
+    ).rejects.toThrow('Account temporarily locked. Please try again in 30 minutes');
+  });
+
   it('[UT-S-12] Đăng nhập thất bại do sai mật khẩu lần thứ 1 đến 4', async () => {
     redisService.get.mockResolvedValue(null);
     const mockUser: any = {
       id: 'u-1',
       email: 'a@famidoc.vn',
-      passwordHash: 'different_hash',
+      passwordHash: hashSync('DifferentPassword@123', 4),
       status: 'ACTIVE',
     };
     repository.findByEmail.mockResolvedValue(mockUser);
@@ -255,12 +344,29 @@ describe('AuthServiceImpl', () => {
     expect(redisService.incr).toHaveBeenCalled();
   });
 
-  it('[UT-S-13] Đăng nhập sai mật khẩu lần thứ 5 -> Kích hoạt khóa tài khoản 30 phút', async () => {
+  it('[UT-S-12b] Đăng nhập sai mật khẩu lần 1 đến 4 -> Đồng bộ số lần sai xuống DB với lockedUntil là null', async () => {
     redisService.get.mockResolvedValue(null);
     const mockUser: any = {
       id: 'u-1',
       email: 'a@famidoc.vn',
       passwordHash: 'different_hash',
+      status: 'ACTIVE',
+    };
+    repository.findByEmail.mockResolvedValue(mockUser);
+    redisService.incr.mockResolvedValue(2);
+
+    await expect(
+      service.login({ identifier: 'a@famidoc.vn', password: 'WrongPassword' }),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(repository.updateFailedAttempts).toHaveBeenCalledWith('u-1', 2, null);
+  });
+
+  it('[UT-S-13] Đăng nhập sai mật khẩu lần thứ 5 -> Kích hoạt khóa tài khoản 30 phút', async () => {
+    redisService.get.mockResolvedValue(null);
+    const mockUser: any = {
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+      passwordHash: hashSync('DifferentPassword@123', 4),
       status: 'ACTIVE',
     };
     repository.findByEmail.mockResolvedValue(mockUser);
@@ -277,13 +383,37 @@ describe('AuthServiceImpl', () => {
     );
   });
 
+  it('[UT-S-13b] Đăng nhập sai mật khẩu lần thứ 5 -> Đồng bộ lockedUntil 30 phút xuống DB', async () => {
+    redisService.get.mockResolvedValue(null);
+    const mockUser: any = {
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+      passwordHash: 'different_hash',
+      status: 'ACTIVE',
+    };
+    repository.findByEmail.mockResolvedValue(mockUser);
+    redisService.incr.mockResolvedValue(5);
+
+    await expect(
+      service.login({ identifier: 'a@famidoc.vn', password: 'WrongPassword' }),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(repository.updateFailedAttempts).toHaveBeenCalledWith(
+      'u-1',
+      5,
+      expect.any(Date),
+    );
+  });
+
   it('[UT-S-14] Đăng nhập thất bại do Email không tồn tại trong hệ thống (GB-05)', async () => {
     redisService.get.mockResolvedValue(null);
     repository.findByEmail.mockResolvedValue(null);
     repository.findByPhone.mockResolvedValue(null);
 
     await expect(
-      service.login({ identifier: 'notfound@famidoc.vn', password: 'Password@123' }),
+      service.login({
+        identifier: 'notfound@famidoc.vn',
+        password: 'Password@123',
+      }),
     ).rejects.toThrow(UnauthorizedException);
   });
 
@@ -292,7 +422,7 @@ describe('AuthServiceImpl', () => {
     const mockUser: any = {
       id: 'u-1',
       email: 'a@famidoc.vn',
-      passwordHash: 'hash',
+      passwordHash: hashSync('Password@123', 4),
       status: 'SUSPENDED',
     };
     repository.findByEmail.mockResolvedValue(mockUser);
@@ -307,10 +437,9 @@ describe('AuthServiceImpl', () => {
     const mockUser: any = {
       id: 'd-1',
       email: 'doctor@famidoc.vn',
-      passwordHash: 'hash',
+      passwordHash: hashSync('Password@123', 4),
       role: 'DOCTOR',
-      status: 'PENDING_VERIFICATION',
-      tokenVersion: 1,
+      status: 'PENDING',
     };
     repository.findByEmail.mockResolvedValue(mockUser);
     jwtService.sign.mockReturnValue('jwt_onboarding_token');
@@ -322,24 +451,149 @@ describe('AuthServiceImpl', () => {
     expect(res.accessToken).toBe('jwt_onboarding_token');
   });
 
+  it('[UT-S-16b] Đăng nhập bằng Số điện thoại thành công (tìm kiếm qua findByPhone)', async () => {
+    redisService.get.mockResolvedValue(null);
+    const mockUser: any = {
+      id: 'u-phone',
+      phone: '0912345678',
+      email: 'rep@famidoc.vn',
+      passwordHash: hashSync('Password@123', 4),
+      role: 'FAMILY_REP',
+      status: 'ACTIVE',
+    };
+    repository.findByPhone.mockResolvedValue(mockUser);
+    jwtService.sign.mockReturnValue('jwt_phone_token');
+
+    const res = await service.login({
+      identifier: '0912345678',
+      password: 'Password@123',
+    });
+    expect(repository.findByPhone).toHaveBeenCalledWith('0912345678');
+    expect(res.accessToken).toBe('jwt_phone_token');
+    expect(res.user.phone).toBe('0912345678');
+  });
+
+  it('[UT-S-16c] Đăng nhập bị từ chối nếu người dùng thông thường (không phải DOCTOR) ở trạng thái PENDING', async () => {
+    redisService.get.mockResolvedValue(null);
+    const mockUser: any = {
+      id: 'u-pending',
+      email: 'pending@famidoc.vn',
+      passwordHash: hashSync('Password@123', 4),
+      role: 'FAMILY_REP',
+      status: 'PENDING',
+    };
+    repository.findByEmail.mockResolvedValue(mockUser);
+
+    await expect(
+      service.login({
+        identifier: 'pending@famidoc.vn',
+        password: 'Password@123',
+      }),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('[UT-S-16d] Đăng nhập tự động cắt bỏ khoảng trắng thừa ở identifier (trim)', async () => {
+    redisService.get.mockResolvedValue(null);
+    const mockUser: any = {
+      id: 'u-trim',
+      email: 'trim@famidoc.vn',
+      passwordHash: hashSync('Password@123', 4),
+      role: 'FAMILY_REP',
+      status: 'ACTIVE',
+    };
+    repository.findByEmail.mockResolvedValue(mockUser);
+    jwtService.sign.mockReturnValue('jwt_trim_token');
+
+    const res = await service.login({
+      identifier: '  trim@famidoc.vn  ',
+      password: 'Password@123',
+    });
+    expect(repository.findByEmail).toHaveBeenCalledWith('trim@famidoc.vn');
+    expect(res.accessToken).toBe('jwt_trim_token');
+  });
+
   // --- UC-03 LOGOUT ---
   it('[UT-S-17] Đăng xuất an toàn (Logout - Đưa Token vào Redis Blacklist)', async () => {
-    jwtService.decode.mockReturnValue({ jti: 'token-uuid', exp: Math.floor(Date.now() / 1000) + 600 });
+    jwtService.decode.mockReturnValue({
+      jti: 'token-uuid',
+      exp: Math.floor(Date.now() / 1000) + 600,
+    });
     redisService.set.mockResolvedValue('OK');
 
-    await service.logout('u-1', 'Bearer token_abc');
+    const res = await service.logout('u-1', 'Bearer token_abc');
     expect(redisService.set).toHaveBeenCalled();
+    expect(res.success).toBe(true);
+  });
+
+  it('[UT-S-17b] Đăng xuất đưa cả JTI và raw token vào Blacklist với TTL chính xác', async () => {
+    const expTime = Math.floor(Date.now() / 1000) + 900;
+    jwtService.decode.mockReturnValue({
+      jti: 'jti-unique-123',
+      exp: expTime,
+    });
+    redisService.set.mockResolvedValue('OK');
+
+    const res = await service.logout('u-1', 'Bearer token_full_value');
+    expect(redisService.set).toHaveBeenCalledWith(
+      'blacklist:jti-unique-123',
+      'revoked',
+      'EX',
+      expect.any(Number),
+    );
+    expect(redisService.set).toHaveBeenCalledWith(
+      'blacklist:token_full_value',
+      'revoked',
+      'EX',
+      expect.any(Number),
+    );
+    expect(res).toEqual({
+      message: 'Logged out successfully',
+      success: true,
+    });
+  });
+
+  it('[UT-S-17c] Đăng xuất xử lý an toàn khi token rỗng', async () => {
+    const res = await service.logout('u-1', '');
+    expect(res).toEqual({
+      message: 'Logged out successfully',
+      success: true,
+    });
   });
 
   // --- UC-04 FORGOT & RESET PASSWORD ---
   it('[UT-S-18] Quên mật khẩu: Gửi OTP reset qua Email cho tài khoản tồn tại', async () => {
-    repository.findByEmail.mockResolvedValue({ id: 'u-1', email: 'a@famidoc.vn' } as any);
+    repository.findByEmail.mockResolvedValue({
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+    } as any);
     redisService.set.mockResolvedValue('OK');
     mailerService.sendMail.mockResolvedValue(true);
 
     const res = await service.forgotPassword({ email: 'a@famidoc.vn' });
     expect(res.success).toBe(true);
     expect(mailerService.sendMail).toHaveBeenCalled();
+  });
+
+  it('[UT-S-18b] Quên mật khẩu: Bị từ chối do còn trong thời gian Cooldown (< 60s)', async () => {
+    redisService.ttl.mockResolvedValue(45);
+
+    await expect(
+      service.requestForgotPassword({ email: 'a@famidoc.vn' }),
+    ).rejects.toThrow(HttpException);
+  });
+
+  it('[UT-S-18c] Quên mật khẩu: requestForgotPassword tự động trim và lowercase email', async () => {
+    redisService.ttl.mockResolvedValue(-2);
+    repository.findByEmail.mockResolvedValue({
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+    } as any);
+    redisService.set.mockResolvedValue('OK');
+    mailerService.sendMail.mockResolvedValue(true);
+
+    const res = await service.requestForgotPassword({ email: '  A@FAMIDOC.VN  ' });
+    expect(repository.findByEmail).toHaveBeenCalledWith('a@famidoc.vn');
+    expect(res.success).toBe(true);
   });
 
   it('[UT-S-19] Quên mật khẩu: Email không tồn tại trong hệ thống (Bảo mật GB-05)', async () => {
@@ -352,7 +606,10 @@ describe('AuthServiceImpl', () => {
 
   it('[UT-S-20] Đặt lại mật khẩu (Reset Password) thành công bằng OTP', async () => {
     redisService.get.mockResolvedValue('654321');
-    repository.findByEmail.mockResolvedValue({ id: 'u-1', email: 'a@famidoc.vn' } as any);
+    repository.findByEmail.mockResolvedValue({
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+    } as any);
 
     const res = await service.resetPassword({
       email: 'a@famidoc.vn',
@@ -362,15 +619,80 @@ describe('AuthServiceImpl', () => {
 
     expect(res.success).toBe(true);
     expect(repository.updatePassword).toHaveBeenCalled();
-    expect(repository.incrementTokenVersion).toHaveBeenCalledWith('u-1');
+    expect(redisService.set).toHaveBeenCalledWith(
+      'token:revoked:u-1',
+      expect.any(String),
+      'EX',
+      expect.any(Number),
+    );
     expect(redisService.del).toHaveBeenCalled();
+  });
+
+  it('[UT-S-20b] Đặt lại mật khẩu thất bại do mã OTP không khớp', async () => {
+    redisService.get.mockResolvedValue('123456');
+
+    await expect(
+      service.resetPassword({
+        email: 'a@famidoc.vn',
+        otp: '999999',
+        newPassword: 'NewPassword@123',
+      }),
+    ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('[UT-S-20c] Đặt lại mật khẩu thất bại do OTP đã hết hạn (không tồn tại trong Redis)', async () => {
+    redisService.get.mockResolvedValue(null);
+
+    await expect(
+      service.resetPassword({
+        email: 'a@famidoc.vn',
+        otp: '123456',
+        newPassword: 'NewPassword@123',
+      }),
+    ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('[UT-S-20d] Đặt lại mật khẩu thất bại do email không tồn tại trong DB', async () => {
+    redisService.get.mockResolvedValue('123456');
+    repository.findByEmail.mockResolvedValue(null);
+
+    await expect(
+      service.resetPassword({
+        email: 'notfound@famidoc.vn',
+        otp: '123456',
+        newPassword: 'NewPassword@123',
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('[UT-S-20e] Đặt lại mật khẩu tự động mở khóa brute-force và reset failed attempts khi thành công', async () => {
+    redisService.get.mockResolvedValue('654321');
+    repository.findByEmail.mockResolvedValue({
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+      phone: '0912345678',
+      failedLoginAttempts: 3,
+    } as any);
+
+    const res = await service.resetPassword({
+      email: '  A@FAMIDOC.VN  ',
+      otp: '654321',
+      newPassword: 'NewPassword@123',
+    });
+
+    expect(res.success).toBe(true);
+    expect(repository.resetFailedAttempts).toHaveBeenCalledWith('u-1');
+    expect(redisService.del).toHaveBeenCalledWith('login:lock:a@famidoc.vn');
+    expect(redisService.del).toHaveBeenCalledWith('login:fail:a@famidoc.vn');
+    expect(redisService.del).toHaveBeenCalledWith('login:lock:0912345678');
+    expect(redisService.del).toHaveBeenCalledWith('login:fail:0912345678');
   });
 
   // --- UC-05 CHANGE PASSWORD ---
   it('[UT-S-21] Đổi mật khẩu (Change Password) thành công khi nhập đúng mật khẩu cũ', async () => {
     repository.findById.mockResolvedValue({
       id: 'u-1',
-      passwordHash: 'hash',
+      passwordHash: hashSync('OldPassword@123', 4),
     } as any);
 
     const res = await service.changePassword('u-1', {
@@ -379,13 +701,18 @@ describe('AuthServiceImpl', () => {
     });
     expect(res.success).toBe(true);
     expect(repository.updatePassword).toHaveBeenCalled();
-    expect(repository.incrementTokenVersion).toHaveBeenCalledWith('u-1');
+    expect(redisService.set).toHaveBeenCalledWith(
+      'token:revoked:u-1',
+      expect.any(String),
+      'EX',
+      expect.any(Number),
+    );
   });
 
   it('[UT-S-22] Đổi mật khẩu thất bại do nhập sai mật khẩu cũ', async () => {
     repository.findById.mockResolvedValue({
       id: 'u-1',
-      passwordHash: 'different_hash',
+      passwordHash: hashSync('DifferentPassword@123', 4),
     } as any);
 
     await expect(
@@ -408,6 +735,39 @@ describe('AuthServiceImpl', () => {
         newPassword: 'SamePassword@123',
       }),
     ).rejects.toThrow(BadRequestException);
+  });
+
+  it('[UT-S-24] Đổi mật khẩu thất bại do không tìm thấy user theo userId', async () => {
+    repository.findById.mockResolvedValue(null);
+
+    await expect(
+      service.changePassword('u-notfound', {
+        oldPassword: 'OldPassword@123',
+        newPassword: 'NewPassword@123',
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('[UT-S-25] Đổi mật khẩu tự động dọn dẹp các khóa đăng nhập và reset failed attempts khi thành công', async () => {
+    repository.findById.mockResolvedValue({
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+      phone: '0912345678',
+      passwordHash: hashSync('OldPassword@123', 4),
+      failedLoginAttempts: 2,
+    } as any);
+
+    const res = await service.changePassword('u-1', {
+      oldPassword: 'OldPassword@123',
+      newPassword: 'NewPassword@456',
+    });
+
+    expect(res.success).toBe(true);
+    expect(repository.resetFailedAttempts).toHaveBeenCalledWith('u-1');
+    expect(redisService.del).toHaveBeenCalledWith('login:lock:a@famidoc.vn');
+    expect(redisService.del).toHaveBeenCalledWith('login:fail:a@famidoc.vn');
+    expect(redisService.del).toHaveBeenCalledWith('login:lock:0912345678');
+    expect(redisService.del).toHaveBeenCalledWith('login:fail:0912345678');
   });
 
   // --- FAULT INJECTION TESTS ---
@@ -465,9 +825,14 @@ describe('AuthServiceImpl', () => {
   });
 
   it('[FI-05] Hasher gặp sự cố ném InternalServerErrorException', async () => {
-    repository.findById.mockResolvedValue({ id: 'u-1', passwordHash: 'hash' } as any);
+    repository.findById.mockResolvedValue({
+      id: 'u-1',
+      passwordHash: hashSync('Password@123', 4),
+    } as any);
     // giả lập lỗi crash bộ nhớ
-    jest.spyOn(service as any, 'verifyPassword' as any).mockRejectedValue(new Error('Memory allocation failed'));
+    jest
+      .spyOn(service as any, 'verifyPassword' as any)
+      .mockRejectedValue(new Error('Memory allocation failed'));
 
     await expect(
       service.changePassword('u-1', {
@@ -475,5 +840,66 @@ describe('AuthServiceImpl', () => {
         newPassword: 'NewPassword@123',
       }),
     ).rejects.toThrow(InternalServerErrorException);
+  });
+
+  describe('Password Hashing & Verification (bcryptjs)', () => {
+    it('băm mật khẩu và so khớp thành công với mật khẩu đúng', async () => {
+      const plain = 'StrongPass@123';
+      const hash = await (service as any).hashPassword(plain);
+      expect(hash).toBeDefined();
+      expect(hash).not.toBe(plain);
+      expect(hash.startsWith('$2a$') || hash.startsWith('$2b$')).toBe(true);
+
+      const isValid = await (service as any).verifyPassword(plain, hash);
+      expect(isValid).toBe(true);
+    });
+
+    it('so khớp thất bại với mật khẩu sai', async () => {
+      const hash = await (service as any).hashPassword('CorrectPass@123');
+      const isValid = await (service as any).verifyPassword(
+        'WrongPass@123',
+        hash,
+      );
+      expect(isValid).toBe(false);
+    });
+  });
+
+  it('[UT-S-24] Toàn vẹn chuỗi vòng đời khóa tài khoản: Sai 4 lần (chưa lock) -> Sai lần 5 (lock 30 phút trên cả Redis & DB) -> Đúng mật khẩu (reset fail về 0 trên DB)', async () => {
+    const mockUser: any = {
+      id: 'u-1',
+      email: 'a@famidoc.vn',
+      passwordHash: hashSync('Password@123', 4),
+      role: 'FAMILY_REP',
+      status: 'ACTIVE',
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+    };
+    repository.findByEmail.mockResolvedValue(mockUser);
+    jwtService.sign.mockReturnValue('jwt_token_valid');
+
+    // 1. Sai lần 4
+    redisService.get.mockResolvedValue(null);
+    redisService.incr.mockResolvedValueOnce(4);
+    await expect(
+      service.login({ identifier: 'a@famidoc.vn', password: 'WrongPassword' }),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(repository.updateFailedAttempts).toHaveBeenCalledWith('u-1', 4, null);
+    expect(redisService.set).not.toHaveBeenCalledWith('login:lock:a@famidoc.vn', expect.anything(), expect.anything(), expect.anything());
+
+    // 2. Sai lần 5 -> Lock 30 phút cả Redis & DB
+    redisService.incr.mockResolvedValueOnce(5);
+    await expect(
+      service.login({ identifier: 'a@famidoc.vn', password: 'WrongPassword' }),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(repository.updateFailedAttempts).toHaveBeenCalledWith('u-1', 5, expect.any(Date));
+    expect(redisService.set).toHaveBeenCalledWith('login:lock:a@famidoc.vn', '1', 'EX', 1800);
+
+    // 3. Đăng nhập thành công khi hết hạn lock -> Reset DB failedAttempts về 0
+    mockUser.failedLoginAttempts = 5;
+    mockUser.lockedUntil = null;
+    redisService.get.mockResolvedValue(null);
+    const successRes = await service.login({ identifier: 'a@famidoc.vn', password: 'Password@123' });
+    expect(successRes.accessToken).toBe('jwt_token_valid');
+    expect(repository.resetFailedAttempts).toHaveBeenCalledWith('u-1');
   });
 });

@@ -1,3 +1,4 @@
+import { randomInt, randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -11,7 +12,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as argon2 from 'argon2';
+import * as bcrypt from 'bcryptjs';
 import { CreateAuthDto } from '../../dtos/create-auth.dto';
 import { UpdateAuthDto } from '../../dtos/update-auth.dto';
 import { RegisterFamilyRepDto } from '../../dtos/register-family-rep.dto';
@@ -31,7 +32,6 @@ import {
   AUTH_REPOSITORY_TOKEN,
 } from '../../repositories/interfaces/auth.repository.interface';
 import type { IAuthRepository } from '../../repositories/interfaces/auth.repository.interface';
-import { AUTH_SERVICE_TOKEN } from '../interfaces/auth.service.interface';
 import type { IAuthService } from '../interfaces/auth.service.interface';
 
 @Injectable()
@@ -48,23 +48,18 @@ export class AuthServiceImpl implements IAuthService {
 
   protected async hashPassword(password: string): Promise<string> {
     try {
-      return await argon2.hash(password, {
-        type: argon2.argon2id,
-        memoryCost: 65536,
-        timeCost: 3,
-        parallelism: 1,
-      });
+      return await bcrypt.hash(password, 10);
     } catch {
       throw new InternalServerErrorException('Password hashing failed');
     }
   }
 
-  protected async verifyPassword(plain: string, hash: string): Promise<boolean> {
+  protected async verifyPassword(
+    plain: string,
+    hash: string,
+  ): Promise<boolean> {
     try {
-      if (hash === 'hash' || hash === 'different_hash' || hash === 'same_hash') {
-        return hash === 'hash' && (plain === 'Password@123' || plain === 'OldPassword@123');
-      }
-      return await argon2.verify(hash, plain);
+      return await bcrypt.compare(plain, hash);
     } catch (err: any) {
       if (err instanceof InternalServerErrorException) throw err;
       throw new InternalServerErrorException('Password verification failed');
@@ -95,7 +90,9 @@ export class AuthServiceImpl implements IAuthService {
     return this.authRepository.delete(id);
   }
 
-  async registerFamilyRep(dto: RegisterFamilyRepDto): Promise<RegisterInitiateResponse> {
+  async registerFamilyRepresentative(
+    dto: RegisterFamilyRepDto,
+  ): Promise<RegisterInitiateResponse> {
     if (!dto.acceptedTerms) {
       throw new BadRequestException('You must accept terms and privacy policy');
     }
@@ -119,13 +116,14 @@ export class AuthServiceImpl implements IAuthService {
         );
       }
 
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otp = randomInt(100000, 1000000).toString();
       await this.redisClient.set(
         `otp:reg:${dto.email}`,
         JSON.stringify({
           fullName: dto.fullName,
           phone: dto.phone,
-          password: dto.password,
+          passwordHash: await this.hashPassword(dto.password),
+          homeAddress: dto.homeAddress,
           otp,
         }),
         'EX',
@@ -136,7 +134,7 @@ export class AuthServiceImpl implements IAuthService {
 
       await this.mailerService.sendMail({
         to: dto.email,
-        subject: 'FamiDoc - Xác thực đăng ký tài khoản',
+        subject: 'FamiDoc - Xác thực đăng ký tài khoản đại diện gia đình',
         text: `Mã OTP xác thực đăng ký của bạn là: ${otp} (hiệu lực 5 phút).`,
       });
 
@@ -146,14 +144,26 @@ export class AuthServiceImpl implements IAuthService {
         expiresInSeconds: 300,
       };
     } catch (err: any) {
-      if (err instanceof ConflictException || err instanceof BadRequestException || err instanceof HttpException) {
+      if (
+        err instanceof ConflictException ||
+        err instanceof BadRequestException ||
+        err instanceof HttpException
+      ) {
         throw err;
       }
       if (err.code === 'P2002') {
         throw new ConflictException('This email/phone is already registered');
       }
-      throw new ServiceUnavailableException('Service unavailable, please try again later');
+      throw new ServiceUnavailableException(
+        'Service unavailable, please try again later',
+      );
     }
+  }
+
+  async registerFamilyRep(
+    dto: RegisterFamilyRepDto,
+  ): Promise<RegisterInitiateResponse> {
+    return this.registerFamilyRepresentative(dto);
   }
 
   async resendEmailOtp(dto: ResendEmailOtpDto): Promise<ApiResponseMessage> {
@@ -167,14 +177,21 @@ export class AuthServiceImpl implements IAuthService {
 
     const cached = await this.redisClient.get(`otp:reg:${dto.email}`);
     if (!cached) {
-      throw new BadRequestException('No pending registration found for this email');
+      throw new BadRequestException(
+        'No pending registration found for this email',
+      );
     }
 
     const data = JSON.parse(cached);
-    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const newOtp = randomInt(100000, 1000000).toString();
     data.otp = newOtp;
 
-    await this.redisClient.set(`otp:reg:${dto.email}`, JSON.stringify(data), 'EX', 300);
+    await this.redisClient.set(
+      `otp:reg:${dto.email}`,
+      JSON.stringify(data),
+      'EX',
+      300,
+    );
     await this.redisClient.set(`otp:cooldown:${dto.email}`, '1', 'EX', 60);
 
     await this.mailerService.sendMail({
@@ -200,32 +217,45 @@ export class AuthServiceImpl implements IAuthService {
       throw new UnauthorizedException('Invalid or expired OTP');
     }
 
-    const passwordHash = await this.hashPassword(data.password);
+    // Chỉ lưu hash trong Redis, không lưu mật khẩu đăng ký dạng rõ.
+    if (!data.passwordHash)
+      throw new UnauthorizedException(
+        'Registration expired; please register again',
+      );
+    const passwordHash = data.passwordHash;
     const user = await this.authRepository.createFamilyRepWithProfile({
       email: dto.email,
       phone: data.phone,
       passwordHash,
       fullName: data.fullName,
+      homeAddress: data.homeAddress,
     });
 
     await this.redisClient.del(`otp:reg:${dto.email}`);
     return user;
   }
 
-  async login(dto: LoginDto, clientIp?: string): Promise<LoginSuccessResponse> {
+  async login(
+    dto: LoginDto,
+    _clientIp?: string,
+  ): Promise<LoginSuccessResponse> {
+    const LOCKOUT_DURATION_SECONDS = 1800; // 30 minutes (SRS Security Section IV.2.3)
+    const identifier = dto.identifier.trim();
     try {
-      const isLocked = await this.redisClient.get(`login:lock:${dto.identifier}`);
+      const isLocked = await this.redisClient.get(
+        `login:lock:${identifier}`,
+      );
       if (isLocked) {
         throw new ForbiddenException(
-          'Account temporarily locked. Please try again in 20 minutes',
+          'Account temporarily locked. Please try again in 30 minutes',
         );
       }
 
       let user: AuthEntity | null = null;
-      if (dto.identifier.includes('@')) {
-        user = await this.authRepository.findByEmail(dto.identifier);
+      if (identifier.includes('@')) {
+        user = await this.authRepository.findByEmail(identifier);
       } else {
-        user = await this.authRepository.findByPhone(dto.identifier);
+        user = await this.authRepository.findByPhone(identifier);
       }
 
       if (!user) {
@@ -234,38 +264,73 @@ export class AuthServiceImpl implements IAuthService {
         );
       }
 
-      if (user.status === 'SUSPENDED' || user.status === 'DEACTIVATED') {
+      if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
+        throw new ForbiddenException(
+          'Account temporarily locked. Please try again in 30 minutes',
+        );
+      }
+
+      if (
+        user.status === 'SUSPENDED' ||
+        user.status === 'LOCKED' ||
+        (user.status === 'PENDING' && user.role !== 'DOCTOR')
+      ) {
         throw new ForbiddenException(
           'Your account cannot be used to sign in. Please contact support.',
         );
       }
 
-      const isValid = await this.verifyPassword(dto.password, user.passwordHash);
+      const isValid = await this.verifyPassword(
+        dto.password,
+        user.passwordHash,
+      );
       if (!isValid) {
-        const failCount = await this.redisClient.incr(`login:fail:${dto.identifier}`);
-        if (failCount >= 5) {
-          await this.redisClient.set(
-            `login:lock:${dto.identifier}`,
-            '1',
-            'EX',
-            1800,
+        const failCount = await this.redisClient.incr(
+          `login:fail:${identifier}`,
+        );
+        if (
+          failCount === 1 &&
+          typeof this.redisClient.expire === 'function'
+        ) {
+          await this.redisClient.expire(
+            `login:fail:${identifier}`,
+            LOCKOUT_DURATION_SECONDS,
           );
         }
+        const lockedUntil =
+          failCount >= 5
+            ? new Date(Date.now() + LOCKOUT_DURATION_SECONDS * 1000)
+            : null;
+        if (failCount >= 5) {
+          await this.redisClient.set(
+            `login:lock:${identifier}`,
+            '1',
+            'EX',
+            LOCKOUT_DURATION_SECONDS,
+          );
+        }
+
+        await this.authRepository.updateFailedAttempts(user.id, failCount, lockedUntil);
+
         throw new UnauthorizedException(
           'Incorrect username or password. Please check again.',
         );
       }
 
-      await this.redisClient.del(`login:fail:${dto.identifier}`);
+      await this.redisClient.del(`login:fail:${identifier}`);
+
+      if (user.failedLoginAttempts && user.failedLoginAttempts > 0) {
+        await this.authRepository.resetFailedAttempts(user.id);
+      }
 
       const payload: any = {
         sub: user.id,
+        jti: randomUUID(),
         email: user.email,
         role: user.role,
-        tokenVersion: user.tokenVersion,
       };
 
-      if (user.role === 'DOCTOR' && user.status === 'PENDING_VERIFICATION') {
+      if (user.role === 'DOCTOR' && user.status === 'PENDING') {
         payload.scope = 'ONBOARDING_ONLY';
       }
 
@@ -277,9 +342,11 @@ export class AuthServiceImpl implements IAuthService {
         user: {
           id: user.id,
           email: user.email,
+          phone: user.phone,
           fullName: user.fullName,
           role: user.role,
           status: user.status,
+          avatarUrl: user.avatarUrl,
         },
       };
     } catch (err: any) {
@@ -289,64 +356,119 @@ export class AuthServiceImpl implements IAuthService {
       ) {
         throw err;
       }
-      throw new ServiceUnavailableException('Authentication service unavailable');
+      throw new ServiceUnavailableException(
+        'Authentication service unavailable',
+      );
     }
   }
 
-  async logout(userId: string, token: string): Promise<void> {
-    const rawToken = token.replace('Bearer ', '');
+  async logout(userId: string, token: string): Promise<ApiResponseMessage> {
+    const rawToken = token.replace(/^Bearer\s+/i, '').trim();
+    if (!rawToken) {
+      return { message: 'Logged out successfully', success: true };
+    }
     const decoded: any = this.jwtService.decode(rawToken);
     const ttl = decoded?.exp
       ? Math.max(decoded.exp - Math.floor(Date.now() / 1000), 60)
       : 3600;
 
+    if (decoded?.jti) {
+      await this.redisClient.set(
+        `blacklist:${decoded.jti}`,
+        'revoked',
+        'EX',
+        ttl,
+      );
+    }
     await this.redisClient.set(
-      `blacklist:${decoded?.jti || rawToken}`,
+      `blacklist:${rawToken}`,
       'revoked',
       'EX',
       ttl,
     );
-  }
-
-  async forgotPassword(dto: ForgotPasswordDto): Promise<ApiResponseMessage> {
-    const user = await this.authRepository.findByEmail(dto.email);
-    if (!user) {
-      return {
-        message: `A confirmation email has been sent to ${dto.email}`,
-        success: true,
-      };
-    }
-
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    await this.redisClient.set(`otp:reset:${dto.email}`, otp, 'EX', 600);
-
-    await this.mailerService.sendMail({
-      to: dto.email,
-      subject: 'FamiDoc - Yêu cầu khôi phục mật khẩu',
-      text: `Mã OTP đặt lại mật khẩu của bạn là: ${otp} (hiệu lực 10 phút).`,
-    });
 
     return {
-      message: `A confirmation email has been sent to ${dto.email}`,
+      message: 'Logged out successfully',
       success: true,
     };
   }
 
+  async requestForgotPassword(
+    dto: ForgotPasswordDto,
+  ): Promise<ApiResponseMessage> {
+    const email = dto.email.trim().toLowerCase();
+    const cooldown =
+      typeof this.redisClient.ttl === 'function'
+        ? (await this.redisClient.ttl(`otp:cooldown:reset:${email}`)) || 0
+        : 0;
+    if (cooldown > 0) {
+      throw new HttpException(
+        `Please wait ${cooldown} seconds before requesting a new OTP`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    const user = await this.authRepository.findByEmail(email);
+    if (!user) {
+      return {
+        message: `A confirmation email has been sent to ${email}`,
+        success: true,
+      };
+    }
+
+    const otp = randomInt(100000, 1000000).toString();
+    await this.redisClient.set(`otp:reset:${email}`, otp, 'EX', 600);
+    await this.redisClient.set(`otp:cooldown:reset:${email}`, '1', 'EX', 60);
+
+    await this.mailerService.sendMail({
+      to: email,
+      subject: 'FamiDoc - Yêu cầu khôi phục mật khẩu',
+      text: `Mã OTP đặt lại mật khẩu của bạn là: ${otp} (hiệu lực 10 phút). Vui lòng không chia sẻ mã này cho bất kỳ ai.`,
+    });
+
+    return {
+      message: `A confirmation email has been sent to ${email}`,
+      success: true,
+    };
+  }
+
+  async forgotPassword(dto: ForgotPasswordDto): Promise<ApiResponseMessage> {
+    return this.requestForgotPassword(dto);
+  }
+
   async resetPassword(dto: ResetPasswordDto): Promise<ApiResponseMessage> {
-    const cachedOtp = await this.redisClient.get(`otp:reset:${dto.email}`);
+    const email = dto.email.trim().toLowerCase();
+    const cachedOtp = await this.redisClient.get(`otp:reset:${email}`);
     if (!cachedOtp || cachedOtp !== dto.otp) {
       throw new UnauthorizedException('Invalid or expired OTP');
     }
 
-    const user = await this.authRepository.findByEmail(dto.email);
+    const user = await this.authRepository.findByEmail(email);
     if (!user) {
       throw new BadRequestException('User not found');
     }
 
     const newHash = await this.hashPassword(dto.newPassword);
     await this.authRepository.updatePassword(user.id, newHash);
-    await this.authRepository.incrementTokenVersion(user.id);
-    await this.redisClient.del(`otp:reset:${dto.email}`);
+    await this.redisClient.set(
+      `token:revoked:${user.id}`,
+      Math.floor(Date.now() / 1000).toString(),
+      'EX',
+      7 * 86400,
+    );
+    await this.redisClient.del(`otp:reset:${email}`);
+    await this.redisClient.del(`otp:cooldown:reset:${email}`);
+
+    // Mở khóa đăng nhập và reset số lần sai mật khẩu nếu tài khoản đang bị khóa
+    await this.redisClient.del(`login:lock:${email}`);
+    await this.redisClient.del(`login:fail:${email}`);
+    if (user.phone) {
+      await this.redisClient.del(`login:lock:${user.phone}`);
+      await this.redisClient.del(`login:fail:${user.phone}`);
+    }
+    if (user.failedLoginAttempts && user.failedLoginAttempts > 0) {
+      await this.authRepository.resetFailedAttempts(user.id);
+    }
 
     return {
       message: 'Update password successfully',
@@ -381,7 +503,25 @@ export class AuthServiceImpl implements IAuthService {
 
     const newHash = await this.hashPassword(dto.newPassword);
     await this.authRepository.updatePassword(userId, newHash);
-    await this.authRepository.incrementTokenVersion(userId);
+    await this.redisClient.set(
+      `token:revoked:${userId}`,
+      Math.floor(Date.now() / 1000).toString(),
+      'EX',
+      7 * 86400,
+    );
+
+    // Mở khóa đăng nhập và reset số lần sai mật khẩu nếu có
+    if (user.email) {
+      await this.redisClient.del(`login:lock:${user.email}`);
+      await this.redisClient.del(`login:fail:${user.email}`);
+    }
+    if (user.phone) {
+      await this.redisClient.del(`login:lock:${user.phone}`);
+      await this.redisClient.del(`login:fail:${user.phone}`);
+    }
+    if (user.failedLoginAttempts && user.failedLoginAttempts > 0) {
+      await this.authRepository.resetFailedAttempts(user.id);
+    }
 
     return {
       message: 'Update password successfully',

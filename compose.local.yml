@@ -1,0 +1,40 @@
+name: famidoc-local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: famidoc
+      POSTGRES_DB: famidoc_dev
+      POSTGRES_PASSWORD: ${LOCAL_POSTGRES_PASSWORD:?Configure LOCAL_POSTGRES_PASSWORD in .env}
+    # Chỉ mở trên máy local; không dùng cấu hình này để công khai DB trên VPS.
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U famidoc -d famidoc_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:56379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  # Giữ dữ liệu khi dừng/khởi động lại container.
+  postgres_data:
+  redis_data:

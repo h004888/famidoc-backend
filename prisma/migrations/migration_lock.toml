@@ -1,0 +1,2 @@
+# File quản lý migration của Prisma; giữ trong Git cùng các migration SQL.
+provider = "postgresql"

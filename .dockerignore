@@ -1,0 +1,10 @@
+node_modules
+dist
+.git
+.env
+.tdd
+npm-debug.log
+
+# Khong dua bat ky file env cuc bo/test va bi mat nao vao image.
+.env*
+!.env.example
