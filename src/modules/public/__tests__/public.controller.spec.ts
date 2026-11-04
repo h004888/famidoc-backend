@@ -24,6 +24,8 @@ describe('PublicController', () => {
       lookupHealthcareFacilities: jest.fn(),
       lookupDoctorDirectory: jest.fn(),
       submitConsultationRequest: jest.fn(),
+      getPublicFacilityDetail: jest.fn(),
+      getPublicDoctorDetail: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -284,5 +286,61 @@ describe('PublicController', () => {
       );
     });
   });
-});
 
+  describe('getPublicFacilityDetail', () => {
+    it('should delegate to publicService.getPublicFacilityDetail', async () => {
+      const facilityId = 'fac-uuid-1';
+      const mockFacility = {
+        id: facilityId,
+        facilityName: 'Bệnh viện Đa khoa Quốc tế',
+        licenseNumber: 'LIC-12345',
+        address: 'Hà Nội',
+        hotline: '1900 6868',
+        email: 'bv@gmail.com',
+        verificationStatus: 'ACTIVE',
+        operatingStatus: 'OPERATIONAL',
+        totalActiveDoctors: 5,
+        createdAt: new Date(),
+      };
+
+      const spy = jest.spyOn(service, 'getPublicFacilityDetail');
+      spy.mockResolvedValue(mockFacility as any);
+
+      const result = await controller.getPublicFacilityDetail(facilityId);
+
+      expect(result).toBe(mockFacility);
+      expect(spy).toHaveBeenCalledWith(facilityId);
+    });
+  });
+
+  describe('getPublicDoctorDetail', () => {
+    it('should delegate to publicService.getPublicDoctorDetail', async () => {
+      const doctorId = 'doc-uuid-1';
+      const mockDoctor = {
+        id: doctorId,
+        doctorName: 'BS. Trần Văn B',
+        specialty: 'Nội tổng quát',
+        academicTitle: 'BS.CKI',
+        experienceYears: 8,
+        bio: 'Tiểu sử bác sĩ',
+        ratingAvg: 4.8,
+        totalReviews: 25,
+        isAvailable: true,
+        facility: {
+          id: 'fac-uuid-1',
+          facilityName: 'Bệnh viện Đa khoa Quốc tế',
+          address: 'Hà Nội',
+          hotline: '1900 6868',
+        },
+      };
+
+      const spy = jest.spyOn(service, 'getPublicDoctorDetail');
+      spy.mockResolvedValue(mockDoctor as any);
+
+      const result = await controller.getPublicDoctorDetail(doctorId);
+
+      expect(result).toBe(mockDoctor);
+      expect(spy).toHaveBeenCalledWith(doctorId);
+    });
+  });
+});

@@ -17,8 +17,19 @@ import type {
   ListStaffingContractsDto,
   StaffingContractResponseDto,
 } from '../../dtos/staffing-contract.dto';
+import type { CreateMedicalContractDto } from '../../dtos/create-medical-contract.dto';
 export const CONTRACTS_SERVICE_TOKEN = Symbol('IContractsService');
 export interface IContractsService {
+  createInitialMedicalContract(
+    actor: AuthenticatedUser,
+    dto: CreateMedicalContractDto,
+  ): Promise<ContractSummary>;
+  signInitialMedicalContract(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: SignContractChangeDto,
+    ip: string,
+  ): Promise<ContractSignature>;
   createStaffingContract(
     actor: AuthenticatedUser,
     dto: CreateStaffingContractDto,

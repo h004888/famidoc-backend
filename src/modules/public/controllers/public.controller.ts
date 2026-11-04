@@ -49,7 +49,7 @@ export class PublicController {
     private readonly publicService: IPublicService,
   ) {}
 
-  @Get('portal-overview')
+  @Get(['portal-overview', 'overview'])
   @ApiOperation({
     summary: 'Lấy thông tin tổng quan trang chủ Public Portal (STT 7 - UC-06)',
     description:
@@ -101,7 +101,8 @@ export class PublicController {
   })
   @ApiResponse({
     status: 404,
-    description: 'Không tìm thấy gói chăm sóc sức khỏe hoặc gói đã ngừng áp dụng.',
+    description:
+      'Không tìm thấy gói chăm sóc sức khỏe hoặc gói đã ngừng áp dụng.',
   })
   async getPublicPackageDetail(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -109,10 +110,9 @@ export class PublicController {
     return this.publicService.getPublicPackageDetail(id);
   }
 
-  @Get('facilities')
+  @Get(['facilities', 'directory'])
   @ApiOperation({
-    summary:
-      'Tra cứu danh bạ cơ sở y tế đối tác công khai (STT 10 - UC-08)',
+    summary: 'Tra cứu danh bạ cơ sở y tế đối tác công khai (STT 10 - UC-08)',
     description:
       'Cho phép tra cứu các bệnh viện, phòng khám đa khoa đối tác đã được thẩm định hoạt động (ACTIVE) kèm số lượng bác sĩ đang liên kết.',
   })
@@ -127,10 +127,35 @@ export class PublicController {
     return this.publicService.lookupHealthcareFacilities(query);
   }
 
+  @Get('facilities/:id')
+  @ApiOperation({
+    summary: 'Xem chi tiết cơ sở y tế công khai theo ID (UC-08)',
+    description:
+      'Trả về thông tin chi tiết của cơ sở y tế đối tác đã được thẩm định hoạt động (ACTIVE).',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID của cơ sở y tế',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Chi tiết cơ sở y tế.',
+  })
+  @ApiResponse({
+    status: 404,
+    description:
+      'Không tìm thấy cơ sở y tế hoặc cơ sở y tế chưa được kích hoạt.',
+  })
+  async getPublicFacilityDetail(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<any> {
+    return this.publicService.getPublicFacilityDetail(id);
+  }
+
   @Get('doctors')
   @ApiOperation({
-    summary:
-      'Tra cứu danh bạ bác sĩ gia đình công khai (STT 11 - UC-08)',
+    summary: 'Tra cứu danh bạ bác sĩ gia đình công khai (STT 11 - UC-08)',
     description:
       'Cho phép tìm kiếm và tra cứu hồ sơ bác sĩ theo họ tên, chuyên khoa, số năm kinh nghiệm, cơ sở y tế trực thuộc và trạng thái khả dụng tiếp nhận hộ gia đình.',
   })
@@ -145,10 +170,36 @@ export class PublicController {
     return this.publicService.lookupDoctorDirectory(query);
   }
 
-  @Post('consultation-requests')
+  @Get('doctors/:id')
+  @ApiOperation({
+    summary: 'Xem chi tiết bác sĩ gia đình công khai theo ID (UC-08)',
+    description:
+      'Trả về thông tin chi tiết hồ sơ bác sĩ gia đình đã hoàn tất kích hoạt (ACTIVE).',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID của bác sĩ',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Chi tiết hồ sơ bác sĩ.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy bác sĩ hoặc bác sĩ chưa được kích hoạt.',
+  })
+  async getPublicDoctorDetail(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ): Promise<any> {
+    return this.publicService.getPublicDoctorDetail(id);
+  }
+
+  @Post(['consultation-requests', 'inquiries'])
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
-    summary: 'Gửi yêu cầu tư vấn gói dịch vụ chăm sóc gia đình (STT 12 - UC-09)',
+    summary:
+      'Gửi yêu cầu tư vấn gói dịch vụ chăm sóc gia đình (STT 12 - UC-09)',
     description:
       'Khách hàng hoặc đại diện gia đình gửi thông tin liên hệ và nhu cầu chăm sóc để đội ngũ tư vấn viên/bác sĩ liên hệ tư vấn gói phù hợp.',
   })
@@ -177,4 +228,3 @@ export class PublicController {
     );
   }
 }
-

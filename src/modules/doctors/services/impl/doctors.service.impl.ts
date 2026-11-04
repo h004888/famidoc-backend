@@ -2,8 +2,10 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { hashSync } from 'bcryptjs';
 import { PrismaService } from '../../../../core/database/prisma.service';
@@ -19,7 +21,12 @@ import type { DoctorResponseDto } from '../../dtos/doctor-response.dto';
 
 @Injectable()
 export class DoctorsServiceImpl implements IDoctorsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    @Inject('MAILER_SERVICE')
+    private readonly mailerService?: any,
+  ) {}
 
   async provisionDoctorAccount(
     actor: AuthenticatedUser,
@@ -56,6 +63,20 @@ export class DoctorsServiceImpl implements IDoctorsService {
     } else {
       throw new ForbiddenException(
         'Chỉ Quản trị viên hoặc Cơ sở y tế mới có quyền tạo tài khoản bác sĩ',
+      );
+    }
+
+    const activeContract = await this.prisma.b2bStaffingContract.findFirst({
+      where: {
+        facilityId: targetFacilityId,
+        status: 'ACTIVE',
+        endDate: { gte: new Date() },
+      },
+    });
+
+    if (!activeContract) {
+      throw new BadRequestException(
+        'Cơ sở y tế chưa có hợp đồng nhân lực B2B đang có hiệu lực',
       );
     }
 
@@ -116,6 +137,18 @@ export class DoctorsServiceImpl implements IDoctorsService {
       return doctor;
     });
 
+    if (this.mailerService?.sendMail) {
+      try {
+        await this.mailerService.sendMail({
+          to: dto.email,
+          subject: 'Thư mời kích hoạt tài khoản Bác sĩ gia đình - FamiDoc',
+          text: `Kính gửi Bác sĩ ${dto.doctorName},\n\nTài khoản của bạn tại hệ thống FamiDoc đã được tạo thành công bởi cơ sở y tế. Vui lòng đăng nhập với mật khẩu mặc định 'FamiDoc@2026' và hoàn thiện hồ sơ chứng chỉ hành nghề để được phê duyệt.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+        });
+      } catch {
+        // Continue even if mail fails
+      }
+    }
+
     return this.formatDoctor(result);
   }
 
@@ -125,13 +158,22 @@ export class DoctorsServiceImpl implements IDoctorsService {
     dto: SubmitDoctorCredentialsDto,
     ip: string,
   ): Promise<DoctorResponseDto> {
-    const doctor = await this.prisma.doctor.findUnique({
-      where: { id: doctorId },
-    });
+    const doctor =
+      doctorId === 'me'
+        ? await this.prisma.doctor.findFirst({
+            where: { userId: actor.id },
+            include: { facility: true },
+          })
+        : await this.prisma.doctor.findUnique({
+            where: { id: doctorId },
+            include: { facility: true },
+          });
 
     if (!doctor) {
       throw new NotFoundException('Không tìm thấy thông tin bác sĩ');
     }
+
+    const actualDoctorId = doctor.id;
 
     if (actor.role === 'DOCTOR' && doctor.userId !== actor.id) {
       throw new ForbiddenException(
@@ -141,12 +183,12 @@ export class DoctorsServiceImpl implements IDoctorsService {
 
     const updatedDoctor = await this.prisma.$transaction(async (tx) => {
       await tx.doctorCredential.deleteMany({
-        where: { doctorId },
+        where: { doctorId: actualDoctorId },
       });
 
       await tx.doctorCredential.createMany({
         data: dto.credentials.map((c) => ({
-          doctorId,
+          doctorId: actualDoctorId,
           credentialType: c.credentialType,
           certificateNumber: c.certificateNumber,
           issueDate: new Date(c.issueDate),
@@ -158,7 +200,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
       });
 
       const updated = await tx.doctor.update({
-        where: { id: doctorId },
+        where: { id: actualDoctorId },
         data: {
           onboardingStatus: 'PENDING_SUBMISSION',
           updatedAt: new Date(),
@@ -174,11 +216,23 @@ export class DoctorsServiceImpl implements IDoctorsService {
           actorUserId: actor.id,
           action: 'DOCTOR_CREDENTIALS_SUBMITTED',
           resourceName: 'Doctor',
-          resourceId: doctorId,
+          resourceId: actualDoctorId,
           clientIp: ip || '127.0.0.1',
           timestamp: new Date(),
         },
       });
+
+      if (doctor.facility?.userId) {
+        await tx.notification.create({
+          data: {
+            userId: doctor.facility.userId,
+            title: 'Hồ sơ chứng chỉ bác sĩ mới cần thẩm định',
+            content: `Bác sĩ ${doctor.doctorName} đã nộp hồ sơ chứng chỉ hành nghề, đang chờ cơ sở y tế thẩm định Cấp 1.`,
+            type: 'DOCTOR_CREDENTIALS_SUBMITTED',
+            referenceId: actualDoctorId,
+          },
+        });
+      }
 
       return updated;
     });
@@ -208,14 +262,14 @@ export class DoctorsServiceImpl implements IDoctorsService {
       throw new ForbiddenException(
         'Chỉ cơ sở y tế quản lý trực tiếp bác sĩ này mới có quyền thẩm định cấp 1',
       );
-    } else if (
-      actor.role !== 'HEALTHCARE_FACILITY' &&
-      actor.role !== 'ADMIN'
-    ) {
+    } else if (actor.role !== 'HEALTHCARE_FACILITY' && actor.role !== 'ADMIN') {
       throw new ForbiddenException('Bạn không có quyền thẩm định hồ sơ bác sĩ');
     }
 
-    if (dto.approved && (!doctor.credentials || doctor.credentials.length === 0)) {
+    if (
+      dto.approved &&
+      (!doctor.credentials || doctor.credentials.length === 0)
+    ) {
       throw new BadRequestException(
         'Bác sĩ chưa nộp văn bằng chứng chỉ chuyên môn để thẩm định',
       );
@@ -252,6 +306,22 @@ export class DoctorsServiceImpl implements IDoctorsService {
             timestamp: new Date(),
           },
         });
+
+        const admins = await tx.user.findMany({
+          where: { role: 'ADMIN', status: 'ACTIVE' },
+        });
+
+        for (const admin of admins) {
+          await tx.notification.create({
+            data: {
+              userId: admin.id,
+              title: 'Hồ sơ bác sĩ đã được CSYT thẩm định Cấp 1',
+              content: `Hồ sơ bác sĩ ${doctor.doctorName} (${doctor.facility.facilityName}) đã qua thẩm định Cấp 1, chờ phê duyệt Cấp 2.`,
+              type: 'DOCTOR_FACILITY_VERIFIED',
+              referenceId: doctor.id,
+            },
+          });
+        }
 
         return doc;
       } else {
@@ -354,6 +424,35 @@ export class DoctorsServiceImpl implements IDoctorsService {
             timestamp: new Date(),
           },
         });
+
+        await tx.notification.create({
+          data: {
+            userId: doctor.userId,
+            title: 'Chúc mừng! Hồ sơ bác sĩ của bạn đã được phê duyệt',
+            content:
+              'Hồ sơ văn bằng và chứng chỉ hành nghề của bạn đã được Quản trị viên FamiDoc phê duyệt cấp 2. Tài khoản của bạn hiện đã được kích hoạt (ACTIVE).',
+            type: 'DOCTOR_PLATFORM_APPROVED',
+            referenceId: doctor.id,
+          },
+        });
+
+        if (this.mailerService?.sendMail) {
+          const docUser = await tx.user.findUnique({
+            where: { id: doctor.userId },
+          });
+          if (docUser?.email) {
+            try {
+              await this.mailerService.sendMail({
+                to: docUser.email,
+                subject:
+                  'Hồ sơ bác sĩ của bạn đã được phê duyệt thành công - FamiDoc',
+                text: `Kính gửi Bác sĩ ${doctor.doctorName},\n\nHồ sơ văn bằng và chứng chỉ hành nghề của bạn đã được Quản trị viên FamiDoc phê duyệt cấp 2. Tài khoản của bạn đã chuyển sang trạng thái ACTIVE.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+              });
+            } catch {
+              // Silently ignore mail errors in dev
+            }
+          }
+        }
 
         return doc;
       } else {

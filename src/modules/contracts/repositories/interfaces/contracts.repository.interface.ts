@@ -83,6 +83,11 @@ export interface ContractsSession {
   ): Promise<void>;
   findFacilityById(id: string): Promise<HealthcareFacility | null>;
   findFacilityByUserId(userId: string): Promise<HealthcareFacility | null>;
+  findDoctorById(id: string): Promise<any | null>;
+  findFamilyById(id: string): Promise<any | null>;
+  createMedicalContract(
+    data: Prisma.MedicalContractUncheckedCreateInput,
+  ): Promise<ChangeContract>;
   findConflictingStaffingContract(
     facilityId: string,
     startDate: Date,

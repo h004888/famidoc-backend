@@ -82,7 +82,9 @@ describe('PublicServiceImpl', () => {
 
       expect(result).toBeDefined();
       expect(result.platformInfo.platformName).toBe('FamiDoc');
-      expect(result.platformInfo.legalBasis).toContain('Luật Khám bệnh, chữa bệnh');
+      expect(result.platformInfo.legalBasis).toContain(
+        'Luật Khám bệnh, chữa bệnh',
+      );
       expect(result.platformInfo.securityStandards).toContain('ISO 27799');
 
       expect(result.heroBanners.length).toBeGreaterThan(0);
@@ -298,7 +300,9 @@ describe('PublicServiceImpl', () => {
       ];
 
       prismaService.healthcareFacility.count.mockResolvedValue(1);
-      prismaService.healthcareFacility.findMany.mockResolvedValue(mockFacilities);
+      prismaService.healthcareFacility.findMany.mockResolvedValue(
+        mockFacilities,
+      );
 
       const result = await service.lookupHealthcareFacilities({
         page: 1,
@@ -509,6 +513,84 @@ describe('PublicServiceImpl', () => {
       await expect(service.submitConsultationRequest(validDto)).rejects.toThrow(
         BadRequestException,
       );
+    });
+  });
+
+  describe('getPublicFacilityDetail', () => {
+    it('should return facility details when facility exists and is ACTIVE', async () => {
+      prismaService.healthcareFacility.findUnique = jest
+        .fn()
+        .mockResolvedValue({
+          id: 'fac-1',
+          facilityName: 'Bệnh viện Đa khoa Quốc tế',
+          licenseNumber: 'LIC-001',
+          address: 'Hà Nội',
+          hotline: '1900 6868',
+          email: 'info@bv.vn',
+          verificationStatus: 'ACTIVE',
+          operatingStatus: 'OPERATIONAL',
+          createdAt: new Date(),
+          _count: {
+            doctors: 8,
+          },
+        });
+
+      const result = await (service as any).getPublicFacilityDetail('fac-1');
+      expect(result).toBeDefined();
+      expect(result.id).toBe('fac-1');
+      expect(result.totalActiveDoctors).toBe(8);
+      expect(result.verificationStatus).toBe('ACTIVE');
+    });
+
+    it('should throw NotFoundException if facility does not exist or not ACTIVE', async () => {
+      prismaService.healthcareFacility.findUnique = jest
+        .fn()
+        .mockResolvedValue({
+          id: 'fac-2',
+          verificationStatus: 'PENDING',
+        });
+
+      await expect(
+        (service as any).getPublicFacilityDetail('fac-2'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('getPublicDoctorDetail', () => {
+    it('should return doctor details when doctor exists and is ACTIVE', async () => {
+      prismaService.doctor.findUnique = jest.fn().mockResolvedValue({
+        id: 'doc-1',
+        doctorName: 'BS. Trần Văn B',
+        specialty: 'Y học gia đình',
+        academicTitle: 'ThS.BS',
+        experienceYears: 7,
+        bio: 'Bác sĩ tận tâm',
+        ratingAvg: 4.8,
+        totalReviews: 20,
+        activePanelCount: 15,
+        maxPanelCapacity: 30,
+        onboardingStatus: 'ACTIVE',
+        facility: {
+          id: 'fac-1',
+          facilityName: 'Phòng khám Đa khoa Quốc tế',
+          address: 'Hà Nội',
+          hotline: '1900 6868',
+        },
+      });
+
+      const result = await (service as any).getPublicDoctorDetail('doc-1');
+      expect(result).toBeDefined();
+      expect(result.id).toBe('doc-1');
+      expect(result.isAvailable).toBe(true);
+      expect(result.ratingAvg).toBe(4.8);
+    });
+
+    it('should throw NotFoundException if doctor does not exist or not ACTIVE', async () => {
+      prismaService.doctor.findUnique = jest.fn().mockResolvedValue(null);
+
+      await expect(
+        (service as any).getPublicDoctorDetail('doc-none'),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

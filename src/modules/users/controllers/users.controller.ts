@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Inject,
+  Patch,
   Put,
   Req,
   UseGuards,
@@ -26,7 +27,7 @@ import {
 
 @ApiTags('Users')
 @ApiBearerAuth('JWT-auth')
-@Controller('api/v1/users')
+@Controller(['api/v1/users', 'api/v1/me'])
 @UseGuards(JwtAuthGuard)
 @UsePipes(
   new ValidationPipe({
@@ -48,6 +49,7 @@ export class UsersController {
     return this.service.getCurrentUserProfile(req.user.id);
   }
 
+  @Patch('profile')
   @Put('profile')
   @ApiOperation({ summary: 'Cập nhật thông tin hồ sơ cá nhân' })
   @ApiBody({ type: UpdateProfileDto })

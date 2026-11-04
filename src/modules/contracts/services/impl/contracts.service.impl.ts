@@ -42,6 +42,7 @@ import type {
   ListStaffingContractsDto,
   StaffingContractResponseDto,
 } from '../../dtos/staffing-contract.dto';
+import type { CreateMedicalContractDto } from '../../dtos/create-medical-contract.dto';
 import {
   calculateHomeVisitAddendum,
   calculateMemberAddendum,
@@ -66,6 +67,202 @@ export class ContractsServiceImpl implements IContractsService {
     private readonly repository: IContractsRepository,
   ) {}
 
+  createInitialMedicalContract(
+    actor: AuthenticatedUser,
+    dto: CreateMedicalContractDto,
+  ): Promise<ContractSummary> {
+    return this.repository.transaction(async (session) => {
+      let targetFamilyId = dto.familyId;
+      if (actor.role === 'FAMILY_REP') {
+        if (!actor.familyUnitId && !dto.familyId) {
+          throw new BadRequestException(
+            'Tài khoản đại diện gia đình chưa liên kết với hộ gia đình',
+          );
+        }
+        targetFamilyId = actor.familyUnitId || dto.familyId;
+      } else if (actor.role === 'ADMIN') {
+        if (!targetFamilyId) {
+          throw new BadRequestException(
+            'Vui lòng chỉ định hộ gia đình (familyId)',
+          );
+        }
+      } else {
+        throw new ForbiddenException(
+          'Chỉ Đại diện gia đình hoặc Quản trị viên mới có quyền tạo hợp đồng',
+        );
+      }
+
+      const pkg = await session.findPackage(dto.packageId);
+      if (!pkg || pkg.status !== 'ACTIVE' || pkg.deletedAt) {
+        throw new BadRequestException(
+          'Gói chăm sóc sức khỏe không hợp lệ hoặc không khả dụng',
+        );
+      }
+
+      const facility = await session.findFacilityById(dto.facilityId);
+      if (!facility || facility.verificationStatus !== 'ACTIVE') {
+        throw new BadRequestException(
+          'Cơ sở y tế không hợp lệ hoặc chưa được kích hoạt',
+        );
+      }
+
+      const doctor = await session.findDoctorById(dto.doctorId);
+      if (
+        !doctor ||
+        doctor.onboardingStatus !== 'ACTIVE' ||
+        doctor.facilityId !== dto.facilityId
+      ) {
+        throw new BadRequestException(
+          'Bác sĩ không hợp lệ hoặc không thuộc cơ sở y tế này',
+        );
+      }
+
+      const family = await session.findFamilyById(targetFamilyId!);
+      if (!family || family.status !== 'ACTIVE') {
+        throw new BadRequestException(
+          'Hộ gia đình không tồn tại hoặc không ở trạng thái ACTIVE',
+        );
+      }
+
+      const memberCount =
+        dto.memberCount ||
+        (await session.countFamilyMembers(targetFamilyId!)) ||
+        1;
+
+      const quote = calculateCarePackageQuote(
+        {
+          id: pkg.id,
+          code: pkg.lineageCode,
+          version: pkg.version,
+          name: pkg.packageName,
+          description: pkg.description,
+          durationMonths: pkg.durationMonths,
+          priceVnd: moneyToNumber(pkg.basePrice),
+          includedMembers: pkg.includedMembers,
+          maxMembers: pkg.maxMembers,
+          additionalMemberMonthlyPriceVnd: moneyToNumber(
+            pkg.additionalMemberMonthlyPrice,
+          ),
+          quotaPeriod: pkg.quotaPeriod as QuotaPeriod,
+          quotas: {
+            homeVisits: pkg.periodicVisitsQuota,
+            videoConsultations: pkg.telehealthQuota,
+            facilityVisits: 0,
+          },
+          currency: 'VND',
+          status: CarePackageStatus.ACTIVE,
+          createdAt: pkg.createdAt.toISOString(),
+          updatedAt: pkg.updatedAt.toISOString(),
+          publishedAt: pkg.publishedAt?.toISOString() ?? null,
+          retiredAt: null,
+        },
+        memberCount,
+      );
+
+      const snapshot = {
+        package: quote.package,
+        members: quote.members,
+        pricing: quote.pricing,
+        benefits: quote.benefits,
+      };
+
+      const today = todayInVietnam();
+      const contractNumber =
+        'MC' + randomUUID().replaceAll('-', '').toUpperCase();
+
+      const createFn = session.createMedicalContract || session.createUpgrade;
+      const item = await createFn.call(session, {
+        contractNumber,
+        familyId: targetFamilyId!,
+        facilityId: dto.facilityId,
+        doctorId: dto.doctorId,
+        packageId: pkg.id,
+        totalAmount: quote.pricing.totalPriceVnd,
+        remainingHomeVisits: pkg.periodicVisitsQuota,
+        remainingTelehealth: pkg.telehealthQuota,
+        startDate: today,
+        endDate: addContractMonths(today, pkg.durationMonths),
+        contractStatus: 'PENDING_APPROVAL',
+        billingSnapshot: snapshot as unknown as Prisma.InputJsonValue,
+        memberCount,
+        isDemo: false,
+      });
+
+      await session.recordChange(
+        actor.id,
+        item,
+        'CREATE_INITIAL_MEDICAL_CONTRACT',
+        item.id,
+      );
+
+      return this.toContractSummary(item);
+    });
+  }
+
+  signInitialMedicalContract(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: SignContractChangeDto,
+    ip: string,
+  ): Promise<ContractSignature> {
+    return this.repository.transaction(async (session) => {
+      const contract = await this.requirePartyContract(session, id, actor);
+      if (
+        !['PENDING_APPROVAL', 'PENDING_PAYMENT'].includes(
+          contract.contractStatus,
+        )
+      ) {
+        throw new ConflictException('Contract is not awaiting signatures');
+      }
+
+      const hash = calculateContractTermsHash(contract);
+      this.validateAcceptance(dto, hash);
+
+      const role = getContractSignerRole(contract, actor);
+      const signatures = await session.findContractSignatures(id);
+
+      const previous = signatures.find((s) => s.signerRole === role);
+      if (previous) {
+        if (previous.signerUserId !== actor.id) {
+          throw new ConflictException('This role has already signed');
+        }
+        return previous;
+      }
+
+      this.assertSigningOrder(
+        role,
+        signatures.map((s) => s.signerRole),
+      );
+
+      const saveSigFn = session.saveSignature || session.saveUpgradeSignature;
+      const item = await saveSigFn.call(session, {
+        contractId: id,
+        termsHash: hash,
+        signerRole: role,
+        signerUserId: actor.id,
+        signatureHash: createTermsHash({
+          termsHash: hash,
+          userId: actor.id,
+          at: new Date().toISOString(),
+        }),
+        ipAddress: ip.slice(0, 45),
+      });
+
+      if (signatures.length === 3) {
+        await session.updateContractStatus(id, 'PENDING_PAYMENT');
+      }
+
+      await session.recordChange(
+        actor.id,
+        contract,
+        'SIGN_INITIAL_MEDICAL_CONTRACT',
+        id,
+      );
+
+      return item;
+    });
+  }
+
   async createStaffingContract(
     actor: AuthenticatedUser,
     dto: CreateStaffingContractDto,
@@ -86,7 +283,9 @@ export class ContractsServiceImpl implements IContractsService {
       throw new BadRequestException('Ngày bắt đầu hoặc kết thúc không hợp lệ');
     }
     if (endDate <= startDate) {
-      throw new BadRequestException('Ngày kết thúc hợp đồng phải sau ngày bắt đầu');
+      throw new BadRequestException(
+        'Ngày kết thúc hợp đồng phải sau ngày bắt đầu',
+      );
     }
 
     return this.repository.transaction(async (session) => {
@@ -165,7 +364,9 @@ export class ContractsServiceImpl implements IContractsService {
     return this.repository.transaction(async (session) => {
       const contract = await session.findStaffingContract(id);
       if (!contract) {
-        throw new NotFoundException('Không tìm thấy hợp đồng cung ứng nhân lực');
+        throw new NotFoundException(
+          'Không tìm thấy hợp đồng cung ứng nhân lực',
+        );
       }
 
       if (actor.role === 'HEALTHCARE_FACILITY') {
@@ -230,7 +431,9 @@ export class ContractsServiceImpl implements IContractsService {
           where.facilityId = query.facilityId;
         }
       } else {
-        throw new ForbiddenException('Bạn không có quyền xem hợp đồng nhân lực');
+        throw new ForbiddenException(
+          'Bạn không có quyền xem hợp đồng nhân lực',
+        );
       }
 
       if (query.status) {
@@ -257,7 +460,9 @@ export class ContractsServiceImpl implements IContractsService {
     return this.repository.transaction(async (session) => {
       const contract = await session.findStaffingContract(id);
       if (!contract) {
-        throw new NotFoundException('Không tìm thấy hợp đồng cung ứng nhân lực');
+        throw new NotFoundException(
+          'Không tìm thấy hợp đồng cung ứng nhân lực',
+        );
       }
 
       if (
@@ -271,7 +476,9 @@ export class ContractsServiceImpl implements IContractsService {
         actor.role !== 'ADMIN' &&
         actor.role !== 'HEALTHCARE_FACILITY'
       ) {
-        throw new ForbiddenException('Bạn không có quyền xem hợp đồng nhân lực');
+        throw new ForbiddenException(
+          'Bạn không có quyền xem hợp đồng nhân lực',
+        );
       }
 
       return this.formatStaffingContract(contract);

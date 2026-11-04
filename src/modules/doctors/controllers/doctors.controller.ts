@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -6,6 +7,7 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Put,
   Req,
   UseGuards,
@@ -52,11 +54,37 @@ export class DoctorsController {
     private readonly service: IDoctorsService,
   ) {}
 
+  @Put('me/credentials')
+  @Roles('DOCTOR')
+  @AllowOnboarding()
+  @ApiOperation({
+    summary:
+      'Bác sĩ tải lên hồ sơ văn bằng, chứng chỉ hành nghề của chính mình (UC-21 alias)',
+  })
+  @ApiBody({ type: SubmitDoctorCredentialsDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Nộp hồ sơ chứng chỉ thành công.',
+    type: DoctorResponseDto,
+  })
+  submitMyCredentials(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: SubmitDoctorCredentialsDto,
+  ): Promise<DoctorResponseDto> {
+    return this.service.submitDoctorCredentials(
+      req.user,
+      'me',
+      dto,
+      req.ip ?? 'unknown',
+    );
+  }
+
   @Put(':id/credentials')
   @Roles('DOCTOR', 'ADMIN')
   @AllowOnboarding()
   @ApiOperation({
-    summary: 'Bác sĩ tải lên hồ sơ văn bằng, chứng chỉ hành nghề (STT 16 - UC-21)',
+    summary:
+      'Bác sĩ tải lên hồ sơ văn bằng, chứng chỉ hành nghề (STT 16 - UC-21)',
     description:
       'Bác sĩ nộp chứng chỉ hành nghề khám chữa bệnh (CCHN), chứng chỉ đào tạo Y học gia đình và văn bằng chuyên môn.',
   })
@@ -64,7 +92,8 @@ export class DoctorsController {
   @ApiBody({ type: SubmitDoctorCredentialsDto })
   @ApiResponse({
     status: 200,
-    description: 'Nộp hồ sơ chứng chỉ thành công, chuyển sang chờ CSYT duyệt cấp 1.',
+    description:
+      'Nộp hồ sơ chứng chỉ thành công, chuyển sang chờ CSYT duyệt cấp 1.',
     type: DoctorResponseDto,
   })
   submitDoctorCredentials(
@@ -110,7 +139,8 @@ export class DoctorsController {
   @Patch(':id/credentials/platform-approve')
   @Roles('ADMIN')
   @ApiOperation({
-    summary: 'Quản trị viên Nền tảng phê duyệt cấp chứng nhận - Cấp 2 (STT 18 - UC-22)',
+    summary:
+      'Quản trị viên Nền tảng phê duyệt cấp chứng nhận - Cấp 2 (STT 18 - UC-22)',
     description:
       'Quản trị viên đối soát với Cơ sở dữ liệu Quốc gia và phê duyệt kích hoạt Bác sĩ sang trạng thái ACTIVE để bắt đầu nhận bệnh nhân.',
   })
@@ -131,6 +161,60 @@ export class DoctorsController {
       id,
       dto,
       req.ip ?? 'unknown',
+    );
+  }
+
+  @Post('credentials/:id/review')
+  @Roles('HEALTHCARE_FACILITY', 'ADMIN')
+  @ApiOperation({
+    summary: 'Thẩm định hồ sơ chứng chỉ bác sĩ hợp nhất 2 cấp (UC-22)',
+    description:
+      'Tier 1: CSYT thẩm định cấp 1; Tier 2: Quản trị viên phê duyệt kích hoạt cấp 2.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hồ sơ Bác sĩ' })
+  @ApiResponse({
+    status: 200,
+    description: 'Thẩm định hồ sơ thành công.',
+    type: DoctorResponseDto,
+  })
+  reviewDoctorCredentials(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body()
+    body: {
+      tier: number;
+      approved?: boolean;
+      rejectionReason?: string;
+      verificationNotes?: string;
+      backgroundCheckConsent?: boolean;
+    },
+  ): Promise<DoctorResponseDto> {
+    if (body.tier === 1) {
+      return this.service.approveDoctorCredentialsByFacility(
+        req.user,
+        id,
+        {
+          approved: body.approved !== false,
+          rejectionReason: body.rejectionReason,
+          verificationNotes: body.verificationNotes,
+        },
+        req.ip ?? 'unknown',
+      );
+    }
+    if (body.tier === 2) {
+      return this.service.approveDoctorCredentialsByPlatform(
+        req.user,
+        id,
+        {
+          approved: body.approved !== false,
+          rejectionReason: body.rejectionReason,
+          backgroundCheckConsent: body.backgroundCheckConsent,
+        },
+        req.ip ?? 'unknown',
+      );
+    }
+    throw new BadRequestException(
+      'Cấp thẩm định (tier) không hợp lệ (phải là 1 hoặc 2)',
     );
   }
 

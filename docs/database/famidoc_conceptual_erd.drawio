@@ -1,0 +1,321 @@
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0" />
+    <mxCell id="1" parent="0" />
+    <mxCell id="ent_user" value="User" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="40" y="40" width="160" height="152" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_user_attrs" value="+ Full Name&#xa;+ Email Address&#xa;+ Phone Number&#xa;+ System Role&#xa;+ Account Status&#xa;+ Failed Login Counter" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_user">
+      <mxGeometry y="28" width="160" height="124" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_notification" value="Notification" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="40" y="240" width="160" height="134" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_notification_attrs" value="+ Message Title&#xa;+ Message Content&#xa;+ Notification Type&#xa;+ Read Status&#xa;+ Sent Timestamp" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_notification">
+      <mxGeometry y="28" width="160" height="106" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_audit_log" value="AuditLog" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="40" y="440" width="160" height="152" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_audit_log_attrs" value="+ Performed Action&#xa;+ Target Resource&#xa;+ Target Resource ID&#xa;+ Client IP Address&#xa;+ User Agent Header&#xa;+ Action Timestamp" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_audit_log">
+      <mxGeometry y="28" width="160" height="124" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_system_config" value="SystemConfiguration" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="40" y="640" width="160" height="116" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_system_config_attrs" value="+ Config Parameter Key&#xa;+ Config Parameter Value&#xa;+ Parameter Description&#xa;+ Last Modified Time" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_system_config">
+      <mxGeometry y="28" width="160" height="88" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_facility" value="HealthcareFacility" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="280" y="40" width="160" height="170" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_facility_attrs" value="+ Facility Name&#xa;+ Medical License Number&#xa;+ Enterprise Tax Code&#xa;+ Physical Address&#xa;+ Operating Hotline&#xa;+ Banking Details&#xa;+ Verification Status" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_facility">
+      <mxGeometry y="28" width="160" height="142" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_doctor" value="Doctor" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="520" y="40" width="160" height="170" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_doctor_attrs" value="+ Doctor Full Name&#xa;+ Medical Specialty&#xa;+ Academic Title&#xa;+ Years of Experience&#xa;+ Patient Panel Capacity&#xa;+ Average Rating Score&#xa;+ Onboarding Status" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_doctor">
+      <mxGeometry y="28" width="160" height="142" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_doctor_credential" value="DoctorCredential" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="760" y="40" width="160" height="152" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_doctor_credential_attrs" value="+ Credential Classification&#xa;+ Certificate License Number&#xa;+ Issuing Authority&#xa;+ Certificate Issue Date&#xa;+ Facility Verification Flag&#xa;+ Platform Approval Flag" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_doctor_credential">
+      <mxGeometry y="28" width="160" height="124" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_doctor_shift" value="DoctorShift" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="520" y="240" width="160" height="134" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_doctor_shift_attrs" value="+ Shift Scheduled Date&#xa;+ Shift Start Time&#xa;+ Shift End Time&#xa;+ Shift Work Type&#xa;+ Duty Roster Notes" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_doctor_shift">
+      <mxGeometry y="28" width="160" height="106" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_b2b_contract" value="B2bStaffingContract" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="280" y="240" width="160" height="134" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_b2b_contract_attrs" value="+ Staffing Contract Code&#xa;+ Platform Commission Rate&#xa;+ Facility Revenue Rate&#xa;+ Valid Contract Term&#xa;+ Legal Contract Status" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_b2b_contract">
+      <mxGeometry y="28" width="160" height="106" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_service_package" value="ServicePackage" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="280" y="460" width="160" height="188" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_service_package_attrs" value="+ Service Package Code&#xa;+ Service Package Name&#xa;+ Package Validity Months&#xa;+ Base Package Price&#xa;+ Periodic Visits Quota&#xa;+ Telehealth Visits Quota&#xa;+ Included Member Count&#xa;+ Package Lifecycle Status" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_service_package">
+      <mxGeometry y="28" width="160" height="160" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_medical_contract" value="MedicalContract" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="520" y="460" width="160" height="170" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_medical_contract_attrs" value="+ Formal Contract Number&#xa;+ Effective Coverage Period&#xa;+ Total Contract Value&#xa;+ Remaining Home Visits&#xa;+ Remaining Telehealth Visits&#xa;+ Registered Member Count&#xa;+ Medical Contract Status" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_medical_contract">
+      <mxGeometry y="28" width="160" height="142" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_contract_signature" value="ContractSignature" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="760" y="460" width="160" height="134" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_contract_signature_attrs" value="+ Signer Legal Role&#xa;+ Digital Signature Hash&#xa;+ Terms and Conditions Hash&#xa;+ Signed Date Timestamp&#xa;+ Signer IP Address" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_contract_signature">
+      <mxGeometry y="28" width="160" height="106" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_contract_addendum" value="ContractAddendum" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="760" y="660" width="160" height="170" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_contract_addendum_attrs" value="+ Addendum Identifier Number&#xa;+ Addendum Extension Type&#xa;+ Additional Surcharge Fee&#xa;+ Additional Home Visits&#xa;+ Additional Telehealth Visits&#xa;+ Extended Expiration Date&#xa;+ Addendum Legal Status" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_contract_addendum">
+      <mxGeometry y="28" width="160" height="142" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_family_unit" value="FamilyUnit" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="280" y="800" width="160" height="116" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_family_unit_attrs" value="+ Household Residence Address&#xa;+ Emergency Contact Hotline&#xa;+ Family Unit Profile Status&#xa;+ Profile Registration Date" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_family_unit">
+      <mxGeometry y="28" width="160" height="88" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_patient" value="Patient" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="520" y="800" width="160" height="170" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_patient_attrs" value="+ Member Full Name&#xa;+ Patient Date of Birth&#xa;+ Biological Gender&#xa;+ Relationship to Household Head&#xa;+ Citizen Identity Card&#xa;+ Health Insurance Card Number&#xa;+ Active Patient Status" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_patient">
+      <mxGeometry y="28" width="160" height="142" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_patient_allergy" value="PatientAllergy" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="760" y="800" width="160" height="116" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_patient_allergy_attrs" value="+ Allergen Category&#xa;+ Allergen Substance Name&#xa;+ Hazard Severity Degree&#xa;+ Clinical Manifestation Symptom" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_patient_allergy">
+      <mxGeometry y="28" width="160" height="88" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_patient_document" value="PatientDocument" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="760" y="960" width="160" height="116" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_patient_document_attrs" value="+ Medical Record Title&#xa;+ Document Category Type&#xa;+ Clinical Examination Date&#xa;+ Storage File Size Info" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_patient_document">
+      <mxGeometry y="28" width="160" height="88" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_encounter" value="Encounter" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="520" y="1040" width="160" height="170" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_encounter_attrs" value="+ Clinical Care Modality&#xa;+ Scheduled Visit Category&#xa;+ Planned Appointment Date&#xa;+ Planned Appointment Time&#xa;+ Reschedule Attempt Counter&#xa;+ Current Encounter Status&#xa;+ Appointment Cancellation Reason" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_encounter">
+      <mxGeometry y="28" width="160" height="142" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_telehealth_session" value="TelehealthSession" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="280" y="1040" width="160" height="134" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_telehealth_session_attrs" value="+ Telehealth Room ID&#xa;+ Call Start and End Time&#xa;+ Total Call Duration Seconds&#xa;+ Network Connection Quality&#xa;+ Fallback Text Chat Active" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_telehealth_session">
+      <mxGeometry y="28" width="160" height="106" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_clinical_emr" value="ClinicalEmr" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="520" y="1280" width="160" height="152" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_clinical_emr_attrs" value="+ Primary Chief Complaint&#xa;+ Anamnesis Disease History&#xa;+ Objective Clinical Findings&#xa;+ ICD-10 Diagnostic Classification&#xa;+ Prescribed Medical Treatment Plan&#xa;+ Record Finalized Status" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_clinical_emr">
+      <mxGeometry y="28" width="160" height="124" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_vital_sign" value="VitalSign" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="280" y="1280" width="160" height="152" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_vital_sign_attrs" value="+ Systolic and Diastolic Pressure&#xa;+ Heart Pulse Rate&#xa;+ Core Body Temperature&#xa;+ Blood Oxygen Level SpO2&#xa;+ Blood Glucose Concentration&#xa;+ Abnormal Warning Indicator" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_vital_sign">
+      <mxGeometry y="28" width="160" height="124" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_prescription" value="Prescription" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="760" y="1280" width="160" height="152" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_prescription_attrs" value="+ Prescription Serial Code&#xa;+ Prescribed Issuance Date&#xa;+ Valid Dispensation End Date&#xa;+ Medication Usage Instructions&#xa;+ Doctor Digital Signature Hash&#xa;+ Prescription Fulfillment Status" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_prescription">
+      <mxGeometry y="28" width="160" height="124" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_prescription_detail" value="PrescriptionDetail" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="1000" y="1280" width="160" height="134" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_prescription_detail_attrs" value="+ Pharmaceutical Drug Name&#xa;+ Standard Clinical Dosage&#xa;+ Dispensed Quantity and Unit&#xa;+ Daily Administration Frequency&#xa;+ Regimen Duration Days" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_prescription_detail">
+      <mxGeometry y="28" width="160" height="106" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_referral_order" value="ReferralOrder" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="520" y="1500" width="160" height="134" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_referral_order_attrs" value="+ Official Referral Code&#xa;+ Receiving Hospital Facility&#xa;+ Clinical Reason for Transfer&#xa;+ Medical Case Summary&#xa;+ Patient Transport Mode" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_referral_order">
+      <mxGeometry y="28" width="160" height="106" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_invoice" value="Invoice" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="1000" y="660" width="160" height="170" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_invoice_attrs" value="+ Official Invoice Code&#xa;+ Dynamic Payment Transfer Memo&#xa;+ Pre-tax Gross Amount&#xa;+ Applicable Value Added Tax&#xa;+ Final Payable Net Amount&#xa;+ Payment Gateway Channel&#xa;+ Invoice Settlement Status" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_invoice">
+      <mxGeometry y="28" width="160" height="142" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_payment_transaction" value="PaymentTransaction" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="1240" y="660" width="160" height="152" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_payment_transaction_attrs" value="+ Gateway Transaction Reference&#xa;+ Intermediary Gateway Provider&#xa;+ Destination Bank Account Number&#xa;+ Total Received Monetary Amount&#xa;+ Webhook Digital Signature Verified&#xa;+ Reconciliation Process Status" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_payment_transaction">
+      <mxGeometry y="28" width="160" height="124" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_facility_settlement" value="FacilitySettlement" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="1000" y="380" width="160" height="170" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_facility_settlement_attrs" value="+ Settlement Batch Code&#xa;+ Settlement Billing Month and Year&#xa;+ Total Realized Facility Revenue&#xa;+ Platform Service Fee Retained&#xa;+ Net Facility Payout Amount&#xa;+ Bank Disbursement Batch Status&#xa;+ Payout Bank Transfer Evidence" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_facility_settlement">
+      <mxGeometry y="28" width="160" height="142" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_facility_settlement_item" value="FacilitySettlementItem" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="1000" y="180" width="160" height="134" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_facility_settlement_item_attrs" value="+ Itemized Invoice Gross Amount&#xa;+ Itemized Value Added Tax&#xa;+ Itemized Realized Net Revenue&#xa;+ Platform Commission Amount&#xa;+ Facility Earned Share Amount" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_facility_settlement_item">
+      <mxGeometry y="28" width="160" height="106" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_doctor_review" value="DoctorReview" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="1000" y="880" width="160" height="98" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_doctor_review_attrs" value="+ Star Rating Assessment (1 to 5)&#xa;+ Patient Subjective Feedback&#xa;+ Review Submission Date Time" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_doctor_review">
+      <mxGeometry y="28" width="160" height="70" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_complaint" value="Complaint" style="swimlane;fontStyle=1;childLayout=stackLayout;horizontal=1;startSize=28;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=1;marginBottom=0;whiteSpace=wrap;html=1;rounded=1;arcSize=10;strokeWidth=2;strokeColor=#000000;fillColor=#ffffff;fontFamily=Helvetica;fontSize=13;" vertex="1" parent="1">
+      <mxGeometry x="1000" y="1060" width="160" height="170" as="geometry" />
+    </mxCell>
+    <mxCell id="ent_complaint_attrs" value="+ Complaint Ticket Number&#xa;+ Dispute Classification Category&#xa;+ Grievance Narrative Description&#xa;+ Facility Clarification Response&#xa;+ Final Resolution Ruling&#xa;+ Grievance Closure Notes&#xa;+ Investigation Workflow Status" style="text;strokeColor=none;fillColor=none;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;overflow=hidden;rotatable=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;whiteSpace=wrap;html=1;fontFamily=Helvetica;fontSize=12;" vertex="1" parent="ent_complaint">
+      <mxGeometry y="28" width="160" height="142" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_0_user_notification" value="receiving&#xa;(User)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_user" target="ent_notification">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_1_user_facility" value="managing&#xa;(Facility Admin)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToOne;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_user" target="ent_facility">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_2_user_doctor" value="practicing as&#xa;(Doctor)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToOne;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_user" target="ent_doctor">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_3_user_family_unit" value="representing&#xa;(Family Rep)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToOne;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_user" target="ent_family_unit">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_4_user_contract_signature" value="signing digitally&#xa;(Signer)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_user" target="ent_contract_signature">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_5_user_complaint" value="filing grievance&#xa;(Complainant)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_user" target="ent_complaint">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_6_user_audit_log" value="logging activity&#xa;(Security Audit)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_user" target="ent_audit_log">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_7_user_system_config" value="configuring&#xa;(System Admin)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_user" target="ent_system_config">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_8_facility_doctor" value="employing&#xa;(Healthcare Facility)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERoneToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_facility" target="ent_doctor">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_9_facility_doctor_shift" value="scheduling roster&#xa;(Facility Admin)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_facility" target="ent_doctor_shift">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_10_facility_b2b_contract" value="contracting B2B&#xa;(Healthcare Facility)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERoneToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_facility" target="ent_b2b_contract">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_11_facility_medical_contract" value="fulfilling care&#xa;(Healthcare Facility)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_facility" target="ent_medical_contract">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_12_facility_facility_settlement" value="settling revenue&#xa;(Healthcare Facility)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_facility" target="ent_facility_settlement">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_13_doctor_doctor_credential" value="holding certified&#xa;(Doctor)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERoneToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_doctor" target="ent_doctor_credential">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_14_doctor_doctor_shift" value="assigned duty&#xa;(Doctor)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_doctor" target="ent_doctor_shift">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_15_doctor_medical_contract" value="designated doctor&#xa;(Doctor)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_doctor" target="ent_medical_contract">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_16_doctor_encounter" value="conducting visit&#xa;(Doctor)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_doctor" target="ent_encounter">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_17_doctor_doctor_review" value="evaluated in&#xa;(Doctor)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_doctor" target="ent_doctor_review">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_18_service_package_medical_contract" value="defining package terms&#xa;(Platform Admin)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_service_package" target="ent_medical_contract">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_19_family_unit_patient" value="registering members&#xa;(Family Rep)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERoneToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_family_unit" target="ent_patient">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_20_family_unit_medical_contract" value="purchasing plan&#xa;(Family Rep)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_family_unit" target="ent_medical_contract">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_21_family_unit_doctor_review" value="submitting review&#xa;(Family Rep)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_family_unit" target="ent_doctor_review">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_22_patient_patient_allergy" value="diagnosed allergy&#xa;(Patient)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_patient" target="ent_patient_allergy">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_23_patient_patient_document" value="owning health records&#xa;(Patient)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_patient" target="ent_patient_document">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_24_patient_encounter" value="attending examination&#xa;(Patient)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_patient" target="ent_encounter">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_25_patient_vital_sign" value="measuring vitals&#xa;(Patient)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_patient" target="ent_vital_sign">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_26_medical_contract_contract_signature" value="authenticated with signatures&#xa;(4 Contract Signers)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERoneToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_medical_contract" target="ent_contract_signature">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_27_medical_contract_contract_addendum" value="supplementing clauses&#xa;(Contract Parties)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_medical_contract" target="ent_contract_addendum">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_28_medical_contract_encounter" value="authorizing visits&#xa;(Contract Quota)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_medical_contract" target="ent_encounter">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_29_medical_contract_invoice" value="invoicing contract fee&#xa;(Billing System)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_medical_contract" target="ent_invoice">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_30_medical_contract_complaint" value="subject to dispute&#xa;(Dispute Resolution)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_medical_contract" target="ent_complaint">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_31_contract_addendum_contract_signature" value="endorsing addendum&#xa;(Signers)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_contract_addendum" target="ent_contract_signature">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_32_contract_addendum_invoice" value="invoicing addendum fee&#xa;(Billing System)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_contract_addendum" target="ent_invoice">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_33_encounter_telehealth_session" value="hosting video consultation&#xa;(Telehealth Engine)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToOne;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_encounter" target="ent_telehealth_session">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_34_encounter_clinical_emr" value="documenting SOAP chart&#xa;(Doctor)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToOne;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_encounter" target="ent_clinical_emr">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_35_encounter_invoice" value="billing copay fee&#xa;(Billing System)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_encounter" target="ent_invoice">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_36_encounter_doctor_review" value="feedback generated&#xa;(Family Rep)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToOne;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_encounter" target="ent_doctor_review">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_37_encounter_complaint" value="referenced incident&#xa;(Complainant)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_encounter" target="ent_complaint">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_38_clinical_emr_vital_sign" value="recording vital metrics&#xa;(Doctor)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_clinical_emr" target="ent_vital_sign">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_39_clinical_emr_prescription" value="prescribing medication&#xa;(Doctor)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_clinical_emr" target="ent_prescription">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_40_clinical_emr_referral_order" value="referring higher tier&#xa;(Doctor)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToOne;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_clinical_emr" target="ent_referral_order">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_41_prescription_prescription_detail" value="itemizing drugs&#xa;(Doctor)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERoneToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_prescription" target="ent_prescription_detail">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_42_invoice_payment_transaction" value="reconciled with transaction&#xa;(Payment Gateway)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_invoice" target="ent_payment_transaction">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_43_invoice_facility_settlement_item" value="apportioned in settlement&#xa;(Finance Accounting)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERzeroToOne;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_invoice" target="ent_facility_settlement_item">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="edge_44_facility_settlement_facility_settlement_item" value="aggregating payout items&#xa;(Finance Accounting)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;startArrow=none;endArrow=ERoneToMany;endFill=0;fontSize=11;align=center;verticalAlign=bottom;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="ent_facility_settlement" target="ent_facility_settlement_item">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+  </root>
+</mxGraphModel>

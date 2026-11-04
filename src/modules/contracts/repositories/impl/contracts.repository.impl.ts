@@ -255,6 +255,24 @@ class PrismaContractsSession implements ContractsSession {
     return this.tx.healthcareFacility.findUnique({ where: { userId } });
   }
 
+  findDoctorById(id: string) {
+    return this.tx.doctor.findUnique({
+      where: { id },
+      include: { user: true },
+    });
+  }
+
+  findFamilyById(id: string) {
+    return this.tx.familyUnit.findUnique({ where: { id } });
+  }
+
+  createMedicalContract(data: Prisma.MedicalContractUncheckedCreateInput) {
+    return this.tx.medicalContract.create({
+      data,
+      include: CONTRACT_CHANGE_INCLUDE,
+    });
+  }
+
   findConflictingStaffingContract(
     facilityId: string,
     startDate: Date,

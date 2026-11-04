@@ -12,6 +12,7 @@ import { DoctorCredentialType, DoctorOnboardingStatus } from '@prisma/client';
 describe('DoctorsServiceImpl', () => {
   let service: DoctorsServiceImpl;
   let prismaService: any;
+  let mailerService: any;
 
   const adminUser: AuthenticatedUser = {
     id: 'admin-uuid-1',
@@ -59,14 +60,40 @@ describe('DoctorsServiceImpl', () => {
   };
 
   beforeEach(async () => {
+    mailerService = {
+      sendMail: jest.fn().mockResolvedValue({ messageId: 'msg-1' }),
+    };
+
     prismaService = {
       healthcareFacility: {
         findUnique: jest.fn().mockResolvedValue(mockFacility),
       },
+      b2bStaffingContract: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'b2b-1',
+          facilityId: 'fac-uuid-1',
+          status: 'ACTIVE',
+          endDate: new Date(Date.now() + 86400000 * 365),
+        }),
+      },
       user: {
         findFirst: jest.fn().mockResolvedValue(null),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({
+            id: 'doctor-user-uuid-1',
+            email: 'doc@famidoc.vn',
+          }),
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: 'admin-uuid-1', role: 'ADMIN' }]),
         create: jest.fn().mockResolvedValue({ id: 'new-user-uuid-1' }),
-        update: jest.fn().mockResolvedValue({ id: 'new-user-uuid-1', status: 'ACTIVE' }),
+        update: jest
+          .fn()
+          .mockResolvedValue({ id: 'new-user-uuid-1', status: 'ACTIVE' }),
+      },
+      notification: {
+        create: jest.fn().mockResolvedValue({ id: 'notif-uuid-1' }),
       },
       doctor: {
         findUnique: jest.fn().mockResolvedValue(mockDoctor),
@@ -93,6 +120,10 @@ describe('DoctorsServiceImpl', () => {
           provide: PrismaService,
           useValue: prismaService,
         },
+        {
+          provide: 'MAILER_SERVICE',
+          useValue: mailerService,
+        },
       ],
     }).compile();
 
@@ -118,7 +149,9 @@ describe('DoctorsServiceImpl', () => {
 
       expect(result).toBeDefined();
       expect(result.doctorName).toBe('BS. CKI Nguyễn Văn An');
-      expect(result.onboardingStatus).toBe(DoctorOnboardingStatus.PENDING_SUBMISSION);
+      expect(result.onboardingStatus).toBe(
+        DoctorOnboardingStatus.PENDING_SUBMISSION,
+      );
       expect(prismaService.user.create).toHaveBeenCalled();
       expect(prismaService.doctor.create).toHaveBeenCalled();
       expect(prismaService.auditLog.create).toHaveBeenCalledWith({
@@ -142,6 +175,28 @@ describe('DoctorsServiceImpl', () => {
       expect(prismaService.healthcareFacility.findUnique).toHaveBeenCalledWith({
         where: { userId: facilityUser.id },
       });
+    });
+
+    it('should throw BadRequestException if facility has no active B2B staffing contract', async () => {
+      prismaService.b2bStaffingContract.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.provisionDoctorAccount(adminUser, dto, '127.0.0.1'),
+      ).rejects.toThrow(
+        new BadRequestException(
+          'Cơ sở y tế chưa có hợp đồng nhân lực B2B đang có hiệu lực',
+        ),
+      );
+    });
+
+    it('should send welcome email when doctor is provisioned', async () => {
+      await service.provisionDoctorAccount(adminUser, dto, '127.0.0.1');
+
+      expect(mailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: dto.email,
+        }),
+      );
     });
 
     it('should throw ConflictException if email or phone already exists', async () => {
@@ -192,6 +247,25 @@ describe('DoctorsServiceImpl', () => {
           action: 'DOCTOR_CREDENTIALS_SUBMITTED',
         }),
       });
+      expect(prismaService.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: mockFacility.userId,
+          type: 'DOCTOR_CREDENTIALS_SUBMITTED',
+        }),
+      });
+    });
+
+    it('should allow doctor to upload credentials using "me" alias', async () => {
+      prismaService.doctor.findFirst = jest.fn().mockResolvedValue(mockDoctor);
+
+      const result = await service.submitDoctorCredentials(
+        doctorUser,
+        'me',
+        credDto,
+        '127.0.0.1',
+      );
+
+      expect(result).toBeDefined();
     });
 
     it('should throw ForbiddenException if doctor tries to update another doctor', async () => {
@@ -236,12 +310,19 @@ describe('DoctorsServiceImpl', () => {
         '127.0.0.1',
       );
 
-      expect(result.onboardingStatus).toBe(DoctorOnboardingStatus.FACILITY_VERIFIED);
+      expect(result.onboardingStatus).toBe(
+        DoctorOnboardingStatus.FACILITY_VERIFIED,
+      );
       expect(prismaService.doctorCredential.updateMany).toHaveBeenCalledWith({
         where: { doctorId: 'doc-uuid-1' },
         data: expect.objectContaining({
           facilityVerified: true,
           facilityVerifiedBy: facilityUser.id,
+        }),
+      });
+      expect(prismaService.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          type: 'DOCTOR_FACILITY_VERIFIED',
         }),
       });
     });
@@ -284,6 +365,17 @@ describe('DoctorsServiceImpl', () => {
       );
 
       expect(result.onboardingStatus).toBe(DoctorOnboardingStatus.ACTIVE);
+      expect(prismaService.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: mockDoctor.userId,
+          type: 'DOCTOR_PLATFORM_APPROVED',
+        }),
+      });
+      expect(mailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'doc@famidoc.vn',
+        }),
+      );
       expect(prismaService.doctorCredential.updateMany).toHaveBeenCalledWith({
         where: { doctorId: 'doc-uuid-1' },
         data: expect.objectContaining({
