@@ -276,6 +276,14 @@ class PrismaContractsSession implements ContractsSession {
     });
   }
 
+  updateContractDoctor(id: string, doctorId: string) {
+    return this.tx.medicalContract.update({
+      where: { id },
+      data: { doctorId },
+      include: CONTRACT_CHANGE_INCLUDE,
+    });
+  }
+
   findConflictingStaffingContract(
     facilityId: string,
     startDate: Date,

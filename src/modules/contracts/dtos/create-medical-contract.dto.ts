@@ -45,3 +45,6 @@ export class CreateMedicalContractDto {
   memberCount?: number;
 }
 
+export class CreateFourPartyContractDto extends CreateMedicalContractDto {}
+
+

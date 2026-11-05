@@ -43,6 +43,7 @@ import type {
   StaffingContractResponseDto,
 } from '../../dtos/staffing-contract.dto';
 import type { CreateMedicalContractDto } from '../../dtos/create-medical-contract.dto';
+import type { AssignDoctorToPackageDto } from '../../dtos/assign-doctor.dto';
 import {
   calculateHomeVisitAddendum,
   calculateMemberAddendum,
@@ -114,6 +115,16 @@ export class ContractsServiceImpl implements IContractsService {
       ) {
         throw new BadRequestException(
           'Bác sĩ không hợp lệ hoặc không thuộc cơ sở y tế này',
+        );
+      }
+
+      const maxCap = doctor.maxPanelCapacity || 30;
+      if (
+        typeof doctor.activePanelCount === 'number' &&
+        doctor.activePanelCount >= maxCap
+      ) {
+        throw new ConflictException(
+          `Bác sĩ đã đạt giới hạn tối đa số hộ gia đình phụ trách (${maxCap}/${maxCap}). Vui lòng chọn bác sĩ khác`,
         );
       }
 
@@ -260,6 +271,102 @@ export class ContractsServiceImpl implements IContractsService {
       );
 
       return item;
+    });
+  }
+
+  initiateFourPartyContract(
+    actor: AuthenticatedUser,
+    dto: CreateMedicalContractDto,
+  ): Promise<ContractSummary> {
+    return this.createInitialMedicalContract(actor, dto);
+  }
+
+  signFourPartyContract(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: SignContractChangeDto,
+    ip: string,
+  ): Promise<ContractSignature> {
+    return this.signInitialMedicalContract(actor, id, dto, ip);
+  }
+
+  assignDoctorToPackage(
+    actor: AuthenticatedUser,
+    contractId: string,
+    dto: AssignDoctorToPackageDto,
+    _ip: string,
+  ): Promise<ContractSummary> {
+    return this.repository.transaction(async (session) => {
+      const contract = await session.findContractForUpdate(contractId);
+      if (!contract) {
+        throw new NotFoundException('Không tìm thấy hợp đồng y tế');
+      }
+
+      if (actor.role === 'HEALTHCARE_FACILITY') {
+        if (contract.facility.userId !== actor.id) {
+          throw new ForbiddenException(
+            'Bạn không có quyền phân công bác sĩ cho hợp đồng của cơ sở y tế khác',
+          );
+        }
+      } else if (actor.role !== 'ADMIN') {
+        throw new ForbiddenException(
+          'Chỉ Cơ sở y tế hoặc Quản trị viên mới có quyền phân công bác sĩ',
+        );
+      }
+
+      if (['TERMINATED', 'EXPIRED'].includes(contract.contractStatus)) {
+        throw new ConflictException(
+          'Hợp đồng đã kết thúc hoặc bị hủy, không thể phân công lại bác sĩ',
+        );
+      }
+
+      const newDoctor = await session.findDoctorById(dto.doctorId);
+      if (!newDoctor || newDoctor.onboardingStatus !== 'ACTIVE') {
+        throw new BadRequestException(
+          'Bác sĩ không tồn tại hoặc chưa được kích hoạt hoạt động',
+        );
+      }
+
+      if (newDoctor.facilityId !== contract.facilityId) {
+        throw new BadRequestException(
+          'Bác sĩ không thuộc cơ sở y tế phụ trách hợp đồng này',
+        );
+      }
+
+      const maxCapacity = newDoctor.maxPanelCapacity || 30;
+      if (
+        typeof newDoctor.activePanelCount === 'number' &&
+        newDoctor.activePanelCount >= maxCapacity
+      ) {
+        throw new ConflictException(
+          `Bác sĩ đã đạt giới hạn tối đa số hộ gia đình phụ trách (${maxCapacity}/${maxCapacity}). Vui lòng chọn bác sĩ khác`,
+        );
+      }
+
+      const prevDoctorId = contract.doctorId;
+      if (prevDoctorId === dto.doctorId) {
+        return this.toContractSummary(contract);
+      }
+
+      const updated = await session.updateContractDoctor(
+        contractId,
+        dto.doctorId,
+      );
+
+      // Nếu hợp đồng đang ACTIVE thì cập nhật counter activePanelCount (BR-03)
+      if (contract.contractStatus === 'ACTIVE') {
+        await session.refreshDoctorPanel(prevDoctorId);
+        await session.refreshDoctorPanel(dto.doctorId);
+      }
+
+      await session.recordChange(
+        actor.id,
+        updated,
+        'ASSIGN_DOCTOR_TO_CONTRACT',
+        contractId,
+      );
+
+      return this.toContractSummary(updated);
     });
   }
 

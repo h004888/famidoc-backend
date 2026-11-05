@@ -91,6 +91,7 @@ export interface ContractsSession {
   createMedicalContract(
     data: Prisma.MedicalContractUncheckedCreateInput,
   ): Promise<ChangeContract>;
+  updateContractDoctor(id: string, doctorId: string): Promise<ChangeContract>;
   findConflictingStaffingContract(
     facilityId: string,
     startDate: Date,
