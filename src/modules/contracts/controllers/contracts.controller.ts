@@ -37,7 +37,11 @@ import {
   ListStaffingContractsDto,
   StaffingContractResponseDto,
 } from '../dtos/staffing-contract.dto';
-import { CreateMedicalContractDto } from '../dtos/create-medical-contract.dto';
+import {
+  CreateMedicalContractDto,
+  CreateFourPartyContractDto,
+} from '../dtos/create-medical-contract.dto';
+import { AssignDoctorToPackageDto } from '../dtos/assign-doctor.dto';
 import {
   CONTRACTS_SERVICE_TOKEN,
   type IContractsService,
@@ -60,31 +64,41 @@ export class ContractsController {
     private readonly service: IContractsService,
   ) {}
 
-  @Post('medical')
+  @Post(['four-party', 'medical'])
   @UseGuards(RolesGuard)
   @Roles('FAMILY_REP', 'ADMIN')
   @ApiOperation({
-    summary: 'Khởi tạo hợp đồng dịch vụ y tế 4 bên ban đầu (STT 19 - UC-16)',
+    summary:
+      'Khởi tạo hợp đồng dịch vụ y tế 4 bên ban đầu (STT 28 - UC-16, SD-16)',
     description:
-      'Đại diện gia đình (hoặc Admin) tạo bản thảo hợp đồng y tế ban đầu, snapshot quyền lợi gói và khởi tạo trạng thái PENDING_APPROVAL.',
+      'Đại diện gia đình (hoặc Admin) tạo bản thảo hợp đồng y tế ban đầu ràng buộc 4 bên (Family, Facility, Doctor, Platform), snapshot quyền lợi gói và khởi tạo trạng thái PENDING_APPROVAL.',
   })
-  @ApiBody({ type: CreateMedicalContractDto })
+  @ApiBody({ type: CreateFourPartyContractDto })
   @ApiResponse({
     status: 201,
-    description: 'Tạo bản thảo hợp đồng y tế thành công.',
+    description: 'Tạo bản thảo hợp đồng dịch vụ y tế 4 bên thành công.',
   })
+  initiateFourPartyContract(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: CreateMedicalContractDto,
+  ) {
+    return this.service.initiateFourPartyContract(req.user, dto);
+  }
+
   createInitialMedicalContract(
     @Req() req: AuthenticatedRequest,
     @Body() dto: CreateMedicalContractDto,
   ) {
-    return this.service.createInitialMedicalContract(req.user, dto);
+    return this.initiateFourPartyContract(req, dto);
   }
 
-  @Put(['medical/:id/sign', 'medical/:id/signatures'])
+  @Put(['four-party/:id/sign', 'medical/:id/sign', 'medical/:id/signatures'])
+  @Post(['four-party/:id/sign', 'medical/:id/sign'])
   @UseGuards(RolesGuard)
   @Roles('FAMILY_REP', 'ADMIN', 'HEALTHCARE_FACILITY', 'DOCTOR')
   @ApiOperation({
-    summary: 'Ký số điện tử hợp đồng y tế 4 bên ban đầu (STT 20 - UC-16)',
+    summary:
+      'Ký số điện tử hợp đồng y tế 4 bên ban đầu (STT 29 - UC-16, SD-16)',
     description:
       'Tuần tự ký số 4 bên: FAMILY_REP -> ADMIN -> HEALTHCARE_FACILITY -> ASSIGNED_DOCTOR. Sau khi đủ 4 chữ ký sẽ chuyển sang PENDING_PAYMENT.',
   })
@@ -94,12 +108,62 @@ export class ContractsController {
     status: 200,
     description: 'Ký số thành công.',
   })
+  signFourPartyContract(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: SignContractChangeDto,
+  ) {
+    return this.service.signFourPartyContract(
+      req.user,
+      id,
+      dto,
+      req.ip ?? 'unknown',
+    );
+  }
+
   signInitialMedicalContract(
     @Req() req: AuthenticatedRequest,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() dto: SignContractChangeDto,
   ) {
-    return this.service.signInitialMedicalContract(
+    return this.signFourPartyContract(req, id, dto);
+  }
+
+  @Patch(':id/assign-doctor')
+  @UseGuards(RolesGuard)
+  @Roles('HEALTHCARE_FACILITY', 'ADMIN')
+  @ApiOperation({
+    summary:
+      'Phân công / Điều chuyển bác sĩ gia đình phụ trách hợp đồng (STT 30 - UC-23, SD-23)',
+    description:
+      'Cơ sở y tế (hoặc Admin) chỉ định hoặc điều chuyển bác sĩ gia đình chăm sóc cho hộ gia đình theo hợp đồng, kiểm soát giới hạn định biên tối đa 30 hộ/bác sĩ (BR-04, CFG-01).',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng y tế' })
+  @ApiBody({ type: AssignDoctorToPackageDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Phân công bác sĩ cho hợp đồng thành công.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bác sĩ không hợp lệ hoặc không thuộc cơ sở y tế này.',
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      'Không có quyền phân công bác sĩ cho hợp đồng của cơ sở y tế khác.',
+  })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Bác sĩ đã đạt giới hạn tối đa 30 hộ gia đình (CFG-01, BR-04) hoặc hợp đồng đã kết thúc.',
+  })
+  assignDoctorToPackage(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: AssignDoctorToPackageDto,
+  ) {
+    return this.service.assignDoctorToPackage(
       req.user,
       id,
       dto,
