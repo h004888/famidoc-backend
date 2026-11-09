@@ -101,7 +101,7 @@
 - Nhận đầu vào từ: Schema Prisma tại Task 1
 - Cung cấp đầu ra cho: Task 3 (Controller tiếp nhận HTTP request) và Task 4 (kiểm tra `patientIds` thuộc hộ gia đình)
 
-- [x] **Bước 1 [RED]: Viết test cho nghiệp vụ PatientsService**
+- [ ] **Bước 1 [RED]: Viết test cho nghiệp vụ PatientsService**
   Vị trí file test: `src/modules/patients/__tests__/patients.service.spec.ts`
   Test case:
   - `createPatient`: Thêm thành viên mới vào hộ gia đình của `FAMILY_REP`, xác thực dữ liệu quan hệ thân nhân (`relationshipToRepresentative`).
@@ -109,17 +109,17 @@
   - `addAllergy`: Thêm thông tin dị ứng cho bệnh nhân chỉ định.
   - `addDocument`: Thêm hồ sơ bệnh án hoặc kết quả cận lâm sàng ban đầu cho bệnh nhân.
   Kỳ vọng: chạy `npm test -- src/modules/patients/__tests__/patients.service.spec.ts` → FAIL với lý do `PatientsServiceImpl` chưa được định nghĩa.
-- [x] **Bước 2 [GREEN]: Viết code tối thiểu DTO, Repository và Service để test ở Bước 1 PASS**
+- [ ] **Bước 2 [GREEN]: Viết code tối thiểu DTO, Repository và Service để test ở Bước 1 PASS**
   Triển khai:
   - Tạo các DTO với validation `class-validator` (`IsNotEmpty`, `IsString`, `IsEnum`, `IsDateString`, `IsOptional`).
   - Tạo interface `IPatientsRepository` và `IPatientsService`.
   - Triển khai `PatientsRepositoryImpl` thao tác CRUD qua `PrismaService`.
   - Triển khai `PatientsServiceImpl` kiểm soát quyền sở hữu: `FAMILY_REP` chỉ được quản lý bệnh nhân trong `familyUnitId` của mình; `ADMIN` được quản lý toàn bộ.
   Kỳ vọng: chạy `npm test -- src/modules/patients/__tests__/patients.service.spec.ts` → PASS.
-- [x] **Bước 3 [REFACTOR] (nếu cần): Tinh chỉnh mapping Entity response**
+- [ ] **Bước 3 [REFACTOR] (nếu cần): Tinh chỉnh mapping Entity response**
   Tách riêng các mapper chuyển đổi dữ liệu Prisma sang DTO response sạch, loại bỏ các trường nội bộ không cần thiết.
   Kỳ vọng: chạy `npm test -- src/modules/patients/__tests__/patients.service.spec.ts` → vẫn PASS.
-- [x] **Bước 4: Xác nhận hoàn tất task**
+- [ ] **Bước 4: Xác nhận hoàn tất task**
   Cách kiểm tra: chạy `npm test -- src/modules/patients/__tests__/patients.service.spec.ts`
   Kết quả mong đợi: tất cả PASS.
 
@@ -144,7 +144,7 @@
 - Nhận đầu vào từ: `PatientsService` (Task 2)
 - Cung cấp đầu ra cho: Đại diện gia đình khai báo hồ sơ y tế trước khi chọn gói hợp đồng
 
-- [x] **Bước 1 [RED]: Viết test cho HTTP Endpoints của PatientsController**
+- [ ] **Bước 1 [RED]: Viết test cho HTTP Endpoints của PatientsController**
   Vị trí file test: `src/modules/patients/__tests__/patients.controller.spec.ts`
   Test case:
   - `POST /api/v1/patients`: Tạo hồ sơ thành viên mới với vai trò `FAMILY_REP`.
@@ -156,16 +156,16 @@
   - `POST /api/v1/patients/:id/documents`: Đính kèm tài liệu y tế ban đầu.
   - `GET /api/v1/patients/:id/documents`: Xem danh sách tài liệu y tế.
   Kỳ vọng: chạy `npm test -- src/modules/patients/__tests__/patients.controller.spec.ts` → FAIL với lý do `PatientsController` chưa tồn tại.
-- [x] **Bước 2 [GREEN]: Viết code tối thiểu PatientsController và đăng ký module để test ở Bước 1 PASS**
+- [ ] **Bước 2 [GREEN]: Viết code tối thiểu PatientsController và đăng ký module để test ở Bước 1 PASS**
   Triển khai:
   - Tạo `PatientsController` tại `src/modules/patients/controllers/patients.controller.ts` đính kèm `@UseGuards(RolesGuard)`, `@Roles('FAMILY_REP', 'ADMIN')` và Swagger annotations.
   - Tạo `PatientsModule` tại `src/modules/patients/patients.module.ts` cung cấp repository và service token.
   - Thêm `PatientsModule` vào mảng `imports` của `AppModule` trong `src/app.module.ts`.
   Kỳ vọng: chạy `npm test -- src/modules/patients/__tests__/patients.controller.spec.ts` → PASS.
-- [x] **Bước 3 [REFACTOR] (nếu cần): Chuẩn hóa Swagger DTO documentation**
+- [ ] **Bước 3 [REFACTOR] (nếu cần): Chuẩn hóa Swagger DTO documentation**
   Bổ sung đầy đủ `@ApiOperation`, `@ApiResponse`, `@ApiParam` cho 8 endpoints của PatientsController.
   Kỳ vọng: chạy `npm test -- src/modules/patients/__tests__/patients.controller.spec.ts` → vẫn PASS.
-- [x] **Bước 4: Xác nhận hoàn tất task**
+- [ ] **Bước 4: Xác nhận hoàn tất task**
   Cách kiểm tra: chạy `npm test -- src/modules/patients/__tests__/patients.controller.spec.ts`
   Kết quả mong đợi: tất cả PASS, kiểm tra regression test `npm test -- src/core/__tests__/entrypoint-contract.spec.ts` PASS.
 
@@ -190,7 +190,7 @@
 - Nhận đầu vào từ: Schema Prisma Task 1, danh sách bệnh nhân từ Task 2/3
 - Cung cấp đầu ra cho: Luồng ký số 4 bên và tra cứu hợp đồng ở Task 5
 
-- [ ] **Bước 1 [RED]: Cập nhật test case khởi tạo hợp đồng cho phép doctorId optional và bắt buộc patientIds**
+- [x] **Bước 1 [RED]: Cập nhật test case khởi tạo hợp đồng cho phép doctorId optional và bắt buộc patientIds**
   Vị trí file test: `src/modules/contracts/__tests__/initial-medical-contracts.spec.ts`
   Test case:
   - Khởi tạo hợp đồng thành công khi không truyền `doctorId` (giá tính theo `DoctorTier.STANDARD`, trạng thái `PENDING_APPROVAL`, `contract.doctorId` là null).
@@ -198,7 +198,7 @@
   - Khởi tạo hợp đồng thành công lưu đủ các bản ghi vào bảng `contract_members`.
   - Cơ sở y tế hoặc Bác sĩ không thể ký nếu `doctorId` chưa được gán.
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/initial-medical-contracts.spec.ts` → FAIL vì DTO hiện tại vẫn bắt buộc `doctorId` và chưa hỗ trợ `patientIds`.
-- [ ] **Bước 2 [GREEN]: Viết code cập nhật CreateMedicalContractDto, Repository và ContractsServiceImpl để test ở Bước 1 PASS**
+- [x] **Bước 2 [GREEN]: Viết code cập nhật CreateMedicalContractDto, Repository và ContractsServiceImpl để test ở Bước 1 PASS**
   Triển khai:
   - Tại `src/modules/contracts/dtos/create-medical-contract.dto.ts`:
     - Đổi `doctorId` thành `@IsOptional() @IsUUID('4') doctorId?: string`.
@@ -214,10 +214,10 @@
     - `assignDoctorToPackage`:
       - Cho phép gán bác sĩ khi `contract.doctorId` đang null hoặc thay đổi bác sĩ khi đang `PENDING_APPROVAL`.
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/initial-medical-contracts.spec.ts` → PASS.
-- [ ] **Bước 3 [REFACTOR] (nếu cần): Tối ưu truy vấn kiểm tra danh sách bệnh nhân**
+- [x] **Bước 3 [REFACTOR] (nếu cần): Tối ưu truy vấn kiểm tra danh sách bệnh nhân**
   Dùng một truy vấn `findMany` duy nhất với `where: { id: { in: dto.patientIds }, familyUnitId: targetFamilyId }` để kiểm tra toàn bộ thành viên trong 1 round-trip database.
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/initial-medical-contracts.spec.ts` → vẫn PASS.
-- [ ] **Bước 4: Xác nhận hoàn tất task**
+- [x] **Bước 4: Xác nhận hoàn tất task**
   Cách kiểm tra: chạy `npm test -- src/modules/contracts/__tests__/initial-medical-contracts.spec.ts` và `npm test -- src/modules/contracts/__tests__/four-party-and-assign-doctor.spec.ts`
   Kết quả mong đợi: tất cả PASS.
 
@@ -245,7 +245,7 @@
 - Nhận đầu vào từ: Dữ liệu hợp đồng đã tạo từ Task 4
 - Cung cấp đầu ra cho: Giao diện người dùng theo dõi tiến độ ký số và thanh toán hợp đồng
 
-- [ ] **Bước 1 [RED]: Viết test cho API tra cứu danh sách và chi tiết hợp đồng y tế**
+- [x] **Bước 1 [RED]: Viết test cho API tra cứu danh sách và chi tiết hợp đồng y tế**
   Vị trí file test: `src/modules/contracts/__tests__/medical-contracts-query.spec.ts`
   Test case:
   - `GET /api/v1/contracts/medical`:
@@ -257,7 +257,7 @@
     - Trả về chi tiết hợp đồng gồm: gói dịch vụ, cơ sở y tế, bác sĩ, danh sách `members` (bệnh nhân kèm họ tên, ngày sinh), trạng thái 4 chữ ký và hóa đơn thanh toán.
     - Ném `ForbiddenException` nếu người gọi không thuộc các bên tham gia hợp đồng.
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/medical-contracts-query.spec.ts` → FAIL với lý do route `GET /contracts/medical` chưa được khai báo.
-- [ ] **Bước 2 [GREEN]: Viết code triển khai Query Repository, Service và Controller để test ở Bước 1 PASS**
+- [x] **Bước 2 [GREEN]: Viết code triển khai Query Repository, Service và Controller để test ở Bước 1 PASS**
   Triển khai:
   - Thêm DTO `ListMedicalContractsQueryDto` hỗ trợ `page`, `limit`, `status`, `facilityId`.
   - Bổ sung phương thức `listMedicalContracts` và `findMedicalContractById` vào `IContractsRepository` và triển khai trong `ContractsRepositoryImpl`.
@@ -269,10 +269,10 @@
     - `@Get('medical')`: Lấy danh sách hợp đồng y tế.
     - `@Get('medical/:id')`: Lấy chi tiết hợp đồng y tế.
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/medical-contracts-query.spec.ts` → PASS.
-- [ ] **Bước 3 [REFACTOR] (nếu cần): Tinh chỉnh pagination response format**
+- [x] **Bước 3 [REFACTOR] (nếu cần): Tinh chỉnh pagination response format**
   Đồng bộ định dạng phân trang chuẩn `{ items: [...], total: number, page: number, limit: number }` thống nhất toàn dự án.
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/medical-contracts-query.spec.ts` → vẫn PASS.
-- [ ] **Bước 4: Xác nhận hoàn tất task**
+- [x] **Bước 4: Xác nhận hoàn tất task**
   Cách kiểm tra: chạy `npm test -- src/modules/contracts/__tests__/medical-contracts-query.spec.ts`
   Kết quả mong đợi: tất cả PASS.
 
@@ -300,7 +300,7 @@
 - Nhận đầu vào từ: Dữ liệu bệnh nhân (Task 2), Hợp đồng và Chữ ký số (Task 4/5)
 - Cung cấp đầu ra cho: Bác sĩ ký số nhận trách nhiệm chuyên môn và 4 bên lưu trữ văn bản hợp đồng
 
-- [ ] **Bước 1 [RED]: Viết test cho API Care Needs Summary và Contract Document Export**
+- [x] **Bước 1 [RED]: Viết test cho API Care Needs Summary và Contract Document Export**
   Vị trí file test: `src/modules/contracts/__tests__/contract-care-summary-and-document.spec.ts`
   Test case:
   - `GET /api/v1/contracts/medical/:id/care-summary`:
@@ -309,7 +309,7 @@
   - `GET /api/v1/contracts/medical/:id/document`:
     - Trả về bản sao hợp đồng định dạng văn bản chuẩn (HTML / formatted text view) chứa: tiêu đề, thông tin 4 bên, điều khoản gói dịch vụ (snapshot), danh sách thành viên áp dụng, và chi tiết 4 chữ ký số kèm mã hash (`termsHash`, `signatureHash`, `signedAt`, `ipAddress`).
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/contract-care-summary-and-document.spec.ts` → FAIL với lý do method `getCareNeedsSummary` và `getContractDocument` chưa tồn tại.
-- [ ] **Bước 2 [GREEN]: Viết code triển khai Care Needs Summary và Contract Document Renderer để test ở Bước 1 PASS**
+- [x] **Bước 2 [GREEN]: Viết code triển khai Care Needs Summary và Contract Document Renderer để test ở Bước 1 PASS**
   Triển khai:
   - Tạo `ContractDocumentRendererService` tại `src/modules/contracts/services/contract-document-renderer.service.ts` sinh tài liệu hợp đồng điện tử chuẩn hóa tích hợp chữ ký số và snapshot.
   - Trong `ContractsServiceImpl`:
@@ -319,9 +319,9 @@
     - `@Get('medical/:id/care-summary')`: Tóm tắt nhu cầu chăm sóc sức khỏe.
     - `@Get('medical/:id/document')`: Xuất tài liệu hợp đồng điện tử có chữ ký số.
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/contract-care-summary-and-document.spec.ts` → PASS.
-- [ ] **Bước 3 [REFACTOR] (nếu cần): Tinh chỉnh template hiển thị chữ ký số**
+- [x] **Bước 3 [REFACTOR] (nếu cần): Tinh chỉnh template hiển thị chữ ký số**
   Cấu trúc template định dạng bảng chữ ký số bảo đảm rõ ràng mã hash SHA-256 rút gọn và thời gian ký múi giờ Việt Nam (+07:00).
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/contract-care-summary-and-document.spec.ts` → vẫn PASS.
-- [ ] **Bước 4: Xác nhận hoàn tất task**
+- [x] **Bước 4: Xác nhận hoàn tất task**
   Cách kiểm tra: chạy `npm test -- src/modules/contracts/__tests__/contract-care-summary-and-document.spec.ts` và `npm test -- src/modules/contracts/__tests__/contract-terms-hash.spec.ts`
   Kết quả mong đợi: tất cả PASS.

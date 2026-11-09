@@ -17,6 +17,7 @@ import {
 import {
   CONTRACT_CHANGE_INCLUDE,
   CHANGE_ADDENDUM_INCLUDE,
+  MEDICAL_CONTRACT_DETAIL_INCLUDE,
   type IContractsRepository,
   type ContractsSession,
   type ChangeContract,
@@ -265,8 +266,28 @@ class PrismaContractsSession implements ContractsSession {
     });
   }
 
+  findDoctorByUserId(userId: string) {
+    return this.tx.doctor.findUnique({
+      where: { userId },
+      include: { user: true },
+    });
+  }
+
   findFamilyById(id: string) {
     return this.tx.familyUnit.findUnique({ where: { id } });
+  }
+
+  findFamilyByRepresentativeUserId(userId: string) {
+    return this.tx.familyUnit.findUnique({
+      where: { representativeUserId: userId },
+    });
+  }
+
+  findPatientsByIdsAndFamilyId(patientIds: string[], familyId: string) {
+    return this.tx.patient.findMany({
+      where: { id: { in: patientIds }, familyId },
+      select: { id: true },
+    });
   }
 
   createMedicalContract(data: Prisma.MedicalContractUncheckedCreateInput) {
@@ -276,11 +297,53 @@ class PrismaContractsSession implements ContractsSession {
     });
   }
 
+  async createContractMembers(contractId: string, patientIds: string[]) {
+    await this.tx.contractMember.createMany({
+      data: patientIds.map((patientId) => ({ contractId, patientId })),
+    });
+  }
+
   updateContractDoctor(id: string, doctorId: string) {
     return this.tx.medicalContract.update({
       where: { id },
       data: { doctorId },
       include: CONTRACT_CHANGE_INCLUDE,
+    });
+  }
+
+  async listMedicalContracts(
+    where: Prisma.MedicalContractWhereInput,
+    skip: number,
+    take: number,
+  ) {
+    const [total, items] = await Promise.all([
+      this.tx.medicalContract.count({ where }),
+      this.tx.medicalContract.findMany({
+        where,
+        skip,
+        take,
+        include: MEDICAL_CONTRACT_DETAIL_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+    return { items, total };
+  }
+
+  findMedicalContractById(id: string) {
+    return this.tx.medicalContract.findUnique({
+      where: { id },
+      include: MEDICAL_CONTRACT_DETAIL_INCLUDE,
+    });
+  }
+
+  findPatientsWithClinicalProfile(patientIds: string[]) {
+    return this.tx.patient.findMany({
+      where: { id: { in: patientIds } },
+      include: {
+        allergies: true,
+        documents: true,
+      },
+      orderBy: { createdAt: 'asc' },
     });
   }
 
