@@ -40,6 +40,8 @@ describe('ContractsController - Staffing Endpoints', () => {
 
   beforeEach(async () => {
     service = {
+      createInitialMedicalContract: jest.fn(),
+      signInitialMedicalContract: jest.fn(),
       createStaffingContract: jest.fn().mockResolvedValue(mockStaffingContract),
       signStaffingContract: jest.fn().mockResolvedValue({
         ...mockStaffingContract,

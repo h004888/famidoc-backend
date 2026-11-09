@@ -1,3 +1,4 @@
+import { calculateMonthlyInvoiceShares } from '../../pricing/monthly-recognition';
 import {
   BadRequestException,
   ConflictException,
@@ -21,7 +22,6 @@ import type {
   MonthlySettlementDto,
   RevenueAnalyticsQueryDto,
 } from '../../dtos/finance.dto';
-import { calculateRevenueShares } from '../../pricing/revenue-sharing';
 @Injectable()
 export class FinanceServiceImpl implements IFinanceService {
   constructor(
@@ -57,7 +57,7 @@ export class FinanceServiceImpl implements IFinanceService {
         facilityShareVnd: 0,
       };
       for (const invoice of invoices) {
-        const amount = this.getInvoiceShares(invoice);
+        const amount = this.getInvoiceShares(invoice, filter);
         for (const key of Object.keys(totals) as (keyof typeof totals)[])
           totals[key] += amount[key];
       }
@@ -67,6 +67,13 @@ export class FinanceServiceImpl implements IFinanceService {
         facilityId: facilityId ?? null,
         currency: 'VND' as const,
         invoiceCount: invoices.length,
+        recognitionBasis: 'SERVICE_DAYS',
+        platformFeeGrossVnd: totals.platformFeeVnd,
+        platformFeeVatVnd: null,
+        platformFeeNetVnd: null,
+        taxTreatment:
+          'Phí 15% đã gồm thuế nếu phát sinh; chưa tự xác định thuế suất.',
+        satisfaction: await session.getSatisfactionSummary(filter),
         ...totals,
         // CSYT không xem nhật ký giao dịch chưa xác định của đơn vị khác.
         unmatchedTransactionsCount:
@@ -143,12 +150,17 @@ export class FinanceServiceImpl implements IFinanceService {
           fee = 0,
           payout = 0;
         const lines = items.map((invoice) => {
-          const shares = this.getInvoiceShares(invoice);
+          const shares = this.getInvoiceShares(invoice, filter);
           revenue += shares.netVnd;
           fee += shares.platformFeeVnd;
           payout += shares.facilityShareVnd;
           return {
             settlementId: settlement!.id,
+            recognitionYear: period.year,
+            recognitionMonth: period.month,
+            recognitionBasis: 'SERVICE_DAYS',
+            serviceFrom: shares.serviceFrom,
+            serviceUntil: shares.serviceUntil,
             invoiceId: invoice.id,
             grossAmount: shares.grossVnd,
             vatAmount: shares.vatVnd,
@@ -174,6 +186,7 @@ export class FinanceServiceImpl implements IFinanceService {
         ...period,
         environment: dto.environment,
         transferExecuted: false as const,
+        satisfaction: await session.getSatisfactionSummary(filter),
         message:
           'Statements prepared. Confirm only after the bank transfer has actually been reconciled.',
         settlements: await session.findSettlements(
@@ -252,11 +265,14 @@ export class FinanceServiceImpl implements IFinanceService {
       return updated;
     });
   }
-  private getInvoiceShares(invoice: RevenueInvoice) {
-    return calculateRevenueShares(
-      moneyToNumber(invoice.totalPayable),
-      moneyToNumber(invoice.vatAmount),
-    );
+  private getInvoiceShares(invoice: RevenueInvoice, filter: RevenueFilter) {
+    // 15% là phí gộp đã gồm GTGT nếu có. Không trừ VAT toàn gói trước khi tính 85% của CSYT.
+    const shares = calculateMonthlyInvoiceShares(invoice, filter);
+    if (!shares)
+      throw new BadRequestException(
+        'Hóa đơn không có ngày phục vụ thuộc kỳ này.',
+      );
+    return shares;
   }
   private resolveReportingPeriod(query: RevenueAnalyticsQueryDto) {
     if (query.environment === 'TEST' && process.env.NODE_ENV === 'production')

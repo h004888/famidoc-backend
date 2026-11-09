@@ -49,7 +49,15 @@ export class UsersController {
     return this.service.getCurrentUserProfile(req.user.id);
   }
 
+  // PATCH và PUT dùng hai handler rõ ràng; chồng decorator sẽ chỉ đăng ký một HTTP method.
   @Patch('profile')
+  updateUserProfilePartial(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    return this.service.updateUserProfile(req.user.id, dto);
+  }
+
   @Put('profile')
   @ApiOperation({ summary: 'Cập nhật thông tin hồ sơ cá nhân' })
   @ApiBody({ type: UpdateProfileDto })

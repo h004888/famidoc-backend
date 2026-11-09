@@ -116,7 +116,7 @@ export async function activateAddendumRights(
       !Number.isSafeInteger(added) ||
       added < 1 ||
       expectedCount !== parent.memberCount ||
-      newCount > Math.min(6, terms.members?.maxCount ?? 6) ||
+      newCount > (terms.members?.maxCount ?? 6) ||
       newCount < familyCount ||
       (details.newMemberCount !== undefined &&
         details.newMemberCount !== newCount)
