@@ -186,18 +186,24 @@ class PrismaPaymentsSession implements PaymentsSession {
         ),
         adminSigned: signature('ADMIN'),
         facilitySigned: signature('HEALTHCARE_FACILITY', row.facility.userId),
-        doctorSigned: signature('ASSIGNED_DOCTOR', row.doctor.userId),
+        doctorSigned: row.doctor
+          ? signature('ASSIGNED_DOCTOR', row.doctor.userId)
+          : false,
         facilityId: row.facilityId,
         doctorId: row.doctorId,
-        doctorVerified:
-          row.doctor.onboardingStatus === 'ACTIVE' &&
-          row.doctor.user.status === 'ACTIVE' &&
-          row.facility.verificationStatus === 'ACTIVE' &&
-          row.facility.user.status === 'ACTIVE' &&
-          row.familyUnit.status === 'ACTIVE' &&
-          row.doctor.facilityId === row.facilityId &&
-          !!staffing,
-        panelCapacityAvailable: activeCount < row.doctor.maxPanelCapacity,
+        doctorVerified: Boolean(
+          row.doctor &&
+            row.doctor.onboardingStatus === 'ACTIVE' &&
+            row.doctor.user.status === 'ACTIVE' &&
+            row.facility.verificationStatus === 'ACTIVE' &&
+            row.facility.user.status === 'ACTIVE' &&
+            row.familyUnit.status === 'ACTIVE' &&
+            row.doctor.facilityId === row.facilityId &&
+            !!staffing,
+        ),
+        panelCapacityAvailable: Boolean(
+          row.doctor && activeCount < row.doctor.maxPanelCapacity,
+        ),
         familyCoverageComplete:
           (await this.tx.patient.count({
             where: { familyId: row.familyId, status: 'ACTIVE' },
@@ -234,6 +240,7 @@ class PrismaPaymentsSession implements PaymentsSession {
       },
     });
     if (!item || item.contractId !== id) return null;
+    if (!row.doctor || !row.doctorId) return null;
     const roles = {
       FAMILY_REP: row.familyUnit.representativeUserId,
       HEALTHCARE_FACILITY: row.facility.userId,
@@ -334,6 +341,9 @@ class PrismaPaymentsSession implements PaymentsSession {
         throw new ConflictException('Activation requirements changed');
       if (old.endDate <= new Date())
         throw new ConflictException('Signed contract term has expired');
+      if (!old.doctorId) {
+        throw new ConflictException('Contract does not have an assigned doctor');
+      }
       await this.tx.doctor.update({
         where: { id: old.doctorId },
         data: {

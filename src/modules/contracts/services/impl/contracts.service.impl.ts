@@ -1134,7 +1134,7 @@ export class ContractsServiceImpl implements IContractsService {
         );
       if (old.contractStatus === 'ACTIVE') {
         await session.updateContractStatus(old.id, 'EXPIRED');
-        await session.refreshDoctorPanel(old.doctorId);
+        if (old.doctorId) await session.refreshDoctorPanel(old.doctorId);
       }
       const existing = await session.findOpenUpgrade(id);
       if (existing) {
@@ -1487,6 +1487,9 @@ export class ContractsServiceImpl implements IContractsService {
       }
       if (actor.role !== 'ADMIN')
         throw new ForbiddenException('Only Admin can approve termination');
+      if (!contract.doctor || !contract.doctorId) {
+        throw new BadRequestException('Hợp đồng chưa có bác sĩ phân công');
+      }
       const required = [
         ['FAMILY_REP', contract.familyUnit.representativeUserId],
         ['HEALTHCARE_FACILITY', contract.facility.userId],

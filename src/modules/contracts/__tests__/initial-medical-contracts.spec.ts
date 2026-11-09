@@ -136,6 +136,10 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
         createdAt: new Date(),
       })),
       updateContractStatus: jest.fn().mockResolvedValue(undefined),
+      updateContractDoctor: jest.fn().mockImplementation((id, doctorId) =>
+        Promise.resolve({ ...mockContract, id, doctorId }),
+      ),
+      refreshDoctorPanel: jest.fn().mockResolvedValue(undefined),
       recordChange: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -245,6 +249,43 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
         (service as any).createInitialMedicalContract(familyRepUser, dto),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('should throw BadRequestException if doctor does not belong to facility', async () => {
+      sessionMock.findDoctorById.mockResolvedValue({
+        ...mockDoctor,
+        facilityId: 'fac-other',
+      });
+
+      const dto = {
+        packageId: 'pkg-1',
+        facilityId: 'fac-1',
+        doctorId: 'doc-1',
+        patientIds: ['patient-1'],
+      };
+
+      await expect(
+        service.createInitialMedicalContract(familyRepUser, dto as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw ConflictException if doctor has reached maximum active households (30/30)', async () => {
+      sessionMock.findDoctorById.mockResolvedValue({
+        ...mockDoctor,
+        activePanelCount: 30,
+        maxPanelCapacity: 30,
+      });
+
+      const dto = {
+        packageId: 'pkg-1',
+        facilityId: 'fac-1',
+        doctorId: 'doc-1',
+        patientIds: ['patient-1'],
+      };
+
+      await expect(
+        service.createInitialMedicalContract(familyRepUser, dto as any),
+      ).rejects.toThrow(ConflictException);
+    });
   });
 
   describe('signInitialMedicalContract', () => {
@@ -332,6 +373,64 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
         'contract-uuid-1',
         'PENDING_PAYMENT',
       );
+    });
+
+    it('should require a doctor before an assigned doctor signs an unassigned contract', async () => {
+      const unassignedContractWithDoctorRole = {
+        ...mockContract,
+        doctorId: null,
+        doctor: { userId: 'doctor-user-1' },
+      };
+      sessionMock.findContractForUpdate.mockResolvedValue(
+        unassignedContractWithDoctorRole,
+      );
+      const hash = calculateContractTermsHash(unassignedContractWithDoctorRole);
+
+      await expect(
+        service.signInitialMedicalContract(
+          doctorUser,
+          'contract-uuid-1',
+          { acceptedTerms: true, termsHash: hash },
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(
+        'Cơ sở y tế phải phân công bác sĩ trước khi ký tiếp nhận',
+      );
+    });
+  });
+
+  describe('assignDoctorToPackage', () => {
+    it('should allow assigning doctor when contract.doctorId is null in PENDING_APPROVAL status', async () => {
+      const pendingContractWithoutDoctor = {
+        ...mockContract,
+        contractStatus: 'PENDING_APPROVAL',
+        doctorId: null,
+        doctor: null,
+      };
+      sessionMock.findContractForUpdate.mockResolvedValue(
+        pendingContractWithoutDoctor,
+      );
+      sessionMock.findDoctorById.mockResolvedValue({
+        id: 'doc-assigned',
+        facilityId: 'fac-1',
+        onboardingStatus: 'ACTIVE',
+        activePanelCount: 5,
+        maxPanelCapacity: 30,
+      });
+
+      const result = await service.assignDoctorToPackage(
+        facilityUser,
+        'contract-uuid-1',
+        { doctorId: 'doc-assigned' },
+        '127.0.0.1',
+      );
+
+      expect(result).toBeDefined();
+      expect(sessionMock.updateContractDoctor).toHaveBeenCalledWith(
+        'contract-uuid-1',
+        'doc-assigned',
+      );
+      expect(sessionMock.refreshDoctorPanel).not.toHaveBeenCalled();
     });
   });
 });

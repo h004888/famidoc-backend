@@ -60,6 +60,9 @@ export class ComplaintsServiceImpl implements IComplaintsService {
         throw new BadRequestException(
           'Evidence keys must be in your complaint upload namespace',
         );
+      if (!contract.doctor) {
+        throw new BadRequestException('Hợp đồng chưa có bác sĩ phân công');
+      }
       const targetUserId =
         actor.role === 'DOCTOR'
           ? contract.familyUnit.representativeUserId

@@ -40,6 +40,7 @@ export async function activateAddendumRights(
   )
     throw new ConflictException('The contract is not currently serving');
   if (
+    !parent.doctor ||
     parent.doctor.onboardingStatus !== 'ACTIVE' ||
     parent.doctor.facilityId !== parent.facilityId ||
     parent.facility.verificationStatus !== 'ACTIVE' ||
