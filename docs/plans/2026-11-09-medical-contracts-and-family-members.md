@@ -101,7 +101,7 @@
 - Nhận đầu vào từ: Schema Prisma tại Task 1
 - Cung cấp đầu ra cho: Task 3 (Controller tiếp nhận HTTP request) và Task 4 (kiểm tra `patientIds` thuộc hộ gia đình)
 
-- [ ] **Bước 1 [RED]: Viết test cho nghiệp vụ PatientsService**
+- [x] **Bước 1 [RED]: Viết test cho nghiệp vụ PatientsService**
   Vị trí file test: `src/modules/patients/__tests__/patients.service.spec.ts`
   Test case:
   - `createPatient`: Thêm thành viên mới vào hộ gia đình của `FAMILY_REP`, xác thực dữ liệu quan hệ thân nhân (`relationshipToRepresentative`).
@@ -109,17 +109,17 @@
   - `addAllergy`: Thêm thông tin dị ứng cho bệnh nhân chỉ định.
   - `addDocument`: Thêm hồ sơ bệnh án hoặc kết quả cận lâm sàng ban đầu cho bệnh nhân.
   Kỳ vọng: chạy `npm test -- src/modules/patients/__tests__/patients.service.spec.ts` → FAIL với lý do `PatientsServiceImpl` chưa được định nghĩa.
-- [ ] **Bước 2 [GREEN]: Viết code tối thiểu DTO, Repository và Service để test ở Bước 1 PASS**
+- [x] **Bước 2 [GREEN]: Viết code tối thiểu DTO, Repository và Service để test ở Bước 1 PASS**
   Triển khai:
   - Tạo các DTO với validation `class-validator` (`IsNotEmpty`, `IsString`, `IsEnum`, `IsDateString`, `IsOptional`).
   - Tạo interface `IPatientsRepository` và `IPatientsService`.
   - Triển khai `PatientsRepositoryImpl` thao tác CRUD qua `PrismaService`.
   - Triển khai `PatientsServiceImpl` kiểm soát quyền sở hữu: `FAMILY_REP` chỉ được quản lý bệnh nhân trong `familyUnitId` của mình; `ADMIN` được quản lý toàn bộ.
   Kỳ vọng: chạy `npm test -- src/modules/patients/__tests__/patients.service.spec.ts` → PASS.
-- [ ] **Bước 3 [REFACTOR] (nếu cần): Tinh chỉnh mapping Entity response**
+- [x] **Bước 3 [REFACTOR] (nếu cần): Tinh chỉnh mapping Entity response**
   Tách riêng các mapper chuyển đổi dữ liệu Prisma sang DTO response sạch, loại bỏ các trường nội bộ không cần thiết.
   Kỳ vọng: chạy `npm test -- src/modules/patients/__tests__/patients.service.spec.ts` → vẫn PASS.
-- [ ] **Bước 4: Xác nhận hoàn tất task**
+- [x] **Bước 4: Xác nhận hoàn tất task**
   Cách kiểm tra: chạy `npm test -- src/modules/patients/__tests__/patients.service.spec.ts`
   Kết quả mong đợi: tất cả PASS.
 
@@ -144,7 +144,7 @@
 - Nhận đầu vào từ: `PatientsService` (Task 2)
 - Cung cấp đầu ra cho: Đại diện gia đình khai báo hồ sơ y tế trước khi chọn gói hợp đồng
 
-- [ ] **Bước 1 [RED]: Viết test cho HTTP Endpoints của PatientsController**
+- [x] **Bước 1 [RED]: Viết test cho HTTP Endpoints của PatientsController**
   Vị trí file test: `src/modules/patients/__tests__/patients.controller.spec.ts`
   Test case:
   - `POST /api/v1/patients`: Tạo hồ sơ thành viên mới với vai trò `FAMILY_REP`.
@@ -156,16 +156,16 @@
   - `POST /api/v1/patients/:id/documents`: Đính kèm tài liệu y tế ban đầu.
   - `GET /api/v1/patients/:id/documents`: Xem danh sách tài liệu y tế.
   Kỳ vọng: chạy `npm test -- src/modules/patients/__tests__/patients.controller.spec.ts` → FAIL với lý do `PatientsController` chưa tồn tại.
-- [ ] **Bước 2 [GREEN]: Viết code tối thiểu PatientsController và đăng ký module để test ở Bước 1 PASS**
+- [x] **Bước 2 [GREEN]: Viết code tối thiểu PatientsController và đăng ký module để test ở Bước 1 PASS**
   Triển khai:
   - Tạo `PatientsController` tại `src/modules/patients/controllers/patients.controller.ts` đính kèm `@UseGuards(RolesGuard)`, `@Roles('FAMILY_REP', 'ADMIN')` và Swagger annotations.
   - Tạo `PatientsModule` tại `src/modules/patients/patients.module.ts` cung cấp repository và service token.
   - Thêm `PatientsModule` vào mảng `imports` của `AppModule` trong `src/app.module.ts`.
   Kỳ vọng: chạy `npm test -- src/modules/patients/__tests__/patients.controller.spec.ts` → PASS.
-- [ ] **Bước 3 [REFACTOR] (nếu cần): Chuẩn hóa Swagger DTO documentation**
+- [x] **Bước 3 [REFACTOR] (nếu cần): Chuẩn hóa Swagger DTO documentation**
   Bổ sung đầy đủ `@ApiOperation`, `@ApiResponse`, `@ApiParam` cho 8 endpoints của PatientsController.
   Kỳ vọng: chạy `npm test -- src/modules/patients/__tests__/patients.controller.spec.ts` → vẫn PASS.
-- [ ] **Bước 4: Xác nhận hoàn tất task**
+- [x] **Bước 4: Xác nhận hoàn tất task**
   Cách kiểm tra: chạy `npm test -- src/modules/patients/__tests__/patients.controller.spec.ts`
   Kết quả mong đợi: tất cả PASS, kiểm tra regression test `npm test -- src/core/__tests__/entrypoint-contract.spec.ts` PASS.
 
