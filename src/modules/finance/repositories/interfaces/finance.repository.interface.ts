@@ -3,7 +3,7 @@ export const FINANCE_INVOICE_INCLUDE = {
   contract: { include: { facility: true } },
   addendum: true,
   acceptedTransaction: true,
-  settlementItem: true,
+  settlementItems: true,
 } as const;
 export type RevenueInvoice = Prisma.InvoiceGetPayload<{
   include: typeof FINANCE_INVOICE_INCLUDE;
@@ -17,6 +17,30 @@ export interface RevenueFilter {
 }
 export const FINANCE_REPOSITORY_TOKEN = Symbol('IFinanceRepository');
 export interface FinanceSession {
+  getSatisfactionSummary(
+    filter: RevenueFilter,
+  ): Promise<{
+    reviewCount: number;
+    averageStars: number | null;
+    affectsPayout: false;
+    byDoctor: {
+      doctorId: string;
+      averageStars: number | null;
+      reviewCount: number;
+    }[];
+  }>;
+  getSatisfactionSummary(
+    filter: RevenueFilter,
+  ): Promise<{
+    reviewCount: number;
+    averageStars: number | null;
+    affectsPayout: false;
+    byDoctor: {
+      doctorId: string;
+      averageStars: number | null;
+      reviewCount: number;
+    }[];
+  }>;
   findFacilityForUser(userId: string): Promise<{ id: string } | null>;
   findEligibleInvoices(filter: RevenueFilter): Promise<RevenueInvoice[]>;
   countUnmatchedTransactions(filter: RevenueFilter): Promise<number>;

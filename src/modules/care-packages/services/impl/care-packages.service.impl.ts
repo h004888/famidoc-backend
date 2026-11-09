@@ -60,8 +60,32 @@ export class CarePackagesServiceImpl {
   async quote(id: string, dto: QuoteCarePackageDto): Promise<CarePackageQuote> {
     // Luôn lấy giá/quyền lợi từ phiên bản ACTIVE trong kho, không nhận giá client tự gửi.
     const carePackage = await this.getPublic(id);
-    // Chỉ tính mua mới trọn kỳ; chưa tính thêm người giữa kỳ, gia hạn hay nâng gói.
-    return calculateCarePackageQuote(carePackage, dto.memberCount);
+    if (dto.memberCount > carePackage.maxMembers) {
+      const candidates = await this.repository.list(
+        1,
+        100,
+        CarePackageStatus.ACTIVE,
+      );
+      throw new BadRequestException({
+        message: 'Số người vượt trần gói đang chọn.',
+        code: 'PACKAGE_MEMBER_LIMIT',
+        maxMembers: carePackage.maxMembers,
+        requestedMembers: dto.memberCount,
+        suggestHigherPackage: true,
+        suggestedPackages: candidates.items
+          .filter((p) => p.maxMembers >= dto.memberCount && p.id !== id)
+          .sort((a, b) => a.durationMonths - b.durationMonths)
+          .map((p) => ({
+            id: p.id,
+            name: p.name,
+            durationMonths: p.durationMonths,
+            maxMembers: p.maxMembers,
+            priceVnd: p.priceVnd,
+          })),
+      });
+    }
+    // Báo giá không thu tiền và không tự chọn gói khác khi vượt trần.
+    return calculateCarePackageQuote(carePackage, dto.memberCount, dto);
   }
 
   // Tra cứu nội bộ mọi trạng thái; module gọi vẫn phải tự kiểm tra quyền người dùng.
@@ -133,6 +157,8 @@ export class CarePackagesServiceImpl {
       name,
       description,
       durationMonths,
+      videoQuotaPolicy,
+      homeVisitUnitPriceVnd,
       priceVnd,
       includedMembers,
       maxMembers,
@@ -145,6 +171,8 @@ export class CarePackagesServiceImpl {
       name,
       description,
       durationMonths,
+      videoQuotaPolicy,
+      homeVisitUnitPriceVnd,
       priceVnd,
       includedMembers,
       maxMembers,

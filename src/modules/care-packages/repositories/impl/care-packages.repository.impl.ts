@@ -29,6 +29,10 @@ function toEntity(row: ServicePackage): CarePackage {
     name: row.packageName,
     description: row.description,
     durationMonths: row.durationMonths,
+    videoQuotaPolicy: row.videoQuotaPolicy as 'FIXED' | 'CONTRACT',
+    homeVisitUnitPriceVnd: row.homeVisitUnitPrice
+      ? moneyToNumber(row.homeVisitUnitPrice)
+      : undefined,
     priceVnd: moneyToNumber(row.basePrice),
     includedMembers: row.includedMembers,
     maxMembers: row.maxMembers,
@@ -55,6 +59,8 @@ function termsData(terms: CarePackageTerms) {
     packageName: terms.name,
     description: terms.description,
     durationMonths: terms.durationMonths,
+    videoQuotaPolicy: terms.videoQuotaPolicy ?? 'FIXED',
+    homeVisitUnitPrice: terms.homeVisitUnitPriceVnd ?? null,
     basePrice: terms.priceVnd,
     includedMembers: terms.includedMembers,
     maxMembers: terms.maxMembers,

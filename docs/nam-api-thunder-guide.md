@@ -1,10 +1,10 @@
 # Test 16 API của Nam bằng Thunder Client
 
-Backend trên máy dùng cổng trong `.env` (hiện tại `http://localhost:3001`). Dùng Node 24. Backend này đang nối PostgreSQL VPS; bộ `npm run test:db` dùng DB local riêng, không dọn dữ liệu trên VPS.
+Backend trên máy dùng cổng trong `.env` (hiện tại `http://localhost:4000`). Dùng Node 24. Backend này đang nối PostgreSQL VPS; bộ `npm run test:db` dùng `TEST_DATABASE_URL` và `TEST_REDIS_URL` trong cùng file `.env`, chỉ cho chạy vào DB local riêng, không dọn dữ liệu trên VPS.
 
 ## Tài khoản và dữ liệu mẫu
 
-Mật khẩu nằm trong `.env.local`, biến `DEMO_SEED_PASSWORD`; file này được Git và Docker bỏ qua. Các tài khoản có cùng mật khẩu demo:
+Mật khẩu nằm trong `.env`, biến `DEMO_SEED_PASSWORD`; file này được Git và Docker bỏ qua. Các tài khoản có cùng mật khẩu demo:
 
 | Tài khoản | Vai trò |
 |---|---|
@@ -17,7 +17,7 @@ Mật khẩu nằm trong `.env.local`, biến `DEMO_SEED_PASSWORD`; file này đ
 POST `/api/v1/auth/login`:
 
 ```json
-{"identifier":"family2@demo.famidoc.invalid","password":"MẬT_KHẨU_TRONG_ENV_LOCAL"}
+{"identifier":"family2@demo.famidoc.invalid","password":"GIÁ_TRỊ_DEMO_SEED_PASSWORD_TRONG_ENV"}
 ```
 
 Copy accessToken trả về vào Auth → Bearer Token. Khi đổi vai trò để xác nhận phụ lục/khiếu nại, đăng nhập lại đúng tài khoản và dùng đúng token. Không tự sửa role trong body.
@@ -163,7 +163,7 @@ Admin, POST `/api/v1/finance/settlements/monthly`:
 {"year":YYYY,"month":MM,"environment":"TEST","action":"PREPARE"}
 ```
 
-Trả bảng PENDING, transferExecuted=false. Lưu riêng từng hóa đơn để không cộng lại khi gọi trùng. Ví dụ hóa đơn mẫu 1.000.000đ, VAT đã ghi 0đ: nền tảng 150.000đ, CSYT 850.000đ.
+Trả bảng PENDING, transferExecuted=false. Lưu riêng từng hóa đơn để không cộng lại khi gọi trùng. Ví dụ phần doanh thu được phân bổ cho kỳ là 1.000.000đ: phí gộp nền tảng 150.000đ, CSYT 850.000đ. Đây không mặc định là toàn bộ giá trị hóa đơn của gói nhiều tháng.
 
 Chỉ sau khi **đã chuyển khoản và đối chiếu ngoài hệ thống**, Admin xác nhận:
 
@@ -211,10 +211,73 @@ Gia hạn cùng dòng gói dùng kind=RENEWAL và packageId thuộc cùng lineag
 - `npm run test:db`: HTTP + PostgreSQL/Redis local. Chỉ chạy với hostname local và tên DB kết thúc `_test`.
 - `npm run build`: build NestJS.
 
-Seed `npm run db:seed` chỉ nạp fixture DEMO khi ALLOW_DEMO_SEED=1 trong `.env.local`; không xóa dữ liệu. Không dùng seed để biến hợp đồng chưa ký thành hợp đồng pháp lý. Các xác nhận trong code là ghi nhận tài khoản chấp thuận điều khoản, chưa tích hợp nhà cung cấp chữ ký số CA.
+Seed `npm run db:seed` chỉ nạp fixture DEMO khi ALLOW_DEMO_SEED=1 trong `.env`; mặc định giữ ALLOW_DEMO_SEED=0 để tránh nạp lại dữ liệu ngoài ý muốn. Không dùng seed để biến hợp đồng chưa ký thành hợp đồng pháp lý. Các xác nhận trong code là ghi nhận tài khoản chấp thuận điều khoản, chưa tích hợp nhà cung cấp chữ ký số CA.
 
 ## Thay đổi DB sau khi gộp bảng
 
 Còn 30 bảng nghiệp vụ, cộng bảng `_prisma_migrations` là 31 bảng. Đã bỏ bảng riêng cho thành viên hợp đồng, xác nhận phụ lục và yêu cầu chấm dứt. Số người nằm trong `medical_contracts.member_count`; xác nhận phụ lục trong `contract_signatures.addendum_id`; lịch sử chấm dứt trong `medical_contracts.termination_requests`. Bảng `facility_settlement_items` vẫn giữ để đối soát chi tiết. Các migration cũ vẫn giữ để cài đặt và cập nhật DB theo thứ tự.
 
 API GET `/api/v1/contracts/{id}/terms` trả thêm `memberCount` là số người hiện đã mua, tách với báo giá ban đầu trong `terms`. Demo B trên VPS đang có 3 hồ sơ ACTIVE nhưng mới mua 1 chỗ: có thể dùng ví dụ `additionalMembers: 2` ở trên để kiểm tra mua đủ cho cả gia đình. Không tự tăng chỗ đã mua chỉ vì thêm hồ sơ. Khi tạo DB test mới, hai hồ sơ bổ sung được seed INACTIVE và chỉ đổi ACTIVE khi kiểm tra việc thêm người.
+
+
+## Bảng dịch vụ 05/11/2026 — kiểm tra bản code mới
+
+### Chuẩn bị và kết nối
+
+- Node 24.22.1, PostgreSQL và Redis. Không cần đăng ký dịch vụ thanh toán mới vì vẫn dùng VietQR/SePay hiện có.
+- Hai migration 20261105000100 (catalog/phân bổ tháng) và 20261105000200 (tên index) đã thử trên TEST_DATABASE_URL local riêng; chưa áp dụng vào VPS. DATABASE_URL trong .env trên máy có thể đang là DB VPS dùng chung: phải sao lưu và kiểm tra DB đích trước khi dùng npm run db:deploy.
+- Trên môi trường được phép cập nhật: npm run db:status → npm run db:deploy → npm run prisma:generate → npm run start:dev. Không dùng migrate reset, db push --force-reset hoặc seed lại toàn bộ DB chung.
+- Migration tự xuất bản bốn phiên bản catalog mới, giữ hợp đồng cũ. prisma/seed.ts là fixture legacy dùng kiểm tra tương thích, không phải lệnh cập nhật giá thực tế.
+- Trên Dokploy cần deploy code kèm prisma/migrations và áp dụng migration trước khi phục vụ request mới. Không tự chạy migration vào VPS trong lúc kiểm tra local.
+- CONTRACT_REMINDERS_ENABLED=true bật tác vụ nhắc hạn. Không cần cron hay Redis queue mới. Mặc định không bật tác vụ trong test.
+
+### Báo giá
+
+GET /api/v1/care-packages để lấy ID phiên bản ACTIVE. POST /api/v1/care-packages/{id}/quote:
+
+```json
+{"memberCount":5,"doctorTier":"DOCTORATE","extraHomeVisits":0}
+```
+
+Với Đồng hành mới: tổng 3.600.000đ; 3 lần tại nhà, 4 video. Bác sĩ thường: 3.300.000đ. Gói 6 tháng cho 8 người: 8.275.000đ, 7 lần tại nhà và 8 video; người thứ 9 bị từ chối và nhận gợi ý gói phù hợp. Gói năm cho 10 người với bác sĩ thường: 16.200.000đ.
+
+Các loại bác sĩ: STANDARD / MASTER / DOCTORATE / PROFESSOR. Chọn ở API quote chỉ để xem báo giá; khi tạo hợp đồng, backend dùng academicTitle của bác sĩ đã chọn trong DB. CSYT cần chuẩn hóa tên như “Bác sĩ”, “Thạc sĩ”, “Tiến sĩ”, “PGS.TS”.
+
+### Tạo hợp đồng và phụ lục
+
+POST /api/v1/contracts/medical nhận packageId, facilityId, doctorId và có thể thêm extraHomeVisits. Gói năm bắt buộc videoConsultations là số nguyên dương đã thống nhất. Ví dụ:
+
+```json
+{"packageId":"UUID_GOI_NAM","facilityId":"UUID_CSYT","doctorId":"UUID_BAC_SI","videoConsultations":24}
+```
+
+Đây là chốt quyền lợi trước khi bốn bên ký, không phải mua video lẻ. Với gói 1/3/6 tháng không được tự tăng số video. FE cần đọc videoQuotaPolicy=CONTRACT để hiện “thỏa thuận trong hợp đồng”, không hiển thị 0 lượt hay không giới hạn.
+
+Thêm người vẫn dùng POST /contracts/{id}/addendums với MEMBER_EXTENSION. Không vượt trần đã ký của phiên bản gói. Mua thêm lượt với QUOTA_EXPANSION tính (đơn giá gói + phụ thu bác sĩ đã chốt) × số lượt, không nhân số người.
+
+### Thanh toán
+
+POST /payments/vietqr chỉ nhận contractId/addendumId. Số tiền phải khớp tổng đã ký, bao gồm phụ thu. GET /payments/{paymentId}/status xem tiến trình. Webhook hợp lệ mới ghi PAID; đã PAID vẫn phải đủ điều kiện để ACTIVE. Test local không chuyển tiền thật.
+
+### Quyết toán và đánh giá
+
+GET /api/v1/finance/analytics?year=2026&month=10&environment=TEST bằng tài khoản Admin/CSYT. Tiền trong báo cáo là phần ngày phục vụ của tháng, không phải toàn bộ tiền gói vừa thu. satisfaction trả số đánh giá, sao trung bình và affectsPayout=false.
+
+POST /api/v1/finance/settlements/monthly với action=PREPARE chỉ nhận tháng đã kết thúc. Một hóa đơn gói quý/năm có nhiều dòng phân bổ ở các tháng; gọi lại cùng kỳ không cộng lại. Sau chuyển khoản thật mới CONFIRM_TRANSFER. Phí 15% là phí gộp; platformFeeVatVnd/platformFeeNetVnd chưa xác định thì trả null, cần chốt kế toán trước khai thuế. Không tự trừ thêm thuế vào 85% của CSYT.
+
+POST /api/v1/notifications/reminders/run bằng Admin kiểm tra nhắc hạn. Gọi hai lần chỉ có một thông báo cho mỗi hợp đồng/người nhận.
+
+### Chạy kiểm thử
+
+```powershell
+npm test -- --runInBand --reporters=default
+npm run test:db -- --verbose --reporters=default
+```
+
+Kết quả ngày 05/11/2026: 321 unit test và 43 test tích hợp đạt; TypeScript, Nest build và Prisma schema khớp DB kiểm thử. Lint không có lỗi, còn cảnh báo trong mã/test hiện có.
+
+Bộ test mới gồm báo giá mới, trần người, quota năm, phụ thu theo học vị, một hóa đơn qua nhiều kỳ, gọi trùng, đánh giá thấp không giảm tiền và nhắc hạn không trùng. Chỉ chạy trên DB local *_test và Redis riêng.
+
+### Phần cần phối hợp
+
+SePay Live vẫn cần HTTPS/chứng chỉ hợp lệ, khóa HMAC khớp và một hợp đồng thật đã đủ xác nhận để kiểm tra end-to-end. Upload bằng chứng lên SeaweedFS chưa nằm trong cập nhật bảng giá này. API lịch khám/hoàn thành của thành viên khác phải giữ chỗ quota, chỉ trừ sau hoàn thành, trả lượt khi hủy/lỗi; một lần khám cả gia đình không trừ nhiều lần theo từng bệnh nhân.
