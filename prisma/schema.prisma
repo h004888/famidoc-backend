@@ -412,6 +412,7 @@ model Patient {
   documents  PatientDocument[]
   encounters Encounter[]
   vitalSigns VitalSign[]
+  contractMembers ContractMember[]
 
   @@map("patients")
 }
@@ -456,7 +457,7 @@ model MedicalContract {
   contractNumber      String                @unique @map("contract_number") @db.VarChar(50)
   familyId            String                @map("family_id") @db.Uuid
   facilityId          String                @map("facility_id") @db.Uuid
-  doctorId            String                @map("doctor_id") @db.Uuid
+  doctorId            String?               @map("doctor_id") @db.Uuid
   packageId           String                @map("package_id") @db.Uuid
   totalAmount         Decimal               @map("total_amount") @db.Decimal(12, 2)
   remainingHomeVisits Int                   @map("remaining_home_visits")
@@ -485,10 +486,11 @@ model MedicalContract {
   // Relations
   familyUnit     FamilyUnit          @relation(fields: [familyId], references: [id], onDelete: Restrict)
   facility       HealthcareFacility  @relation(fields: [facilityId], references: [id], onDelete: Restrict)
-  doctor         Doctor              @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  doctor         Doctor?             @relation(fields: [doctorId], references: [id], onDelete: Restrict)
   servicePackage ServicePackage      @relation(fields: [packageId], references: [id], onDelete: Restrict)
   signatures     ContractSignature[]
   addenda        ContractAddendum[]
+  members        ContractMember[]
   encounters     Encounter[]
   invoices       Invoice[]
   complaints     Complaint[]
@@ -498,6 +500,20 @@ model MedicalContract {
   // CREATE UNIQUE INDEX idx_unique_active_contract_per_family ON medical_contracts (family_id) WHERE contract_status = 'ACTIVE';
   @@index([familyId], map: "idx_medical_contracts_family_id")
   @@map("medical_contracts")
+}
+
+model ContractMember {
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contractId        String           @map("contract_id") @db.Uuid
+  patientId         String           @map("patient_id") @db.Uuid
+  addedByAddendumId String?          @map("added_by_addendum_id") @db.Uuid
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+
+  contract          MedicalContract  @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  patient           Patient          @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@unique([contractId, patientId], map: "idx_contract_members_contract_patient")
+  @@map("contract_members")
 }
 
 model ContractSignature {
