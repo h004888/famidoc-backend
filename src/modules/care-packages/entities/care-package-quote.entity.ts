@@ -20,6 +20,13 @@ export interface CarePackageQuote {
     maxCount: number;
   };
   pricing: {
+    homeVisitUnitPriceVnd?: number;
+    doctorTier?: import('../pricing/doctor-pricing').DoctorTier;
+    doctorSurchargePerVisitVnd?: number;
+    doctorSurchargeTotalVnd?: number;
+    extraHomeVisits?: number;
+    extraHomeVisitsTotalVnd?: number;
+    settlementPolicy?: 'SERVICE_DAYS_15_85';
     currency: 'VND';
     basePriceVnd: number; // Giá trọn kỳ đã bao gồm số người cơ bản.
     additionalMemberMonthlyPriceVnd: number; // Đơn giá bổ sung một người/tháng.
@@ -28,6 +35,8 @@ export interface CarePackageQuote {
     totalPriceVnd: number; // Giá cơ bản cộng phụ phí, không tự thêm khoản phí chưa cấu hình.
   };
   benefits: {
+    videoQuotaPolicy?: 'FIXED' | 'CONTRACT';
+    videoQuotaConfirmed?: boolean;
     quotaPeriod: QuotaPeriod;
     quotas: CarePackageQuotas;
     sharedAcrossMembers: true; // Thêm người không tự nhân số lượt video/khám của gói.

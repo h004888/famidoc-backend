@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class PublicPackageItemDto {
+  videoQuotaPolicy?: string;
+  homeVisitUnitPriceVnd?: number;
   @ApiProperty({ example: '3fa85f64-5717-4562-b3fc-2c963f66afa6' })
   id!: string;
 
@@ -19,7 +21,10 @@ export class PublicPackageItemDto {
   @ApiProperty({ example: 4, description: 'Số lượt khám định kỳ tại nhà' })
   periodicVisitsQuota!: number;
 
-  @ApiProperty({ example: 12, description: 'Số lượt tư vấn từ xa (Telehealth)' })
+  @ApiProperty({
+    example: 12,
+    description: 'Số lượt tư vấn từ xa (Telehealth)',
+  })
   telehealthQuota!: number;
 
   @ApiProperty({ example: 4, description: 'Số thành viên tối đa áp dụng' })
@@ -51,7 +56,10 @@ export class PublicPackageItemDto {
 }
 
 export class PaginationMetaDto {
-  @ApiProperty({ example: 25, description: 'Tổng số bản ghi thỏa mãn điều kiện' })
+  @ApiProperty({
+    example: 25,
+    description: 'Tổng số bản ghi thỏa mãn điều kiện',
+  })
   total!: number;
 
   @ApiProperty({ example: 1, description: 'Trang hiện tại' })

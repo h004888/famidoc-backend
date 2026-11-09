@@ -124,7 +124,7 @@ import {
         const res = await request(app.getHttpServer())
           .post('/api/v1/auth/login')
           .send({ identifier: `${name}@demo.famidoc.invalid`, password })
-          .expect(201);
+          .expect(200);
         tokens[name] = 'Bearer ' + res.body.accessToken;
       }
     }, 120000);

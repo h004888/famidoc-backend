@@ -22,10 +22,20 @@ export class CreateContractAddendumDto {
   @ValidateIf((o) => o.type === 'MEMBER_EXTENSION')
   @IsInt()
   @Min(1)
-  @Max(5)
+  @Max(9)
   additionalMembers?: number;
 }
 export class CreatePackageUpgradeDto {
+  @ValidateIf((_o, v) => v !== undefined)
+  @IsInt()
+  @Min(1)
+  @Max(100_000)
+  videoConsultations?: number;
+  @ValidateIf((_o, v) => v !== undefined)
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  extraHomeVisits?: number;
   @IsUUID('4') packageId: string;
   @IsIn(['UPGRADE', 'RENEWAL']) kind: 'UPGRADE' | 'RENEWAL' = 'UPGRADE';
   // Backend đếm toàn bộ hồ sơ ACTIVE trong gia đình để tính gói; không chọn người lẻ.

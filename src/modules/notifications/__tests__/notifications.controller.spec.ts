@@ -1,3 +1,4 @@
+import { ContractRemindersService } from '../services/contract-reminders.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationsController } from '../controllers/notifications.controller';
 import {
@@ -41,6 +42,10 @@ describe('NotificationsController (/me/notifications alias)', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [NotificationsController],
       providers: [
+        {
+          provide: ContractRemindersService,
+          useValue: { runExpiryReminders: jest.fn() },
+        },
         {
           provide: NOTIFICATIONS_SERVICE_TOKEN,
           useValue: service,

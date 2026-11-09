@@ -8,7 +8,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, type SignerRole, type ContractSignature } from '@prisma/client';
+import {
+  Prisma,
+  type SignerRole,
+  type ContractSignature,
+} from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
 import {
@@ -17,6 +21,7 @@ import {
   todayInVietnam,
 } from '../../../../core/business/business-helpers';
 import { moneyToNumber } from '../../../../core/database/prisma-transaction';
+import { resolveDoctorTier } from '../../../care-packages/pricing/doctor-pricing';
 import { calculateCarePackageQuote } from '../../../care-packages/pricing/calculate-care-package-quote';
 import {
   CarePackageStatus,
@@ -43,6 +48,7 @@ import type {
   StaffingContractResponseDto,
 } from '../../dtos/staffing-contract.dto';
 import type { CreateMedicalContractDto } from '../../dtos/create-medical-contract.dto';
+import type { AssignDoctorToPackageDto } from '../../dtos/assign-doctor.dto';
 import {
   calculateHomeVisitAddendum,
   calculateMemberAddendum,
@@ -117,6 +123,16 @@ export class ContractsServiceImpl implements IContractsService {
         );
       }
 
+      const maxCap = doctor.maxPanelCapacity || 30;
+      if (
+        typeof doctor.activePanelCount === 'number' &&
+        doctor.activePanelCount >= maxCap
+      ) {
+        throw new ConflictException(
+          `Bác sĩ đã đạt giới hạn tối đa số hộ gia đình phụ trách (${maxCap}/${maxCap}). Vui lòng chọn bác sĩ khác`,
+        );
+      }
+
       const family = await session.findFamilyById(targetFamilyId!);
       if (!family || family.status !== 'ACTIVE') {
         throw new BadRequestException(
@@ -124,10 +140,18 @@ export class ContractsServiceImpl implements IContractsService {
         );
       }
 
-      const memberCount =
-        dto.memberCount ||
-        (await session.countFamilyMembers(targetFamilyId!)) ||
-        1;
+      // Đếm hồ sơ ACTIVE trong DB; khách phải mua đủ chỗ cho cả gia đình.
+      const familyCount = await session.countFamilyMembers(targetFamilyId!);
+      if (
+        actor.role === 'FAMILY_REP' &&
+        family.representativeUserId !== actor.id
+      )
+        throw new ForbiddenException(
+          'Bạn không phải đại diện của gia đình này.',
+        );
+      const memberCount = dto.memberCount ?? familyCount;
+      if (memberCount < familyCount || memberCount < 1)
+        throw new BadRequestException('Hãy đăng ký đủ số người của gia đình.');
 
       const quote = calculateCarePackageQuote(
         {
@@ -137,6 +161,10 @@ export class ContractsServiceImpl implements IContractsService {
           name: pkg.packageName,
           description: pkg.description,
           durationMonths: pkg.durationMonths,
+          videoQuotaPolicy: pkg.videoQuotaPolicy as 'FIXED' | 'CONTRACT',
+          homeVisitUnitPriceVnd: pkg.homeVisitUnitPrice
+            ? moneyToNumber(pkg.homeVisitUnitPrice)
+            : undefined,
           priceVnd: moneyToNumber(pkg.basePrice),
           includedMembers: pkg.includedMembers,
           maxMembers: pkg.maxMembers,
@@ -157,8 +185,17 @@ export class ContractsServiceImpl implements IContractsService {
           retiredAt: null,
         },
         memberCount,
+        {
+          doctorTier: resolveDoctorTier(doctor.academicTitle),
+          extraHomeVisits: dto.extraHomeVisits,
+          videoConsultations: dto.videoConsultations,
+        },
       );
 
+      if (quote.benefits.videoQuotaConfirmed === false)
+        throw new BadRequestException(
+          'Gói năm cần chốt số lượt video cụ thể trong hợp đồng trước khi ký.',
+        );
       const snapshot = {
         package: quote.package,
         members: quote.members,
@@ -178,8 +215,8 @@ export class ContractsServiceImpl implements IContractsService {
         doctorId: dto.doctorId,
         packageId: pkg.id,
         totalAmount: quote.pricing.totalPriceVnd,
-        remainingHomeVisits: pkg.periodicVisitsQuota,
-        remainingTelehealth: pkg.telehealthQuota,
+        remainingHomeVisits: quote.benefits.quotas.homeVisits,
+        remainingTelehealth: quote.benefits.quotas.videoConsultations,
         startDate: today,
         endDate: addContractMonths(today, pkg.durationMonths),
         contractStatus: 'PENDING_APPROVAL',
@@ -260,6 +297,102 @@ export class ContractsServiceImpl implements IContractsService {
       );
 
       return item;
+    });
+  }
+
+  initiateFourPartyContract(
+    actor: AuthenticatedUser,
+    dto: CreateMedicalContractDto,
+  ): Promise<ContractSummary> {
+    return this.createInitialMedicalContract(actor, dto);
+  }
+
+  signFourPartyContract(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: SignContractChangeDto,
+    ip: string,
+  ): Promise<ContractSignature> {
+    return this.signInitialMedicalContract(actor, id, dto, ip);
+  }
+
+  assignDoctorToPackage(
+    actor: AuthenticatedUser,
+    contractId: string,
+    dto: AssignDoctorToPackageDto,
+    _ip: string,
+  ): Promise<ContractSummary> {
+    return this.repository.transaction(async (session) => {
+      const contract = await session.findContractForUpdate(contractId);
+      if (!contract) {
+        throw new NotFoundException('Không tìm thấy hợp đồng y tế');
+      }
+
+      if (actor.role === 'HEALTHCARE_FACILITY') {
+        if (contract.facility.userId !== actor.id) {
+          throw new ForbiddenException(
+            'Bạn không có quyền phân công bác sĩ cho hợp đồng của cơ sở y tế khác',
+          );
+        }
+      } else if (actor.role !== 'ADMIN') {
+        throw new ForbiddenException(
+          'Chỉ Cơ sở y tế hoặc Quản trị viên mới có quyền phân công bác sĩ',
+        );
+      }
+
+      if (['TERMINATED', 'EXPIRED'].includes(contract.contractStatus)) {
+        throw new ConflictException(
+          'Hợp đồng đã kết thúc hoặc bị hủy, không thể phân công lại bác sĩ',
+        );
+      }
+
+      const newDoctor = await session.findDoctorById(dto.doctorId);
+      if (!newDoctor || newDoctor.onboardingStatus !== 'ACTIVE') {
+        throw new BadRequestException(
+          'Bác sĩ không tồn tại hoặc chưa được kích hoạt hoạt động',
+        );
+      }
+
+      if (newDoctor.facilityId !== contract.facilityId) {
+        throw new BadRequestException(
+          'Bác sĩ không thuộc cơ sở y tế phụ trách hợp đồng này',
+        );
+      }
+
+      const maxCapacity = newDoctor.maxPanelCapacity || 30;
+      if (
+        typeof newDoctor.activePanelCount === 'number' &&
+        newDoctor.activePanelCount >= maxCapacity
+      ) {
+        throw new ConflictException(
+          `Bác sĩ đã đạt giới hạn tối đa số hộ gia đình phụ trách (${maxCapacity}/${maxCapacity}). Vui lòng chọn bác sĩ khác`,
+        );
+      }
+
+      const prevDoctorId = contract.doctorId;
+      if (prevDoctorId === dto.doctorId) {
+        return this.toContractSummary(contract);
+      }
+
+      const updated = await session.updateContractDoctor(
+        contractId,
+        dto.doctorId,
+      );
+
+      // Nếu hợp đồng đang ACTIVE thì cập nhật counter activePanelCount (BR-03)
+      if (contract.contractStatus === 'ACTIVE') {
+        await session.refreshDoctorPanel(prevDoctorId);
+        await session.refreshDoctorPanel(dto.doctorId);
+      }
+
+      await session.recordChange(
+        actor.id,
+        updated,
+        'ASSIGN_DOCTOR_TO_CONTRACT',
+        contractId,
+      );
+
+      return this.toContractSummary(updated);
     });
   }
 
@@ -557,9 +690,9 @@ export class ContractsServiceImpl implements IContractsService {
           );
         const added = dto.additionalMembers!;
         const newCount = contract.memberCount + added;
-        if (newCount > Math.min(6, terms.members.maxCount))
+        if (newCount > terms.members.maxCount)
           throw new BadRequestException(
-            'The package supports at most six family members',
+            'Số người vượt trần của phiên bản gói đã ký',
           );
         const familyCount = await session.countFamilyMembers(contract.familyId);
         if (newCount < familyCount)
@@ -659,6 +792,11 @@ export class ContractsServiceImpl implements IContractsService {
       const pkg = await session.findPackage(dto.packageId);
       if (!pkg || pkg.status !== 'ACTIVE' || pkg.deletedAt)
         throw new NotFoundException('Active package not found');
+      const doctor = await session.findDoctorById(old.doctorId);
+      if (!doctor || doctor.onboardingStatus !== 'ACTIVE')
+        throw new ConflictException(
+          'Bác sĩ chưa đủ điều kiện phục vụ hợp đồng mới.',
+        );
       const oldTerms = readFrozenContractTerms(old.billingSnapshot);
       if (
         dto.kind === 'UPGRADE' &&
@@ -683,6 +821,10 @@ export class ContractsServiceImpl implements IContractsService {
           name: pkg.packageName,
           description: pkg.description,
           durationMonths: pkg.durationMonths,
+          videoQuotaPolicy: pkg.videoQuotaPolicy as 'FIXED' | 'CONTRACT',
+          homeVisitUnitPriceVnd: pkg.homeVisitUnitPrice
+            ? moneyToNumber(pkg.homeVisitUnitPrice)
+            : undefined,
           priceVnd: moneyToNumber(pkg.basePrice),
           includedMembers: pkg.includedMembers,
           maxMembers: pkg.maxMembers,
@@ -703,7 +845,16 @@ export class ContractsServiceImpl implements IContractsService {
           retiredAt: null,
         },
         memberCount,
+        {
+          doctorTier: resolveDoctorTier(doctor.academicTitle),
+          extraHomeVisits: dto.extraHomeVisits,
+          videoConsultations: dto.videoConsultations,
+        },
       );
+      if (quote.benefits.videoQuotaConfirmed === false)
+        throw new BadRequestException(
+          'Gói năm cần chốt số lượt video cụ thể trong hợp đồng trước khi ký.',
+        );
       const snapshot = {
         package: quote.package,
         members: quote.members,
@@ -718,8 +869,8 @@ export class ContractsServiceImpl implements IContractsService {
         doctorId: old.doctorId,
         packageId: pkg.id,
         totalAmount: quote.pricing.totalPriceVnd,
-        remainingHomeVisits: pkg.periodicVisitsQuota,
-        remainingTelehealth: pkg.telehealthQuota,
+        remainingHomeVisits: quote.benefits.quotas.homeVisits,
+        remainingTelehealth: quote.benefits.quotas.videoConsultations,
         startDate: today,
         endDate: addContractMonths(today, pkg.durationMonths),
         contractStatus: 'PENDING_APPROVAL',
