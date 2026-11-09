@@ -5,7 +5,6 @@ import { ReviewsModule } from './modules/reviews/reviews.module';
 import { ComplaintsModule } from './modules/complaints/complaints.module';
 import { UsersModule } from './modules/users/users.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
-import { PatientsModule } from './modules/patients/patients.module';
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
