@@ -220,6 +220,10 @@ export class PublicServiceImpl implements IPublicService {
         basePrice: Number(pkg.basePrice),
         periodicVisitsQuota: pkg.periodicVisitsQuota,
         telehealthQuota: pkg.telehealthQuota,
+        videoQuotaPolicy: pkg.videoQuotaPolicy,
+        homeVisitUnitPriceVnd: pkg.homeVisitUnitPrice
+          ? Number(pkg.homeVisitUnitPrice)
+          : undefined,
         maxMembers: pkg.maxMembers,
         includedMembers: pkg.includedMembers,
         additionalMemberMonthlyPrice: Number(pkg.additionalMemberMonthlyPrice),
@@ -253,6 +257,10 @@ export class PublicServiceImpl implements IPublicService {
       basePrice: Number(pkg.basePrice),
       periodicVisitsQuota: pkg.periodicVisitsQuota,
       telehealthQuota: pkg.telehealthQuota,
+      videoQuotaPolicy: pkg.videoQuotaPolicy,
+      homeVisitUnitPriceVnd: pkg.homeVisitUnitPrice
+        ? Number(pkg.homeVisitUnitPrice)
+        : undefined,
       maxMembers: pkg.maxMembers,
       includedMembers: pkg.includedMembers,
       additionalMemberMonthlyPrice: Number(pkg.additionalMemberMonthlyPrice),
@@ -265,11 +273,12 @@ export class PublicServiceImpl implements IPublicService {
         clinicalServices: [
           'Khám lâm sàng tổng quát toàn diện định kỳ tại nhà',
           'Đo dấu hiệu sinh tồn chuẩn y tế (Huyết áp, Nhịp tim, SpO2, Thân nhiệt)',
-          'Xét nghiệm đường huyết mao mạch và kiểm tra sức khỏe tại chỗ',
+          'Theo dõi chỉ số và tư vấn trong phạm vi chuyên môn; xét nghiệm ngoài gói',
           'Cập nhật và theo dõi Hồ sơ sức khỏe điện tử (EHR) liên tục',
           'Kê đơn thuốc điện tử chuẩn Thông tư 04/2022/TT-BYT',
         ],
-        emergencySupport: 'Đường dây nóng hỗ trợ điều phối y tế gia đình 24/7',
+        emergencySupport:
+          'Theo lịch và giờ làm việc đã thống nhất; không phải dịch vụ cấp cứu 24/7',
       },
       sampleTerms: {
         rescheduleNoticeHours:

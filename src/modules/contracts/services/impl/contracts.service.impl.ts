@@ -8,7 +8,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, type SignerRole, type ContractSignature } from '@prisma/client';
+import {
+  Prisma,
+  type SignerRole,
+  type ContractSignature,
+} from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
 import {
@@ -17,6 +21,7 @@ import {
   todayInVietnam,
 } from '../../../../core/business/business-helpers';
 import { moneyToNumber } from '../../../../core/database/prisma-transaction';
+import { resolveDoctorTier } from '../../../care-packages/pricing/doctor-pricing';
 import { calculateCarePackageQuote } from '../../../care-packages/pricing/calculate-care-package-quote';
 import {
   CarePackageStatus,
@@ -135,10 +140,18 @@ export class ContractsServiceImpl implements IContractsService {
         );
       }
 
-      const memberCount =
-        dto.memberCount ||
-        (await session.countFamilyMembers(targetFamilyId!)) ||
-        1;
+      // Đếm hồ sơ ACTIVE trong DB; khách phải mua đủ chỗ cho cả gia đình.
+      const familyCount = await session.countFamilyMembers(targetFamilyId!);
+      if (
+        actor.role === 'FAMILY_REP' &&
+        family.representativeUserId !== actor.id
+      )
+        throw new ForbiddenException(
+          'Bạn không phải đại diện của gia đình này.',
+        );
+      const memberCount = dto.memberCount ?? familyCount;
+      if (memberCount < familyCount || memberCount < 1)
+        throw new BadRequestException('Hãy đăng ký đủ số người của gia đình.');
 
       const quote = calculateCarePackageQuote(
         {
@@ -148,6 +161,10 @@ export class ContractsServiceImpl implements IContractsService {
           name: pkg.packageName,
           description: pkg.description,
           durationMonths: pkg.durationMonths,
+          videoQuotaPolicy: pkg.videoQuotaPolicy as 'FIXED' | 'CONTRACT',
+          homeVisitUnitPriceVnd: pkg.homeVisitUnitPrice
+            ? moneyToNumber(pkg.homeVisitUnitPrice)
+            : undefined,
           priceVnd: moneyToNumber(pkg.basePrice),
           includedMembers: pkg.includedMembers,
           maxMembers: pkg.maxMembers,
@@ -168,8 +185,17 @@ export class ContractsServiceImpl implements IContractsService {
           retiredAt: null,
         },
         memberCount,
+        {
+          doctorTier: resolveDoctorTier(doctor.academicTitle),
+          extraHomeVisits: dto.extraHomeVisits,
+          videoConsultations: dto.videoConsultations,
+        },
       );
 
+      if (quote.benefits.videoQuotaConfirmed === false)
+        throw new BadRequestException(
+          'Gói năm cần chốt số lượt video cụ thể trong hợp đồng trước khi ký.',
+        );
       const snapshot = {
         package: quote.package,
         members: quote.members,
@@ -189,8 +215,8 @@ export class ContractsServiceImpl implements IContractsService {
         doctorId: dto.doctorId,
         packageId: pkg.id,
         totalAmount: quote.pricing.totalPriceVnd,
-        remainingHomeVisits: pkg.periodicVisitsQuota,
-        remainingTelehealth: pkg.telehealthQuota,
+        remainingHomeVisits: quote.benefits.quotas.homeVisits,
+        remainingTelehealth: quote.benefits.quotas.videoConsultations,
         startDate: today,
         endDate: addContractMonths(today, pkg.durationMonths),
         contractStatus: 'PENDING_APPROVAL',
@@ -664,9 +690,9 @@ export class ContractsServiceImpl implements IContractsService {
           );
         const added = dto.additionalMembers!;
         const newCount = contract.memberCount + added;
-        if (newCount > Math.min(6, terms.members.maxCount))
+        if (newCount > terms.members.maxCount)
           throw new BadRequestException(
-            'The package supports at most six family members',
+            'Số người vượt trần của phiên bản gói đã ký',
           );
         const familyCount = await session.countFamilyMembers(contract.familyId);
         if (newCount < familyCount)
@@ -766,6 +792,11 @@ export class ContractsServiceImpl implements IContractsService {
       const pkg = await session.findPackage(dto.packageId);
       if (!pkg || pkg.status !== 'ACTIVE' || pkg.deletedAt)
         throw new NotFoundException('Active package not found');
+      const doctor = await session.findDoctorById(old.doctorId);
+      if (!doctor || doctor.onboardingStatus !== 'ACTIVE')
+        throw new ConflictException(
+          'Bác sĩ chưa đủ điều kiện phục vụ hợp đồng mới.',
+        );
       const oldTerms = readFrozenContractTerms(old.billingSnapshot);
       if (
         dto.kind === 'UPGRADE' &&
@@ -790,6 +821,10 @@ export class ContractsServiceImpl implements IContractsService {
           name: pkg.packageName,
           description: pkg.description,
           durationMonths: pkg.durationMonths,
+          videoQuotaPolicy: pkg.videoQuotaPolicy as 'FIXED' | 'CONTRACT',
+          homeVisitUnitPriceVnd: pkg.homeVisitUnitPrice
+            ? moneyToNumber(pkg.homeVisitUnitPrice)
+            : undefined,
           priceVnd: moneyToNumber(pkg.basePrice),
           includedMembers: pkg.includedMembers,
           maxMembers: pkg.maxMembers,
@@ -810,7 +845,16 @@ export class ContractsServiceImpl implements IContractsService {
           retiredAt: null,
         },
         memberCount,
+        {
+          doctorTier: resolveDoctorTier(doctor.academicTitle),
+          extraHomeVisits: dto.extraHomeVisits,
+          videoConsultations: dto.videoConsultations,
+        },
       );
+      if (quote.benefits.videoQuotaConfirmed === false)
+        throw new BadRequestException(
+          'Gói năm cần chốt số lượt video cụ thể trong hợp đồng trước khi ký.',
+        );
       const snapshot = {
         package: quote.package,
         members: quote.members,
@@ -825,8 +869,8 @@ export class ContractsServiceImpl implements IContractsService {
         doctorId: old.doctorId,
         packageId: pkg.id,
         totalAmount: quote.pricing.totalPriceVnd,
-        remainingHomeVisits: pkg.periodicVisitsQuota,
-        remainingTelehealth: pkg.telehealthQuota,
+        remainingHomeVisits: quote.benefits.quotas.homeVisits,
+        remainingTelehealth: quote.benefits.quotas.videoConsultations,
         startDate: today,
         endDate: addContractMonths(today, pkg.durationMonths),
         contractStatus: 'PENDING_APPROVAL',

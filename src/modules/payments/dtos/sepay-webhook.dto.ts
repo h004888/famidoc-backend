@@ -13,7 +13,7 @@ import {
 // Các trường SePay gửi qua webhook. Guard xác thực nguồn trước khi xử lý nội dung.
 export class SePayWebhookDto {
   @IsInt()
-  @Min(1)
+  @Min(0) // SePay dùng 0 cho bản tin gửi thử. Controller xử lý riêng bản tin này.
   @Max(Number.MAX_SAFE_INTEGER)
   id: number;
 

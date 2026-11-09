@@ -37,7 +37,7 @@ import { demoIds, seedDemo } from '../prisma/seed';
       const res = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
         .send({ identifier, password })
-        .expect(201);
+        .expect(200);
       expect(res.body.user).not.toHaveProperty('passwordHash');
       return `Bearer ${res.body.accessToken}`;
     }
@@ -124,7 +124,7 @@ import { demoIds, seedDemo } from '../prisma/seed';
       expect(await db.user.count()).toBe(5);
       expect(await db.medicalContract.count()).toBe(2);
     });
-    it('publishes 1/3/12 month packages with the documented prices', async () => {
+    it('preserves 1/3/12-month legacy fixture prices for old signed contracts', async () => {
       const { body } = await request(app.getHttpServer())
         .get('/api/v1/care-packages')
         .expect(200);
@@ -524,7 +524,7 @@ import { demoIds, seedDemo } from '../prisma/seed';
       await request(app.getHttpServer())
         .post('/api/v1/auth/logout')
         .set('Authorization', family)
-        .expect(201);
+        .expect(200);
       await request(app.getHttpServer())
         .get('/api/v1/users/profile')
         .set('Authorization', family)

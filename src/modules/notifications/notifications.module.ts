@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ContractRemindersService } from './services/contract-reminders.service';
 import { AuthAccessModule } from '../../core/auth/auth-access.module';
 import { NotificationsController } from './controllers/notifications.controller';
 import { NotificationsServiceImpl } from './services/impl/notifications.service.impl';
@@ -9,6 +10,7 @@ import { NOTIFICATIONS_REPOSITORY_TOKEN } from './repositories/interfaces/notifi
   imports: [AuthAccessModule],
   controllers: [NotificationsController],
   providers: [
+    ContractRemindersService,
     {
       provide: NOTIFICATIONS_SERVICE_TOKEN,
       useClass: NotificationsServiceImpl,

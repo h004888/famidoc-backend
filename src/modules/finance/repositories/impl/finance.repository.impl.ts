@@ -1,3 +1,4 @@
+import { calculateMonthlyInvoiceShares } from '../../pricing/monthly-recognition';
 import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { FacilitySettlement } from '@prisma/client';
@@ -21,6 +22,39 @@ export class FinanceRepositoryImpl implements IFinanceRepository {
 }
 class PrismaFinanceSession implements FinanceSession {
   constructor(private readonly tx: Prisma.TransactionClient) {}
+  // Điểm sao phục vụ giám sát chất lượng, không tham gia công thức tiền chi trả.
+  async getSatisfactionSummary(filter: RevenueFilter) {
+    const groups = await this.tx.doctorReview.groupBy({
+      by: ['doctorId'],
+      where: {
+        createdAt: { gte: filter.start, lt: filter.end },
+        encounter: {
+          contract: {
+            facilityId: filter.facilityId,
+            isDemo: filter.environment === 'TEST',
+          },
+        },
+      },
+      _avg: { ratingStars: true },
+      _count: true,
+    });
+    const reviewCount = groups.reduce((sum, r) => sum + r._count, 0);
+    return {
+      reviewCount,
+      averageStars: reviewCount
+        ? groups.reduce(
+            (sum, r) => sum + (r._avg.ratingStars ?? 0) * r._count,
+            0,
+          ) / reviewCount
+        : null,
+      affectsPayout: false as const,
+      byDoctor: groups.map((r) => ({
+        doctorId: r.doctorId,
+        averageStars: r._avg.ratingStars,
+        reviewCount: r._count,
+      })),
+    };
+  }
   findFacilityForUser(userId: string) {
     return this.tx.healthcareFacility.findUnique({
       where: { userId },
@@ -31,12 +65,14 @@ class PrismaFinanceSession implements FinanceSession {
     const rows = await this.tx.invoice.findMany({
       where: {
         paymentStatus: 'PAID',
-        paidAt: { gte: filter.start, lt: filter.end },
+        paidAt: { lt: filter.end },
         environment: filter.environment,
         contract: {
           facilityId: filter.facilityId,
           isDemo: filter.environment === 'TEST',
           contractStatus: { in: ['ACTIVE', 'EXPIRED', 'TERMINATED'] },
+          startDate: { lt: filter.end },
+          endDate: { gt: filter.start },
         },
         acceptedTransaction: {
           outcome: 'MATCHED',
@@ -44,7 +80,27 @@ class PrismaFinanceSession implements FinanceSession {
           transferType: 'in',
           environment: filter.environment,
         },
-        ...(filter.onlyUnsettled ? { settlementItem: null } : {}),
+        // Hóa đơn đã quyết toán trọn theo cách cũ không được chia thêm lần nữa.
+        ...(filter.onlyUnsettled
+          ? {
+              settlementItems: {
+                none: {
+                  OR: [
+                    { recognitionBasis: 'LEGACY_CASH' },
+                    {
+                      recognitionYear: new Date(
+                        filter.end.getTime() + 7 * 3600000 - 1,
+                      ).getUTCFullYear(),
+                      recognitionMonth:
+                        new Date(
+                          filter.end.getTime() + 7 * 3600000 - 1,
+                        ).getUTCMonth() + 1,
+                    },
+                  ],
+                },
+              },
+            }
+          : {}),
       },
       include: FINANCE_INVOICE_INCLUDE,
       orderBy: { id: 'asc' },
@@ -55,7 +111,11 @@ class PrismaFinanceSession implements FinanceSession {
         'Select one facility or a smaller reporting period; this request exceeds 1000 invoices',
       );
     // Phụ lục chưa cấp quyền thì chưa chia doanh thu, dù tiền đã được ghi nhận.
-    return rows.filter((r) => !r.addendumId || r.addendum?.status === 'ACTIVE');
+    return rows.filter(
+      (r) =>
+        (!r.addendumId || r.addendum?.status === 'ACTIVE') &&
+        calculateMonthlyInvoiceShares(r, filter),
+    );
   }
   countUnmatchedTransactions(filter: RevenueFilter) {
     return this.tx.paymentTransaction.count({
