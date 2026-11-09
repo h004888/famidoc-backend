@@ -115,6 +115,10 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
       findFacilityById: jest.fn().mockResolvedValue(mockFacility),
       findDoctorById: jest.fn().mockResolvedValue(mockDoctor),
       findFamilyById: jest.fn().mockResolvedValue(mockFamily),
+      findPatientsByIdsAndFamilyId: jest
+        .fn()
+        .mockResolvedValue([{ id: 'patient-1' }, { id: 'patient-2' }]),
+      createContractMembers: jest.fn().mockResolvedValue(undefined),
       countFamilyMembers: jest.fn().mockResolvedValue(4),
       hasOtherActiveContract: jest.fn().mockResolvedValue(false),
       findContractForUpdate: jest.fn().mockResolvedValue(mockContract),
@@ -158,6 +162,7 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
         packageId: 'pkg-1',
         facilityId: 'fac-1',
         doctorId: 'doc-1',
+        patientIds: ['patient-1', 'patient-2'],
       };
 
       const result = await (service as any).createInitialMedicalContract(
@@ -169,7 +174,61 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
       expect(result.contractStatus).toBe('PENDING_APPROVAL');
       expect(result.facilityId).toBe('fac-1');
       expect(result.doctorId).toBe('doc-1');
+      expect(sessionMock.createContractMembers).toHaveBeenCalledWith(
+        'contract-uuid-1',
+        ['patient-1', 'patient-2'],
+      );
       expect(sessionMock.findPackage).toHaveBeenCalledWith('pkg-1');
+    });
+
+    it('should create a pending contract without a doctor using exactly the selected family members', async () => {
+      sessionMock.createMedicalContract.mockResolvedValue({
+        ...mockContract,
+        doctorId: null,
+        doctor: null,
+        memberCount: 2,
+      });
+
+      const result = await service.createInitialMedicalContract(familyRepUser, {
+        packageId: 'pkg-1',
+        facilityId: 'fac-1',
+        patientIds: ['patient-1', 'patient-2'],
+      } as any);
+
+      expect(result.doctorId).toBeNull();
+      expect(sessionMock.findDoctorById).not.toHaveBeenCalled();
+      expect(sessionMock.createMedicalContract).toHaveBeenCalledWith(
+        expect.objectContaining({ doctorId: null, memberCount: 2 }),
+      );
+      expect(sessionMock.createContractMembers).toHaveBeenCalledWith(
+        'contract-uuid-1',
+        ['patient-1', 'patient-2'],
+      );
+    });
+
+    it('should reject selected patients outside the target family', async () => {
+      sessionMock.findPatientsByIdsAndFamilyId.mockResolvedValue([
+        { id: 'patient-1' },
+      ]);
+
+      await expect(
+        service.createInitialMedicalContract(familyRepUser, {
+          packageId: 'pkg-1',
+          facilityId: 'fac-1',
+          patientIds: ['patient-1', 'patient-from-another-family'],
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject a memberCount that disagrees with patientIds', async () => {
+      await expect(
+        service.createInitialMedicalContract(familyRepUser, {
+          packageId: 'pkg-1',
+          facilityId: 'fac-1',
+          patientIds: ['patient-1', 'patient-2'],
+          memberCount: 3,
+        } as any),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw BadRequestException if package is not active', async () => {
@@ -179,6 +238,7 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
         packageId: 'pkg-inactive',
         facilityId: 'fac-1',
         doctorId: 'doc-1',
+        patientIds: ['patient-1'],
       };
 
       await expect(
@@ -188,6 +248,26 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
   });
 
   describe('signInitialMedicalContract', () => {
+    it('should require a doctor before a facility signs an unassigned contract', async () => {
+      const unassignedContract = {
+        ...mockContract,
+        doctorId: null,
+        doctor: null,
+      };
+      sessionMock.findContractForUpdate.mockResolvedValue(unassignedContract);
+      const hash = calculateContractTermsHash(unassignedContract);
+
+      await expect(
+        service.signInitialMedicalContract(
+          facilityUser,
+          'contract-uuid-1',
+          { acceptedTerms: true, termsHash: hash },
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(
+        'Cơ sở y tế phải phân công bác sĩ trước khi ký tiếp nhận',
+      );
+    });
     it('should allow FAMILY_REP to sign first', async () => {
       const hash = calculateContractTermsHash(mockContract);
       const signDto = {

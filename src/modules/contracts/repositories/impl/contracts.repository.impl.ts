@@ -269,10 +269,23 @@ class PrismaContractsSession implements ContractsSession {
     return this.tx.familyUnit.findUnique({ where: { id } });
   }
 
+  findPatientsByIdsAndFamilyId(patientIds: string[], familyId: string) {
+    return this.tx.patient.findMany({
+      where: { id: { in: patientIds }, familyId },
+      select: { id: true },
+    });
+  }
+
   createMedicalContract(data: Prisma.MedicalContractUncheckedCreateInput) {
     return this.tx.medicalContract.create({
       data,
       include: CONTRACT_CHANGE_INCLUDE,
+    });
+  }
+
+  async createContractMembers(contractId: string, patientIds: string[]) {
+    await this.tx.contractMember.createMany({
+      data: patientIds.map((patientId) => ({ contractId, patientId })),
     });
   }
 

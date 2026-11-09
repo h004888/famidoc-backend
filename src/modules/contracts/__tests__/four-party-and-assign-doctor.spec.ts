@@ -161,6 +161,15 @@ describe('Four-Party Contract & Doctor Assignment (UC-16, UC-23, SD-16, SD-23)',
         return Promise.resolve(null);
       }),
       findFamilyById: jest.fn().mockResolvedValue(mockFamily),
+      findPatientsByIdsAndFamilyId: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 'patient-1' },
+          { id: 'patient-2' },
+          { id: 'patient-3' },
+          { id: 'patient-4' },
+        ]),
+      createContractMembers: jest.fn().mockResolvedValue(undefined),
       countFamilyMembers: jest.fn().mockResolvedValue(4),
       findContractForUpdate: jest.fn().mockResolvedValue(mockContract),
       findContractSignatures: jest.fn().mockResolvedValue([]),
@@ -219,10 +228,14 @@ describe('Four-Party Contract & Doctor Assignment (UC-16, UC-23, SD-16, SD-23)',
       facilityId: 'fac-1',
       doctorId: 'doc-1',
       memberCount: 4,
+      patientIds: ['patient-1', 'patient-2', 'patient-3', 'patient-4'],
     };
 
     it('should successfully initiate four-party contract by Family Representative', async () => {
-      const result = await service.initiateFourPartyContract(familyRepUser, dto);
+      const result = await service.initiateFourPartyContract(
+        familyRepUser,
+        dto,
+      );
 
       expect(result).toBeDefined();
       expect(result.contractStatus).toBe('PENDING_APPROVAL');
@@ -235,7 +248,10 @@ describe('Four-Party Contract & Doctor Assignment (UC-16, UC-23, SD-16, SD-23)',
 
     it('should successfully initiate four-party contract by Admin with explicit familyId', async () => {
       const adminDto = { ...dto, familyId: 'fam-uuid-1' };
-      const result = await service.initiateFourPartyContract(adminUser, adminDto);
+      const result = await service.initiateFourPartyContract(
+        adminUser,
+        adminDto,
+      );
 
       expect(result).toBeDefined();
       expect(sessionMock.findFamilyById).toHaveBeenCalledWith('fam-uuid-1');

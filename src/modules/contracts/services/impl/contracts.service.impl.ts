@@ -8,7 +8,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, type SignerRole, type ContractSignature } from '@prisma/client';
+import {
+  Prisma,
+  type SignerRole,
+  type ContractSignature,
+} from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
 import {
@@ -107,25 +111,27 @@ export class ContractsServiceImpl implements IContractsService {
         );
       }
 
-      const doctor = await session.findDoctorById(dto.doctorId);
-      if (
-        !doctor ||
-        doctor.onboardingStatus !== 'ACTIVE' ||
-        doctor.facilityId !== dto.facilityId
-      ) {
-        throw new BadRequestException(
-          'Bác sĩ không hợp lệ hoặc không thuộc cơ sở y tế này',
-        );
-      }
+      if (dto.doctorId) {
+        const doctor = await session.findDoctorById(dto.doctorId);
+        if (
+          !doctor ||
+          doctor.onboardingStatus !== 'ACTIVE' ||
+          doctor.facilityId !== dto.facilityId
+        ) {
+          throw new BadRequestException(
+            'Bác sĩ không hợp lệ hoặc không thuộc cơ sở y tế này',
+          );
+        }
 
-      const maxCap = doctor.maxPanelCapacity || 30;
-      if (
-        typeof doctor.activePanelCount === 'number' &&
-        doctor.activePanelCount >= maxCap
-      ) {
-        throw new ConflictException(
-          `Bác sĩ đã đạt giới hạn tối đa số hộ gia đình phụ trách (${maxCap}/${maxCap}). Vui lòng chọn bác sĩ khác`,
-        );
+        const maxCap = doctor.maxPanelCapacity || 30;
+        if (
+          typeof doctor.activePanelCount === 'number' &&
+          doctor.activePanelCount >= maxCap
+        ) {
+          throw new ConflictException(
+            `Bác sĩ đã đạt giới hạn tối đa số hộ gia đình phụ trách (${maxCap}/${maxCap}). Vui lòng chọn bác sĩ khác`,
+          );
+        }
       }
 
       const family = await session.findFamilyById(targetFamilyId!);
@@ -135,10 +141,24 @@ export class ContractsServiceImpl implements IContractsService {
         );
       }
 
-      const memberCount =
-        dto.memberCount ||
-        (await session.countFamilyMembers(targetFamilyId!)) ||
-        1;
+      if (
+        dto.memberCount !== undefined &&
+        dto.memberCount !== dto.patientIds.length
+      ) {
+        throw new BadRequestException(
+          'memberCount phải khớp với số thành viên trong patientIds',
+        );
+      }
+      const patients = await session.findPatientsByIdsAndFamilyId(
+        dto.patientIds,
+        targetFamilyId!,
+      );
+      if (patients.length !== dto.patientIds.length) {
+        throw new BadRequestException(
+          'Tất cả thành viên được chọn phải thuộc hộ gia đình của hợp đồng',
+        );
+      }
+      const memberCount = dto.patientIds.length;
 
       const quote = calculateCarePackageQuote(
         {
@@ -186,7 +206,7 @@ export class ContractsServiceImpl implements IContractsService {
         contractNumber,
         familyId: targetFamilyId!,
         facilityId: dto.facilityId,
-        doctorId: dto.doctorId,
+        doctorId: dto.doctorId ?? null,
         packageId: pkg.id,
         totalAmount: quote.pricing.totalPriceVnd,
         remainingHomeVisits: pkg.periodicVisitsQuota,
@@ -198,6 +218,8 @@ export class ContractsServiceImpl implements IContractsService {
         memberCount,
         isDemo: false,
       });
+
+      await session.createContractMembers(item.id, dto.patientIds);
 
       await session.recordChange(
         actor.id,
@@ -230,6 +252,14 @@ export class ContractsServiceImpl implements IContractsService {
       this.validateAcceptance(dto, hash);
 
       const role = getContractSignerRole(contract, actor);
+      if (
+        ['HEALTHCARE_FACILITY', 'ASSIGNED_DOCTOR'].includes(role) &&
+        contract.doctorId === null
+      ) {
+        throw new BadRequestException(
+          'Cơ sở y tế phải phân công bác sĩ trước khi ký tiếp nhận',
+        );
+      }
       const signatures = await session.findContractSignatures(id);
 
       const previous = signatures.find((s) => s.signerRole === role);
@@ -355,7 +385,7 @@ export class ContractsServiceImpl implements IContractsService {
 
       // Nếu hợp đồng đang ACTIVE thì cập nhật counter activePanelCount (BR-03)
       if (contract.contractStatus === 'ACTIVE') {
-        await session.refreshDoctorPanel(prevDoctorId);
+        if (prevDoctorId) await session.refreshDoctorPanel(prevDoctorId);
         await session.refreshDoctorPanel(dto.doctorId);
       }
 

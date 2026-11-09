@@ -1,4 +1,12 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsUUID, Min } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsUUID,
+  Min,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateMedicalContractDto {
@@ -18,13 +26,22 @@ export class CreateMedicalContractDto {
   @IsNotEmpty()
   facilityId!: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'ID bác sĩ gia đình phân công',
     example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
   @IsUUID('4')
-  @IsNotEmpty()
-  doctorId!: string;
+  @IsOptional()
+  doctorId?: string;
+
+  @ApiProperty({
+    type: [String],
+    description: 'Danh sách ID thành viên gia đình được bảo trợ trong hợp đồng',
+  })
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsUUID('4', { each: true })
+  patientIds!: string[];
 
   @ApiPropertyOptional({
     description:
@@ -46,5 +63,3 @@ export class CreateMedicalContractDto {
 }
 
 export class CreateFourPartyContractDto extends CreateMedicalContractDto {}
-
-

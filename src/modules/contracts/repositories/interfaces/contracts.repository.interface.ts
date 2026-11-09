@@ -88,9 +88,17 @@ export interface ContractsSession {
   findFacilityByUserId(userId: string): Promise<HealthcareFacility | null>;
   findDoctorById(id: string): Promise<any | null>;
   findFamilyById(id: string): Promise<any | null>;
+  findPatientsByIdsAndFamilyId(
+    patientIds: string[],
+    familyId: string,
+  ): Promise<Array<{ id: string }>>;
   createMedicalContract(
     data: Prisma.MedicalContractUncheckedCreateInput,
   ): Promise<ChangeContract>;
+  createContractMembers(
+    contractId: string,
+    patientIds: string[],
+  ): Promise<void>;
   updateContractDoctor(id: string, doctorId: string): Promise<ChangeContract>;
   findConflictingStaffingContract(
     facilityId: string,
