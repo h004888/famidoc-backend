@@ -1,4 +1,5 @@
 import { ContractsModule } from './modules/contracts/contracts.module';
+import { PatientsModule } from './modules/patients/patients.module';
 import { FinanceModule } from './modules/finance/finance.module';
 import { ReviewsModule } from './modules/reviews/reviews.module';
 import { ComplaintsModule } from './modules/complaints/complaints.module';
@@ -31,6 +32,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
     ComplaintsModule,
     UsersModule,
     NotificationsModule,
+    PatientsModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

@@ -949,8 +949,9 @@ export class ContractsServiceImpl implements IContractsService {
           family: {
             familyId: contract.familyId,
             familyName:
-              contract.familyUnit?.familyName ||
-              contract.familyUnit?.familyCode,
+              (contract.familyUnit as any)?.familyName ||
+              (contract.familyUnit as any)?.familyCode ||
+              contract.familyUnit?.homeAddress,
             representativeUserId: contract.familyUnit?.representativeUserId,
           },
           facility: {
