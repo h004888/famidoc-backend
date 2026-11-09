@@ -190,7 +190,7 @@
 - Nhận đầu vào từ: Schema Prisma Task 1, danh sách bệnh nhân từ Task 2/3
 - Cung cấp đầu ra cho: Luồng ký số 4 bên và tra cứu hợp đồng ở Task 5
 
-- [ ] **Bước 1 [RED]: Cập nhật test case khởi tạo hợp đồng cho phép doctorId optional và bắt buộc patientIds**
+- [x] **Bước 1 [RED]: Cập nhật test case khởi tạo hợp đồng cho phép doctorId optional và bắt buộc patientIds**
   Vị trí file test: `src/modules/contracts/__tests__/initial-medical-contracts.spec.ts`
   Test case:
   - Khởi tạo hợp đồng thành công khi không truyền `doctorId` (giá tính theo `DoctorTier.STANDARD`, trạng thái `PENDING_APPROVAL`, `contract.doctorId` là null).
@@ -198,7 +198,7 @@
   - Khởi tạo hợp đồng thành công lưu đủ các bản ghi vào bảng `contract_members`.
   - Cơ sở y tế hoặc Bác sĩ không thể ký nếu `doctorId` chưa được gán.
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/initial-medical-contracts.spec.ts` → FAIL vì DTO hiện tại vẫn bắt buộc `doctorId` và chưa hỗ trợ `patientIds`.
-- [ ] **Bước 2 [GREEN]: Viết code cập nhật CreateMedicalContractDto, Repository và ContractsServiceImpl để test ở Bước 1 PASS**
+- [x] **Bước 2 [GREEN]: Viết code cập nhật CreateMedicalContractDto, Repository và ContractsServiceImpl để test ở Bước 1 PASS**
   Triển khai:
   - Tại `src/modules/contracts/dtos/create-medical-contract.dto.ts`:
     - Đổi `doctorId` thành `@IsOptional() @IsUUID('4') doctorId?: string`.
@@ -214,10 +214,10 @@
     - `assignDoctorToPackage`:
       - Cho phép gán bác sĩ khi `contract.doctorId` đang null hoặc thay đổi bác sĩ khi đang `PENDING_APPROVAL`.
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/initial-medical-contracts.spec.ts` → PASS.
-- [ ] **Bước 3 [REFACTOR] (nếu cần): Tối ưu truy vấn kiểm tra danh sách bệnh nhân**
+- [x] **Bước 3 [REFACTOR] (nếu cần): Tối ưu truy vấn kiểm tra danh sách bệnh nhân**
   Dùng một truy vấn `findMany` duy nhất với `where: { id: { in: dto.patientIds }, familyUnitId: targetFamilyId }` để kiểm tra toàn bộ thành viên trong 1 round-trip database.
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/initial-medical-contracts.spec.ts` → vẫn PASS.
-- [ ] **Bước 4: Xác nhận hoàn tất task**
+- [x] **Bước 4: Xác nhận hoàn tất task**
   Cách kiểm tra: chạy `npm test -- src/modules/contracts/__tests__/initial-medical-contracts.spec.ts` và `npm test -- src/modules/contracts/__tests__/four-party-and-assign-doctor.spec.ts`
   Kết quả mong đợi: tất cả PASS.
 

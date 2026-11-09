@@ -4,7 +4,7 @@ export interface ContractSummary {
   contractNumber: string;
   familyId: string;
   facilityId: string;
-  doctorId: string;
+  doctorId: string | null;
   packageId: string;
   totalAmount: number;
   remainingHomeVisits: number;

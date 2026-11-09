@@ -396,6 +396,28 @@ describe('Four-Party Contract & Doctor Assignment (UC-16, UC-23, SD-16, SD-23)',
       );
     });
 
+    it('should allow assigning doctor when contract.doctorId is currently null in PENDING_APPROVAL status', async () => {
+      sessionMock.findContractForUpdate.mockResolvedValue({
+        ...mockContract,
+        contractStatus: 'PENDING_APPROVAL',
+        doctorId: null,
+      });
+
+      const result = await service.assignDoctorToPackage(
+        facilityUser,
+        'contract-uuid-1',
+        assignDto,
+        '127.0.0.1',
+      );
+
+      expect(result).toBeDefined();
+      expect(sessionMock.updateContractDoctor).toHaveBeenCalledWith(
+        'contract-uuid-1',
+        'doc-2',
+      );
+      expect(sessionMock.refreshDoctorPanel).not.toHaveBeenCalled();
+    });
+
     it('should refresh panel counters for both old and new doctors if contract is ACTIVE (BR-03)', async () => {
       sessionMock.findContractForUpdate.mockResolvedValue({
         ...mockContract,

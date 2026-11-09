@@ -6,7 +6,7 @@ import type { AuthenticatedUser } from '../auth/authenticated-request';
 export interface ContractParties {
   id: string;
   familyId: string;
-  doctor: { userId: string };
+  doctor?: { userId: string } | null;
   facility: { userId: string };
   familyUnit: { representativeUserId: string };
 }
@@ -25,7 +25,7 @@ export function getContractSignerRole(
     contract.facility.userId === actor.id
   )
     return 'HEALTHCARE_FACILITY' as const;
-  if (actor.role === 'DOCTOR' && contract.doctor.userId === actor.id)
+  if (actor.role === 'DOCTOR' && contract.doctor?.userId === actor.id)
     return 'ASSIGNED_DOCTOR' as const;
   throw new ForbiddenException('You are not a party to this contract');
 }
@@ -68,11 +68,12 @@ export async function notifyContractParties(
   content: string,
   type: string,
 ) {
-  const users = new Set([
+  const userIds = [
     contract.familyUnit.representativeUserId,
     contract.facility.userId,
-    contract.doctor.userId,
-  ]);
+    contract.doctor?.userId,
+  ].filter((id): id is string => Boolean(id));
+  const users = new Set(userIds);
   // Chỉ thông báo trạng thái nghiệp vụ; không đưa chẩn đoán/bệnh án vào thông báo chung.
   await tx.notification.createMany({
     data: [...users].map((userId) => ({
