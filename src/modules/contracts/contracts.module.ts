@@ -5,12 +5,15 @@ import { ContractsServiceImpl } from './services/impl/contracts.service.impl';
 import { CONTRACTS_SERVICE_TOKEN } from './services/interfaces/contracts.service.interface';
 import { ContractsRepositoryImpl } from './repositories/impl/contracts.repository.impl';
 import { CONTRACTS_REPOSITORY_TOKEN } from './repositories/interfaces/contracts.repository.interface';
+import { ContractDocumentRendererService } from './services/contract-document-renderer.service';
 @Module({
   imports: [AuthAccessModule],
   controllers: [ContractsController],
   providers: [
     { provide: CONTRACTS_SERVICE_TOKEN, useClass: ContractsServiceImpl },
     { provide: CONTRACTS_REPOSITORY_TOKEN, useClass: ContractsRepositoryImpl },
+    ContractDocumentRendererService,
   ],
+  exports: [ContractDocumentRendererService],
 })
 export class ContractsModule {}

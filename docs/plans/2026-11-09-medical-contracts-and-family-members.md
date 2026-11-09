@@ -245,7 +245,7 @@
 - Nhận đầu vào từ: Dữ liệu hợp đồng đã tạo từ Task 4
 - Cung cấp đầu ra cho: Giao diện người dùng theo dõi tiến độ ký số và thanh toán hợp đồng
 
-- [ ] **Bước 1 [RED]: Viết test cho API tra cứu danh sách và chi tiết hợp đồng y tế**
+- [x] **Bước 1 [RED]: Viết test cho API tra cứu danh sách và chi tiết hợp đồng y tế**
   Vị trí file test: `src/modules/contracts/__tests__/medical-contracts-query.spec.ts`
   Test case:
   - `GET /api/v1/contracts/medical`:
@@ -257,7 +257,7 @@
     - Trả về chi tiết hợp đồng gồm: gói dịch vụ, cơ sở y tế, bác sĩ, danh sách `members` (bệnh nhân kèm họ tên, ngày sinh), trạng thái 4 chữ ký và hóa đơn thanh toán.
     - Ném `ForbiddenException` nếu người gọi không thuộc các bên tham gia hợp đồng.
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/medical-contracts-query.spec.ts` → FAIL với lý do route `GET /contracts/medical` chưa được khai báo.
-- [ ] **Bước 2 [GREEN]: Viết code triển khai Query Repository, Service và Controller để test ở Bước 1 PASS**
+- [x] **Bước 2 [GREEN]: Viết code triển khai Query Repository, Service và Controller để test ở Bước 1 PASS**
   Triển khai:
   - Thêm DTO `ListMedicalContractsQueryDto` hỗ trợ `page`, `limit`, `status`, `facilityId`.
   - Bổ sung phương thức `listMedicalContracts` và `findMedicalContractById` vào `IContractsRepository` và triển khai trong `ContractsRepositoryImpl`.
@@ -269,10 +269,10 @@
     - `@Get('medical')`: Lấy danh sách hợp đồng y tế.
     - `@Get('medical/:id')`: Lấy chi tiết hợp đồng y tế.
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/medical-contracts-query.spec.ts` → PASS.
-- [ ] **Bước 3 [REFACTOR] (nếu cần): Tinh chỉnh pagination response format**
+- [x] **Bước 3 [REFACTOR] (nếu cần): Tinh chỉnh pagination response format**
   Đồng bộ định dạng phân trang chuẩn `{ items: [...], total: number, page: number, limit: number }` thống nhất toàn dự án.
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/medical-contracts-query.spec.ts` → vẫn PASS.
-- [ ] **Bước 4: Xác nhận hoàn tất task**
+- [x] **Bước 4: Xác nhận hoàn tất task**
   Cách kiểm tra: chạy `npm test -- src/modules/contracts/__tests__/medical-contracts-query.spec.ts`
   Kết quả mong đợi: tất cả PASS.
 
@@ -300,7 +300,7 @@
 - Nhận đầu vào từ: Dữ liệu bệnh nhân (Task 2), Hợp đồng và Chữ ký số (Task 4/5)
 - Cung cấp đầu ra cho: Bác sĩ ký số nhận trách nhiệm chuyên môn và 4 bên lưu trữ văn bản hợp đồng
 
-- [ ] **Bước 1 [RED]: Viết test cho API Care Needs Summary và Contract Document Export**
+- [x] **Bước 1 [RED]: Viết test cho API Care Needs Summary và Contract Document Export**
   Vị trí file test: `src/modules/contracts/__tests__/contract-care-summary-and-document.spec.ts`
   Test case:
   - `GET /api/v1/contracts/medical/:id/care-summary`:
@@ -309,7 +309,7 @@
   - `GET /api/v1/contracts/medical/:id/document`:
     - Trả về bản sao hợp đồng định dạng văn bản chuẩn (HTML / formatted text view) chứa: tiêu đề, thông tin 4 bên, điều khoản gói dịch vụ (snapshot), danh sách thành viên áp dụng, và chi tiết 4 chữ ký số kèm mã hash (`termsHash`, `signatureHash`, `signedAt`, `ipAddress`).
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/contract-care-summary-and-document.spec.ts` → FAIL với lý do method `getCareNeedsSummary` và `getContractDocument` chưa tồn tại.
-- [ ] **Bước 2 [GREEN]: Viết code triển khai Care Needs Summary và Contract Document Renderer để test ở Bước 1 PASS**
+- [x] **Bước 2 [GREEN]: Viết code triển khai Care Needs Summary và Contract Document Renderer để test ở Bước 1 PASS**
   Triển khai:
   - Tạo `ContractDocumentRendererService` tại `src/modules/contracts/services/contract-document-renderer.service.ts` sinh tài liệu hợp đồng điện tử chuẩn hóa tích hợp chữ ký số và snapshot.
   - Trong `ContractsServiceImpl`:
@@ -319,9 +319,9 @@
     - `@Get('medical/:id/care-summary')`: Tóm tắt nhu cầu chăm sóc sức khỏe.
     - `@Get('medical/:id/document')`: Xuất tài liệu hợp đồng điện tử có chữ ký số.
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/contract-care-summary-and-document.spec.ts` → PASS.
-- [ ] **Bước 3 [REFACTOR] (nếu cần): Tinh chỉnh template hiển thị chữ ký số**
+- [x] **Bước 3 [REFACTOR] (nếu cần): Tinh chỉnh template hiển thị chữ ký số**
   Cấu trúc template định dạng bảng chữ ký số bảo đảm rõ ràng mã hash SHA-256 rút gọn và thời gian ký múi giờ Việt Nam (+07:00).
   Kỳ vọng: chạy `npm test -- src/modules/contracts/__tests__/contract-care-summary-and-document.spec.ts` → vẫn PASS.
-- [ ] **Bước 4: Xác nhận hoàn tất task**
+- [x] **Bước 4: Xác nhận hoàn tất task**
   Cách kiểm tra: chạy `npm test -- src/modules/contracts/__tests__/contract-care-summary-and-document.spec.ts` và `npm test -- src/modules/contracts/__tests__/contract-terms-hash.spec.ts`
   Kết quả mong đợi: tất cả PASS.

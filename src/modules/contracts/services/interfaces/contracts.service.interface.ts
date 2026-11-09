@@ -19,8 +19,31 @@ import type {
 } from '../../dtos/staffing-contract.dto';
 import type { CreateMedicalContractDto } from '../../dtos/create-medical-contract.dto';
 import type { AssignDoctorToPackageDto } from '../../dtos/assign-doctor.dto';
+import type { ListMedicalContractsQueryDto } from '../../dtos/list-medical-contracts-query.dto';
+import type { DetailedMedicalContract } from '../../repositories/interfaces/contracts.repository.interface';
 export const CONTRACTS_SERVICE_TOKEN = Symbol('IContractsService');
 export interface IContractsService {
+  listMedicalContracts(
+    actor: AuthenticatedUser,
+    query: ListMedicalContractsQueryDto,
+  ): Promise<{
+    items: DetailedMedicalContract[];
+    total: number;
+    page: number;
+    limit: number;
+  }>;
+  findMedicalContractById(
+    actor: AuthenticatedUser,
+    id: string,
+  ): Promise<DetailedMedicalContract>;
+  getCareNeedsSummary(
+    actor: AuthenticatedUser,
+    id: string,
+  ): Promise<any>;
+  getContractDocument(
+    actor: AuthenticatedUser,
+    id: string,
+  ): Promise<any>;
   initiateFourPartyContract(
     actor: AuthenticatedUser,
     dto: CreateMedicalContractDto,

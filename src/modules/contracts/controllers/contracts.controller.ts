@@ -42,6 +42,8 @@ import {
   CreateFourPartyContractDto,
 } from '../dtos/create-medical-contract.dto';
 import { AssignDoctorToPackageDto } from '../dtos/assign-doctor.dto';
+import { ListMedicalContractsQueryDto } from '../dtos/list-medical-contracts-query.dto';
+import { CareNeedsSummaryDto } from '../dtos/care-needs-summary.dto';
 import {
   CONTRACTS_SERVICE_TOKEN,
   type IContractsService,
@@ -169,6 +171,112 @@ export class ContractsController {
       dto,
       req.ip ?? 'unknown',
     );
+  }
+
+  @Get('medical')
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_REP', 'HEALTHCARE_FACILITY', 'DOCTOR', 'ADMIN')
+  @ApiOperation({
+    summary: 'Xem danh sách hợp đồng dịch vụ y tế 4 bên theo vai trò',
+    description:
+      'Lấy danh sách hợp đồng y tế phân quyền tự động theo vai trò (FAMILY_REP: hộ gia đình, HEALTHCARE_FACILITY: cơ sở y tế, DOCTOR: bác sĩ phụ trách, ADMIN: toàn bộ).',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách hợp đồng y tế phân trang thành công.',
+  })
+  listMedicalContracts(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: ListMedicalContractsQueryDto,
+  ) {
+    return this.service.listMedicalContracts(req.user, query);
+  }
+
+  @Get('medical/:id')
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_REP', 'HEALTHCARE_FACILITY', 'DOCTOR', 'ADMIN')
+  @ApiOperation({
+    summary: 'Xem chi tiết hợp đồng dịch vụ y tế 4 bên',
+    description:
+      'Lấy thông tin chi tiết hợp đồng gồm các bên liên quan, gói dịch vụ, danh sách thành viên gia đình được bảo trợ, chữ ký số và hóa đơn thanh toán.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng y tế' })
+  @ApiResponse({
+    status: 200,
+    description: 'Chi tiết hợp đồng y tế 4 bên.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Không có quyền truy cập hợp đồng này.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy hợp đồng y tế.',
+  })
+  findMedicalContractById(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.service.findMedicalContractById(req.user, id);
+  }
+
+  @Get('medical/:id/care-summary')
+  @UseGuards(RolesGuard)
+  @Roles('DOCTOR', 'ADMIN', 'HEALTHCARE_FACILITY', 'FAMILY_REP')
+  @ApiOperation({
+    summary:
+      'Tóm tắt nhu cầu chăm sóc sức khỏe của các thành viên trong hợp đồng',
+    description:
+      'Tổng hợp hồ sơ nhân khẩu, tiền sử dị ứng và tài liệu y tế bệnh án của các thành viên gia đình được bảo trợ trong hợp đồng y tế phục vụ bác sĩ gia đình thẩm định chuyên môn trước khi ký tiếp nhận.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng y tế' })
+  @ApiResponse({
+    status: 200,
+    description: 'Báo cáo tổng hợp nhu cầu chăm sóc sức khỏe.',
+    type: CareNeedsSummaryDto,
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      'Bác sĩ không được phân công hoặc không có quyền truy cập hợp đồng này.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy hợp đồng y tế.',
+  })
+  getCareNeedsSummary(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.service.getCareNeedsSummary(req.user, id);
+  }
+
+  @Get('medical/:id/document')
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_REP', 'HEALTHCARE_FACILITY', 'DOCTOR', 'ADMIN')
+  @ApiOperation({
+    summary: 'Kết xuất văn bản bản sao hợp đồng dịch vụ y tế điện tử 4 bên',
+    description:
+      'Kết xuất văn bản hợp đồng hoàn chỉnh (HTML/formatted view) kèm điều khoản snapshot và đầy đủ 4 chữ ký số điện tử của các bên tham gia.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng y tế' })
+  @ApiResponse({
+    status: 200,
+    description: 'Bản sao văn bản hợp đồng điện tử 4 bên kèm chữ ký số.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Không có quyền truy cập văn bản hợp đồng này.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy hợp đồng y tế.',
+  })
+  getContractDocument(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.service.getContractDocument(req.user, id);
   }
 
   @Post('staffing')

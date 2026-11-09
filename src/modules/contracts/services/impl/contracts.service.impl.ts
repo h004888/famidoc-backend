@@ -7,6 +7,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   Prisma,
@@ -32,6 +33,7 @@ import {
   type IContractsRepository,
   type ChangeContract,
   type ContractsSession,
+  type DetailedMedicalContract,
 } from '../../repositories/interfaces/contracts.repository.interface';
 import type { IContractsService } from '../interfaces/contracts.service.interface';
 import type {
@@ -48,6 +50,9 @@ import type {
 } from '../../dtos/staffing-contract.dto';
 import type { CreateMedicalContractDto } from '../../dtos/create-medical-contract.dto';
 import type { AssignDoctorToPackageDto } from '../../dtos/assign-doctor.dto';
+import type { ListMedicalContractsQueryDto } from '../../dtos/list-medical-contracts-query.dto';
+import type { CareNeedsSummaryDto, PatientCareSummaryDto } from '../../dtos/care-needs-summary.dto';
+import { ContractDocumentRendererService } from '../contract-document-renderer.service';
 import {
   calculateHomeVisitAddendum,
   calculateMemberAddendum,
@@ -67,10 +72,18 @@ const signingOrder: SignerRole[] = [
 ];
 @Injectable()
 export class ContractsServiceImpl implements IContractsService {
+  private readonly documentRenderer: ContractDocumentRendererService;
+
   constructor(
     @Inject(CONTRACTS_REPOSITORY_TOKEN)
     private readonly repository: IContractsRepository,
-  ) {}
+    @Optional()
+    @Inject(ContractDocumentRendererService)
+    documentRenderer?: ContractDocumentRendererService,
+  ) {
+    this.documentRenderer =
+      documentRenderer || new ContractDocumentRendererService();
+  }
 
   createInitialMedicalContract(
     actor: AuthenticatedUser,
@@ -619,6 +632,352 @@ export class ContractsServiceImpl implements IContractsService {
       }
 
       return this.formatStaffingContract(contract);
+    });
+  }
+
+  async listMedicalContracts(
+    actor: AuthenticatedUser,
+    query: ListMedicalContractsQueryDto,
+  ): Promise<{
+    items: DetailedMedicalContract[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const page = Math.max(1, query?.page || 1);
+    const limit = Math.min(100, Math.max(1, query?.limit || 10));
+    const skip = (page - 1) * limit;
+
+    return this.repository.transaction(async (session) => {
+      const where: Prisma.MedicalContractWhereInput = {};
+
+      if (query?.status) {
+        where.contractStatus = query.status;
+      }
+
+      if (actor.role === 'FAMILY_REP') {
+        let familyId = actor.familyUnitId;
+        if (!familyId) {
+          const family = await session.findFamilyByRepresentativeUserId(
+            actor.id,
+          );
+          familyId = family?.id ?? null;
+        }
+        if (!familyId) {
+          return { items: [], total: 0, page, limit };
+        }
+        where.familyId = familyId;
+      } else if (actor.role === 'HEALTHCARE_FACILITY') {
+        const facility = await session.findFacilityByUserId(actor.id);
+        if (!facility) {
+          return { items: [], total: 0, page, limit };
+        }
+        where.facilityId = facility.id;
+      } else if (actor.role === 'DOCTOR') {
+        const doctor = await session.findDoctorByUserId(actor.id);
+        if (!doctor) {
+          return { items: [], total: 0, page, limit };
+        }
+        where.doctorId = doctor.id;
+      } else if (actor.role === 'ADMIN') {
+        if (query?.facilityId) {
+          where.facilityId = query.facilityId;
+        }
+      } else {
+        throw new ForbiddenException(
+          'Không có quyền xem danh sách hợp đồng y tế',
+        );
+      }
+
+      const { items, total } = await session.listMedicalContracts(
+        where,
+        skip,
+        limit,
+      );
+
+      return {
+        items,
+        total,
+        page,
+        limit,
+      };
+    });
+  }
+
+  async findMedicalContractById(
+    actor: AuthenticatedUser,
+    id: string,
+  ): Promise<DetailedMedicalContract> {
+    return this.repository.transaction(async (session) => {
+      const contract = await session.findMedicalContractById(id);
+      if (!contract) {
+        throw new NotFoundException('Không tìm thấy hợp đồng y tế');
+      }
+
+      if (actor.role === 'ADMIN') {
+        return contract;
+      }
+
+      let isAllowed = false;
+      if (
+        actor.role === 'FAMILY_REP' &&
+        (contract.familyUnit?.representativeUserId === actor.id ||
+          contract.familyId === actor.familyUnitId)
+      ) {
+        isAllowed = true;
+      } else if (
+        actor.role === 'HEALTHCARE_FACILITY' &&
+        (contract.facility?.userId === actor.id ||
+          contract.facilityId === actor.id)
+      ) {
+        isAllowed = true;
+      } else if (
+        actor.role === 'DOCTOR' &&
+        contract.doctor &&
+        (contract.doctor.userId === actor.id || contract.doctorId === actor.id)
+      ) {
+        isAllowed = true;
+      }
+
+      if (!isAllowed) {
+        throw new ForbiddenException(
+          'Bạn không có quyền truy cập thông tin hợp đồng này',
+        );
+      }
+
+      return contract;
+    });
+  }
+
+  async getCareNeedsSummary(
+    actor: AuthenticatedUser,
+    id: string,
+  ): Promise<CareNeedsSummaryDto> {
+    return this.repository.transaction(async (session) => {
+      const contract = await session.findMedicalContractById(id);
+      if (!contract) {
+        throw new NotFoundException('Không tìm thấy hợp đồng y tế');
+      }
+
+      if (actor.role === 'ADMIN') {
+        // Admin allowed
+      } else if (actor.role === 'DOCTOR') {
+        if (
+          !contract.doctor ||
+          (contract.doctor.userId !== actor.id && contract.doctorId !== actor.id)
+        ) {
+          throw new ForbiddenException(
+            'Bác sĩ không được phân công cho hợp đồng này',
+          );
+        }
+      } else if (actor.role === 'HEALTHCARE_FACILITY') {
+        if (
+          contract.facility?.userId !== actor.id &&
+          contract.facilityId !== actor.id
+        ) {
+          throw new ForbiddenException(
+            'Bạn không có quyền truy cập thông tin chăm sóc của hợp đồng này',
+          );
+        }
+      } else if (actor.role === 'FAMILY_REP') {
+        if (
+          contract.familyUnit?.representativeUserId !== actor.id &&
+          contract.familyId !== actor.familyUnitId
+        ) {
+          throw new ForbiddenException(
+            'Bạn không có quyền truy cập thông tin chăm sóc của hợp đồng này',
+          );
+        }
+      } else {
+        throw new ForbiddenException(
+          'Bạn không có quyền truy cập thông tin chăm sóc của hợp đồng này',
+        );
+      }
+
+      const patientIds = (contract.members || [])
+        .map((m: any) => m.patientId || m.patient?.id)
+        .filter(Boolean);
+
+      let patients: any[] = [];
+      if (session.findPatientsWithClinicalProfile && patientIds.length > 0) {
+        patients = await session.findPatientsWithClinicalProfile(patientIds);
+      }
+
+      const patientProfileMap = new Map<string, any>(
+        patients.map((p) => [p.id, p]),
+      );
+
+      const today = new Date();
+      const members: PatientCareSummaryDto[] = (contract.members || []).map(
+        (m: any) => {
+          const rawPatient =
+            patientProfileMap.get(m.patientId || m.patient?.id) ||
+            m.patient ||
+            {};
+          const dob = rawPatient.dateOfBirth
+            ? new Date(rawPatient.dateOfBirth)
+            : new Date();
+
+          let age = today.getFullYear() - dob.getFullYear();
+          const monthDiff = today.getMonth() - dob.getMonth();
+          if (
+            monthDiff < 0 ||
+            (monthDiff === 0 && today.getDate() < dob.getDate())
+          ) {
+            age--;
+          }
+          if (age < 0) age = 0;
+
+          let ageGroup: 'CHILD' | 'ADOLESCENT' | 'ADULT' | 'ELDERLY';
+          if (age < 13) {
+            ageGroup = 'CHILD';
+          } else if (age < 18) {
+            ageGroup = 'ADOLESCENT';
+          } else if (age < 60) {
+            ageGroup = 'ADULT';
+          } else {
+            ageGroup = 'ELDERLY';
+          }
+
+          const allergies = (rawPatient.allergies || []).map((a: any) => ({
+            id: a.id,
+            allergenType: a.allergenType,
+            allergenName: a.allergenName,
+            severity: a.severity,
+            clinicalManifestation: a.clinicalManifestation,
+          }));
+
+          const documents = (rawPatient.documents || []).map((d: any) => ({
+            id: d.id,
+            documentName: d.documentName,
+            documentType: d.documentType,
+            fileUrl: d.fileUrl,
+            fileSizeKb: d.fileSizeKb,
+            recordedDate: d.recordedDate,
+          }));
+
+          return {
+            patientId: rawPatient.id || m.patientId,
+            fullName: rawPatient.fullName || 'Thành viên',
+            dateOfBirth: dob,
+            age,
+            ageGroup,
+            gender: rawPatient.gender || 'OTHER',
+            relationshipToHead: rawPatient.relationshipToHead || 'MEMBER',
+            citizenId: rawPatient.citizenId,
+            healthInsuranceNumber: rawPatient.healthInsuranceNumber,
+            allergies,
+            documents,
+          };
+        },
+      );
+
+      return {
+        contractId: contract.id,
+        contractNumber: contract.contractNumber,
+        familyId: contract.familyId,
+        packageName:
+          contract.servicePackage?.packageName ||
+          (contract.billingSnapshot as any)?.packageName ||
+          'Gói Chăm Sóc Sức Khỏe Gia Đình',
+        totalMembers: members.length,
+        members,
+      };
+    });
+  }
+
+  async getContractDocument(
+    actor: AuthenticatedUser,
+    id: string,
+  ): Promise<any> {
+    return this.repository.transaction(async (session) => {
+      const contract = await session.findMedicalContractById(id);
+      if (!contract) {
+        throw new NotFoundException('Không tìm thấy hợp đồng y tế');
+      }
+
+      if (actor.role === 'ADMIN') {
+        // Admin allowed
+      } else if (
+        actor.role === 'FAMILY_REP' &&
+        (contract.familyUnit?.representativeUserId === actor.id ||
+          contract.familyId === actor.familyUnitId)
+      ) {
+        // Family allowed
+      } else if (
+        actor.role === 'HEALTHCARE_FACILITY' &&
+        (contract.facility?.userId === actor.id ||
+          contract.facilityId === actor.id)
+      ) {
+        // Facility allowed
+      } else if (
+        actor.role === 'DOCTOR' &&
+        contract.doctor &&
+        (contract.doctor.userId === actor.id || contract.doctorId === actor.id)
+      ) {
+        // Assigned doctor allowed
+      } else {
+        throw new ForbiddenException(
+          'Bạn không có quyền truy cập văn bản hợp đồng này',
+        );
+      }
+
+      let signatures = contract.signatures;
+      if (!signatures || signatures.length === 0) {
+        signatures = await session.findContractSignatures(contract.id);
+      }
+
+      const termsHash =
+        signatures?.[0]?.termsHash || calculateContractTermsHash(contract);
+
+      const renderedHtml = this.documentRenderer.renderHtml(
+        { ...contract, termsHash },
+        signatures,
+      );
+      const renderedSignatures = this.documentRenderer.renderSignatures(
+        signatures,
+      );
+
+      return {
+        contractId: contract.id,
+        contractNumber: contract.contractNumber,
+        status: contract.contractStatus,
+        termsHash,
+        renderedHtml,
+        signatures: renderedSignatures,
+        parties: {
+          family: {
+            familyId: contract.familyId,
+            familyName:
+              contract.familyUnit?.familyName ||
+              contract.familyUnit?.familyCode,
+            representativeUserId: contract.familyUnit?.representativeUserId,
+          },
+          facility: {
+            facilityId: contract.facilityId,
+            facilityName: contract.facility?.facilityName,
+          },
+          doctor: contract.doctor
+            ? {
+                doctorId: contract.doctor.id,
+                doctorName: contract.doctor.doctorName,
+                specialty: contract.doctor.specialty,
+              }
+            : null,
+          platform: {
+            name: 'Công ty Cổ phần Công nghệ Y tế FamiDoc',
+            role: 'Platform Provider',
+          },
+        },
+        members: (contract.members || []).map((m: any) => ({
+          memberId: m.id,
+          patientId: m.patientId,
+          fullName: m.patient?.fullName,
+          dateOfBirth: m.patient?.dateOfBirth,
+          gender: m.patient?.gender,
+          relationshipToHead: m.patient?.relationshipToHead,
+        })),
+      };
     });
   }
 
