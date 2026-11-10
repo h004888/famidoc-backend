@@ -25,8 +25,6 @@ import { ConsultationRequestResponseDto } from '../../dtos/consultation-request-
 export class PublicServiceImpl implements IPublicService {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject('REDIS_CLIENT')
-    private readonly redisClient: any,
   ) {}
 
   async getPublicPortalOverview(): Promise<PortalOverviewResponseDto> {
@@ -549,26 +547,6 @@ export class PublicServiceImpl implements IPublicService {
     const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
     const ticketId = `CRQ-${timestampPart}-${randomPart}`;
     const submittedAt = new Date();
-
-    if (this.redisClient) {
-      await this.redisClient.set(
-        `consultation:request:${ticketId}`,
-        JSON.stringify({
-          ticketId,
-          fullName: dto.fullName,
-          phone: dto.phone,
-          email: dto.email,
-          address: dto.address || null,
-          preferredPackageId: dto.preferredPackageId || null,
-          healthNeeds: dto.healthNeeds,
-          familyMemberCount: dto.familyMemberCount,
-          status: 'RECEIVED',
-          submittedAt: submittedAt.toISOString(),
-        }),
-        'EX',
-        30 * 86400,
-      );
-    }
 
     await this.prisma.auditLog.create({
       data: {

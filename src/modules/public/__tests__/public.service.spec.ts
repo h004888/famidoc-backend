@@ -6,13 +6,8 @@ import { PrismaService } from '../../../core/database/prisma.service';
 describe('PublicServiceImpl', () => {
   let service: PublicServiceImpl;
   let prismaService: any;
-  let redisClient: any;
 
   beforeEach(async () => {
-    redisClient = {
-      set: jest.fn().mockResolvedValue('OK'),
-      get: jest.fn(),
-    };
 
     prismaService = {
       healthcareFacility: {
@@ -61,10 +56,6 @@ describe('PublicServiceImpl', () => {
         {
           provide: PrismaService,
           useValue: prismaService,
-        },
-        {
-          provide: 'REDIS_CLIENT',
-          useValue: redisClient,
         },
       ],
     }).compile();
@@ -476,12 +467,6 @@ describe('PublicServiceImpl', () => {
       expect(prismaService.servicePackage.findUnique).toHaveBeenCalledWith({
         where: { id: 'pkg-valid-id' },
       });
-      expect(redisClient.set).toHaveBeenCalledWith(
-        expect.stringContaining(`consultation:request:${result.ticketId}`),
-        expect.stringContaining('Nguyễn Văn Minh'),
-        'EX',
-        30 * 86400,
-      );
       expect(prismaService.auditLog.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           action: 'CONSULTATION_REQUEST_SUBMITTED',
@@ -503,7 +488,6 @@ describe('PublicServiceImpl', () => {
       expect(result.ticketId).toMatch(/^CRQ-/);
       expect(result.status).toBe('RECEIVED');
       expect(prismaService.servicePackage.findUnique).not.toHaveBeenCalled();
-      expect(redisClient.set).toHaveBeenCalled();
       expect(prismaService.auditLog.create).toHaveBeenCalled();
     });
 
