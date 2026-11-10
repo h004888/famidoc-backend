@@ -1,6 +1,10 @@
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import { ApiStandardResponse } from '../../../core/decorators/api-standard-response.decorator';
-import { RegisterInitiateDataDto } from '../dtos/auth-responses.dto';
+import { ResponseMessage } from '../../../core/decorators/response-message.decorator';
+import {
+  RegisterInitiateDataDto,
+  LoginDataDto,
+} from '../dtos/auth-responses.dto';
 import {
   Body,
   Controller,
@@ -111,8 +115,10 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Đăng nhập hệ thống (Email và mật khẩu)' })
   @ApiBody({ type: LoginDto })
-  @ApiResponse({
-    status: 200,
+  @ResponseMessage('Đăng nhập thành công')
+  @ApiStandardResponse({
+    type: LoginDataDto,
+    status: HttpStatus.OK,
     description: 'Đăng nhập thành công, trả về JWT Access Token',
   })
   @ApiResponse({ status: 401, description: 'Sai tên đăng nhập hoặc mật khẩu' })
