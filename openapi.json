@@ -980,6 +980,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewDoctorCredentialsDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Thẩm định hồ sơ thành công.",
@@ -2639,6 +2649,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestTerminationDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Tiếp nhận yêu cầu chấm dứt hợp đồng"
@@ -2669,6 +2689,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideTerminationDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Quyết định chấm dứt hợp đồng thành công"
@@ -2846,7 +2876,57 @@
     "/api/v1/finance/analytics": {
       "get": {
         "operationId": "FinanceController_getRevenueAnalytics",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "year",
+            "required": false,
+            "in": "query",
+            "description": "Năm tài chính cần truy vấn (2000 - 2200)",
+            "schema": {
+              "minimum": 2000,
+              "maximum": 2200,
+              "example": 2026,
+              "type": "number"
+            }
+          },
+          {
+            "name": "month",
+            "required": false,
+            "in": "query",
+            "description": "Tháng tài chính cần truy vấn (1 - 12)",
+            "schema": {
+              "minimum": 1,
+              "maximum": 12,
+              "example": 11,
+              "type": "number"
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "description": "UUID của cơ sở y tế cần lọc báo cáo doanh thu",
+            "schema": {
+              "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+              "type": "string"
+            }
+          },
+          {
+            "name": "environment",
+            "required": false,
+            "in": "query",
+            "description": "Môi trường dữ liệu (TEST: thử nghiệm, LIVE: thực tế)",
+            "schema": {
+              "default": "LIVE",
+              "example": "LIVE",
+              "type": "string",
+              "enum": [
+                "TEST",
+                "LIVE"
+              ]
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Dữ liệu phân tích doanh thu"
@@ -3252,7 +3332,43 @@
     "/api/v1/notifications": {
       "get": {
         "operationId": "NotificationsController_getUserNotifications[0]",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Số trang cần lấy (bắt đầu từ 1)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số lượng thông báo trên mỗi trang (tối đa 100)",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "unreadOnly",
+            "required": false,
+            "in": "query",
+            "description": "Chỉ lọc các thông báo chưa đọc (true / false)",
+            "schema": {
+              "example": "true",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Danh sách thông báo người dùng"
@@ -3272,7 +3388,43 @@
     "/api/v1/me/notifications": {
       "get": {
         "operationId": "NotificationsController_getUserNotifications[1]",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Số trang cần lấy (bắt đầu từ 1)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số lượng thông báo trên mỗi trang (tối đa 100)",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "unreadOnly",
+            "required": false,
+            "in": "query",
+            "description": "Chỉ lọc các thông báo chưa đọc (true / false)",
+            "schema": {
+              "example": "true",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Danh sách thông báo người dùng"
@@ -4797,25 +4949,139 @@
           "approved"
         ]
       },
+      "ReviewDoctorCredentialsDto": {
+        "type": "object",
+        "properties": {
+          "tier": {
+            "type": "number",
+            "description": "Cấp thẩm định (1: CSYT thẩm định cấp 1, 2: Quản trị viên phê duyệt cấp 2)",
+            "example": 1,
+            "enum": [
+              1,
+              2
+            ]
+          },
+          "approved": {
+            "type": "boolean",
+            "description": "Kết quả thẩm định (true: Duyệt, false: Từ chối)",
+            "example": true
+          },
+          "rejectionReason": {
+            "type": "string",
+            "description": "Lý do từ chối nếu không thông qua thẩm định",
+            "example": "Văn bằng chứng chỉ mờ, không rõ dấu đỏ của Sở Y tế."
+          },
+          "verificationNotes": {
+            "type": "string",
+            "description": "Ghi chú thẩm định hồ sơ của CSYT (dành cho Tier 1)",
+            "example": "Đã đối chiếu văn bằng gốc tại đơn vị."
+          },
+          "backgroundCheckConsent": {
+            "type": "boolean",
+            "description": "Đồng thuận kiểm tra lý lịch / tư pháp ngành y tế (dành cho Tier 2)",
+            "example": true
+          }
+        },
+        "required": [
+          "tier"
+        ]
+      },
       "CreateAuthDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Nguyễn Văn A",
+            "description": "Tên người dùng"
+          }
+        },
+        "required": [
+          "name"
+        ]
       },
       "UpdateAuthDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Nguyễn Văn A",
+            "description": "Tên người dùng"
+          }
+        }
       },
       "RegisterFamilyRepDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "example": "Nguyễn Văn Đại Diện",
+            "description": "Họ và tên người đại diện gia đình"
+          },
+          "phone": {
+            "type": "string",
+            "example": "0912345678",
+            "description": "Số điện thoại liên hệ (10-11 chữ số)"
+          },
+          "email": {
+            "type": "string",
+            "example": "representative@famidoc.vn",
+            "description": "Địa chỉ email đăng ký nhận OTP"
+          },
+          "password": {
+            "type": "string",
+            "example": "Password@123",
+            "description": "Mật khẩu tài khoản (8 - 64 ký tự)"
+          },
+          "acceptedTerms": {
+            "type": "boolean",
+            "example": true,
+            "description": "Đồng ý với điều khoản sử dụng và chính sách bảo mật"
+          },
+          "homeAddress": {
+            "type": "string",
+            "example": "123 Đường Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh",
+            "description": "Địa chỉ cư trú của gia đình"
+          }
+        },
+        "required": [
+          "fullName",
+          "phone",
+          "email",
+          "password",
+          "acceptedTerms"
+        ]
       },
       "VerifyEmailOtpDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "representative@famidoc.vn",
+            "description": "Địa chỉ email đã đăng ký tài khoản cần xác thực"
+          },
+          "otp": {
+            "type": "string",
+            "example": "123456",
+            "description": "Mã OTP 6 chữ số nhận qua email"
+          }
+        },
+        "required": [
+          "email",
+          "otp"
+        ]
       },
       "ResendEmailOtpDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "representative@famidoc.vn",
+            "description": "Địa chỉ email cần nhận lại mã OTP"
+          }
+        },
+        "required": [
+          "email"
+        ]
       },
       "LoginDto": {
         "type": "object",
@@ -4947,7 +5213,31 @@
       },
       "CarePackageQuotasDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "videoConsultations": {
+            "type": "number",
+            "description": "Số lượt khám tư vấn video trực tuyến",
+            "example": 10,
+            "default": 0
+          },
+          "homeVisits": {
+            "type": "number",
+            "description": "Số lượt bác sĩ đến khám tận nơi tại nhà",
+            "example": 4,
+            "default": 0
+          },
+          "facilityVisits": {
+            "type": "number",
+            "description": "Số lượt khám tại cơ sở y tế (mặc định 0)",
+            "example": 0,
+            "default": 0
+          }
+        },
+        "required": [
+          "videoConsultations",
+          "homeVisits",
+          "facilityVisits"
+        ]
       },
       "CreateCarePackageDto": {
         "type": "object",
@@ -4989,11 +5279,55 @@
       },
       "UpdateCarePackageDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "videoQuotaPolicy": {
+            "type": "string",
+            "enum": [
+              "FIXED",
+              "CONTRACT"
+            ],
+            "description": "FIXED cho gói 1/3/6 tháng; CONTRACT cho quota năm được chốt khi ký."
+          },
+          "homeVisitUnitPriceVnd": {
+            "type": "number",
+            "minimum": 1,
+            "description": "Đơn giá một lần khám tại nhà của cả gia đình, chưa có phụ thu bác sĩ."
+          },
+          "quotaPeriod": {
+            "description": "Kỳ hạn áp dụng hạn mức gói (PER_TERM hoặc PER_MONTH)",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuotaPeriod"
+              }
+            ]
+          },
+          "quotas": {
+            "description": "Chi tiết các hạn mức quyền lợi gói",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CarePackageQuotasDto"
+              }
+            ]
+          }
+        }
       },
       "CreatePaymentRequestDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "contractId": {
+            "type": "string",
+            "description": "UUID của hợp đồng y tế cần tạo yêu cầu thanh toán VietQR",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "addendumId": {
+            "type": "string",
+            "description": "UUID của phụ lục hợp đồng (nếu thanh toán cho phụ lục phát sinh)",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          }
+        },
+        "required": [
+          "contractId"
+        ]
       },
       "TransactionOutcome": {
         "type": "string",
@@ -5005,7 +5339,81 @@
       },
       "SePayWebhookDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": "ID giao dịch SePay",
+            "example": 1234567
+          },
+          "gateway": {
+            "type": "string",
+            "description": "Cổng thanh toán / ngân hàng thụ hưởng (MB, VCB, ACB...)",
+            "example": "MBBank"
+          },
+          "transactionDate": {
+            "type": "string",
+            "description": "Thời gian giao dịch theo giờ Việt Nam (YYYY-MM-DD HH:mm:ss)",
+            "example": "2026-11-10 08:30:00"
+          },
+          "accountNumber": {
+            "type": "string",
+            "description": "Số tài khoản ngân hàng thụ hưởng",
+            "example": "0987654321"
+          },
+          "code": {
+            "type": "object",
+            "description": "Mã code thanh toán nhận diện",
+            "example": "FAMIDOC123456"
+          },
+          "content": {
+            "type": "string",
+            "description": "Nội dung chuyển khoản ngân hàng",
+            "example": "FAMIDOC TH THANH TOAN HD 123456"
+          },
+          "transferType": {
+            "type": "string",
+            "enum": [
+              "in",
+              "out"
+            ],
+            "description": "Loại luân chuyển tiền (in: tiền vào, out: tiền ra)",
+            "example": "in"
+          },
+          "transferAmount": {
+            "type": "number",
+            "description": "Số tiền giao dịch thực tế (VNĐ)",
+            "example": 5000000
+          },
+          "referenceCode": {
+            "type": "string",
+            "description": "Mã tham chiếu ngân hàng",
+            "example": "REF123456789"
+          },
+          "subAccount": {
+            "type": "string",
+            "description": "Tài khoản phụ / tên gợi nhớ",
+            "example": "FAMIDOC_PRIMARY"
+          },
+          "description": {
+            "type": "string",
+            "description": "Mô tả chi tiết bổ sung",
+            "example": "Giao dịch qua VietQR SePay"
+          },
+          "accumulated": {
+            "type": "number",
+            "description": "Số dư tài khoản tích lũy sau giao dịch",
+            "example": 100000000
+          }
+        },
+        "required": [
+          "id",
+          "gateway",
+          "transactionDate",
+          "accountNumber",
+          "content",
+          "transferType",
+          "transferAmount"
+        ]
       },
       "CreateFourPartyContractDto": {
         "type": "object",
@@ -5093,7 +5501,22 @@
       },
       "SignContractChangeDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "termsHash": {
+            "type": "string",
+            "description": "Mã băm SHA-256 các điều khoản hợp đồng được ký xác nhận",
+            "example": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "acceptedTerms": {
+            "type": "boolean",
+            "description": "Xác nhận chấp thuận và đồng ý toàn bộ điều khoản",
+            "example": true
+          }
+        },
+        "required": [
+          "termsHash",
+          "acceptedTerms"
+        ]
       },
       "AssignDoctorToPackageDto": {
         "type": "object",
@@ -5450,35 +5873,361 @@
       },
       "CreateContractAddendumDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "requestKey": {
+            "type": "string",
+            "description": "Khóa định danh yêu cầu phụ lục (Idempotency Key / Request Key)",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "QUOTA_EXPANSION",
+              "MEMBER_EXTENSION"
+            ],
+            "description": "Loại phụ lục hợp đồng (QUOTA_EXPANSION: mở rộng lượt khám, MEMBER_EXTENSION: thêm thành viên)",
+            "example": "QUOTA_EXPANSION"
+          },
+          "extraHomeVisits": {
+            "type": "number",
+            "description": "Số lượt khám tại nhà bổ sung (bắt buộc khi type là QUOTA_EXPANSION)",
+            "example": 2,
+            "minimum": 1,
+            "maximum": 100
+          },
+          "additionalMembers": {
+            "type": "number",
+            "description": "Số lượng thành viên bảo trợ thêm (bắt buộc khi type là MEMBER_EXTENSION)",
+            "example": 1,
+            "minimum": 1,
+            "maximum": 9
+          }
+        },
+        "required": [
+          "requestKey",
+          "type"
+        ]
       },
       "CreatePackageUpgradeDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "videoConsultations": {
+            "type": "number",
+            "description": "Số lượt tư vấn video điều chỉnh",
+            "example": 20,
+            "minimum": 1,
+            "maximum": 100000
+          },
+          "extraHomeVisits": {
+            "type": "number",
+            "description": "Số lượt khám tại nhà bổ sung điều chỉnh",
+            "example": 6,
+            "minimum": 0,
+            "maximum": 100
+          },
+          "packageId": {
+            "type": "string",
+            "description": "ID gói dịch vụ chăm sóc sức khỏe muốn nâng cấp tới",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "UPGRADE",
+              "RENEWAL"
+            ],
+            "description": "Hình thức thay đổi gói (UPGRADE: nâng cấp, RENEWAL: gia hạn)",
+            "default": "UPGRADE",
+            "example": "UPGRADE"
+          }
+        },
+        "required": [
+          "packageId"
+        ]
       },
       "TerminateContractDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "REQUEST",
+              "CONSENT",
+              "APPROVE",
+              "REJECT"
+            ],
+            "description": "Hành động chấm dứt hợp đồng (REQUEST: gửi yêu cầu, CONSENT: CSYT đồng thuận, APPROVE: Admin duyệt, REJECT: từ chối)",
+            "default": "REQUEST",
+            "example": "REQUEST"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Lý do chấm dứt hợp đồng (bắt buộc khi action là REQUEST hoặc REJECT)",
+            "example": "Gia đình chuyển nơi sinh sống sang tỉnh thành khác"
+          },
+          "requestId": {
+            "type": "string",
+            "description": "UUID của yêu cầu chấm dứt (bắt buộc khi action khác REQUEST)",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "termsHash": {
+            "type": "string",
+            "description": "Mã băm điều khoản chấm dứt (bắt buộc khi action là CONSENT hoặc APPROVE)",
+            "example": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "required": [
+          "action"
+        ]
+      },
+      "RequestTerminationDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Lý do gửi yêu cầu chấm dứt hợp đồng y tế",
+            "example": "Gia đình chuyển địa điểm sinh sống sang khu vực khác"
+          }
+        }
+      },
+      "DecideTerminationDto": {
+        "type": "object",
+        "properties": {
+          "contractId": {
+            "type": "string",
+            "description": "UUID của hợp đồng y tế",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "APPROVE",
+              "REJECT",
+              "CONSENT"
+            ],
+            "description": "Hành động quyết định (APPROVE: Admin phê duyệt, REJECT: Admin từ chối, CONSENT: CSYT đồng thuận)",
+            "example": "CONSENT"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Lý do từ chối hoặc giải trình",
+            "example": "Đã hoàn tất kiểm tra và đồng thuận chấm dứt"
+          },
+          "termsHash": {
+            "type": "string",
+            "description": "Mã băm điều khoản (SHA-256)",
+            "example": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "required": [
+          "contractId",
+          "action"
+        ]
       },
       "MonthlySettlementDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "year": {
+            "type": "number",
+            "description": "Năm tài chính cần truy vấn (2000 - 2200)",
+            "example": 2026,
+            "minimum": 2000,
+            "maximum": 2200
+          },
+          "month": {
+            "type": "number",
+            "description": "Tháng tài chính cần truy vấn (1 - 12)",
+            "example": 11,
+            "minimum": 1,
+            "maximum": 12
+          },
+          "facilityId": {
+            "type": "string",
+            "description": "UUID của cơ sở y tế cần lọc báo cáo doanh thu",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "TEST",
+              "LIVE"
+            ],
+            "description": "Môi trường dữ liệu (TEST: thử nghiệm, LIVE: thực tế)",
+            "default": "LIVE",
+            "example": "LIVE"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "PREPARE",
+              "CONFIRM_TRANSFER",
+              "MARK_FAILED"
+            ],
+            "description": "Hành động quyết toán hàng tháng (PREPARE: lập bảng đối soát, CONFIRM_TRANSFER: xác nhận chuyển khoản, MARK_FAILED: báo thất bại)",
+            "default": "PREPARE",
+            "example": "PREPARE"
+          },
+          "settlementId": {
+            "type": "string",
+            "description": "UUID của kỳ quyết toán (bắt buộc khi action khác PREPARE)",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "bankTransferOrderId": {
+            "type": "string",
+            "description": "Mã giao dịch / mã lệnh chuyển khoản ngân hàng",
+            "example": "FT261110001234"
+          },
+          "amountPaidVnd": {
+            "type": "number",
+            "description": "Số tiền thực tế đã giải ngân thanh toán (VNĐ)",
+            "example": 50000000
+          },
+          "paidAt": {
+            "type": "string",
+            "description": "Thời điểm chuyển tiền thành công theo chuẩn ISO8601",
+            "example": "2026-11-10T08:00:00.000Z"
+          },
+          "evidenceKey": {
+            "type": "string",
+            "description": "Khóa tài liệu chứng từ ủy nhiệm chi ngân hàng lưu trữ",
+            "example": "settlements/unc_nov2026.pdf"
+          },
+          "failureReason": {
+            "type": "string",
+            "description": "Lý do quyết toán thất bại / không thực hiện được",
+            "example": "Sai thông tin tài khoản thụ hưởng của cơ sở y tế"
+          }
+        },
+        "required": [
+          "action"
+        ]
       },
       "SubmitDoctorReviewDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "encounterId": {
+            "type": "string",
+            "description": "UUID của lượt khám bác sĩ cần gửi đánh giá",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "ratingStars": {
+            "type": "number",
+            "description": "Điểm số đánh giá mức độ hài lòng (1 đến 5 sao)",
+            "example": 5,
+            "minimum": 1,
+            "maximum": 5
+          },
+          "reviewComment": {
+            "type": "string",
+            "description": "Nhận xét, phản hồi chi tiết về chất lượng dịch vụ của bác sĩ",
+            "example": "Bác sĩ rất nhiệt tình, giải thích rõ ràng và chu đáo.",
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "encounterId",
+          "ratingStars"
+        ]
       },
       "SubmitIncidentComplaintDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "contractId": {
+            "type": "string",
+            "description": "UUID của hợp đồng dịch vụ y tế liên quan đến khiếu nại",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "encounterId": {
+            "type": "string",
+            "description": "UUID lượt khám xảy ra sự cố (nếu có)",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "DOCTOR_ABSENT",
+              "MISSED_VISIT",
+              "UNAUTHORIZED_FEE",
+              "FAMILY_UNCOOPERATIVE",
+              "OTHER"
+            ],
+            "description": "Danh mục khiếu nại / sự cố",
+            "example": "MISSED_VISIT"
+          },
+          "description": {
+            "type": "string",
+            "description": "Mô tả chi tiết nội dung sự cố / phản ánh khiếu nại (10 - 4000 ký tự)",
+            "example": "Bác sĩ không đến khám theo đúng lịch hẹn đã thống nhất trước đó."
+          },
+          "evidenceKeys": {
+            "description": "Danh sách khóa tệp tài liệu / hình ảnh bằng chứng đính kèm",
+            "example": [
+              "complaints/evidence_1.jpg"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "contractId",
+          "category",
+          "description"
+        ]
       },
       "ResolveComplaintDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "INVESTIGATE",
+              "FACILITY_RESPONSE",
+              "RESOLVE",
+              "CLOSE"
+            ],
+            "description": "Hành động xử lý khiếu nại (INVESTIGATE: xác minh, FACILITY_RESPONSE: CSYT phản hồi, RESOLVE: giải quyết, CLOSE: đóng)",
+            "example": "RESOLVE"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Ghi chú / kết luận xử lý khiếu nại",
+            "example": "Đã nhắc nhở bác sĩ và sắp xếp lịch khám bù cho gia đình trong tuần này."
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "NO_VIOLATION",
+              "WARNING",
+              "SERVICE_CORRECTION",
+              "REFERRED_TO_FACILITY"
+            ],
+            "description": "Kết quả phân định khiếu nại (bắt buộc khi action là RESOLVE)",
+            "example": "SERVICE_CORRECTION"
+          }
+        },
+        "required": [
+          "action",
+          "notes"
+        ]
       },
       "UpdateProfileDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "description": "Họ và tên hiển thị của người dùng",
+            "example": "Nguyễn Văn A",
+            "maxLength": 100
+          },
+          "avatarUrl": {
+            "type": "string",
+            "description": "Đường dẫn ảnh đại diện (phải bắt đầu bằng https://)",
+            "example": "https://storage.famidoc.vn/avatars/user_123.jpg",
+            "maxLength": 255
+          }
+        }
       },
       "CreatePatientDto": {
         "type": "object",

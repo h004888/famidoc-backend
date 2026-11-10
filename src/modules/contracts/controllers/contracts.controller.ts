@@ -30,6 +30,8 @@ import {
   CreatePackageUpgradeDto,
   SignContractChangeDto,
   TerminateContractDto,
+  RequestTerminationDto,
+  DecideTerminationDto,
 } from '../dtos/contract-change.dto';
 import {
   CreateStaffingContractDto,
@@ -409,6 +411,7 @@ export class ContractsController {
   @Post(':id/termination')
   @ApiOperation({ summary: 'Gửi yêu cầu chấm dứt hợp đồng (UC-19 alias)' })
   @ApiParam({ name: 'id', description: 'UUID của hợp đồng cần chấm dứt' })
+  @ApiBody({ type: RequestTerminationDto })
   @ApiResponse({
     status: 200,
     description: 'Tiếp nhận yêu cầu chấm dứt hợp đồng',
@@ -416,7 +419,7 @@ export class ContractsController {
   requestTermination(
     @Req() req: AuthenticatedRequest,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
-    @Body() dto: { reason?: string },
+    @Body() dto: RequestTerminationDto,
   ) {
     return this.service.terminateContract(req.user, id, {
       action: 'REQUEST',
@@ -433,6 +436,7 @@ export class ContractsController {
     name: 'id',
     description: 'UUID của yêu cầu chấm dứt (requestId)',
   })
+  @ApiBody({ type: DecideTerminationDto })
   @ApiResponse({
     status: 200,
     description: 'Quyết định chấm dứt hợp đồng thành công',
@@ -440,13 +444,7 @@ export class ContractsController {
   decideTermination(
     @Req() req: AuthenticatedRequest,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
-    @Body()
-    dto: {
-      contractId: string;
-      action: 'APPROVE' | 'REJECT' | 'CONSENT';
-      reason?: string;
-      termsHash?: string;
-    },
+    @Body() dto: DecideTerminationDto,
   ) {
     return this.service.terminateContract(req.user, dto.contractId, {
       action: dto.action,

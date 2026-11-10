@@ -1,7 +1,8 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsString } from 'class-validator';
 
 export class CreateAuthDto {
-  // TODO: thay bằng các field thật của model Prisma `user` (theo kế hoạch)
+  @ApiProperty({ example: 'Nguyễn Văn A', description: 'Tên người dùng' })
   @IsString()
   @IsNotEmpty()
   name!: string;

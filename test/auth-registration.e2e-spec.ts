@@ -3,7 +3,7 @@ import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import { randomInt, randomUUID } from 'node:crypto';
 import { compare } from 'bcryptjs';
 import request from 'supertest';
-import type Redis from 'ioredis';
+import type { ICacheStore } from '../src/core/auth/auth-access.module';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/core/database/prisma.service';
 
@@ -11,7 +11,7 @@ import { PrismaService } from '../src/core/database/prisma.service';
 (process.env.RUN_DB_TESTS === '1' ? describe : describe.skip)(
   'Merged family registration routes',
   () => {
-    let app: INestApplication, db: PrismaService, redis: Redis;
+    let app: INestApplication, db: PrismaService, redis: ICacheStore;
     const emails: string[] = [],
       userIds: string[] = [];
     const mailer = { sendMail: jest.fn().mockResolvedValue(true) };

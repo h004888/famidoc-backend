@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
-import type Redis from 'ioredis';
+import type { ICacheStore } from './auth-access.module';
 import { PrismaService } from '../database/prisma.service';
 import type { AuthenticatedRequest } from './authenticated-request';
 import { ALLOW_ONBOARDING_KEY } from './allow-onboarding.decorator';
@@ -28,7 +28,7 @@ export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
-    @Inject('REDIS_CLIENT') private readonly redis: Redis,
+    @Inject('REDIS_CLIENT') private readonly redis: ICacheStore,
     @Optional() private readonly reflector?: Reflector,
   ) {}
 
