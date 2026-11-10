@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaginationMetaDto } from './public-packages-response.dto';
 
 export class PublicDoctorFacilityDto {
@@ -51,8 +51,8 @@ export class PublicDoctorItemDto {
   })
   isAvailable!: boolean;
 
-  @ApiProperty({ type: PublicDoctorFacilityDto })
-  facility!: PublicDoctorFacilityDto;
+  @ApiPropertyOptional({ type: PublicDoctorFacilityDto, nullable: true })
+  facility?: PublicDoctorFacilityDto | null;
 }
 
 export class PublicDoctorsResponseDto {
