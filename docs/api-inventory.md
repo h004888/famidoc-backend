@@ -1,7 +1,7 @@
 # Danh Mục Toàn Bộ API Backend (FamiDoc API Inventory)
 
-> **Tổng số Endpoint:** 88 APIs
-> **Số phân hệ (Tags):** 16 phân hệ
+> **Tổng số Endpoint:** 100 APIs
+> **Số phân hệ (Tags):** 17 phân hệ
 > **Swagger UI:** `/docs` hoặc `/api/docs`
 > **OpenAPI JSON Spec:** `openapi.json` (`/docs-json`)
 
@@ -106,16 +106,20 @@
 | `POST` | `/webhooks/sepay/test` | Nhận và xử lý IPN Webhook tự động từ cổng thanh toán SePay |
 | `POST` | `/api/v1/payments/webhook/vietqr` | Nhận và xử lý IPN Webhook tự động từ cổng thanh toán SePay |
 
-### Contracts (19 APIs)
+### Contracts (23 APIs)
 
 | Method | Endpoint | Mô tả / Nghiệp vụ |
 | :--- | :--- | :--- |
 | `POST` | `/api/v1/contracts/four-party` | Khởi tạo hợp đồng dịch vụ y tế 4 bên ban đầu (STT 28 - UC-16, SD-16) |
 | `POST` | `/api/v1/contracts/medical` | Khởi tạo hợp đồng dịch vụ y tế 4 bên ban đầu (STT 28 - UC-16, SD-16) |
+| `GET` | `/api/v1/contracts/medical` | Xem danh sách hợp đồng dịch vụ y tế 4 bên theo vai trò |
 | `PUT` | `/api/v1/contracts/four-party/{id}/sign` | Ký số điện tử hợp đồng y tế 4 bên ban đầu (STT 29 - UC-16, SD-16) |
 | `PUT` | `/api/v1/contracts/medical/{id}/sign` | Ký số điện tử hợp đồng y tế 4 bên ban đầu (STT 29 - UC-16, SD-16) |
 | `PUT` | `/api/v1/contracts/medical/{id}/signatures` | Ký số điện tử hợp đồng y tế 4 bên ban đầu (STT 29 - UC-16, SD-16) |
 | `PATCH` | `/api/v1/contracts/{id}/assign-doctor` | Phân công / Điều chuyển bác sĩ gia đình phụ trách hợp đồng (STT 30 - UC-23, SD-23) |
+| `GET` | `/api/v1/contracts/medical/{id}` | Xem chi tiết hợp đồng dịch vụ y tế 4 bên |
+| `GET` | `/api/v1/contracts/medical/{id}/care-summary` | Tóm tắt nhu cầu chăm sóc sức khỏe của các thành viên trong hợp đồng |
+| `GET` | `/api/v1/contracts/medical/{id}/document` | Kết xuất văn bản bản sao hợp đồng dịch vụ y tế điện tử 4 bên |
 | `POST` | `/api/v1/contracts/staffing` | Thiết lập hợp đồng cung ứng nhân lực y tế B2B (STT 13 - UC-15) |
 | `GET` | `/api/v1/contracts/staffing` | Xem danh sách hợp đồng cung ứng nhân lực B2B |
 | `PUT` | `/api/v1/contracts/staffing/{id}/sign` | Ký số điện tử hợp đồng cung ứng nhân lực B2B (STT 14 - UC-15) |
@@ -172,4 +176,17 @@
 | `GET` | `/api/v1/me/notifications` | Lấy danh sách thông báo của người dùng hiện tại |
 | `PATCH` | `/api/v1/notifications/{id}/read` | Đánh dấu thông báo đã đọc theo ID |
 | `PATCH` | `/api/v1/me/notifications/{id}/read` | Đánh dấu thông báo đã đọc theo ID |
+
+### Patients (8 APIs)
+
+| Method | Endpoint | Mô tả / Nghiệp vụ |
+| :--- | :--- | :--- |
+| `POST` | `/api/v1/patients` | Thêm hồ sơ thành viên gia đình (bệnh nhân) |
+| `GET` | `/api/v1/patients` | Lấy danh sách thành viên trong hộ gia đình |
+| `GET` | `/api/v1/patients/{id}` | Xem chi tiết hồ sơ bệnh nhân kèm tiền sử dị ứng và tài liệu |
+| `PUT` | `/api/v1/patients/{id}` | Cập nhật thông tin hồ sơ bệnh nhân |
+| `POST` | `/api/v1/patients/{id}/allergies` | Khai báo dị ứng thuốc, thực phẩm hoặc môi trường cho bệnh nhân |
+| `GET` | `/api/v1/patients/{id}/allergies` | Lấy danh sách tiền sử dị ứng của bệnh nhân |
+| `POST` | `/api/v1/patients/{id}/documents` | Đính kèm tài liệu y tế ban đầu (xét nghiệm, kết quả chẩn đoán hình ảnh...) |
+| `GET` | `/api/v1/patients/{id}/documents` | Lấy danh sách tài liệu y tế của bệnh nhân |
 

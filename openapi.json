@@ -1954,6 +1954,75 @@
         "tags": [
           "Contracts"
         ]
+      },
+      "get": {
+        "description": "Lấy danh sách hợp đồng y tế phân quyền tự động theo vai trò (FAMILY_REP: hộ gia đình, HEALTHCARE_FACILITY: cơ sở y tế, DOCTOR: bác sĩ phụ trách, ADMIN: toàn bộ).",
+        "operationId": "ContractsController_listMedicalContracts",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Trang cần truy vấn (bắt đầu từ 1)",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số lượng hợp đồng trên mỗi trang (tối đa 100)",
+            "schema": {
+              "default": 10,
+              "example": 10,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo trạng thái hợp đồng y tế",
+            "schema": {
+              "example": "PENDING_APPROVAL",
+              "type": "string",
+              "enum": [
+                "PENDING_APPROVAL",
+                "PENDING_PAYMENT",
+                "ACTIVE",
+                "EXPIRED",
+                "TERMINATED"
+              ]
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo cơ sở y tế (dành cho Admin hoặc đối tác CSYT)",
+            "schema": {
+              "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách hợp đồng y tế phân trang thành công."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Xem danh sách hợp đồng dịch vụ y tế 4 bên theo vai trò",
+        "tags": [
+          "Contracts"
+        ]
       }
     },
     "/api/v1/contracts/four-party/{id}/sign": {
@@ -2124,6 +2193,124 @@
           }
         ],
         "summary": "Phân công / Điều chuyển bác sĩ gia đình phụ trách hợp đồng (STT 30 - UC-23, SD-23)",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/api/v1/contracts/medical/{id}": {
+      "get": {
+        "description": "Lấy thông tin chi tiết hợp đồng gồm các bên liên quan, gói dịch vụ, danh sách thành viên gia đình được bảo trợ, chữ ký số và hóa đơn thanh toán.",
+        "operationId": "ContractsController_findMedicalContractById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của hợp đồng y tế",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chi tiết hợp đồng y tế 4 bên."
+          },
+          "403": {
+            "description": "Không có quyền truy cập hợp đồng này."
+          },
+          "404": {
+            "description": "Không tìm thấy hợp đồng y tế."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Xem chi tiết hợp đồng dịch vụ y tế 4 bên",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/api/v1/contracts/medical/{id}/care-summary": {
+      "get": {
+        "description": "Tổng hợp hồ sơ nhân khẩu, tiền sử dị ứng và tài liệu y tế bệnh án của các thành viên gia đình được bảo trợ trong hợp đồng y tế phục vụ bác sĩ gia đình thẩm định chuyên môn trước khi ký tiếp nhận.",
+        "operationId": "ContractsController_getCareNeedsSummary",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của hợp đồng y tế",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Báo cáo tổng hợp nhu cầu chăm sóc sức khỏe.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CareNeedsSummaryDto"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Bác sĩ không được phân công hoặc không có quyền truy cập hợp đồng này."
+          },
+          "404": {
+            "description": "Không tìm thấy hợp đồng y tế."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Tóm tắt nhu cầu chăm sóc sức khỏe của các thành viên trong hợp đồng",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/api/v1/contracts/medical/{id}/document": {
+      "get": {
+        "description": "Kết xuất văn bản hợp đồng hoàn chỉnh (HTML/formatted view) kèm điều khoản snapshot và đầy đủ 4 chữ ký số điện tử của các bên tham gia.",
+        "operationId": "ContractsController_getContractDocument",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của hợp đồng y tế",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bản sao văn bản hợp đồng điện tử 4 bên kèm chữ ký số."
+          },
+          "403": {
+            "description": "Không có quyền truy cập văn bản hợp đồng này."
+          },
+          "404": {
+            "description": "Không tìm thấy hợp đồng y tế."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Kết xuất văn bản bản sao hợp đồng dịch vụ y tế điện tử 4 bên",
         "tags": [
           "Contracts"
         ]
@@ -3165,6 +3352,303 @@
         "summary": "Đánh dấu thông báo đã đọc theo ID",
         "tags": [
           "Notifications"
+        ]
+      }
+    },
+    "/api/v1/patients": {
+      "post": {
+        "operationId": "PatientsController_createPatient",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePatientDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tạo hồ sơ bệnh nhân thành công"
+          },
+          "400": {
+            "description": "Dữ liệu không hợp lệ"
+          },
+          "403": {
+            "description": "Không có quyền thao tác"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Thêm hồ sơ thành viên gia đình (bệnh nhân)",
+        "tags": [
+          "Patients"
+        ]
+      },
+      "get": {
+        "operationId": "PatientsController_listFamilyMembers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Danh sách thành viên"
+          },
+          "403": {
+            "description": "Không có quyền truy cập"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Lấy danh sách thành viên trong hộ gia đình",
+        "tags": [
+          "Patients"
+        ]
+      }
+    },
+    "/api/v1/patients/{id}": {
+      "get": {
+        "operationId": "PatientsController_getPatientById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của bệnh nhân",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chi tiết hồ sơ bệnh nhân"
+          },
+          "403": {
+            "description": "Không có quyền truy cập hồ sơ của gia đình khác"
+          },
+          "404": {
+            "description": "Không tìm thấy hồ sơ bệnh nhân"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Xem chi tiết hồ sơ bệnh nhân kèm tiền sử dị ứng và tài liệu",
+        "tags": [
+          "Patients"
+        ]
+      },
+      "put": {
+        "operationId": "PatientsController_updatePatient",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của bệnh nhân",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePatientDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cập nhật hồ sơ bệnh nhân thành công"
+          },
+          "403": {
+            "description": "Không có quyền chỉnh sửa hồ sơ ngoài gia đình"
+          },
+          "404": {
+            "description": "Không tìm thấy hồ sơ bệnh nhân"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Cập nhật thông tin hồ sơ bệnh nhân",
+        "tags": [
+          "Patients"
+        ]
+      }
+    },
+    "/api/v1/patients/{id}/allergies": {
+      "post": {
+        "operationId": "PatientsController_addAllergy",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của bệnh nhân",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAllergyDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Khai báo dị ứng thành công"
+          },
+          "403": {
+            "description": "Không có quyền khai báo cho bệnh nhân ngoài gia đình"
+          },
+          "404": {
+            "description": "Không tìm thấy hồ sơ bệnh nhân"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Khai báo dị ứng thuốc, thực phẩm hoặc môi trường cho bệnh nhân",
+        "tags": [
+          "Patients"
+        ]
+      },
+      "get": {
+        "operationId": "PatientsController_listAllergies",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của bệnh nhân",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách tiền sử dị ứng"
+          },
+          "403": {
+            "description": "Không có quyền xem dị ứng ngoài gia đình"
+          },
+          "404": {
+            "description": "Không tìm thấy hồ sơ bệnh nhân"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Lấy danh sách tiền sử dị ứng của bệnh nhân",
+        "tags": [
+          "Patients"
+        ]
+      }
+    },
+    "/api/v1/patients/{id}/documents": {
+      "post": {
+        "operationId": "PatientsController_addDocument",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của bệnh nhân",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePatientDocumentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Đính kèm tài liệu y tế thành công"
+          },
+          "403": {
+            "description": "Không có quyền đính kèm cho bệnh nhân ngoài gia đình"
+          },
+          "404": {
+            "description": "Không tìm thấy hồ sơ bệnh nhân"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Đính kèm tài liệu y tế ban đầu (xét nghiệm, kết quả chẩn đoán hình ảnh...)",
+        "tags": [
+          "Patients"
+        ]
+      },
+      "get": {
+        "operationId": "PatientsController_listDocuments",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của bệnh nhân",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách tài liệu y tế"
+          },
+          "403": {
+            "description": "Không có quyền xem tài liệu ngoài gia đình"
+          },
+          "404": {
+            "description": "Không tìm thấy hồ sơ bệnh nhân"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Lấy danh sách tài liệu y tế của bệnh nhân",
+        "tags": [
+          "Patients"
         ]
       }
     }
@@ -4526,18 +5010,6 @@
       "CreateFourPartyContractDto": {
         "type": "object",
         "properties": {
-          "videoConsultations": {
-            "type": "number",
-            "description": "Số lượt video thỏa thuận, bắt buộc cho gói năm.",
-            "minimum": 1,
-            "maximum": 100000
-          },
-          "extraHomeVisits": {
-            "type": "number",
-            "description": "Lượt khám tại nhà mua thêm, tính cả phụ thu loại bác sĩ.",
-            "minimum": 0,
-            "maximum": 100
-          },
           "packageId": {
             "type": "string",
             "description": "ID gói dịch vụ chăm sóc sức khỏe",
@@ -4553,6 +5025,13 @@
             "description": "ID bác sĩ gia đình phân công",
             "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
           },
+          "patientIds": {
+            "description": "Danh sách ID thành viên gia đình được bảo trợ trong hợp đồng",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "familyId": {
             "type": "string",
             "description": "ID hộ gia đình (bắt buộc nếu Admin tạo, tự động lấy nếu đại diện gia đình tạo)",
@@ -4567,24 +5046,12 @@
         "required": [
           "packageId",
           "facilityId",
-          "doctorId"
+          "patientIds"
         ]
       },
       "CreateMedicalContractDto": {
         "type": "object",
         "properties": {
-          "videoConsultations": {
-            "type": "number",
-            "description": "Số lượt video thỏa thuận, bắt buộc cho gói năm.",
-            "minimum": 1,
-            "maximum": 100000
-          },
-          "extraHomeVisits": {
-            "type": "number",
-            "description": "Lượt khám tại nhà mua thêm, tính cả phụ thu loại bác sĩ.",
-            "minimum": 0,
-            "maximum": 100
-          },
           "packageId": {
             "type": "string",
             "description": "ID gói dịch vụ chăm sóc sức khỏe",
@@ -4600,6 +5067,13 @@
             "description": "ID bác sĩ gia đình phân công",
             "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
           },
+          "patientIds": {
+            "description": "Danh sách ID thành viên gia đình được bảo trợ trong hợp đồng",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "familyId": {
             "type": "string",
             "description": "ID hộ gia đình (bắt buộc nếu Admin tạo, tự động lấy nếu đại diện gia đình tạo)",
@@ -4614,7 +5088,7 @@
         "required": [
           "packageId",
           "facilityId",
-          "doctorId"
+          "patientIds"
         ]
       },
       "SignContractChangeDto": {
@@ -4632,6 +5106,180 @@
         },
         "required": [
           "doctorId"
+        ]
+      },
+      "PatientAllergySummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "allergenType": {
+            "type": "string",
+            "example": "MEDICATION"
+          },
+          "allergenName": {
+            "type": "string",
+            "example": "Amoxicillin"
+          },
+          "severity": {
+            "type": "string",
+            "example": "HIGH"
+          },
+          "clinicalManifestation": {
+            "type": "object",
+            "example": "Phát ban đỏ toàn thân, khó thở nhẹ"
+          }
+        },
+        "required": [
+          "id",
+          "allergenType",
+          "allergenName",
+          "severity"
+        ]
+      },
+      "PatientDocumentSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "documentName": {
+            "type": "string",
+            "example": "Sổ tiêm chủng mở rộng"
+          },
+          "documentType": {
+            "type": "string",
+            "example": "IMMUNIZATION_RECORD"
+          },
+          "fileUrl": {
+            "type": "string",
+            "example": "https://cdn.famidoc.vn/docs/tiemchung-001.pdf"
+          },
+          "fileSizeKb": {
+            "type": "number",
+            "example": 1200
+          },
+          "recordedDate": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2025-06-01"
+          }
+        },
+        "required": [
+          "id",
+          "documentName",
+          "documentType",
+          "fileUrl",
+          "fileSizeKb",
+          "recordedDate"
+        ]
+      },
+      "PatientCareSummaryDto": {
+        "type": "object",
+        "properties": {
+          "patientId": {
+            "type": "string",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "fullName": {
+            "type": "string",
+            "example": "Nguyễn Văn Con"
+          },
+          "dateOfBirth": {
+            "format": "date-time",
+            "type": "string",
+            "example": "2020-01-15"
+          },
+          "age": {
+            "type": "number",
+            "example": 6
+          },
+          "ageGroup": {
+            "type": "string",
+            "example": "CHILD",
+            "description": "Nhóm tuổi: CHILD (0-12), ADOLESCENT (13-17), ADULT (18-59), ELDERLY (>=60)"
+          },
+          "gender": {
+            "type": "string",
+            "example": "MALE"
+          },
+          "relationshipToHead": {
+            "type": "string",
+            "example": "CON"
+          },
+          "citizenId": {
+            "type": "object",
+            "example": "001200000001"
+          },
+          "healthInsuranceNumber": {
+            "type": "object",
+            "example": "DN4010123456789"
+          },
+          "allergies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PatientAllergySummaryDto"
+            }
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PatientDocumentSummaryDto"
+            }
+          }
+        },
+        "required": [
+          "patientId",
+          "fullName",
+          "dateOfBirth",
+          "age",
+          "ageGroup",
+          "gender",
+          "relationshipToHead",
+          "allergies",
+          "documents"
+        ]
+      },
+      "CareNeedsSummaryDto": {
+        "type": "object",
+        "properties": {
+          "contractId": {
+            "type": "string",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "contractNumber": {
+            "type": "string",
+            "example": "CTR-2026-000001"
+          },
+          "familyId": {
+            "type": "string",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "packageName": {
+            "type": "string",
+            "example": "Gói Chăm Sóc Toàn Diện"
+          },
+          "totalMembers": {
+            "type": "number",
+            "example": 2
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PatientCareSummaryDto"
+            }
+          }
+        },
+        "required": [
+          "contractId",
+          "contractNumber",
+          "familyId",
+          "packageName",
+          "totalMembers",
+          "members"
         ]
       },
       "CreateStaffingContractDto": {
@@ -4831,6 +5479,226 @@
       "UpdateProfileDto": {
         "type": "object",
         "properties": {}
+      },
+      "CreatePatientDto": {
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "description": "Họ và tên bệnh nhân",
+            "example": "Nguyễn Văn Con"
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "description": "Ngày tháng năm sinh (định dạng YYYY-MM-DD)",
+            "example": "2015-05-20"
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "MALE",
+              "FEMALE",
+              "OTHER"
+            ],
+            "description": "Giới tính sinh học",
+            "example": "MALE"
+          },
+          "relationshipToRepresentative": {
+            "type": "string",
+            "description": "Mối quan hệ nhân thân với chủ hộ / đại diện gia đình (BỐ, MẸ, CON, VỢ, CHỒNG, BẢN THÂN...)",
+            "example": "CON"
+          },
+          "identityNumber": {
+            "type": "string",
+            "description": "Số CCCD/Định danh cá nhân",
+            "example": "001201500001"
+          },
+          "citizenId": {
+            "type": "string",
+            "description": "Số CCCD/Định danh cá nhân (alias của identityNumber)"
+          },
+          "relationshipToHead": {
+            "type": "string",
+            "description": "Mối quan hệ nhân thân (alias của relationshipToRepresentative)"
+          },
+          "phoneNumber": {
+            "type": "string",
+            "description": "Số điện thoại liên hệ cá nhân",
+            "example": "0987654321"
+          },
+          "bloodType": {
+            "type": "string",
+            "description": "Nhóm máu (A, B, AB, O...)",
+            "example": "O+"
+          },
+          "healthInsuranceNumber": {
+            "type": "string",
+            "description": "Mã số thẻ bảo hiểm y tế",
+            "example": "DN4010123456789"
+          },
+          "familyId": {
+            "type": "string",
+            "description": "ID hộ gia đình (bắt buộc khi ADMIN tạo hộ)"
+          }
+        },
+        "required": [
+          "fullName",
+          "dateOfBirth",
+          "gender",
+          "relationshipToRepresentative"
+        ]
+      },
+      "UpdatePatientDto": {
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "description": "Họ và tên bệnh nhân",
+            "example": "Nguyễn Văn Con"
+          },
+          "dateOfBirth": {
+            "type": "string",
+            "description": "Ngày tháng năm sinh (định dạng YYYY-MM-DD)",
+            "example": "2015-05-20"
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "MALE",
+              "FEMALE",
+              "OTHER"
+            ],
+            "description": "Giới tính sinh học",
+            "example": "MALE"
+          },
+          "relationshipToRepresentative": {
+            "type": "string",
+            "description": "Mối quan hệ nhân thân với chủ hộ / đại diện gia đình (BỐ, MẸ, CON, VỢ, CHỒNG, BẢN THÂN...)",
+            "example": "CON"
+          },
+          "identityNumber": {
+            "type": "string",
+            "description": "Số CCCD/Định danh cá nhân",
+            "example": "001201500001"
+          },
+          "citizenId": {
+            "type": "string",
+            "description": "Số CCCD/Định danh cá nhân (alias của identityNumber)"
+          },
+          "relationshipToHead": {
+            "type": "string",
+            "description": "Mối quan hệ nhân thân (alias của relationshipToRepresentative)"
+          },
+          "phoneNumber": {
+            "type": "string",
+            "description": "Số điện thoại liên hệ cá nhân",
+            "example": "0987654321"
+          },
+          "bloodType": {
+            "type": "string",
+            "description": "Nhóm máu (A, B, AB, O...)",
+            "example": "O+"
+          },
+          "healthInsuranceNumber": {
+            "type": "string",
+            "description": "Mã số thẻ bảo hiểm y tế",
+            "example": "DN4010123456789"
+          },
+          "familyId": {
+            "type": "string",
+            "description": "ID hộ gia đình (bắt buộc khi ADMIN tạo hộ)"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "INACTIVE"
+            ],
+            "description": "Trạng thái theo dõi bệnh nhân"
+          }
+        }
+      },
+      "CreateAllergyDto": {
+        "type": "object",
+        "properties": {
+          "allergenType": {
+            "type": "string",
+            "enum": [
+              "DRUG",
+              "FOOD",
+              "ENVIRONMENTAL"
+            ],
+            "description": "Nhóm dị nguyên (DRUG: thuốc, FOOD: thực phẩm, ENVIRONMENTAL: môi trường)",
+            "example": "DRUG"
+          },
+          "allergenName": {
+            "type": "string",
+            "description": "Tên dị nguyên gây dị ứng",
+            "example": "Paracetamol"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "MILD",
+              "MODERATE",
+              "LIFE_THREATENING_ANAPHYLAXIS"
+            ],
+            "description": "Mức độ nghiêm trọng (MILD: nhẹ, MODERATE: trung bình, LIFE_THREATENING_ANAPHYLAXIS: sốc phản vệ)",
+            "example": "MODERATE"
+          },
+          "clinicalManifestation": {
+            "type": "string",
+            "description": "Triệu chứng lâm sàng khi tiếp xúc (mẩn ngứa, khó thở, phù mạch...)",
+            "example": "Phát ban ngứa toàn thân"
+          }
+        },
+        "required": [
+          "allergenType",
+          "allergenName",
+          "severity"
+        ]
+      },
+      "CreatePatientDocumentDto": {
+        "type": "object",
+        "properties": {
+          "documentName": {
+            "type": "string",
+            "description": "Tên tài liệu / hồ sơ y tế",
+            "example": "Phiếu xét nghiệm máu"
+          },
+          "documentType": {
+            "type": "string",
+            "enum": [
+              "LAB_RESULT",
+              "IMAGING_XRAY_CT",
+              "DISCHARGE_SUMMARY"
+            ],
+            "description": "Loại tài liệu y tế",
+            "example": "LAB_RESULT"
+          },
+          "fileUrl": {
+            "type": "string",
+            "description": "Đường dẫn liên kết tải tệp tài liệu",
+            "example": "https://storage.famidoc.vn/docs/blood_test.pdf"
+          },
+          "fileSizeKb": {
+            "type": "number",
+            "description": "Kích thước tệp tin (KB)",
+            "example": 1024
+          },
+          "recordedDate": {
+            "type": "string",
+            "description": "Ngày ghi nhận tài liệu y tế (YYYY-MM-DD)",
+            "example": "2026-11-01"
+          }
+        },
+        "required": [
+          "documentName",
+          "documentType",
+          "fileUrl",
+          "fileSizeKb",
+          "recordedDate"
+        ]
       }
     }
   }
