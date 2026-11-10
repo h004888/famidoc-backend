@@ -8,7 +8,6 @@ describe('JwtAuthGuard', () => {
   let guard: JwtAuthGuard;
   let jwtService: jest.Mocked<JwtService>;
   let prismaService: any;
-  let redisClient: any;
   let reflector: jest.Mocked<Reflector>;
 
   beforeEach(() => {
@@ -23,15 +22,11 @@ describe('JwtAuthGuard', () => {
       },
     };
 
-    redisClient = {
-      mget: jest.fn().mockResolvedValue([null, null]),
-    };
-
     reflector = {
       getAllAndOverride: jest.fn(),
     } as any;
 
-    guard = new JwtAuthGuard(jwtService, prismaService, redisClient, reflector);
+    guard = new JwtAuthGuard(jwtService, prismaService, reflector);
   });
 
   const createMockContext = (authHeader?: string, handler = () => {}, targetClass = {}) => {
@@ -55,15 +50,9 @@ describe('JwtAuthGuard', () => {
     await expect(guard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
   });
 
-  it('should throw UnauthorizedException if token is blacklisted in Redis', async () => {
+  it('should throw UnauthorizedException if token is invalid or expired', async () => {
     const ctx = createMockContext('Bearer token123');
-    jwtService.verifyAsync.mockResolvedValue({
-      sub: 'user-1',
-      iat: 1000,
-      exp: 2000,
-      jti: 'jti-1',
-    });
-    redisClient.mget.mockResolvedValue(['revoked', null]);
+    jwtService.verifyAsync.mockRejectedValue(new Error('jwt expired'));
 
     await expect(guard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
   });
@@ -76,66 +65,72 @@ describe('JwtAuthGuard', () => {
       exp: 2000,
       jti: 'jti-1',
     });
-    redisClient.mget.mockResolvedValue([null, null]);
     prismaService.user.findUnique.mockResolvedValue({
       id: 'user-1',
-      role: 'ADMIN',
+      role: 'FAMILY_REP',
+      email: 'user@example.com',
+      fullName: 'User One',
       status: 'ACTIVE',
-      familyUnit: null,
+      familyUnit: { id: 'fam-1' },
     });
 
     const result = await guard.canActivate(ctx);
     expect(result).toBe(true);
-    const req = ctx.switchToHttp().getRequest() as any;
+    const req = ctx.switchToHttp().getRequest();
     expect(req.user).toEqual({
       id: 'user-1',
-      role: 'ADMIN',
-      familyUnitId: null,
+      role: 'FAMILY_REP',
+      familyUnitId: 'fam-1',
     });
   });
 
-  it('should block ONBOARDING_ONLY token on standard routes with 403 Forbidden', async () => {
+  it('should throw ForbiddenException if user status is SUSPENDED', async () => {
     const ctx = createMockContext('Bearer token123');
     jwtService.verifyAsync.mockResolvedValue({
-      sub: 'doc-user-1',
+      sub: 'user-1',
       iat: 1000,
       exp: 2000,
-      scope: 'ONBOARDING_ONLY',
     });
-    redisClient.mget.mockResolvedValue([null, null]);
     prismaService.user.findUnique.mockResolvedValue({
-      id: 'doc-user-1',
-      role: 'DOCTOR',
+      id: 'user-1',
+      status: 'SUSPENDED',
+    });
+
+    await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('should throw ForbiddenException for PENDING doctor when onboarding is not allowed', async () => {
+    const ctx = createMockContext('Bearer token123');
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: 'doctor-1',
+      iat: 1000,
+      exp: 2000,
+    });
+    prismaService.user.findUnique.mockResolvedValue({
+      id: 'doctor-1',
       status: 'PENDING',
-      familyUnit: null,
+      role: 'DOCTOR',
     });
     reflector.getAllAndOverride.mockReturnValue(false);
 
     await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
   });
 
-  it('should allow ONBOARDING_ONLY doctor on routes with @AllowOnboarding()', async () => {
+  it('should allow PENDING user if @AllowOnboarding decorator is set to true', async () => {
     const ctx = createMockContext('Bearer token123');
     jwtService.verifyAsync.mockResolvedValue({
-      sub: 'doc-user-1',
+      sub: 'user-1',
       iat: 1000,
       exp: 2000,
-      scope: 'ONBOARDING_ONLY',
     });
-    redisClient.mget.mockResolvedValue([null, null]);
     prismaService.user.findUnique.mockResolvedValue({
-      id: 'doc-user-1',
-      role: 'DOCTOR',
+      id: 'user-1',
+      role: 'FAMILY_REP',
       status: 'PENDING',
-      familyUnit: null,
     });
-    reflector.getAllAndOverride.mockImplementation((key: any) => {
-      return key === ALLOW_ONBOARDING_KEY;
-    });
+    reflector.getAllAndOverride.mockReturnValue(true);
 
     const result = await guard.canActivate(ctx);
     expect(result).toBe(true);
-    const req = ctx.switchToHttp().getRequest() as any;
-    expect(req.user.id).toBe('doc-user-1');
   });
 });
