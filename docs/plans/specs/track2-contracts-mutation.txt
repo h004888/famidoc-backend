@@ -1,0 +1,32 @@
+Bạn là kỹ sư phần mềm thực thi Track 2 trong dự án famidoc-backend theo đúng kế hoạch docs/plans/2026-11-09-medical-contracts-and-family-members.md.
+Nhiệm vụ của bạn là hoàn thành trọn vẹn Task 4 theo chu trình TDD (Red -> Green -> Refactor):
+
+Task 4: Nâng cấp Khởi tạo Hợp đồng 4 bên với `patientIds` và Bác sĩ Tùy chọn
+
+1. Cập nhật DTO:
+- Sửa src/modules/contracts/dtos/create-medical-contract.dto.ts:
+  - doctorId đổi thành optional: @IsOptional() @IsUUID('4') doctorId?: string;
+  - Thêm danh sách thành viên áp dụng:
+    @ApiProperty({ type: [String], description: 'Danh sách ID thành viên gia đình được bảo trợ trong hợp đồng' })
+    @IsArray()
+    @ArrayNotEmpty()
+    @IsUUID('4', { each: true })
+    patientIds!: string[];
+
+2. Cập nhật Repository & Service:
+- Trong src/modules/contracts/services/impl/contracts.service.impl.ts:
+  - createInitialMedicalContract:
+    - Kiểm tra tất cả patientIds thuộc targetFamilyId (nếu không ném BadRequestException).
+    - memberCount = dto.patientIds.length (nếu dto.memberCount được gửi, kiểm tra khớp độ dài).
+    - Nếu dto.doctorId được gửi: xác thực bác sĩ thuộc facilityId và activePanelCount < 30.
+    - Nếu dto.doctorId KHÔNG được gửi: doctorId = null, tính giá theo DoctorTier.STANDARD.
+    - Trong transaction tạo hợp đồng: lưu các bản ghi vào bảng contract_members (contractId, patientId).
+  - signInitialMedicalContract:
+    - Khi vai trò ký là HEALTHCARE_FACILITY hoặc ASSIGNED_DOCTOR: kiểm tra contract.doctorId !== null. Nếu null, ném BadRequestException('Cơ sở y tế phải phân công bác sĩ trước khi ký tiếp nhận').
+  - assignDoctorToPackage:
+    - Cho phép gán bác sĩ khi contract.doctorId đang null ở trạng thái PENDING_APPROVAL.
+
+3. Kiểm chứng TDD:
+- Cập nhật test case tại src/modules/contracts/__tests__/initial-medical-contracts.spec.ts.
+- Chạy: npm test -- src/modules/contracts/__tests__/initial-medical-contracts.spec.ts (yêu cầu PASS).
+- Chạy regression test: npm test -- src/modules/contracts/__tests__/four-party-and-assign-doctor.spec.ts (yêu cầu PASS).

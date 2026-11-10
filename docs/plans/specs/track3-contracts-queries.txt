@@ -1,0 +1,26 @@
+Bạn là kỹ sư phần mềm thực thi Track 3 trong dự án famidoc-backend theo đúng kế hoạch docs/plans/2026-11-09-medical-contracts-and-family-members.md.
+Nhiệm vụ của bạn là hoàn thành trọn vẹn Task 5 và Task 6 theo chu trình TDD (Red -> Green -> Refactor):
+
+1. Task 5: Triển khai API Danh sách & Chi tiết Hợp đồng y tế 4 bên theo Vai trò
+- Tạo DTO src/modules/contracts/dtos/list-medical-contracts-query.dto.ts (page, limit, status, facilityId).
+- Bổ sung interface và triển khai trong contracts.repository và contracts.service:
+  - listMedicalContracts: Filter tự động theo role của user (FAMILY_REP -> familyUnitId, HEALTHCARE_FACILITY -> facilityId, DOCTOR -> doctorId, ADMIN -> all).
+  - findMedicalContractById: Lấy chi tiết hợp đồng gồm relations (familyUnit, facility, doctor, servicePackage, members.patient, signatures, invoices). Kiểm tra quyền truy cập của người gọi.
+- Bổ sung routes vào src/modules/contracts/controllers/contracts.controller.ts:
+  - GET /api/v1/contracts/medical
+  - GET /api/v1/contracts/medical/:id
+- Viết test TDD tại src/modules/contracts/__tests__/medical-contracts-query.spec.ts.
+- Chạy: npm test -- src/modules/contracts/__tests__/medical-contracts-query.spec.ts (yêu cầu PASS).
+
+2. Task 6: Tóm tắt Nhu cầu Chăm sóc (Care Needs Summary) & Bản sao Hợp đồng (Document API)
+- Tạo DTO src/modules/contracts/dtos/care-needs-summary.dto.ts.
+- Tạo service src/modules/contracts/services/contract-document-renderer.service.ts xuất văn bản hợp đồng hoàn chỉnh (HTML/formatted view) kèm 4 chữ ký số và termsHash.
+- Thêm methods vào contracts.service:
+  - getCareNeedsSummary: Tổng hợp hồ sơ nhân khẩu, dị ứng (allergies), tài liệu bệnh án (documents) của các bệnh nhân trong contract_members phục vụ bác sĩ thẩm định.
+  - getContractDocument: Kết xuất tài liệu hợp đồng và 4 chữ ký số.
+- Bổ sung routes vào src/modules/contracts/controllers/contracts.controller.ts:
+  - GET /api/v1/contracts/medical/:id/care-summary
+  - GET /api/v1/contracts/medical/:id/document
+- Viết test TDD tại src/modules/contracts/__tests__/contract-care-summary-and-document.spec.ts.
+- Chạy: npm test -- src/modules/contracts/__tests__/contract-care-summary-and-document.spec.ts (yêu cầu PASS).
+- Chạy regression test: npm test -- src/modules/contracts/__tests__/contract-terms-hash.spec.ts (yêu cầu PASS).

@@ -117,6 +117,9 @@ export class AuthServiceImpl implements IAuthService {
       }
 
       const otp = randomInt(100000, 1000000).toString();
+      console.log(`\n======================================================`);
+      console.log(`[AUTH-REGISTER-OTP] Email: ${dto.email} | OTP: ${otp}`);
+      console.log(`======================================================\n`);
       await this.redisClient.set(
         `otp:reg:${dto.email}`,
         JSON.stringify({
@@ -184,6 +187,9 @@ export class AuthServiceImpl implements IAuthService {
 
     const data = JSON.parse(cached);
     const newOtp = randomInt(100000, 1000000).toString();
+    console.log(`\n======================================================`);
+    console.log(`[AUTH-RESEND-OTP] Email: ${dto.email} | OTP: ${newOtp}`);
+    console.log(`======================================================\n`);
     data.otp = newOtp;
 
     await this.redisClient.set(

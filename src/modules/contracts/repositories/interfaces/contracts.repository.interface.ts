@@ -21,6 +21,22 @@ export const CONTRACT_CHANGE_INCLUDE = {
 export type ChangeContract = Prisma.MedicalContractGetPayload<{
   include: typeof CONTRACT_CHANGE_INCLUDE;
 }>;
+export const MEDICAL_CONTRACT_DETAIL_INCLUDE = {
+  familyUnit: true,
+  facility: true,
+  doctor: { include: { user: true } },
+  servicePackage: true,
+  members: {
+    include: {
+      patient: true,
+    },
+  },
+  signatures: true,
+  invoices: true,
+} as const;
+export type DetailedMedicalContract = Prisma.MedicalContractGetPayload<{
+  include: typeof MEDICAL_CONTRACT_DETAIL_INCLUDE;
+}>;
 export const CHANGE_ADDENDUM_INCLUDE = {
   signatures: true,
   contract: { include: CONTRACT_CHANGE_INCLUDE },
@@ -87,11 +103,33 @@ export interface ContractsSession {
   findFacilityById(id: string): Promise<HealthcareFacility | null>;
   findFacilityByUserId(userId: string): Promise<HealthcareFacility | null>;
   findDoctorById(id: string): Promise<any | null>;
+  findDoctorByUserId(userId: string): Promise<any | null>;
   findFamilyById(id: string): Promise<any | null>;
+  findFamilyByRepresentativeUserId(userId: string): Promise<any | null>;
+  findPatientsByIdsAndFamilyId(
+    patientIds: string[],
+    familyId: string,
+  ): Promise<Array<{ id: string }>>;
   createMedicalContract(
     data: Prisma.MedicalContractUncheckedCreateInput,
   ): Promise<ChangeContract>;
+  createContractMembers(
+    contractId: string,
+    patientIds: string[],
+  ): Promise<void>;
   updateContractDoctor(id: string, doctorId: string): Promise<ChangeContract>;
+  listMedicalContracts(
+    where: Prisma.MedicalContractWhereInput,
+    skip: number,
+    take: number,
+  ): Promise<{
+    items: DetailedMedicalContract[];
+    total: number;
+  }>;
+  findMedicalContractById(id: string): Promise<DetailedMedicalContract | null>;
+  findPatientsWithClinicalProfile?(
+    patientIds: string[],
+  ): Promise<any[]>;
   findConflictingStaffingContract(
     facilityId: string,
     startDate: Date,

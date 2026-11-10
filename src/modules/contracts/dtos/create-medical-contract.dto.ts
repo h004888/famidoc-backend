@@ -1,7 +1,8 @@
 import {
-  IsInt,
-  Max,
+  ArrayNotEmpty,
+  IsArray,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsUUID,
   Min,
@@ -9,26 +10,6 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateMedicalContractDto {
-  @ApiPropertyOptional({
-    description: 'Số lượt video thỏa thuận, bắt buộc cho gói năm.',
-    minimum: 1,
-    maximum: 100000,
-  })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(100_000)
-  videoConsultations?: number;
-  @ApiPropertyOptional({
-    description: 'Lượt khám tại nhà mua thêm, tính cả phụ thu loại bác sĩ.',
-    minimum: 0,
-    maximum: 100,
-  })
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  @Max(100)
-  extraHomeVisits?: number;
   @ApiProperty({
     description: 'ID gói dịch vụ chăm sóc sức khỏe',
     example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
@@ -45,13 +26,22 @@ export class CreateMedicalContractDto {
   @IsNotEmpty()
   facilityId!: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'ID bác sĩ gia đình phân công',
     example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
   @IsUUID('4')
-  @IsNotEmpty()
-  doctorId!: string;
+  @IsOptional()
+  doctorId?: string;
+
+  @ApiProperty({
+    type: [String],
+    description: 'Danh sách ID thành viên gia đình được bảo trợ trong hợp đồng',
+  })
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsUUID('4', { each: true })
+  patientIds!: string[];
 
   @ApiPropertyOptional({
     description:
@@ -66,10 +56,10 @@ export class CreateMedicalContractDto {
     description: 'Số lượng thành viên tham gia chăm sóc',
     default: 1,
   })
-  @IsInt()
-  @Max(10)
+  @IsNumber()
   @Min(1)
   @IsOptional()
   memberCount?: number;
 }
+
 export class CreateFourPartyContractDto extends CreateMedicalContractDto {}
