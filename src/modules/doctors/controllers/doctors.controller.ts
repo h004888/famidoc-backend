@@ -30,6 +30,7 @@ import { SubmitDoctorCredentialsDto } from '../dtos/submit-credentials.dto';
 import {
   FacilityVerifyCredentialsDto,
   PlatformApproveCredentialsDto,
+  ReviewDoctorCredentialsDto,
 } from '../dtos/verify-credentials.dto';
 import { DoctorResponseDto } from '../dtos/doctor-response.dto';
 import {
@@ -172,6 +173,7 @@ export class DoctorsController {
       'Tier 1: CSYT thẩm định cấp 1; Tier 2: Quản trị viên phê duyệt kích hoạt cấp 2.',
   })
   @ApiParam({ name: 'id', description: 'UUID của hồ sơ Bác sĩ' })
+  @ApiBody({ type: ReviewDoctorCredentialsDto })
   @ApiResponse({
     status: 200,
     description: 'Thẩm định hồ sơ thành công.',
@@ -180,14 +182,7 @@ export class DoctorsController {
   reviewDoctorCredentials(
     @Req() req: AuthenticatedRequest,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
-    @Body()
-    body: {
-      tier: number;
-      approved?: boolean;
-      rejectionReason?: string;
-      verificationNotes?: string;
-      backgroundCheckConsent?: boolean;
-    },
+    @Body() body: ReviewDoctorCredentialsDto,
   ): Promise<DoctorResponseDto> {
     if (body.tier === 1) {
       return this.service.approveDoctorCredentialsByFacility(

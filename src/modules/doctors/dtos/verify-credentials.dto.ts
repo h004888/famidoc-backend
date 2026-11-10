@@ -53,3 +53,45 @@ export class PlatformApproveCredentialsDto {
   @IsBoolean()
   backgroundCheckConsent?: boolean;
 }
+
+export class ReviewDoctorCredentialsDto {
+  @ApiProperty({
+    description: 'Cấp thẩm định (1: CSYT thẩm định cấp 1, 2: Quản trị viên phê duyệt cấp 2)',
+    example: 1,
+    enum: [1, 2],
+  })
+  @IsNotEmpty()
+  tier!: number;
+
+  @ApiPropertyOptional({
+    description: 'Kết quả thẩm định (true: Duyệt, false: Từ chối)',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  approved?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Lý do từ chối nếu không thông qua thẩm định',
+    example: 'Văn bằng chứng chỉ mờ, không rõ dấu đỏ của Sở Y tế.',
+  })
+  @IsOptional()
+  @IsString()
+  rejectionReason?: string;
+
+  @ApiPropertyOptional({
+    description: 'Ghi chú thẩm định hồ sơ của CSYT (dành cho Tier 1)',
+    example: 'Đã đối chiếu văn bằng gốc tại đơn vị.',
+  })
+  @IsOptional()
+  @IsString()
+  verificationNotes?: string;
+
+  @ApiPropertyOptional({
+    description: 'Đồng thuận kiểm tra lý lịch / tư pháp ngành y tế (dành cho Tier 2)',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  backgroundCheckConsent?: boolean;
+}

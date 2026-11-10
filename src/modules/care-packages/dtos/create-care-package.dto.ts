@@ -23,18 +23,33 @@ const trimString = ({ value }: { value: unknown }): unknown =>
 // Ba hạn mức dùng chung cho nhóm người được gói phục vụ, không tính riêng từng người.
 export class CarePackageQuotasDto {
   // Số lượt video: cho phép 0; trần 100.000 là giới hạn kỹ thuật, chưa phải bảng quyền lợi.
+  @ApiProperty({
+    description: 'Số lượt khám tư vấn video trực tuyến',
+    example: 10,
+    default: 0,
+  })
   @IsInt()
   @Min(0)
   @Max(100_000)
   videoConsultations: number;
 
   // Số lượt khám tại nhà trong chu kỳ cấu hình của gói.
+  @ApiProperty({
+    description: 'Số lượt bác sĩ đến khám tận nơi tại nhà',
+    example: 4,
+    default: 0,
+  })
   @IsInt()
   @Min(0)
   @Max(100_000)
   homeVisits: number;
 
   // Khám tại cơ sở ngoài phạm vi gói hiện tại; giữ field cũ tương thích response.
+  @ApiProperty({
+    description: 'Số lượt khám tại cơ sở y tế (mặc định 0)',
+    example: 0,
+    default: 0,
+  })
   @IsInt()
   @Min(0)
   @Max(0)

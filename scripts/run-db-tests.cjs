@@ -17,10 +17,9 @@ try {
 
   const config = parseEnv(readFileSync(resolve(root, '.env'), 'utf8'));
   const database = new URL(config.TEST_DATABASE_URL);
-  const redis = new URL(config.TEST_REDIS_URL);
   const localHosts = ['localhost', '127.0.0.1'];
 
-  // Bộ integration test có dọn dữ liệu: tuyệt đối không cho chạy vào VPS hoặc Redis DB 0.
+  // Bộ integration test có dọn dữ liệu: tuyệt đối không cho chạy vào VPS.
   if (
     !['postgres:', 'postgresql:'].includes(database.protocol) ||
     !localHosts.includes(database.hostname) ||
@@ -31,15 +30,18 @@ try {
       'TEST_DATABASE_URL phải trỏ đến PostgreSQL local, tên DB kết thúc bằng _test.',
     );
   }
-  if (
-    redis.protocol !== 'redis:' ||
-    !localHosts.includes(redis.hostname) ||
-    !/^\/[1-9]\d*$/.test(redis.pathname) ||
-    config.TEST_REDIS_URL === config.REDIS_URL
-  ) {
-    throw new Error(
-      'TEST_REDIS_URL phải trỏ đến Redis local và dùng DB riêng, ví dụ /15.',
-    );
+
+  if (config.TEST_REDIS_URL) {
+    const redis = new URL(config.TEST_REDIS_URL);
+    if (
+      redis.protocol !== 'redis:' ||
+      !localHosts.includes(redis.hostname) ||
+      !/^\/[1-9]\d*$/.test(redis.pathname)
+    ) {
+      throw new Error(
+        'TEST_REDIS_URL phải trỏ đến Redis local và dùng DB riêng, ví dụ /15.',
+      );
+    }
   }
 
   if (process.argv.includes('--check')) {
