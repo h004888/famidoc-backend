@@ -20,17 +20,17 @@ export class RegisterFamilyRepDto {
 
   @ApiProperty({
     example: '0912345678',
-    description: 'Số điện thoại liên hệ (10-11 chữ số)',
+    description: 'Số điện thoại liên hệ (10-11 chữ số hoặc +84)',
   })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^[0-9]{10,11}$/, {
-    message: 'Phone must be a valid 10-11 digit phone number',
+  @Matches(/^(\+84|0)[0-9]{9,10}$/, {
+    message: 'Phone must be a valid 10-11 digit phone number or international +84...',
   })
   phone!: string;
 
   @ApiProperty({
-    example: 'representative@famidoc.vn',
+    example: 'nguyen.family@famidoc.vn',
     description: 'Địa chỉ email đăng ký nhận OTP',
   })
   @IsEmail({}, { message: 'Email must be a valid email address' })
@@ -45,12 +45,36 @@ export class RegisterFamilyRepDto {
   @Length(8, 64, { message: 'Password must be between 8 and 64 characters' })
   password!: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
+    description: 'Xác nhận lại mật khẩu (tùy chọn)',
+  })
+  @IsOptional()
+  @IsString()
+  confirmPassword?: string;
+
+  @ApiPropertyOptional({
+    description: 'Mối quan hệ nhân thân (ví dụ: Chủ hộ)',
+    example: 'Chủ hộ',
+  })
+  @IsOptional()
+  @IsString()
+  relationship?: string;
+
+  @ApiPropertyOptional({
     example: true,
     description: 'Đồng ý với điều khoản sử dụng và chính sách bảo mật',
   })
+  @IsOptional()
   @IsBoolean()
-  acceptedTerms!: boolean;
+  acceptedTerms?: boolean;
+
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Alias của acceptedTerms (dùng từ form frontend)',
+  })
+  @IsOptional()
+  @IsBoolean()
+  acceptTerms?: boolean;
 
   @ApiPropertyOptional({
     example: '123 Đường Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh',

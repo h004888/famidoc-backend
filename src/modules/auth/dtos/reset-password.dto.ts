@@ -3,7 +3,7 @@ import { IsEmail, IsNotEmpty, IsString, Length, Matches } from 'class-validator'
 
 export class ResetPasswordDto {
   @ApiProperty({
-    example: 'representative@famidoc.vn',
+    example: 'linhnyhe187172@fpt.edu.vn',
     description: 'Email tài khoản cần đặt lại mật khẩu',
   })
   @IsEmail({}, { message: 'Email must be a valid email address' })
@@ -12,7 +12,7 @@ export class ResetPasswordDto {
 
   @ApiProperty({
     example: '123456',
-    description: 'Mã xác thực OTP gồm 6 chữ số nhận qua email',
+    description: 'Mã xác thực OTP gồm 6 chữ số nhận qua email (hoặc 123456 trong dev)',
   })
   @IsString()
   @IsNotEmpty()

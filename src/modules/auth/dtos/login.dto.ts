@@ -1,14 +1,30 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class LoginDto {
-  @ApiProperty({
-    example: 'representative@famidoc.vn',
+  @ApiPropertyOptional({
+    example: 'linhnyhe187172@fpt.edu.vn',
     description: 'Email hoặc Số điện thoại đăng nhập của người dùng',
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  identifier!: string;
+  identifier?: string;
+
+  @ApiPropertyOptional({
+    example: 'linhnyhe187172@fpt.edu.vn',
+    description: 'Địa chỉ email đăng nhập (alias của identifier)',
+  })
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @ApiPropertyOptional({
+    example: '0988776655',
+    description: 'Số điện thoại đăng nhập (alias của identifier)',
+  })
+  @IsOptional()
+  @IsString()
+  phone?: string;
 
   @ApiProperty({
     example: 'Password@123',
