@@ -86,7 +86,7 @@ export class StandardApiResponseFilter implements ExceptionFilter {
           status = HttpStatus.UNPROCESSABLE_ENTITY;
           errorCode = ValidationErrorCode.VALIDATION_FAILED;
           message = resObj.message[0] || 'Dữ liệu đầu vào không hợp lệ';
-          detail = 'One or more fields in the request body failed validation constraints.';
+          detail = 'One or more fields in the request failed validation constraints.';
           invalidParams = this.extractValidationErrors(resObj.message);
         } else {
           message = resObj.message || message;
@@ -151,7 +151,10 @@ export class StandardApiResponseFilter implements ExceptionFilter {
   private extractValidationErrors(messages: string[]): InvalidParamItem[] {
     return messages.map((msgStr) => {
       const parts = msgStr.trim().split(' ');
-      const field = parts[0] || 'unknown';
+      let field = parts[0] || 'unknown';
+      if (parts[0] === 'property' && parts[2] === 'should' && parts[3] === 'not') {
+        field = parts[1] || 'unknown';
+      }
       let issue = ValidationIssue.INVALID_FORMAT;
 
       const lower = msgStr.toLowerCase();

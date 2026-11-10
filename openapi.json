@@ -506,7 +506,85 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PublicDoctorsResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Danh sách các bác sĩ gia đình thỏa mãn điều kiện lọc."
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicDoctorItemDto"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "page": {
+                              "type": "number",
+                              "example": 1
+                            },
+                            "pageSize": {
+                              "type": "number",
+                              "example": 20
+                            },
+                            "totalRecords": {
+                              "type": "number",
+                              "example": 100
+                            },
+                            "totalPages": {
+                              "type": "number",
+                              "example": 5
+                            },
+                            "hasNextPage": {
+                              "type": "boolean",
+                              "example": true
+                            },
+                            "hasPreviousPage": {
+                              "type": "boolean",
+                              "example": false
+                            },
+                            "nextCursor": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "previousCursor": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-10T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -536,7 +614,54 @@
         ],
         "responses": {
           "200": {
-            "description": "Chi tiết hồ sơ bác sĩ."
+            "description": "Chi tiết hồ sơ bác sĩ.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Chi tiết hồ sơ bác sĩ."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PublicDoctorItemDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-10T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ID bác sĩ không đúng định dạng UUID v4."
           },
           "404": {
             "description": "Không tìm thấy bác sĩ hoặc bác sĩ chưa được kích hoạt."
@@ -1191,7 +1316,51 @@
         },
         "responses": {
           "200": {
-            "description": "Đăng nhập thành công, trả về JWT Access Token"
+            "description": "Đăng nhập thành công, trả về JWT Access Token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Đăng nhập thành công, trả về JWT Access Token"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/LoginDataDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-10T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
+                }
+              }
+            }
           },
           "401": {
             "description": "Sai tên đăng nhập hoặc mật khẩu"
@@ -4498,7 +4667,13 @@
             "description": "Trạng thái tiếp nhận hộ gia đình mới (dưới hạn mức tối đa 30 hộ)"
           },
           "facility": {
-            "$ref": "#/components/schemas/PublicDoctorFacilityDto"
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PublicDoctorFacilityDto"
+              }
+            ]
           }
         },
         "required": [
@@ -4510,26 +4685,7 @@
           "bio",
           "ratingAvg",
           "totalReviews",
-          "isAvailable",
-          "facility"
-        ]
-      },
-      "PublicDoctorsResponseDto": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PublicDoctorItemDto"
-            }
-          },
-          "meta": {
-            "$ref": "#/components/schemas/PaginationMetaDto"
-          }
-        },
-        "required": [
-          "items",
-          "meta"
+          "isAvailable"
         ]
       },
       "SubmitConsultationRequestDto": {
@@ -5121,6 +5277,81 @@
         },
         "required": [
           "email"
+        ]
+      },
+      "AuthUserDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "10000000-0000-4000-8000-000000000001",
+            "description": "ID người dùng"
+          },
+          "email": {
+            "type": "string",
+            "example": "vana.nguyen@example.com",
+            "description": "Email người dùng"
+          },
+          "phone": {
+            "type": "object",
+            "example": "0987654321",
+            "description": "Số điện thoại"
+          },
+          "fullName": {
+            "type": "string",
+            "example": "Nguyễn Văn A",
+            "description": "Họ và tên người dùng"
+          },
+          "role": {
+            "type": "string",
+            "example": "FAMILY_REP",
+            "description": "Vai trò người dùng trong hệ thống"
+          },
+          "status": {
+            "type": "string",
+            "example": "ACTIVE",
+            "description": "Trạng thái hoạt động của tài khoản"
+          },
+          "avatarUrl": {
+            "type": "object",
+            "example": null,
+            "description": "Đường dẫn ảnh đại diện"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "fullName",
+          "role",
+          "status"
+        ]
+      },
+      "LoginDataDto": {
+        "type": "object",
+        "properties": {
+          "accessToken": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+            "description": "JWT Access Token dùng cho các request tiếp theo"
+          },
+          "role": {
+            "type": "string",
+            "example": "FAMILY_REP",
+            "description": "Vai trò của tài khoản"
+          },
+          "user": {
+            "description": "Thông tin tài khoản đã đăng nhập",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuthUserDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "accessToken",
+          "role",
+          "user"
         ]
       },
       "LoginDto": {

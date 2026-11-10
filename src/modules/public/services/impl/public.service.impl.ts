@@ -17,7 +17,10 @@ import { PublicPackageDetailDto } from '../../dtos/public-package-detail.dto';
 import { LookupHealthcareFacilitiesDto } from '../../dtos/lookup-facilities.dto';
 import { PublicFacilitiesResponseDto } from '../../dtos/public-facilities-response.dto';
 import { LookupDoctorDirectoryDto } from '../../dtos/lookup-doctors.dto';
-import { PublicDoctorsResponseDto } from '../../dtos/public-doctors-response.dto';
+import {
+  PublicDoctorsResponseDto,
+  PublicDoctorItemDto,
+} from '../../dtos/public-doctors-response.dto';
 import { SubmitConsultationRequestDto } from '../../dtos/submit-consultation-request.dto';
 import { ConsultationRequestResponseDto } from '../../dtos/consultation-request-response.dto';
 
@@ -481,7 +484,7 @@ export class PublicServiceImpl implements IPublicService {
     };
   }
 
-  async getPublicDoctorDetail(id: string): Promise<any> {
+  async getPublicDoctorDetail(id: string): Promise<PublicDoctorItemDto> {
     const doctor = await this.prisma.doctor.findUnique({
       where: { id },
       select: {

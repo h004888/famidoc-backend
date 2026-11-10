@@ -78,20 +78,43 @@ export class TransformResponseInterceptor<T>
         const statusCode = response?.statusCode || 200;
         const defaultMessage = customMessage || 'Success';
 
-        // Nếu data trả về từ service/controller có phân tách data và meta (như phân trang)
+        // Nếu data trả về từ service/controller có phân tách data/items và meta (như phân trang)
         if (
           data &&
           typeof data === 'object' &&
           !Array.isArray(data) &&
-          'data' in data &&
+          ('data' in data || 'items' in data) &&
           'meta' in data
         ) {
+          const listData = 'data' in data ? (data as any).data : (data as any).items;
+          const rawMeta = (data as any).meta;
+          let formattedMeta = rawMeta;
+          if (rawMeta && !rawMeta.pagination && typeof rawMeta.total === 'number') {
+            const page = rawMeta.page ?? 1;
+            const pageSize = rawMeta.limit ?? (rawMeta.pageSize ?? 20);
+            const totalRecords = rawMeta.total;
+            const totalPages =
+              rawMeta.totalPages ??
+              (totalRecords > 0 ? Math.ceil(totalRecords / pageSize) : 0);
+
+            formattedMeta = {
+              pagination: {
+                page,
+                pageSize,
+                totalRecords,
+                totalPages,
+                hasNextPage: totalPages > 0 && page < totalPages,
+                hasPreviousPage: page > 1 && totalPages > 0 && page <= totalPages + 1,
+              },
+            };
+          }
+
           const res: ApiSuccessResponse<any> = {
             success: true,
             code: statusCode,
             message: (data as any).message ?? defaultMessage,
-            data: (data as any).data,
-            meta: (data as any).meta ?? null,
+            data: listData,
+            meta: formattedMeta ?? null,
             timestamp: new Date().toISOString(),
             requestId: rawRequestId,
           };

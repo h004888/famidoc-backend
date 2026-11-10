@@ -93,6 +93,39 @@ describe('TransformResponseInterceptor', () => {
     expect(result.meta).toEqual(payload.meta);
   });
 
+  it('nên bóc tách danh sách và chuẩn hóa pagination meta khi controller trả về items và meta', async () => {
+    const context = createMockContext({ statusCode: 200 });
+    const payload = {
+      items: [{ id: 'doc-1', name: 'Dr. Strange' }],
+      meta: {
+        total: 15,
+        page: 1,
+        limit: 10,
+        totalPages: 2,
+      },
+    };
+    const handler: CallHandler = {
+      handle: () => of(payload),
+    };
+
+    const stream$ = interceptor.intercept(context, handler);
+    const result = await lastValueFrom(stream$);
+
+    expect(result.success).toBe(true);
+    expect(result.code).toBe(200);
+    expect(result.data).toEqual([{ id: 'doc-1', name: 'Dr. Strange' }]);
+    expect(result.meta).toEqual({
+      pagination: {
+        page: 1,
+        pageSize: 10,
+        totalRecords: 15,
+        totalPages: 2,
+        hasNextPage: true,
+        hasPreviousPage: false,
+      },
+    });
+  });
+
   it('nên bỏ qua đóng gói khi có cờ BypassTransform', async () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(true);
 

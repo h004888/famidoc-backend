@@ -6,10 +6,12 @@ import {
   INotificationsService,
 } from '../services/interfaces/notifications.service.interface';
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
+import { RolesGuard } from '../../../core/auth/roles.guard';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
 
 describe('NotificationsController (/me/notifications alias)', () => {
   let controller: NotificationsController;
+  let remindersService: ContractRemindersService;
   let service: jest.Mocked<INotificationsService>;
 
   const mockReq = {
@@ -44,7 +46,7 @@ describe('NotificationsController (/me/notifications alias)', () => {
       providers: [
         {
           provide: ContractRemindersService,
-          useValue: { runExpiryReminders: jest.fn() },
+          useValue: { runExpiryReminders: jest.fn().mockResolvedValue({ created: 3 }) },
         },
         {
           provide: NOTIFICATIONS_SERVICE_TOKEN,
@@ -54,9 +56,12 @@ describe('NotificationsController (/me/notifications alias)', () => {
     })
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: () => true })
+      .overrideGuard(RolesGuard)
+      .useValue({ canActivate: () => true })
       .compile();
 
     controller = module.get<NotificationsController>(NotificationsController);
+    remindersService = module.get<ContractRemindersService>(ContractRemindersService);
   });
 
   it('should support /me/notifications alias in controller path metadata', () => {
@@ -86,5 +91,11 @@ describe('NotificationsController (/me/notifications alias)', () => {
       'user-uuid-1',
       'notif-uuid-1',
     );
+  });
+
+  it('should delegate runExpiryReminders to reminders service', async () => {
+    const result = await controller.runExpiryReminders();
+    expect(result).toEqual({ created: 3 });
+    expect(remindersService.runExpiryReminders).toHaveBeenCalled();
   });
 });

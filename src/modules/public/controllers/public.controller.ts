@@ -21,6 +21,8 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiStandardResponse } from '../../../core/decorators/api-standard-response.decorator';
+import { ResponseMessage } from '../../../core/decorators/response-message.decorator';
 import type { IPublicService } from '../services/interfaces/public.service.interface';
 import { PUBLIC_SERVICE_TOKEN } from '../services/interfaces/public.service.interface';
 import { PortalOverviewResponseDto } from '../dtos/portal-overview-response.dto';
@@ -30,7 +32,10 @@ import { PublicPackageDetailDto } from '../dtos/public-package-detail.dto';
 import { LookupHealthcareFacilitiesDto } from '../dtos/lookup-facilities.dto';
 import { PublicFacilitiesResponseDto } from '../dtos/public-facilities-response.dto';
 import { LookupDoctorDirectoryDto } from '../dtos/lookup-doctors.dto';
-import { PublicDoctorsResponseDto } from '../dtos/public-doctors-response.dto';
+import {
+  PublicDoctorItemDto,
+  PublicDoctorsResponseDto,
+} from '../dtos/public-doctors-response.dto';
 import { SubmitConsultationRequestDto } from '../dtos/submit-consultation-request.dto';
 import { ConsultationRequestResponseDto } from '../dtos/consultation-request-response.dto';
 
@@ -159,10 +164,11 @@ export class PublicController {
     description:
       'Cho phép tìm kiếm và tra cứu hồ sơ bác sĩ theo họ tên, chuyên khoa, số năm kinh nghiệm, cơ sở y tế trực thuộc và trạng thái khả dụng tiếp nhận hộ gia đình.',
   })
-  @ApiResponse({
-    status: 200,
+  @ResponseMessage('Tra cứu danh bạ bác sĩ gia đình thành công')
+  @ApiStandardResponse({
+    type: PublicDoctorItemDto,
+    isPaginated: true,
     description: 'Danh sách các bác sĩ gia đình thỏa mãn điều kiện lọc.',
-    type: PublicDoctorsResponseDto,
   })
   async lookupDoctorDirectory(
     @Query() query: LookupDoctorDirectoryDto,
@@ -181,9 +187,14 @@ export class PublicController {
     description: 'UUID của bác sĩ',
     example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
-  @ApiResponse({
+  @ApiStandardResponse({
+    type: PublicDoctorItemDto,
     status: 200,
     description: 'Chi tiết hồ sơ bác sĩ.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'ID bác sĩ không đúng định dạng UUID v4.',
   })
   @ApiResponse({
     status: 404,
@@ -191,7 +202,7 @@ export class PublicController {
   })
   async getPublicDoctorDetail(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
-  ): Promise<any> {
+  ): Promise<PublicDoctorItemDto> {
     return this.publicService.getPublicDoctorDetail(id);
   }
 
