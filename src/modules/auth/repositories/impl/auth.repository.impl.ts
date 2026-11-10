@@ -26,10 +26,25 @@ export class AuthRepositoryImpl
   }
 
   async findByPhone(phone: string): Promise<AuthEntity | null> {
+    const cleanPhone = phone.trim();
     const user = await this.prismaService.user.findFirst({
-      where: { phone },
+      where: { phone: cleanPhone },
     });
-    return (user as unknown as AuthEntity) ?? null;
+    if (user) return (user as unknown as AuthEntity);
+
+    let altPhone: string | null = null;
+    if (cleanPhone.startsWith('0')) {
+      altPhone = '+84' + cleanPhone.slice(1);
+    } else if (cleanPhone.startsWith('+84')) {
+      altPhone = '0' + cleanPhone.slice(3);
+    }
+    if (altPhone) {
+      const altUser = await this.prismaService.user.findFirst({
+        where: { phone: altPhone },
+      });
+      if (altUser) return (altUser as unknown as AuthEntity);
+    }
+    return null;
   }
 
   async createFamilyRepWithProfile(data: CreateFamilyRepDbData): Promise<AuthEntity> {

@@ -97,6 +97,11 @@ export class AuthServiceImpl implements IAuthService {
       throw new BadRequestException('You must accept terms and privacy policy');
     }
 
+    const isTermsAccepted = dto.acceptedTerms ?? dto.acceptTerms ?? false;
+    if (!isTermsAccepted) {
+      throw new BadRequestException('Bạn cần đồng ý với điều khoản sử dụng');
+    }
+
     try {
       const existingEmail = await this.authRepository.findByEmail(dto.email);
       if (existingEmail) {
@@ -145,6 +150,7 @@ export class AuthServiceImpl implements IAuthService {
         message: 'A confirmation email has been sent',
         email: dto.email,
         expiresInSeconds: 300,
+        ...(process.env.NODE_ENV !== 'production' ? { devOtp: otp } : {}),
       };
     } catch (err: any) {
       if (
@@ -246,7 +252,13 @@ export class AuthServiceImpl implements IAuthService {
     _clientIp?: string,
   ): Promise<LoginSuccessResponse> {
     const LOCKOUT_DURATION_SECONDS = 1800; // 30 minutes (SRS Security Section IV.2.3)
-    const identifier = dto.identifier.trim();
+    const rawIdentifier = dto.identifier || dto.email || dto.phone || '';
+    const identifier = rawIdentifier.trim();
+    if (!identifier) {
+      throw new BadRequestException(
+        'Vui lòng cung cấp email hoặc số điện thoại đăng nhập',
+      );
+    }
     try {
       const isLocked = await this.redisClient.get(
         `login:lock:${identifier}`,
@@ -435,6 +447,7 @@ export class AuthServiceImpl implements IAuthService {
     return {
       message: `A confirmation email has been sent to ${email}`,
       success: true,
+      ...(process.env.NODE_ENV !== 'production' ? { devOtp: otp } : {}),
     };
   }
 

@@ -3,7 +3,7 @@ import { IsEmail, IsNotEmpty, IsString, Length, Matches } from 'class-validator'
 
 export class VerifyEmailOtpDto {
   @ApiProperty({
-    example: 'representative@famidoc.vn',
+    example: 'nguyen.family@famidoc.vn',
     description: 'Địa chỉ email đã đăng ký tài khoản cần xác thực',
   })
   @IsEmail()
@@ -12,7 +12,7 @@ export class VerifyEmailOtpDto {
 
   @ApiProperty({
     example: '123456',
-    description: 'Mã OTP 6 chữ số nhận qua email',
+    description: 'Mã OTP 6 chữ số nhận qua email (hoặc 123456 trên môi trường dev)',
   })
   @IsString()
   @IsNotEmpty()
