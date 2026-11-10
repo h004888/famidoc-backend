@@ -33,10 +33,10 @@ import { demoIds, seedDemo } from '../prisma/seed';
       await app.init();
       db = app.get(PrismaService);
     }
-    async function login(identifier: string) {
+    async function login(email: string) {
       const res = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
-        .send({ identifier, password })
+        .send({ email, password })
         .expect(200);
       expect(res.body.user).not.toHaveProperty('passwordHash');
       return `Bearer ${res.body.accessToken}`;

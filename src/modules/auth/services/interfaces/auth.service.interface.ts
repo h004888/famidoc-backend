@@ -26,9 +26,6 @@ export interface IAuthService {
   registerFamilyRepresentative(
     dto: RegisterFamilyRepDto,
   ): Promise<RegisterInitiateResponse>;
-  registerFamilyRep(
-    dto: RegisterFamilyRepDto,
-  ): Promise<RegisterInitiateResponse>;
   resendEmailOtp(dto: ResendEmailOtpDto): Promise<ApiResponseMessage>;
   verifyEmailOtp(dto: VerifyEmailOtpDto): Promise<AuthEntity>;
   login(dto: LoginDto, clientIp?: string): Promise<LoginSuccessResponse>;

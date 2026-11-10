@@ -27,6 +27,12 @@ import {
   ApiResponseMessage,
 } from '../../dtos/auth-responses.dto';
 import {
+  BusinessConflictException,
+  BaseApiException,
+} from '../../../../core/exceptions/api.exception';
+import { AuthErrorCode } from '../../../../core/constants/error-codes.constant';
+
+import {
   AuthEntity,
   AUTH_REPOSITORY_TOKEN,
 } from '../../repositories/interfaces/auth.repository.interface';
@@ -95,20 +101,30 @@ export class AuthServiceImpl implements IAuthService {
   async registerFamilyRepresentative(
     dto: RegisterFamilyRepDto,
   ): Promise<RegisterInitiateResponse> {
-    const isTermsAccepted = dto.acceptedTerms ?? dto.acceptTerms ?? false;
+    const isTermsAccepted = dto.acceptTerms;
     if (!isTermsAccepted) {
       throw new BadRequestException('You must accept terms and privacy policy');
+    }
+
+    if (dto.confirmPassword && dto.confirmPassword !== dto.password) {
+      throw new BadRequestException('Confirm password does not match password');
     }
 
     try {
       const existingEmail = await this.authRepository.findByEmail(dto.email);
       if (existingEmail) {
-        throw new ConflictException('This email is already registered');
+        throw new BusinessConflictException(
+          AuthErrorCode.AUTH_EMAIL_ALREADY_EXISTS,
+          'This email is already registered',
+        );
       }
 
       const existingPhone = await this.authRepository.findByPhone(dto.phone);
       if (existingPhone) {
-        throw new ConflictException('This phone is already registered');
+        throw new BusinessConflictException(
+          AuthErrorCode.AUTH_PHONE_ALREADY_EXISTS,
+          'This phone is already registered',
+        );
       }
 
       const cooldown =
@@ -124,13 +140,12 @@ export class AuthServiceImpl implements IAuthService {
 
       const passwordHash = await this.hashPassword(dto.password);
 
-      // Lưu trực tiếp vào PostgreSQL (không dùng cache lưu tạm)
+      // Lưu trực tiếp vào PostgreSQL
       await this.authRepository.createFamilyRepWithProfile({
         email: dto.email,
         phone: dto.phone,
         passwordHash,
         fullName: dto.fullName,
-        homeAddress: dto.homeAddress,
       });
 
       const otp = randomInt(100000, 1000000).toString();
@@ -142,7 +157,6 @@ export class AuthServiceImpl implements IAuthService {
             fullName: dto.fullName,
             phone: dto.phone,
             passwordHash,
-            homeAddress: dto.homeAddress,
             otp,
           }),
           'EX',
@@ -158,7 +172,6 @@ export class AuthServiceImpl implements IAuthService {
       });
 
       return {
-        message: 'A confirmation email has been sent',
         email: dto.email,
         expiresInSeconds: 300,
         ...(process.env.NODE_ENV !== 'production' ? { devOtp: otp } : {}),
@@ -172,18 +185,15 @@ export class AuthServiceImpl implements IAuthService {
         throw err;
       }
       if (err.code === 'P2002') {
-        throw new ConflictException('This email/phone is already registered');
+        throw new BusinessConflictException(
+          AuthErrorCode.AUTH_CONFLICT_ERROR,
+          'This email/phone is already registered',
+        );
       }
       throw new ServiceUnavailableException(
         'Service unavailable, please try again later',
       );
     }
-  }
-
-  async registerFamilyRep(
-    dto: RegisterFamilyRepDto,
-  ): Promise<RegisterInitiateResponse> {
-    return this.registerFamilyRepresentative(dto);
   }
 
   async resendEmailOtp(dto: ResendEmailOtpDto): Promise<ApiResponseMessage> {
@@ -264,17 +274,14 @@ export class AuthServiceImpl implements IAuthService {
     _clientIp?: string,
   ): Promise<LoginSuccessResponse> {
     const LOCKOUT_DURATION_SECONDS = 1800; // 30 minutes (SRS Security Section IV.2.3)
-    const rawIdentifier = dto.identifier || dto.email || dto.phone || '';
-    const identifier = rawIdentifier.trim();
-    if (!identifier) {
-      throw new BadRequestException(
-        'Vui lòng cung cấp email hoặc số điện thoại đăng nhập',
-      );
+    const email = (dto.email || '').trim().toLowerCase();
+    if (!email) {
+      throw new BadRequestException('Vui lòng cung cấp email đăng nhập');
     }
     try {
       if (this.redisClient && typeof this.redisClient.get === 'function') {
         const isLocked = await this.redisClient.get(
-          `login:lock:${identifier}`,
+          `login:lock:${email}`,
         );
         if (isLocked) {
           throw new ForbiddenException(
@@ -283,12 +290,7 @@ export class AuthServiceImpl implements IAuthService {
         }
       }
 
-      let user: AuthEntity | null = null;
-      if (identifier.includes('@')) {
-        user = await this.authRepository.findByEmail(identifier);
-      } else {
-        user = await this.authRepository.findByPhone(identifier);
-      }
+      const user: AuthEntity | null = await this.authRepository.findByEmail(email);
 
       if (!user) {
         throw new UnauthorizedException(
@@ -319,13 +321,13 @@ export class AuthServiceImpl implements IAuthService {
       if (!isValid) {
         let failCount = (user.failedLoginAttempts || 0) + 1;
         if (this.redisClient && typeof this.redisClient.incr === 'function') {
-          failCount = await this.redisClient.incr(`login:fail:${identifier}`);
+          failCount = await this.redisClient.incr(`login:fail:${email}`);
           if (
             failCount === 1 &&
             typeof this.redisClient.expire === 'function'
           ) {
             await this.redisClient.expire(
-              `login:fail:${identifier}`,
+              `login:fail:${email}`,
               LOCKOUT_DURATION_SECONDS,
             );
           }
@@ -336,7 +338,7 @@ export class AuthServiceImpl implements IAuthService {
             : null;
         if (failCount >= 5 && this.redisClient) {
           await this.redisClient.set?.(
-            `login:lock:${identifier}`,
+            `login:lock:${email}`,
             '1',
             'EX',
             LOCKOUT_DURATION_SECONDS,
@@ -351,7 +353,7 @@ export class AuthServiceImpl implements IAuthService {
       }
 
       if (this.redisClient) {
-        await this.redisClient.del?.(`login:fail:${identifier}`);
+        await this.redisClient.del?.(`login:fail:${email}`);
       }
 
       if (user.failedLoginAttempts && user.failedLoginAttempts > 0) {
@@ -387,7 +389,8 @@ export class AuthServiceImpl implements IAuthService {
     } catch (err: any) {
       if (
         err instanceof ForbiddenException ||
-        err instanceof UnauthorizedException
+        err instanceof UnauthorizedException ||
+        err instanceof BadRequestException
       ) {
         throw err;
       }

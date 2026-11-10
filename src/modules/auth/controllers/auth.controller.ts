@@ -1,4 +1,6 @@
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
+import { ApiStandardResponse } from '../../../core/decorators/api-standard-response.decorator';
+import { RegisterInitiateDataDto } from '../dtos/auth-responses.dto';
 import {
   Body,
   Controller,
@@ -11,6 +13,8 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+
+
 import {
   ApiBearerAuth,
   ApiBody,
@@ -59,33 +63,23 @@ export class AuthController {
   }
 
   @Post('register-representative')
+  @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
       'Đăng ký tài khoản Người đại diện gia đình (Family Representative)',
   })
   @ApiBody({ type: RegisterFamilyRepDto })
-  @ApiResponse({
+  @ApiStandardResponse({
+    type: RegisterInitiateDataDto,
     status: 201,
-    description: 'Gửi OTP thành công đến email đăng ký',
+    description: 'Khởi tạo đăng ký thành công, gửi mã OTP đến email',
   })
-  @ApiResponse({
-    status: 400,
-    description: 'Dữ liệu không hợp lệ hoặc đã tồn tại',
-  })
-  registerFamilyRepresentative(@Body() dto: RegisterFamilyRepDto) {
+  async registerFamilyRepresentative(
+    @Body() dto: RegisterFamilyRepDto,
+  ) {
     return this.authService.registerFamilyRepresentative(dto);
   }
 
-  @Post('register')
-  @ApiOperation({ summary: 'Alias đăng ký tài khoản Người đại diện gia đình' })
-  @ApiBody({ type: RegisterFamilyRepDto })
-  @ApiResponse({
-    status: 201,
-    description: 'Gửi OTP thành công đến email đăng ký',
-  })
-  registerFamilyRep(@Body() dto: RegisterFamilyRepDto) {
-    return this.authService.registerFamilyRepresentative(dto);
-  }
 
   @Post('verify-email-otp')
   @ApiOperation({ summary: 'Xác thực OTP đăng ký tài khoản qua email' })
@@ -115,7 +109,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Đăng nhập hệ thống (Email/SĐT và mật khẩu)' })
+  @ApiOperation({ summary: 'Đăng nhập hệ thống (Email và mật khẩu)' })
   @ApiBody({ type: LoginDto })
   @ApiResponse({
     status: 200,

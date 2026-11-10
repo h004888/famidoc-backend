@@ -1,6 +1,6 @@
 # Danh Mục Toàn Bộ API Backend (FamiDoc API Inventory)
 
-> **Tổng số Endpoint:** 100 APIs
+> **Tổng số Endpoint:** 99 APIs
 > **Số phân hệ (Tags):** 17 phân hệ
 > **Swagger UI:** `/docs` hoặc `/api/docs`
 > **OpenAPI JSON Spec:** `openapi.json` (`/docs-json`)
@@ -53,15 +53,14 @@
 | `POST` | `/api/v1/doctors/credentials/{id}/review` | Thẩm định hồ sơ chứng chỉ bác sĩ hợp nhất 2 cấp (UC-22) |
 | `GET` | `/api/v1/doctors/{id}` | Xem chi tiết hồ sơ bác sĩ |
 
-### Auth (9 APIs)
+### Auth (8 APIs)
 
 | Method | Endpoint | Mô tả / Nghiệp vụ |
 | :--- | :--- | :--- |
 | `POST` | `/api/v1/auth/register-representative` | Đăng ký tài khoản Người đại diện gia đình (Family Representative) |
-| `POST` | `/api/v1/auth/register` | Alias đăng ký tài khoản Người đại diện gia đình |
 | `POST` | `/api/v1/auth/verify-email-otp` | Xác thực OTP đăng ký tài khoản qua email |
 | `POST` | `/api/v1/auth/resend-email-otp` | Gửi lại OTP qua email (có cooldown 60s) |
-| `POST` | `/api/v1/auth/login` | Đăng nhập hệ thống (Email/SĐT và mật khẩu) |
+| `POST` | `/api/v1/auth/login` | Đăng nhập hệ thống (Email và mật khẩu) |
 | `POST` | `/api/v1/auth/logout` | Đăng xuất và thu hồi Access Token |
 | `POST` | `/api/v1/auth/forgot-password` | Yêu cầu OTP đặt lại mật khẩu |
 | `POST` | `/api/v1/auth/reset-password` | Đặt lại mật khẩu mới bằng OTP |

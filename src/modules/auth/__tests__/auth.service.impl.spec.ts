@@ -93,20 +93,22 @@ describe('AuthServiceImpl', () => {
     redisService.set.mockResolvedValue('OK');
     mailerService.sendMail.mockResolvedValue(true);
 
-    const res = await service.registerFamilyRep({
+    const res = await service.registerFamilyRepresentative({
       fullName: 'Nguyen Van A',
       phone: '0912345678',
       email: 'a@famidoc.vn',
       password: 'Password@123',
-      acceptedTerms: true,
+      confirmPassword: 'Password@123',
+      acceptTerms: true,
     });
 
     expect(res.expiresInSeconds).toBe(300);
+    expect(res.email).toBe('a@famidoc.vn');
     expect(redisService.set).toHaveBeenCalled();
     expect(mailerService.sendMail).toHaveBeenCalled();
   });
 
-  it('[UT-S-01b] registerFamilyRepresentative hỗ trợ địa chỉ nhà và lưu tạm Redis', async () => {
+  it('[UT-S-01b] registerFamilyRepresentative lưu thông tin OTP an toàn vào Redis', async () => {
     repository.findByEmail.mockResolvedValue(null);
     repository.findByPhone.mockResolvedValue(null);
     redisService.ttl.mockResolvedValue(-2);
@@ -118,8 +120,7 @@ describe('AuthServiceImpl', () => {
       phone: '0912345678',
       email: 'rep@famidoc.vn',
       password: 'Password@123',
-      acceptedTerms: true,
-      homeAddress: 'Số 10 Phố Huế, Hà Nội',
+      acceptTerms: true,
     });
 
     expect(res.expiresInSeconds).toBe(300);
@@ -128,15 +129,9 @@ describe('AuthServiceImpl', () => {
       ([key]: [string]) => key === 'otp:reg:rep@famidoc.vn',
     );
     const registration = JSON.parse(registrationCall[1]);
-    expect(registration.homeAddress).toBe('Số 10 Phố Huế, Hà Nội');
+    expect(registration.fullName).toBe('Nguyen Van A');
     expect(registration.password).toBeUndefined();
     expect(compareSync('Password@123', registration.passwordHash)).toBe(true);
-    expect(redisService.set).toHaveBeenCalledWith(
-      'otp:reg:rep@famidoc.vn',
-      expect.stringContaining('Số 10 Phố Huế, Hà Nội'),
-      'EX',
-      300,
-    );
     expect(mailerService.sendMail).toHaveBeenCalled();
   });
 
@@ -144,12 +139,12 @@ describe('AuthServiceImpl', () => {
     repository.findByEmail.mockResolvedValue({ id: '1' } as any);
 
     await expect(
-      service.registerFamilyRep({
+      service.registerFamilyRepresentative({
         fullName: 'Nguyen Van A',
         phone: '0912345678',
         email: 'a@famidoc.vn',
         password: 'Password@123',
-        acceptedTerms: true,
+        acceptTerms: true,
       }),
     ).rejects.toThrow(ConflictException);
   });
@@ -159,24 +154,37 @@ describe('AuthServiceImpl', () => {
     repository.findByPhone.mockResolvedValue({ id: '1' } as any);
 
     await expect(
-      service.registerFamilyRep({
+      service.registerFamilyRepresentative({
         fullName: 'Nguyen Van A',
         phone: '0912345678',
         email: 'a@famidoc.vn',
         password: 'Password@123',
-        acceptedTerms: true,
+        acceptTerms: true,
       }),
     ).rejects.toThrow(ConflictException);
   });
 
   it('[UT-S-04] Từ chối đăng ký do chưa tích chọn cam kết Điều khoản / NĐ13', async () => {
     await expect(
-      service.registerFamilyRep({
+      service.registerFamilyRepresentative({
         fullName: 'Nguyen Van A',
         phone: '0912345678',
         email: 'a@famidoc.vn',
         password: 'Password@123',
-        acceptedTerms: false,
+        acceptTerms: false,
+      }),
+    ).rejects.toThrow(BadRequestException);
+  });
+
+  it('[UT-S-04b] Từ chối đăng ký do confirmPassword không khớp với password', async () => {
+    await expect(
+      service.registerFamilyRepresentative({
+        fullName: 'Nguyen Van A',
+        phone: '0912345678',
+        email: 'a@famidoc.vn',
+        password: 'Password@123',
+        confirmPassword: 'Mismatch@999',
+        acceptTerms: true,
       }),
     ).rejects.toThrow(BadRequestException);
   });
@@ -266,7 +274,7 @@ describe('AuthServiceImpl', () => {
 
     // Giả lập password match trong implementation
     const res = await service.login({
-      identifier: 'a@famidoc.vn',
+      email: 'a@famidoc.vn',
       password: 'Password@123',
     });
     expect(res.accessToken).toBe('jwt_token_123');
@@ -286,7 +294,7 @@ describe('AuthServiceImpl', () => {
     repository.findByEmail.mockResolvedValue(mockUser);
     jwtService.sign.mockReturnValue('jwt_token_123');
 
-    await service.login({ identifier: 'a@famidoc.vn', password: 'Password@123' });
+    await service.login({ email: 'a@famidoc.vn', password: 'Password@123' });
     expect(repository.resetFailedAttempts).toHaveBeenCalledWith('u-1');
   });
 
@@ -297,7 +305,7 @@ describe('AuthServiceImpl', () => {
     });
 
     await expect(
-      service.login({ identifier: 'a@famidoc.vn', password: 'Any' }),
+      service.login({ email: 'a@famidoc.vn', password: 'Any' }),
     ).rejects.toThrow(ForbiddenException);
   });
 
@@ -308,7 +316,7 @@ describe('AuthServiceImpl', () => {
     });
 
     await expect(
-      service.login({ identifier: 'a@famidoc.vn', password: 'Any' }),
+      service.login({ email: 'a@famidoc.vn', password: 'Any' }),
     ).rejects.toThrow('Account temporarily locked. Please try again in 30 minutes');
 
     // Trường hợp Redis không còn key nhưng DB có lockedUntil còn hiệu lực
@@ -323,7 +331,7 @@ describe('AuthServiceImpl', () => {
     repository.findByEmail.mockResolvedValue(lockedUser);
 
     await expect(
-      service.login({ identifier: 'a@famidoc.vn', password: 'Any' }),
+      service.login({ email: 'a@famidoc.vn', password: 'Any' }),
     ).rejects.toThrow('Account temporarily locked. Please try again in 30 minutes');
   });
 
@@ -339,7 +347,7 @@ describe('AuthServiceImpl', () => {
     redisService.incr.mockResolvedValue(3);
 
     await expect(
-      service.login({ identifier: 'a@famidoc.vn', password: 'WrongPassword' }),
+      service.login({ email: 'a@famidoc.vn', password: 'WrongPassword' }),
     ).rejects.toThrow(UnauthorizedException);
     expect(redisService.incr).toHaveBeenCalled();
   });
@@ -356,7 +364,7 @@ describe('AuthServiceImpl', () => {
     redisService.incr.mockResolvedValue(2);
 
     await expect(
-      service.login({ identifier: 'a@famidoc.vn', password: 'WrongPassword' }),
+      service.login({ email: 'a@famidoc.vn', password: 'WrongPassword' }),
     ).rejects.toThrow(UnauthorizedException);
     expect(repository.updateFailedAttempts).toHaveBeenCalledWith('u-1', 2, null);
   });
@@ -373,7 +381,7 @@ describe('AuthServiceImpl', () => {
     redisService.incr.mockResolvedValue(5);
 
     await expect(
-      service.login({ identifier: 'a@famidoc.vn', password: 'WrongPassword' }),
+      service.login({ email: 'a@famidoc.vn', password: 'WrongPassword' }),
     ).rejects.toThrow(UnauthorizedException);
     expect(redisService.set).toHaveBeenCalledWith(
       'login:lock:a@famidoc.vn',
@@ -395,7 +403,7 @@ describe('AuthServiceImpl', () => {
     redisService.incr.mockResolvedValue(5);
 
     await expect(
-      service.login({ identifier: 'a@famidoc.vn', password: 'WrongPassword' }),
+      service.login({ email: 'a@famidoc.vn', password: 'WrongPassword' }),
     ).rejects.toThrow(UnauthorizedException);
     expect(repository.updateFailedAttempts).toHaveBeenCalledWith(
       'u-1',
@@ -407,11 +415,10 @@ describe('AuthServiceImpl', () => {
   it('[UT-S-14] Đăng nhập thất bại do Email không tồn tại trong hệ thống (GB-05)', async () => {
     redisService.get.mockResolvedValue(null);
     repository.findByEmail.mockResolvedValue(null);
-    repository.findByPhone.mockResolvedValue(null);
 
     await expect(
       service.login({
-        identifier: 'notfound@famidoc.vn',
+        email: 'notfound@famidoc.vn',
         password: 'Password@123',
       }),
     ).rejects.toThrow(UnauthorizedException);
@@ -428,7 +435,7 @@ describe('AuthServiceImpl', () => {
     repository.findByEmail.mockResolvedValue(mockUser);
 
     await expect(
-      service.login({ identifier: 'a@famidoc.vn', password: 'Password@123' }),
+      service.login({ email: 'a@famidoc.vn', password: 'Password@123' }),
     ).rejects.toThrow(ForbiddenException);
   });
 
@@ -445,32 +452,19 @@ describe('AuthServiceImpl', () => {
     jwtService.sign.mockReturnValue('jwt_onboarding_token');
 
     const res = await service.login({
-      identifier: 'doctor@famidoc.vn',
+      email: 'doctor@famidoc.vn',
       password: 'Password@123',
     });
     expect(res.accessToken).toBe('jwt_onboarding_token');
   });
 
-  it('[UT-S-16b] Đăng nhập bằng Số điện thoại thành công (tìm kiếm qua findByPhone)', async () => {
-    redisService.get.mockResolvedValue(null);
-    const mockUser: any = {
-      id: 'u-phone',
-      phone: '0912345678',
-      email: 'rep@famidoc.vn',
-      passwordHash: hashSync('Password@123', 4),
-      role: 'FAMILY_REP',
-      status: 'ACTIVE',
-    };
-    repository.findByPhone.mockResolvedValue(mockUser);
-    jwtService.sign.mockReturnValue('jwt_phone_token');
-
-    const res = await service.login({
-      identifier: '0912345678',
-      password: 'Password@123',
-    });
-    expect(repository.findByPhone).toHaveBeenCalledWith('0912345678');
-    expect(res.accessToken).toBe('jwt_phone_token');
-    expect(res.user.phone).toBe('0912345678');
+  it('[UT-S-16b] Đăng nhập thất bại khi không cung cấp email hợp lệ (rỗng)', async () => {
+    await expect(
+      service.login({
+        email: '',
+        password: 'Password@123',
+      }),
+    ).rejects.toThrow(BadRequestException);
   });
 
   it('[UT-S-16c] Đăng nhập bị từ chối nếu người dùng thông thường (không phải DOCTOR) ở trạng thái PENDING', async () => {
@@ -486,13 +480,13 @@ describe('AuthServiceImpl', () => {
 
     await expect(
       service.login({
-        identifier: 'pending@famidoc.vn',
+        email: 'pending@famidoc.vn',
         password: 'Password@123',
       }),
     ).rejects.toThrow(ForbiddenException);
   });
 
-  it('[UT-S-16d] Đăng nhập tự động cắt bỏ khoảng trắng thừa ở identifier (trim)', async () => {
+  it('[UT-S-16d] Đăng nhập tự động cắt bỏ khoảng trắng thừa ở email (trim)', async () => {
     redisService.get.mockResolvedValue(null);
     const mockUser: any = {
       id: 'u-trim',
@@ -505,7 +499,7 @@ describe('AuthServiceImpl', () => {
     jwtService.sign.mockReturnValue('jwt_trim_token');
 
     const res = await service.login({
-      identifier: '  trim@famidoc.vn  ',
+      email: '  trim@famidoc.vn  ',
       password: 'Password@123',
     });
     expect(repository.findByEmail).toHaveBeenCalledWith('trim@famidoc.vn');
@@ -775,12 +769,12 @@ describe('AuthServiceImpl', () => {
     repository.findByEmail.mockRejectedValue({ code: 'P2002' });
 
     await expect(
-      service.registerFamilyRep({
+      service.registerFamilyRepresentative({
         fullName: 'Nguyen Van A',
         phone: '0912345678',
         email: 'a@famidoc.vn',
         password: 'Password@123',
-        acceptedTerms: true,
+        acceptTerms: true,
       }),
     ).rejects.toThrow(ConflictException);
   });
@@ -789,12 +783,12 @@ describe('AuthServiceImpl', () => {
     repository.findByEmail.mockRejectedValue(new Error('Connection lost'));
 
     await expect(
-      service.registerFamilyRep({
+      service.registerFamilyRepresentative({
         fullName: 'Nguyen Van A',
         phone: '0912345678',
         email: 'a@famidoc.vn',
         password: 'Password@123',
-        acceptedTerms: true,
+        acceptTerms: true,
       }),
     ).rejects.toThrow(ServiceUnavailableException);
   });
@@ -803,7 +797,7 @@ describe('AuthServiceImpl', () => {
     redisService.get.mockRejectedValue(new Error('Redis connection failed'));
 
     await expect(
-      service.login({ identifier: 'a@famidoc.vn', password: 'Password@123' }),
+      service.login({ email: 'a@famidoc.vn', password: 'Password@123' }),
     ).rejects.toThrow(ServiceUnavailableException);
   });
 
@@ -814,12 +808,12 @@ describe('AuthServiceImpl', () => {
     mailerService.sendMail.mockRejectedValue(new Error('SMTP timeout'));
 
     await expect(
-      service.registerFamilyRep({
+      service.registerFamilyRepresentative({
         fullName: 'Nguyen Van A',
         phone: '0912345678',
         email: 'a@famidoc.vn',
         password: 'Password@123',
-        acceptedTerms: true,
+        acceptTerms: true,
       }),
     ).rejects.toThrow(ServiceUnavailableException);
   });
@@ -881,7 +875,7 @@ describe('AuthServiceImpl', () => {
     redisService.get.mockResolvedValue(null);
     redisService.incr.mockResolvedValueOnce(4);
     await expect(
-      service.login({ identifier: 'a@famidoc.vn', password: 'WrongPassword' }),
+      service.login({ email: 'a@famidoc.vn', password: 'WrongPassword' }),
     ).rejects.toThrow(UnauthorizedException);
     expect(repository.updateFailedAttempts).toHaveBeenCalledWith('u-1', 4, null);
     expect(redisService.set).not.toHaveBeenCalledWith('login:lock:a@famidoc.vn', expect.anything(), expect.anything(), expect.anything());
@@ -889,7 +883,7 @@ describe('AuthServiceImpl', () => {
     // 2. Sai lần 5 -> Lock 30 phút cả Redis & DB
     redisService.incr.mockResolvedValueOnce(5);
     await expect(
-      service.login({ identifier: 'a@famidoc.vn', password: 'WrongPassword' }),
+      service.login({ email: 'a@famidoc.vn', password: 'WrongPassword' }),
     ).rejects.toThrow(UnauthorizedException);
     expect(repository.updateFailedAttempts).toHaveBeenCalledWith('u-1', 5, expect.any(Date));
     expect(redisService.set).toHaveBeenCalledWith('login:lock:a@famidoc.vn', '1', 'EX', 1800);
@@ -898,7 +892,7 @@ describe('AuthServiceImpl', () => {
     mockUser.failedLoginAttempts = 5;
     mockUser.lockedUntil = null;
     redisService.get.mockResolvedValue(null);
-    const successRes = await service.login({ identifier: 'a@famidoc.vn', password: 'Password@123' });
+    const successRes = await service.login({ email: 'a@famidoc.vn', password: 'Password@123' });
     expect(successRes.accessToken).toBe('jwt_token_valid');
     expect(repository.resetFailedAttempts).toHaveBeenCalledWith('u-1');
   });

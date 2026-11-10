@@ -71,7 +71,7 @@ import { demoIds, seedDemo } from '../prisma/seed';
       for (const who of ['admin', 'family', 'facility']) {
         const res = await request(app.getHttpServer())
           .post('/api/v1/auth/login')
-          .send({ identifier: `${who}@demo.famidoc.invalid`, password })
+          .send({ email: `${who}@demo.famidoc.invalid`, password })
           .expect(200);
         tokens[who] = 'Bearer ' + res.body.accessToken;
       }

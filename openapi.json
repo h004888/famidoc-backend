@@ -1066,38 +1066,54 @@
         },
         "responses": {
           "201": {
-            "description": "Gửi OTP thành công đến email đăng ký"
-          },
-          "400": {
-            "description": "Dữ liệu không hợp lệ hoặc đã tồn tại"
-          }
-        },
-        "summary": "Đăng ký tài khoản Người đại diện gia đình (Family Representative)",
-        "tags": [
-          "Auth"
-        ]
-      }
-    },
-    "/api/v1/auth/register": {
-      "post": {
-        "operationId": "AuthController_registerFamilyRep",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RegisterFamilyRepDto"
+            "description": "Khởi tạo đăng ký thành công, gửi mã OTP đến email",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 201
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Khởi tạo đăng ký thành công, gửi mã OTP đến email"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/RegisterInitiateDataDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-10T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
+                }
               }
             }
           }
         },
-        "responses": {
-          "201": {
-            "description": "Gửi OTP thành công đến email đăng ký"
-          }
-        },
-        "summary": "Alias đăng ký tài khoản Người đại diện gia đình",
+        "summary": "Đăng ký tài khoản Người đại diện gia đình (Family Representative)",
         "tags": [
           "Auth"
         ]
@@ -1184,7 +1200,7 @@
             "description": "Tài khoản bị tạm khóa 30 phút do sai quá 5 lần"
           }
         },
-        "summary": "Đăng nhập hệ thống (Email/SĐT và mật khẩu)",
+        "summary": "Đăng nhập hệ thống (Email và mật khẩu)",
         "tags": [
           "Auth"
         ]
@@ -5009,6 +5025,30 @@
           }
         }
       },
+      "RegisterInitiateDataDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "example": "vana.nguyen@example.com",
+            "description": "Email người dùng đăng ký nhận OTP"
+          },
+          "expiresInSeconds": {
+            "type": "number",
+            "example": 300,
+            "description": "Thời gian hiệu lực của mã OTP tính bằng giây"
+          },
+          "devOtp": {
+            "type": "string",
+            "example": "123456",
+            "description": "Mã OTP thử nghiệm (chỉ xuất hiện trong môi trường test/development)"
+          }
+        },
+        "required": [
+          "email",
+          "expiresInSeconds"
+        ]
+      },
       "RegisterFamilyRepDto": {
         "type": "object",
         "properties": {
@@ -5034,34 +5074,21 @@
           },
           "confirmPassword": {
             "type": "string",
-            "description": "Xác nhận lại mật khẩu (tùy chọn)"
-          },
-          "relationship": {
-            "type": "string",
-            "description": "Mối quan hệ nhân thân (ví dụ: Chủ hộ)",
-            "example": "Chủ hộ"
-          },
-          "acceptedTerms": {
-            "type": "boolean",
-            "example": true,
-            "description": "Đồng ý với điều khoản sử dụng và chính sách bảo mật"
+            "example": "Password@123",
+            "description": "Xác nhận lại mật khẩu"
           },
           "acceptTerms": {
             "type": "boolean",
             "example": true,
-            "description": "Alias của acceptedTerms (dùng từ form frontend)"
-          },
-          "homeAddress": {
-            "type": "string",
-            "example": "123 Đường Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh",
-            "description": "Địa chỉ cư trú của gia đình"
+            "description": "Đồng ý với điều khoản sử dụng và chính sách bảo mật"
           }
         },
         "required": [
           "fullName",
           "phone",
           "email",
-          "password"
+          "password",
+          "acceptTerms"
         ]
       },
       "VerifyEmailOtpDto": {
@@ -5099,20 +5126,10 @@
       "LoginDto": {
         "type": "object",
         "properties": {
-          "identifier": {
-            "type": "string",
-            "example": "linhnyhe187172@fpt.edu.vn",
-            "description": "Email hoặc Số điện thoại đăng nhập của người dùng"
-          },
           "email": {
             "type": "string",
             "example": "linhnyhe187172@fpt.edu.vn",
-            "description": "Địa chỉ email đăng nhập (alias của identifier)"
-          },
-          "phone": {
-            "type": "string",
-            "example": "0988776655",
-            "description": "Số điện thoại đăng nhập (alias của identifier)"
+            "description": "Địa chỉ email đăng nhập"
           },
           "password": {
             "type": "string",
@@ -5121,6 +5138,7 @@
           }
         },
         "required": [
+          "email",
           "password"
         ]
       },

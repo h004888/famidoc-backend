@@ -4,6 +4,9 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import type { Request, Response, NextFunction } from 'express';
 import { AppModule } from './app.module';
+import { TransformResponseInterceptor } from './core/interceptors/transform-response.interceptor';
+import { StandardApiResponseFilter } from './core/filters/standard-api-response.filter';
+
 
 async function bootstrap() {
   // Giữ rawBody để xác thực webhook bằng đúng byte nhận được.
@@ -19,6 +22,9 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
+  app.useGlobalInterceptors(new TransformResponseInterceptor());
+  app.useGlobalFilters(new StandardApiResponseFilter());
+
 
   app.use((req: Request, res: Response, next: NextFunction) => {
     const { method, originalUrl } = req;

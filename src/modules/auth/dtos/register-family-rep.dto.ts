@@ -46,41 +46,18 @@ export class RegisterFamilyRepDto {
   password!: string;
 
   @ApiPropertyOptional({
-    description: 'Xác nhận lại mật khẩu (tùy chọn)',
+    example: 'Password@123',
+    description: 'Xác nhận lại mật khẩu',
   })
   @IsOptional()
   @IsString()
   confirmPassword?: string;
 
-  @ApiPropertyOptional({
-    description: 'Mối quan hệ nhân thân (ví dụ: Chủ hộ)',
-    example: 'Chủ hộ',
-  })
-  @IsOptional()
-  @IsString()
-  relationship?: string;
-
-  @ApiPropertyOptional({
+  @ApiProperty({
     example: true,
     description: 'Đồng ý với điều khoản sử dụng và chính sách bảo mật',
   })
-  @IsOptional()
   @IsBoolean()
-  acceptedTerms?: boolean;
-
-  @ApiPropertyOptional({
-    example: true,
-    description: 'Alias của acceptedTerms (dùng từ form frontend)',
-  })
-  @IsOptional()
-  @IsBoolean()
-  acceptTerms?: boolean;
-
-  @ApiPropertyOptional({
-    example: '123 Đường Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh',
-    description: 'Địa chỉ cư trú của gia đình',
-  })
-  @IsOptional()
-  @IsString()
-  homeAddress?: string;
+  @IsNotEmpty()
+  acceptTerms!: boolean;
 }
