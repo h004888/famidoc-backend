@@ -123,7 +123,7 @@ import {
       for (const name of ['admin', 'facility', 'doctor', 'family', 'family2']) {
         const res = await request(app.getHttpServer())
           .post('/api/v1/auth/login')
-          .send({ identifier: `${name}@demo.famidoc.invalid`, password })
+          .send({ email: `${name}@demo.famidoc.invalid`, password })
           .expect(200);
         tokens[name] = 'Bearer ' + res.body.accessToken;
       }

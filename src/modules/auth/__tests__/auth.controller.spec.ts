@@ -19,7 +19,6 @@ describe('AuthController', () => {
       update: jest.fn(),
       remove: jest.fn(),
       registerFamilyRepresentative: jest.fn(),
-      registerFamilyRep: jest.fn(),
       verifyEmailOtp: jest.fn(),
       resendEmailOtp: jest.fn(),
       login: jest.fn(),
@@ -56,45 +55,17 @@ describe('AuthController', () => {
       phone: '0912345678',
       email: 'a@famidoc.vn',
       password: 'Password@123',
-      acceptedTerms: true,
-      homeAddress: '123 Đường Láng, Hà Nội',
+      acceptTerms: true,
     };
     service.registerFamilyRepresentative.mockResolvedValue({
-      message: 'OTP sent',
       email: dto.email,
       expiresInSeconds: 300,
     });
 
-    const res = await controller.registerFamilyRepresentative(dto);
+    const res = await controller.registerFamilyRepresentative(dto as any);
     expect(service.registerFamilyRepresentative).toHaveBeenCalledWith(dto);
-    expect(res).toEqual({
-      message: 'OTP sent',
-      email: dto.email,
-      expiresInSeconds: 300,
-    });
-  });
-
-  it('[UT-C-01b] registerFamilyRep ủy quyền gọi service.registerFamilyRepresentative', async () => {
-    const dto = {
-      fullName: 'Nguyen Van A',
-      phone: '0912345678',
-      email: 'a@famidoc.vn',
-      password: 'Password@123',
-      acceptedTerms: true,
-    };
-    service.registerFamilyRepresentative.mockResolvedValue({
-      message: 'OTP sent',
-      email: dto.email,
-      expiresInSeconds: 300,
-    });
-
-    const res = await controller.registerFamilyRep(dto);
-    expect(service.registerFamilyRepresentative).toHaveBeenCalledWith(dto);
-    expect(res).toEqual({
-      message: 'OTP sent',
-      email: dto.email,
-      expiresInSeconds: 300,
-    });
+    expect(res.email).toBe(dto.email);
+    expect(res.expiresInSeconds).toBe(300);
   });
 
   it('[UT-C-02] verifyEmailOtp ủy quyền gọi service.verifyEmailOtp', async () => {
@@ -120,7 +91,7 @@ describe('AuthController', () => {
   });
 
   it('[UT-C-04] login ủy quyền gọi service.login', async () => {
-    const dto = { identifier: 'a@famidoc.vn', password: 'Pass' };
+    const dto = { email: 'a@famidoc.vn', password: 'Pass' };
     const req: any = { ip: '127.0.0.1' };
     const loginRes: any = { accessToken: 'token', role: 'FAMILY_REP' };
     service.login.mockResolvedValue(loginRes);

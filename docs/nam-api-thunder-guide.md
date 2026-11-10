@@ -17,7 +17,7 @@ Mật khẩu nằm trong `.env`, biến `DEMO_SEED_PASSWORD`; file này được
 POST `/api/v1/auth/login`:
 
 ```json
-{"identifier":"family2@demo.famidoc.invalid","password":"GIÁ_TRỊ_DEMO_SEED_PASSWORD_TRONG_ENV"}
+{"email":"family2@demo.famidoc.invalid","password":"GIÁ_TRỊ_DEMO_SEED_PASSWORD_TRONG_ENV"}
 ```
 
 Copy accessToken trả về vào Auth → Bearer Token. Khi đổi vai trò để xác nhận phụ lục/khiếu nại, đăng nhập lại đúng tài khoản và dùng đúng token. Không tự sửa role trong body.

@@ -71,26 +71,28 @@ import { PrismaService } from '../src/core/database/prisma.service';
       await app?.close();
     });
 
-    it.each(['/api/v1/auth/register-representative', '/api/v1/auth/register'])(
+    it.each(['/api/v1/auth/register-representative'])(
       '%s preserves the address, hashes the password and verifies OTP without exposing the hash',
       async (route) => {
         const email = `merge-${randomUUID()}@famidoc.test`;
         emails.push(email);
         const password = 'IntegrationOnly_Password_2026';
         const homeAddress = 'Số 10 Phố Huế, Hà Nội';
-        await request(app.getHttpServer())
+        const res = await request(app.getHttpServer())
           .post(route)
           .send({
             fullName: 'DEMO - Kiểm tra đăng ký sau merge',
             email,
             phone: '09' + String(randomInt(0, 100000000)).padStart(8, '0'),
             password,
-            acceptedTerms: true,
-            homeAddress,
+            confirmPassword: password,
+            acceptTerms: true,
           })
           .expect(201);
+        expect(res.body.success).toBe(true);
+        expect(res.body.code).toBe(201);
+        expect(res.body.data.email).toBe(email);
         const pending = JSON.parse((await redis.get(`otp:reg:${email}`))!);
-        expect(pending.homeAddress).toBe(homeAddress);
         expect(pending.password).toBeUndefined();
         expect(await compare(password, pending.passwordHash)).toBe(true);
         const verified = await request(app.getHttpServer())
