@@ -43,17 +43,17 @@
 - Nhận đầu vào từ: Cấu hình `BYPASS_TRANSFORM_KEY` và URL route pattern.
 - Cung cấp đầu ra cho: Cổng thanh toán SePay và các cổng Webhook bên thứ 3 trong tương lai.
 
-- [ ] **Bước 1 [RED]: Viết test kiểm tra Interceptor tự động bypass khi route là Webhook hoặc có decorator @BypassTransform**
+- [x] **Bước 1 [RED]: Viết test kiểm tra Interceptor tự động bypass khi route là Webhook hoặc có decorator @BypassTransform**
   Vị trí file test: `src/core/interceptors/__tests__/transform-response.interceptor.spec.ts`
   Test case: Mock `ExecutionContext` với request URL `/api/v1/payments/webhook/vietqr` và `/webhooks/sepay/test`. Kiểm tra interceptor trả về dữ liệu gốc `{ success: true }` mà không bọc thêm envelope `{ success: true, data: { success: true } }`.
   Kỳ vọng: chạy `npm test -- src/core/interceptors/__tests__/transform-response.interceptor.spec.ts` → FAIL do interceptor hiện tại vẫn bọc envelope nếu thiếu decorator.
-- [ ] **Bước 2 [GREEN]: Nâng cấp code tại src/core/interceptors/transform-response.interceptor.ts và gắn decorator tại sepay-webhook.controller.ts**
+- [x] **Bước 2 [GREEN]: Nâng cấp code tại src/core/interceptors/transform-response.interceptor.ts và gắn decorator tại sepay-webhook.controller.ts**
   Thêm kiểm tra đường dẫn URL chứa `/webhook/` hoặc `/webhooks/` vào điều kiện bypass tự động; gắn `@BypassTransform()` lên `SePayWebhookController`.
   Kỳ vọng: chạy `npm test -- src/core/interceptors/__tests__/transform-response.interceptor.spec.ts` → PASS.
-- [ ] **Bước 3 [REFACTOR]: Tinh chỉnh hàm helper kiểm tra URL bypass để hỗ trợ cấu hình mở rộng**
+- [x] **Bước 3 [REFACTOR]: Tinh chỉnh hàm helper kiểm tra URL bypass để hỗ trợ cấu hình mở rộng**
   Tách logic kiểm tra `isWebhookOrExternalPath(url: string): boolean` thành helper function nội bộ rõ ràng.
   Kỳ vọng: chạy `npm test -- src/core/interceptors/__tests__/transform-response.interceptor.spec.ts` → vẫn PASS.
-- [ ] **Bước 4: Xác nhận hoàn tất task**
+- [x] **Bước 4: Xác nhận hoàn tất task**
   Cách kiểm tra: chạy toàn bộ test liên quan tới task (`npm test -- src/core/interceptors/__tests__/transform-response.interceptor.spec.ts` và `npm test -- test/standard-api-response.e2e-spec.ts`)
   Kết quả mong đợi: tất cả PASS.
 
@@ -75,7 +75,7 @@
 - Nhận đầu vào từ: `HttpException` thuần từ các Services và URL request (`instance`).
 - Cung cấp đầu ra cho: Client/Frontend nhận được mã lỗi nghiệp vụ chuẩn theo từng phân hệ.
 
-- [ ] **Bước 1 [RED]: Viết test kiểm tra Filter ánh xạ mã lỗi ngữ cảnh domain khi nhận HttpException thuần**
+- [x] **Bước 1 [RED]: Viết test kiểm tra Filter ánh xạ mã lỗi ngữ cảnh domain khi nhận HttpException thuần**
   Vị trí file test: `src/core/filters/__tests__/standard-api-response.filter.spec.ts`
   Test case: 
   1. Ném `NotFoundException` với instance URL `/api/v1/contracts/123` → Filter phải trả về `errorCode: CONTRACT_NOT_FOUND`.
@@ -83,13 +83,13 @@
   3. Ném `NotFoundException` với instance URL `/api/v1/care-packages/789` → Filter phải trả về `errorCode: PACKAGE_NOT_FOUND`.
   4. Ném `NotFoundException` với instance URL không xác định `/api/v1/unknown` → Filter fallback về `RESOURCE_NOT_FOUND`.
   Kỳ vọng: chạy `npm test -- src/core/filters/__tests__/standard-api-response.filter.spec.ts` → FAIL do filter hiện tại chỉ trả về `RESOURCE_NOT_FOUND` chung chung.
-- [ ] **Bước 2 [GREEN]: Cài đặt Contextual Error Code Resolver trong src/core/filters/standard-api-response.filter.ts**
+- [x] **Bước 2 [GREEN]: Cài đặt Contextual Error Code Resolver trong src/core/filters/standard-api-response.filter.ts**
   Bổ sung phương thức `resolveContextualErrorCode(status: HttpStatus, instanceUrl: string, exceptionResponse: any): string` sử dụng bảng ánh xạ tiền tố route (`/api/v1/contracts`, `/api/v1/doctors`, `/api/v1/care-packages`, `/api/v1/payments`, `/api/v1/auth`).
   Kỳ vọng: chạy `npm test -- src/core/filters/__tests__/standard-api-response.filter.spec.ts` → PASS.
-- [ ] **Bước 3 [REFACTOR]: Tối ưu hóa bảng tra cứu định danh mã lỗi với cấu trúc RoutePattern Mapping**
+- [x] **Bước 3 [REFACTOR]: Tối ưu hóa bảng tra cứu định danh mã lỗi với cấu trúc RoutePattern Mapping**
   Sử dụng mảng cấu hình quy tắc `{ pattern: RegExp, statusMap: Record<number, string> }` giúp dễ dàng mở rộng thêm module mới mà không sửa logic cốt lõi của filter.
   Kỳ vọng: chạy `npm test -- src/core/filters/__tests__/standard-api-response.filter.spec.ts` → vẫn PASS.
-- [ ] **Bước 4: Xác nhận hoàn tất task**
+- [x] **Bước 4: Xác nhận hoàn tất task**
   Cách kiểm tra: chạy toàn bộ test liên quan tới task (`npm test -- src/core/filters/__tests__/standard-api-response.filter.spec.ts`)
   Kết quả mong đợi: tất cả PASS.
 
@@ -111,7 +111,7 @@
 - Nhận đầu vào từ: `OpenAPIObject` do `SwaggerModule.createDocument()` sinh ra.
 - Cung cấp đầu ra cho: Giao diện `/docs` và file `openapi.json` được bọc chuẩn Unified Envelope 100%.
 
-- [ ] **Bước 1 [RED]: Viết test cho hàm transformOpenApiWithEnvelope**
+- [x] **Bước 1 [RED]: Viết test cho hàm transformOpenApiWithEnvelope**
   Vị trí file test: `src/core/swagger/__tests__/swagger-envelope.transformer.spec.ts`
   Test case: Tạo mock document OpenAPI với 1 route bình thường trả về object, 1 route danh sách trả về array, 1 route webhook có cờ bypass. Kiểm tra:
   1. Route bình thường có response 200 được bọc vào envelope với các trường `success`, `code`, `message`, `data`, `meta: null`, `timestamp`, `requestId`.
@@ -119,13 +119,13 @@
   3. Route webhook giữ nguyên schema gốc không bị bọc envelope.
   4. Route đã bọc sẵn bằng `ApiStandardResponse` không bị bọc lồng lần thứ hai.
   Kỳ vọng: chạy `npm test -- src/core/swagger/__tests__/swagger-envelope.transformer.spec.ts` → FAIL với lý do transformer chưa tồn tại.
-- [ ] **Bước 2 [GREEN]: Viết code tối thiểu tại src/core/swagger/swagger-envelope.transformer.ts để test ở Bước 1 PASS**
+- [x] **Bước 2 [GREEN]: Viết code tối thiểu tại src/core/swagger/swagger-envelope.transformer.ts để test ở Bước 1 PASS**
   Triển khai hàm `transformOpenApiWithEnvelope(document: OpenAPIObject): OpenAPIObject` duyệt qua `document.paths`, bóc tách schema của response HTTP 200/201 và đóng gói vào Envelope Schema.
   Kỳ vọng: chạy `npm test -- src/core/swagger/__tests__/swagger-envelope.transformer.spec.ts` → PASS.
-- [ ] **Bước 3 [REFACTOR]: Xử lý chuẩn hóa các trường hợp tham chiếu $ref và Type array**
+- [x] **Bước 3 [REFACTOR]: Xử lý chuẩn hóa các trường hợp tham chiếu $ref và Type array**
   Đảm bảo nếu schema gốc dùng `$ref` (ví dụ `#/components/schemas/CarePackageDto`) thì schema mới giữ nguyên `$ref` trong trường `data`.
   Kỳ vọng: chạy `npm test -- src/core/swagger/__tests__/swagger-envelope.transformer.spec.ts` → vẫn PASS.
-- [ ] **Bước 4: Xác nhận hoàn tất task**
+- [x] **Bước 4: Xác nhận hoàn tất task**
   Cách kiểm tra: chạy toàn bộ test liên quan tới task (`npm test -- src/core/swagger/__tests__/swagger-envelope.transformer.spec.ts`)
   Kết quả mong đợi: tất cả PASS.
 
@@ -149,18 +149,18 @@
 - Nhận đầu vào từ: Task 1 (Interceptor), Task 2 (Filter), Task 3 (Swagger Transformer).
 - Cung cấp đầu ra cho: 100% hệ thống API Famidoc Backend đạt chuẩn tuyệt đối.
 
-- [ ] **Bước 1 [RED]: Viết test E2E kiểm tra Swagger Document và Webhook Bypass sau khi khởi tạo ứng dụng NestJS**
+- [x] **Bước 1 [RED]: Viết test E2E kiểm tra Swagger Document và Webhook Bypass sau khi khởi tạo ứng dụng NestJS**
   Vị trí file test: `test/standard-api-response.e2e-spec.ts`
   Test case: Tạo NestJS testing application, kiểm tra endpoint `/docs-json` trả về OpenAPI spec đã có envelope bọc quanh các endpoint thông thường, và endpoint webhook `/api/v1/payments/webhook/vietqr` trả về dữ liệu phẳng không bọc envelope.
   Kỳ vọng: chạy `npm test -- test/standard-api-response.e2e-spec.ts` → FAIL do `main.ts` và E2E fixture chưa tích hợp `transformOpenApiWithEnvelope`.
-- [ ] **Bước 2 [GREEN]: Tích hợp transformOpenApiWithEnvelope vào src/main.ts, scripts/export-openapi.ts và cập nhật audit-api-standards.ts**
+- [x] **Bước 2 [GREEN]: Tích hợp transformOpenApiWithEnvelope vào src/main.ts, scripts/export-openapi.ts và cập nhật audit-api-standards.ts**
   1. Trong `src/main.ts`, bọc hàm `documentFactory` bằng `transformOpenApiWithEnvelope(SwaggerModule.createDocument(app, swaggerConfig))`.
   2. Trong `scripts/export-openapi.ts`, áp dụng tương tự trước khi ghi file `openapi.json`.
   3. Cập nhật `scripts/audit-api-standards.ts` để ghi nhận các endpoint được Swagger Auto-Enveloping bảo vệ là `FULL_COMPLIANT`.
   Kỳ vọng: chạy `npm test -- test/standard-api-response.e2e-spec.ts` → PASS.
-- [ ] **Bước 3 [REFACTOR]: Xuất lại file openapi.json và tài liệu docs/api-inventory.md chính thức**
+- [x] **Bước 3 [REFACTOR]: Xuất lại file openapi.json và tài liệu docs/api-inventory.md chính thức**
   Chạy lệnh `npm run export:openapi` để sinh lại file `openapi.json` đã chuẩn hóa toàn bộ 89 endpoint.
   Kỳ vọng: chạy `npm test -- test/standard-api-response.e2e-spec.ts` và `npm run audit:apis` → vẫn PASS với tỷ lệ Full Compliant đạt 100%.
-- [ ] **Bước 4: Xác nhận hoàn tất task**
+- [x] **Bước 4: Xác nhận hoàn tất task**
   Cách kiểm tra: chạy toàn bộ test suite (`npm test -- test/standard-api-response.e2e-spec.ts`, `npm test -- src/core/health/__tests__/health.controller.spec.ts`, và `npm run audit:apis`)
   Kết quả mong đợi: tất cả PASS.
