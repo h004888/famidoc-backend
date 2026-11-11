@@ -51,6 +51,12 @@ export class PublicDoctorItemDto {
   })
   isAvailable!: boolean;
 
+  @ApiPropertyOptional({
+    example: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d',
+    nullable: true,
+  })
+  avatarUrl?: string | null;
+
   @ApiPropertyOptional({ type: PublicDoctorFacilityDto, nullable: true })
   facility?: PublicDoctorFacilityDto | null;
 }

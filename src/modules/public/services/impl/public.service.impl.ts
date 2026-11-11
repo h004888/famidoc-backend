@@ -377,6 +377,13 @@ export class PublicServiceImpl implements IPublicService {
       where.facilityId = dto.facilityId;
     }
 
+    if (dto.city?.trim()) {
+      where.facility = {
+        ...where.facility,
+        address: { contains: dto.city.trim(), mode: 'insensitive' },
+      };
+    }
+
     if (dto.specialty?.trim()) {
       where.specialty = { contains: dto.specialty.trim(), mode: 'insensitive' };
     }
@@ -414,6 +421,11 @@ export class PublicServiceImpl implements IPublicService {
               hotline: true,
             },
           },
+          user: {
+            select: {
+              avatarUrl: true,
+            },
+          },
         },
         orderBy,
       }),
@@ -430,6 +442,7 @@ export class PublicServiceImpl implements IPublicService {
         ratingAvg: Number(doc.ratingAvg),
         totalReviews: doc.totalReviews,
         isAvailable: doc.activePanelCount < doc.maxPanelCapacity,
+        avatarUrl: (doc as any).user?.avatarUrl || null,
         facility: doc.facility,
       })),
       meta: {

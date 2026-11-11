@@ -43,6 +43,14 @@ export class LookupDoctorDirectoryDto {
   specialty?: string;
 
   @ApiPropertyOptional({
+    description: 'Lọc theo tỉnh/thành phố của cơ sở y tế',
+    example: 'Hà Nội',
+  })
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @ApiPropertyOptional({
     description: 'Số năm kinh nghiệm tối thiểu',
     example: 5,
   })
