@@ -17,6 +17,7 @@ describe('TransformResponseInterceptor', () => {
     requestId?: string;
     statusCode?: number;
     bypass?: boolean;
+    url?: string;
   }): ExecutionContext {
     const headers: Record<string, string> = {};
     if (options?.requestId) {
@@ -26,6 +27,8 @@ describe('TransformResponseInterceptor', () => {
     const resHeaders: Record<string, string> = {};
     const req = {
       headers,
+      url: options?.url || '',
+      originalUrl: options?.url || '',
     };
     const res = {
       statusCode: options?.statusCode ?? 200,
@@ -159,5 +162,21 @@ describe('TransformResponseInterceptor', () => {
     const result = await lastValueFrom(stream$);
 
     expect(result).toEqual(alreadyWrapped);
+  });
+
+  it('nên tự động bypass khi route là webhook (url chứa /webhook/ hoặc /webhooks/) dù không có cờ BypassTransform', async () => {
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+
+    const context = createMockContext({ url: '/api/v1/payments/webhook/vietqr' });
+    const rawPayload = { success: true };
+    const handler: CallHandler = {
+      handle: () => of(rawPayload),
+    };
+
+    const stream$ = interceptor.intercept(context, handler);
+    const result = await lastValueFrom(stream$);
+
+    expect(result).toEqual({ success: true });
+    expect((result as any).data).toBeUndefined();
   });
 });

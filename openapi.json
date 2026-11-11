@@ -28,19 +28,56 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
                       "type": "string",
-                      "example": "ok"
+                      "example": "Dịch vụ đang hoạt động ổn định"
+                    },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "example": "ok"
+                        },
+                        "timestamp": {
+                          "type": "string",
+                          "example": "2026-10-26T15:30:00.000Z"
+                        },
+                        "uptime": {
+                          "type": "number",
+                          "example": 123.45
+                        }
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
                     },
                     "timestamp": {
                       "type": "string",
-                      "example": "2026-10-26T15:30:00.000Z"
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
                     },
-                    "uptime": {
-                      "type": "number",
-                      "example": 123.45
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
                     }
-                  }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -63,7 +100,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PortalOverviewResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Lấy thông tin tổng quan thành công."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PortalOverviewResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -86,7 +160,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PortalOverviewResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Lấy thông tin tổng quan thành công."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PortalOverviewResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -212,7 +323,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PublicPackagesResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Danh sách các gói chăm sóc sức khỏe thỏa mãn điều kiện lọc."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PublicPackagesResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -246,7 +394,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PublicPackageDetailDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Chi tiết gói chăm sóc sức khỏe."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PublicPackageDetailDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -305,7 +490,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PublicFacilitiesResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Danh sách các cơ sở y tế đối tác thỏa mãn điều kiện lọc."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PublicFacilitiesResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -361,7 +583,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PublicFacilitiesResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Danh sách các cơ sở y tế đối tác thỏa mãn điều kiện lọc."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/PublicFacilitiesResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -694,7 +953,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConsultationRequestResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 201
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Tiếp nhận yêu cầu tư vấn thành công."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ConsultationRequestResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -730,7 +1026,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConsultationRequestResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 201
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Tiếp nhận yêu cầu tư vấn thành công."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/ConsultationRequestResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -766,7 +1099,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoctorResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 201
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Khởi tạo tài khoản bác sĩ thành công."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DoctorResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -807,7 +1177,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoctorResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 201
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Khởi tạo tài khoản bác sĩ thành công."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DoctorResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -848,7 +1255,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoctorResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 201
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Khởi tạo tài khoản bác sĩ thành công."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DoctorResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -889,7 +1333,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoctorResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 201
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Khởi tạo tài khoản bác sĩ thành công."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DoctorResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -929,7 +1410,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoctorResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Nộp hồ sơ chứng chỉ thành công."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DoctorResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -977,7 +1495,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoctorResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Nộp hồ sơ chứng chỉ thành công, chuyển sang chờ CSYT duyệt cấp 1."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DoctorResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -1025,7 +1580,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoctorResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Thẩm định cấp 1 thành công."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DoctorResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -1073,7 +1665,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoctorResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Phê duyệt cấp 2 thành công, bác sĩ đã được kích hoạt ACTIVE."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DoctorResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -1121,7 +1750,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoctorResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Thẩm định hồ sơ thành công."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DoctorResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -1158,7 +1824,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DoctorResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Thông tin hồ sơ bác sĩ."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DoctorResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -2451,7 +3154,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CareNeedsSummaryDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Báo cáo tổng hợp nhu cầu chăm sóc sức khỏe."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CareNeedsSummaryDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -2532,7 +3272,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StaffingContractResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 201
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Tạo hợp đồng nhân lực B2B thành công, chờ ký xác nhận."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StaffingContractResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -2646,7 +3423,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StaffingContractResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Ký số thành công, hợp đồng đã được kích hoạt có hiệu lực."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StaffingContractResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }
@@ -2683,7 +3497,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/StaffingContractResponseDto"
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Chi tiết hợp đồng cung ứng nhân lực."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StaffingContractResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
                 }
               }
             }

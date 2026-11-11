@@ -6,6 +6,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { AppModule } from './app.module';
 import { TransformResponseInterceptor } from './core/interceptors/transform-response.interceptor';
 import { StandardApiResponseFilter } from './core/filters/standard-api-response.filter';
+import { transformOpenApiWithEnvelope } from './core/swagger/swagger-envelope.transformer';
 
 
 async function bootstrap() {
@@ -61,7 +62,8 @@ async function bootstrap() {
       )
       .build();
 
-    const documentFactory = () => SwaggerModule.createDocument(app, swaggerConfig);
+    const documentFactory = () =>
+      transformOpenApiWithEnvelope(SwaggerModule.createDocument(app, swaggerConfig));
 
     // Cấu hình chuẩn hóa theo đúng thông số kỹ thuật của Swagger UI (swagger-api/swagger-ui)
     const swaggerCustomOptions = {

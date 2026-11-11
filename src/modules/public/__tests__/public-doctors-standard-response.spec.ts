@@ -28,6 +28,7 @@ describe('Public Doctors API — Standard Response & Error Formatting', () => {
             ratingAvg: 4.95,
             totalReviews: 42,
             isAvailable: true,
+            avatarUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d',
             facility: {
               id: 'c71e982d-bf41-4796-b611-3d964cb7d8a1',
               facilityName: 'Phòng khám Đa khoa Quốc tế FamiDoc',
@@ -106,6 +107,17 @@ describe('Public Doctors API — Standard Response & Error Formatting', () => {
         hasNextPage: false,
         hasPreviousPage: false,
       });
+    });
+
+    it('GET /api/v1/public/doctors: Chấp nhận query parameter city và trả về avatarUrl trong data', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/v1/public/doctors?city=Hà%20Nội&page=1&limit=10')
+        .expect(200);
+
+      expect(mockPublicService.lookupDoctorDirectory).toHaveBeenCalledWith(
+        expect.objectContaining({ city: 'Hà Nội' }),
+      );
+      expect(res.body.data[0]).toHaveProperty('avatarUrl');
     });
   });
 
