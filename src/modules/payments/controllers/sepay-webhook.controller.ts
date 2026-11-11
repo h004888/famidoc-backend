@@ -14,6 +14,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { BypassTransform } from '../../../core/decorators/bypass-transform.decorator';
 import { SePayWebhookDto } from '../dtos/sepay-webhook.dto';
 import { SePayWebhookGuard } from '../guards/sepay-webhook.guard';
 import { paymentsValidationPipe } from '../payments-validation.pipe';
@@ -24,6 +25,7 @@ import {
 
 @ApiTags('Webhooks')
 @Controller()
+@BypassTransform()
 @UseGuards(SePayWebhookGuard)
 @UsePipes(paymentsValidationPipe)
 export class SePayWebhookController {

@@ -17,8 +17,53 @@ import {
   ValidationErrorCode,
   ValidationIssue,
   SystemErrorCode,
+  ContractErrorCode,
+  DoctorErrorCode,
+  CarePackageErrorCode,
+  PaymentErrorCode,
+  AuthErrorCode,
   resolveErrorTypeUri,
 } from '../constants/error-codes.constant';
+
+interface DomainRouteRule {
+  pattern: RegExp;
+  statusMap: Partial<Record<HttpStatus, string>>;
+}
+
+const DOMAIN_ROUTE_RULES: DomainRouteRule[] = [
+  {
+    pattern: /\/api\/v1\/contracts/i,
+    statusMap: {
+      [HttpStatus.NOT_FOUND]: ContractErrorCode.CONTRACT_NOT_FOUND,
+      [HttpStatus.FORBIDDEN]: ContractErrorCode.CONTRACT_PERMISSION_DENIED,
+    },
+  },
+  {
+    pattern: /\/api\/v1\/doctors/i,
+    statusMap: {
+      [HttpStatus.NOT_FOUND]: DoctorErrorCode.DOCTOR_NOT_FOUND,
+    },
+  },
+  {
+    pattern: /\/api\/v1\/care-packages/i,
+    statusMap: {
+      [HttpStatus.NOT_FOUND]: 'PACKAGE_NOT_FOUND',
+    },
+  },
+  {
+    pattern: /\/api\/v1\/payments/i,
+    statusMap: {
+      [HttpStatus.NOT_FOUND]: PaymentErrorCode.PAYMENT_TRANSACTION_NOT_FOUND,
+    },
+  },
+  {
+    pattern: /\/api\/v1\/auth/i,
+    statusMap: {
+      [HttpStatus.UNAUTHORIZED]: AuthErrorCode.AUTH_UNAUTHORIZED,
+      [HttpStatus.FORBIDDEN]: AuthErrorCode.AUTH_FORBIDDEN,
+    },
+  },
+];
 
 @Catch()
 export class StandardApiResponseFilter implements ExceptionFilter {
@@ -91,12 +136,12 @@ export class StandardApiResponseFilter implements ExceptionFilter {
         } else {
           message = resObj.message || message;
           detail = resObj.error || message;
-          errorCode = resObj.errorCode || this.mapStatusToErrorCode(status);
+          errorCode = resObj.errorCode || this.resolveContextualErrorCode(status, instance, resObj);
         }
       } else if (typeof res === 'string') {
         message = res;
         detail = res;
-        errorCode = this.mapStatusToErrorCode(status);
+        errorCode = this.resolveContextualErrorCode(status, instance, res);
       }
 
       const problem: ProblemDetails = {
@@ -203,6 +248,27 @@ export class StandardApiResponseFilter implements ExceptionFilter {
       default:
         return 'HTTP Error';
     }
+  }
+
+  public resolveContextualErrorCode(
+    status: HttpStatus,
+    instanceUrl: string = '',
+    resObj?: any,
+  ): string {
+    if (resObj && typeof resObj === 'object' && resObj.errorCode) {
+      return resObj.errorCode;
+    }
+
+    if (instanceUrl) {
+      for (const rule of DOMAIN_ROUTE_RULES) {
+        if (rule.pattern.test(instanceUrl)) {
+          const matched = rule.statusMap[status];
+          if (matched) return matched;
+        }
+      }
+    }
+
+    return this.mapStatusToErrorCode(status);
   }
 
   private mapStatusToErrorCode(status: HttpStatus): string {

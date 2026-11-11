@@ -25,7 +25,12 @@ export class TransformResponseInterceptor<T>
       [context.getHandler(), context.getClass()],
     );
 
-    if (isBypass) {
+    const ctx = context.switchToHttp();
+    const request = ctx.getRequest<Request>();
+    const response = ctx.getResponse<Response>();
+
+    const url = request?.originalUrl || request?.url || '';
+    if (isBypass || this.isWebhookOrExternalPath(url)) {
       return next.handle();
     }
 
@@ -33,10 +38,6 @@ export class TransformResponseInterceptor<T>
       RESPONSE_MESSAGE_KEY,
       [context.getHandler(), context.getClass()],
     );
-
-    const ctx = context.switchToHttp();
-    const request = ctx.getRequest<Request>();
-    const response = ctx.getResponse<Response>();
 
     const rawRequestId =
       (request?.headers?.['x-request-id'] as string) ||
@@ -139,6 +140,17 @@ export class TransformResponseInterceptor<T>
         };
         return res;
       }),
+    );
+  }
+
+  private isWebhookOrExternalPath(url: string): boolean {
+    if (!url) return false;
+    const lower = url.toLowerCase();
+    return (
+      lower.includes('/webhook/') ||
+      lower.includes('/webhooks/') ||
+      lower.startsWith('webhooks/') ||
+      lower.startsWith('webhook/')
     );
   }
 }

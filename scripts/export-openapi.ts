@@ -2,6 +2,7 @@ import '../src/core/config/load-environment';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from '../src/app.module';
+import { transformOpenApiWithEnvelope } from '../src/core/swagger/swagger-envelope.transformer';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -25,7 +26,8 @@ async function generateOpenApi() {
     )
     .build();
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  const rawDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  const document = transformOpenApiWithEnvelope(rawDocument);
 
   // 1. Xuất file openapi.json
   const openApiPath = path.resolve(process.cwd(), 'openapi.json');
