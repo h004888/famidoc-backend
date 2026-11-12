@@ -1,5 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import {
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+  S3ServiceException,
+} from '@aws-sdk/client-s3';
 import { extname } from 'path';
 
 @Injectable()
@@ -21,13 +30,37 @@ export class StorageService {
     });
   }
 
+  async objectExists(key: string): Promise<boolean> {
+    try {
+      // Chỉ hỏi metadata để biết tệp tồn tại, không tải nội dung chứng từ xuống.
+      await this.s3.send(
+        new HeadObjectCommand({ Bucket: this.bucket, Key: key }),
+        { abortSignal: AbortSignal.timeout(2_500) },
+      );
+      return true;
+    } catch (error) {
+      if (
+        error instanceof S3ServiceException &&
+        error.$metadata.httpStatusCode === 404
+      )
+        return false;
+      // Lỗi mạng hoặc quyền truy cập S3 cần báo riêng để người dùng có thể thử lại.
+      throw new ServiceUnavailableException(
+        'Không thể kiểm tra tệp trên kho lưu trữ.',
+      );
+    }
+  }
+
   /**
    * Upload file gốc lên SeaweedFS S3
    * @param file File nhận từ NestJS Multer Interceptor
    * @param folder Thư mục lưu trữ logic (vd: 'avatars', 'documents')
    * @returns Key tương đối lưu vào Database (vd: "avatars/1730000000000-123.jpg")
    */
-  async uploadFile(file: Express.Multer.File, folder = 'avatars'): Promise<string> {
+  async uploadFile(
+    file: Express.Multer.File,
+    folder = 'avatars',
+  ): Promise<string> {
     const fileExt = extname(file.originalname);
     const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
     const s3Key = `${folder}/${uniqueSuffix}${fileExt}`;
@@ -45,4 +78,3 @@ export class StorageService {
     return s3Key;
   }
 }
-

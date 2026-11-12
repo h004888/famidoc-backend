@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import {
   IsIn,
   IsInt,
@@ -7,21 +7,28 @@ import {
   IsString,
   IsUUID,
   Length,
+  Matches,
   Max,
   Min,
   ValidateIf,
   IsISO8601,
 } from 'class-validator';
+import { FieldFor } from '../../../core/validation/field-for.decorator';
 
-export class RevenueAnalyticsQueryDto {
+// Query gửi số dưới dạng chuỗi. Chỉ đổi chuỗi chữ số để body true/null vẫn bị từ chối.
+function parsePeriodNumber({ value }: { value: unknown }) {
+  return typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
+}
+
+class ReportingPeriodDto {
   @ApiPropertyOptional({
     description: 'Năm tài chính cần truy vấn (2000 - 2200)',
     example: 2026,
     minimum: 2000,
     maximum: 2200,
   })
-  @IsOptional()
-  @Type(() => Number)
+  @ValidateIf((_dto, value) => value !== undefined)
+  @Transform(parsePeriodNumber)
   @IsInt()
   @Min(2000)
   @Max(2200)
@@ -33,20 +40,12 @@ export class RevenueAnalyticsQueryDto {
     minimum: 1,
     maximum: 12,
   })
-  @IsOptional()
-  @Type(() => Number)
+  @ValidateIf((_dto, value) => value !== undefined)
+  @Transform(parsePeriodNumber)
   @IsInt()
   @Min(1)
   @Max(12)
   month?: number;
-
-  @ApiPropertyOptional({
-    description: 'UUID của cơ sở y tế cần lọc báo cáo doanh thu',
-    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
-  })
-  @IsOptional()
-  @IsUUID('4')
-  facilityId?: string;
 
   @ApiPropertyOptional({
     enum: ['TEST', 'LIVE'],
@@ -54,12 +53,21 @@ export class RevenueAnalyticsQueryDto {
     default: 'LIVE',
     example: 'LIVE',
   })
-  @IsOptional()
   @IsIn(['TEST', 'LIVE'])
   environment: 'TEST' | 'LIVE' = 'LIVE';
 }
 
-export class MonthlySettlementDto extends RevenueAnalyticsQueryDto {
+export class RevenueAnalyticsQueryDto extends ReportingPeriodDto {
+  @ApiPropertyOptional({
+    description: 'UUID của cơ sở y tế cần lọc báo cáo doanh thu',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
+  @IsOptional()
+  @IsUUID('4')
+  facilityId?: string;
+}
+
+export class MonthlySettlementDto extends ReportingPeriodDto {
   @ApiProperty({
     enum: ['PREPARE', 'CONFIRM_TRANSFER', 'MARK_FAILED'],
     description: 'Hành động quyết toán hàng tháng (PREPARE: lập bảng đối soát, CONFIRM_TRANSFER: xác nhận chuyển khoản, MARK_FAILED: báo thất bại)',
@@ -70,10 +78,18 @@ export class MonthlySettlementDto extends RevenueAnalyticsQueryDto {
   action: 'PREPARE' | 'CONFIRM_TRANSFER' | 'MARK_FAILED' = 'PREPARE';
 
   @ApiPropertyOptional({
+    description: 'Lọc theo UUID cơ sở y tế khi lập bảng (PREPARE)',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
+  @FieldFor('action', ['PREPARE'], false)
+  @IsUUID('4')
+  facilityId?: string;
+
+  @ApiPropertyOptional({
     description: 'UUID của kỳ quyết toán (bắt buộc khi action khác PREPARE)',
     example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
-  @ValidateIf((o) => o.action !== 'PREPARE')
+  @FieldFor('action', ['CONFIRM_TRANSFER', 'MARK_FAILED'])
   @IsUUID('4')
   settlementId?: string;
 
@@ -81,7 +97,7 @@ export class MonthlySettlementDto extends RevenueAnalyticsQueryDto {
     description: 'Mã giao dịch / mã lệnh chuyển khoản ngân hàng',
     example: 'FT261110001234',
   })
-  @ValidateIf((o) => o.action === 'CONFIRM_TRANSFER')
+  @FieldFor('action', ['CONFIRM_TRANSFER'])
   @IsString()
   @Length(3, 100)
   bankTransferOrderId?: string;
@@ -90,25 +106,29 @@ export class MonthlySettlementDto extends RevenueAnalyticsQueryDto {
     description: 'Số tiền thực tế đã giải ngân thanh toán (VNĐ)',
     example: 50000000,
   })
-  @ValidateIf((o) => o.action === 'CONFIRM_TRANSFER')
+  @FieldFor('action', ['CONFIRM_TRANSFER'])
   @IsInt()
   @Min(1)
   @Max(999999999999)
   amountPaidVnd?: number;
 
   @ApiPropertyOptional({
-    description: 'Thời điểm chuyển tiền thành công theo chuẩn ISO8601',
+    description: 'Thời điểm chuyển tiền theo ISO 8601, có giờ, phút, giây và múi giờ',
     example: '2026-11-10T08:00:00.000Z',
   })
-  @ValidateIf((o) => o.action === 'CONFIRM_TRANSFER')
-  @IsISO8601({ strict: true })
+  @FieldFor('action', ['CONFIRM_TRANSFER'])
+  @IsISO8601({ strict: true, strictSeparator: true })
+  @Matches(
+    /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-]\d{2}:[0-5]\d)$/,
+    { message: 'paidAt phải có giờ và múi giờ, ví dụ 2026-11-10T15:00:00+07:00.' },
+  )
   paidAt?: string;
 
   @ApiPropertyOptional({
     description: 'Khóa tài liệu chứng từ ủy nhiệm chi ngân hàng lưu trữ',
-    example: 'settlements/unc_nov2026.pdf',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6/settlements/unc_nov2026.pdf',
   })
-  @ValidateIf((o) => o.action === 'CONFIRM_TRANSFER')
+  @FieldFor('action', ['CONFIRM_TRANSFER'])
   @IsString()
   @Length(5, 300)
   evidenceKey?: string;
@@ -117,7 +137,7 @@ export class MonthlySettlementDto extends RevenueAnalyticsQueryDto {
     description: 'Lý do quyết toán thất bại / không thực hiện được',
     example: 'Sai thông tin tài khoản thụ hưởng của cơ sở y tế',
   })
-  @ValidateIf((o) => o.action === 'MARK_FAILED')
+  @FieldFor('action', ['MARK_FAILED'])
   @IsString()
   @Length(10, 1000)
   failureReason?: string;

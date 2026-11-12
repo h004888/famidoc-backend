@@ -11,6 +11,7 @@ import {
   ValidateIf,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
+import { FieldFor } from '../../../core/validation/field-for.decorator';
 
 export class SubmitIncidentComplaintDto {
   @ApiProperty({
@@ -82,16 +83,22 @@ export class ResolveComplaintDto {
   @IsIn(['INVESTIGATE', 'FACILITY_RESPONSE', 'RESOLVE', 'CLOSE'])
   action!: string;
 
-  @ApiProperty({
-    description: 'Ghi chú / kết luận xử lý khiếu nại',
+  @ApiPropertyOptional({
+    description: 'Bắt buộc với FACILITY_RESPONSE và RESOLVE. Các bước mở hoặc đóng hồ sơ không cần ghi chú.',
     example: 'Đã nhắc nhở bác sĩ và sắp xếp lịch khám bù cho gia đình trong tuần này.',
   })
+  @ValidateIf(
+    (dto, value) =>
+      value !== undefined ||
+      dto.action === 'FACILITY_RESPONSE' ||
+      dto.action === 'RESOLVE',
+  )
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim() : value,
   )
   @IsString()
   @Length(10, 4000)
-  notes!: string;
+  notes?: string;
 
   // Chỉ có biện pháp phi tài chính; không có trường tiền hoàn/bồi thường.
   @ApiPropertyOptional({
@@ -104,7 +111,7 @@ export class ResolveComplaintDto {
     description: 'Kết quả phân định khiếu nại (bắt buộc khi action là RESOLVE)',
     example: 'SERVICE_CORRECTION',
   })
-  @ValidateIf((o) => o.action === 'RESOLVE')
+  @FieldFor('action', ['RESOLVE'])
   @IsIn([
     'NO_VIOLATION',
     'WARNING',
