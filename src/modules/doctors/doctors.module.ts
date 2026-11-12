@@ -4,12 +4,19 @@ import { PrismaModule } from '../../core/database/prisma.module';
 import { AuthAccessModule } from '../../core/auth/auth-access.module';
 import { FacilitiesDoctorsController } from './controllers/facilities-doctors.controller';
 import { DoctorsController } from './controllers/doctors.controller';
+import { FacilitiesController } from './controllers/facilities.controller';
+import { AdminFacilitiesController } from './controllers/admin-facilities.controller';
 import { DoctorsServiceImpl } from './services/impl/doctors.service.impl';
 import { DOCTORS_SERVICE_TOKEN } from './services/interfaces/doctors.service.interface';
 
 @Module({
   imports: [PrismaModule, AuthAccessModule],
-  controllers: [FacilitiesDoctorsController, DoctorsController],
+  controllers: [
+    FacilitiesDoctorsController,
+    DoctorsController,
+    FacilitiesController,
+    AdminFacilitiesController,
+  ],
   providers: [
     {
       provide: DOCTORS_SERVICE_TOKEN,

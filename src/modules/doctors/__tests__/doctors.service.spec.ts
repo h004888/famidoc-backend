@@ -97,6 +97,8 @@ describe('DoctorsServiceImpl', () => {
       },
       doctor: {
         findUnique: jest.fn().mockResolvedValue(mockDoctor),
+        findMany: jest.fn().mockResolvedValue([mockDoctor]),
+        count: jest.fn().mockResolvedValue(1),
         create: jest.fn().mockResolvedValue(mockDoctor),
         update: jest.fn().mockResolvedValue(mockDoctor),
       },
@@ -140,26 +142,10 @@ describe('DoctorsServiceImpl', () => {
       facilityId: 'fac-uuid-1',
     };
 
-    it('should allow ADMIN to provision doctor for active facility', async () => {
-      const result = await service.provisionDoctorAccount(
-        adminUser,
-        dto,
-        '127.0.0.1',
-      );
-
-      expect(result).toBeDefined();
-      expect(result.doctorName).toBe('BS. CKI Nguyễn Văn An');
-      expect(result.onboardingStatus).toBe(
-        DoctorOnboardingStatus.PENDING_SUBMISSION,
-      );
-      expect(prismaService.user.create).toHaveBeenCalled();
-      expect(prismaService.doctor.create).toHaveBeenCalled();
-      expect(prismaService.auditLog.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          action: 'DOCTOR_ACCOUNT_PROVISIONED',
-          resourceName: 'Doctor',
-        }),
-      });
+    it('should throw ForbiddenException if ADMIN attempts to provision doctor', async () => {
+      await expect(
+        service.provisionDoctorAccount(adminUser, dto, '127.0.0.1'),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('should allow HEALTHCARE_FACILITY to provision doctor for its own facility', async () => {
@@ -172,6 +158,19 @@ describe('DoctorsServiceImpl', () => {
       );
 
       expect(result).toBeDefined();
+      expect(result.doctorName).toBe('BS. CKI Nguyễn Văn An');
+      expect(result.initialPassword).toBe('FamiDoc@Doctor2026');
+      expect(result.onboardingStatus).toBe(
+        DoctorOnboardingStatus.PENDING_SUBMISSION,
+      );
+      expect(prismaService.user.create).toHaveBeenCalled();
+      expect(prismaService.doctor.create).toHaveBeenCalled();
+      expect(prismaService.auditLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          action: 'DOCTOR_ACCOUNT_PROVISIONED',
+          resourceName: 'Doctor',
+        }),
+      });
       expect(prismaService.healthcareFacility.findUnique).toHaveBeenCalledWith({
         where: { userId: facilityUser.id },
       });
@@ -181,7 +180,7 @@ describe('DoctorsServiceImpl', () => {
       prismaService.b2bStaffingContract.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.provisionDoctorAccount(adminUser, dto, '127.0.0.1'),
+        service.provisionDoctorAccount(facilityUser, dto, '127.0.0.1'),
       ).rejects.toThrow(
         new BadRequestException(
           'Cơ sở y tế chưa có hợp đồng nhân lực B2B đang có hiệu lực',
@@ -190,7 +189,7 @@ describe('DoctorsServiceImpl', () => {
     });
 
     it('should send welcome email when doctor is provisioned', async () => {
-      await service.provisionDoctorAccount(adminUser, dto, '127.0.0.1');
+      await service.provisionDoctorAccount(facilityUser, dto, '127.0.0.1');
 
       expect(mailerService.sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -203,7 +202,7 @@ describe('DoctorsServiceImpl', () => {
       prismaService.user.findFirst.mockResolvedValue({ id: 'existing-user' });
 
       await expect(
-        service.provisionDoctorAccount(adminUser, dto, '127.0.0.1'),
+        service.provisionDoctorAccount(facilityUser, dto, '127.0.0.1'),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -211,7 +210,7 @@ describe('DoctorsServiceImpl', () => {
       prismaService.healthcareFacility.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.provisionDoctorAccount(adminUser, dto, '127.0.0.1'),
+        service.provisionDoctorAccount(facilityUser, dto, '127.0.0.1'),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -425,6 +424,22 @@ describe('DoctorsServiceImpl', () => {
         }),
       });
     });
+
+    it('should throw BadRequestException if facility rejects without rejectionReason', async () => {
+      prismaService.doctor.findUnique.mockResolvedValue({
+        ...mockDoctor,
+        credentials: [{ id: 'cred-1' }],
+      });
+
+      await expect(
+        service.approveDoctorCredentialsByFacility(
+          facilityUser,
+          'doc-uuid-1',
+          { approved: false },
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
   describe('approveDoctorCredentialsByPlatform (STT 18 - UC-22)', () => {
@@ -520,6 +535,98 @@ describe('DoctorsServiceImpl', () => {
           type: 'DOCTOR_PLATFORM_REJECTED',
         }),
       });
+    });
+
+    it('should throw BadRequestException if platform rejects without rejectionReason', async () => {
+      prismaService.doctor.findUnique.mockResolvedValue({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.FACILITY_VERIFIED,
+      });
+
+      await expect(
+        service.approveDoctorCredentialsByPlatform(
+          adminUser,
+          'doc-uuid-1',
+          { approved: false },
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('getDoctorProfile, listDoctors & listFacilityDoctors', () => {
+    it('should get doctor profile by ID', async () => {
+      prismaService.doctor.findUnique.mockResolvedValue(mockDoctor);
+
+      const result = await service.getDoctorProfile(adminUser, 'doc-uuid-1');
+
+      expect(result).toBeDefined();
+      expect(result.id).toBe('doc-uuid-1');
+    });
+
+    it('should get own doctor profile when ID is me', async () => {
+      prismaService.doctor.findUnique.mockResolvedValue(mockDoctor);
+
+      const result = await service.getDoctorProfile(doctorUser, 'me');
+
+      expect(result).toBeDefined();
+      expect(prismaService.doctor.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: doctorUser.id },
+        }),
+      );
+    });
+
+    it('should throw ForbiddenException if facility tries to view another facility doctor', async () => {
+      prismaService.doctor.findUnique.mockResolvedValue({
+        ...mockDoctor,
+        facility: { id: 'other-fac', userId: 'other-user' },
+      });
+
+      await expect(
+        service.getDoctorProfile(facilityUser, 'doc-uuid-1'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should allow ADMIN to list doctors with query filters', async () => {
+      prismaService.doctor.count.mockResolvedValue(1);
+      prismaService.doctor.findMany.mockResolvedValue([mockDoctor]);
+
+      const result = await service.listDoctors(adminUser, {
+        onboardingStatus: DoctorOnboardingStatus.FACILITY_VERIFIED,
+        page: 1,
+        limit: 10,
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(1);
+      expect(prismaService.doctor.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            onboardingStatus: DoctorOnboardingStatus.FACILITY_VERIFIED,
+          }),
+        }),
+      );
+    });
+
+    it('should allow HEALTHCARE_FACILITY to list doctors scoped to its facility', async () => {
+      prismaService.healthcareFacility.findUnique.mockResolvedValue(mockFacility);
+      prismaService.doctor.count.mockResolvedValue(1);
+      prismaService.doctor.findMany.mockResolvedValue([mockDoctor]);
+
+      const result = await service.listFacilityDoctors(facilityUser, {
+        page: 1,
+        limit: 10,
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(prismaService.doctor.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            facilityId: mockFacility.id,
+          }),
+        }),
+      );
     });
   });
 });

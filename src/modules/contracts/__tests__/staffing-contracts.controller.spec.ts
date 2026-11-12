@@ -47,6 +47,10 @@ describe('ContractsController - Staffing Endpoints', () => {
         ...mockStaffingContract,
         status: B2bContractStatus.ACTIVE,
       }),
+      rejectStaffingContract: jest.fn().mockResolvedValue({
+        ...mockStaffingContract,
+        status: B2bContractStatus.TERMINATED,
+      }),
       listStaffingContracts: jest.fn().mockResolvedValue({
         items: [mockStaffingContract],
         total: 1,
@@ -121,6 +125,28 @@ describe('ContractsController - Staffing Endpoints', () => {
         mockAdminUser,
         'stf-uuid-1',
         signDto,
+        '127.0.0.1',
+      );
+    });
+  });
+
+  describe('rejectStaffingContract', () => {
+    it('should delegate to service.rejectStaffingContract', async () => {
+      const rejectDto = {
+        rejectionReason: 'Đề xuất thay đổi tỷ lệ hoa hồng nền tảng thành 10%.',
+      };
+
+      const result = await controller.rejectStaffingContract(
+        mockReq,
+        'stf-uuid-1',
+        rejectDto,
+      );
+
+      expect(result.status).toBe(B2bContractStatus.TERMINATED);
+      expect(service.rejectStaffingContract).toHaveBeenCalledWith(
+        mockAdminUser,
+        'stf-uuid-1',
+        rejectDto,
         '127.0.0.1',
       );
     });

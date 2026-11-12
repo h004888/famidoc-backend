@@ -6,10 +6,55 @@ import type {
   PlatformApproveCredentialsDto,
 } from '../../dtos/verify-credentials.dto';
 import type { DoctorResponseDto } from '../../dtos/doctor-response.dto';
+import type { RegisterFacilityDto } from '../../dtos/register-facility.dto';
+import type { ApproveFacilityAccountDto } from '../../dtos/approve-facility-account.dto';
+import type { SubmitFacilityLegalProfileDto } from '../../dtos/submit-facility-legal-profile.dto';
+import type { VerifyFacilityLegalDto } from '../../dtos/verify-facility-legal.dto';
+import type { FacilityResponseDto } from '../../dtos/facility-response.dto';
+import type { ListDoctorsQueryDto } from '../../dtos/list-doctors-query.dto';
 
 export const DOCTORS_SERVICE_TOKEN = Symbol('IDoctorsService');
 
 export interface IDoctorsService {
+  // Facility Onboarding
+  registerFacility(
+    dto: RegisterFacilityDto,
+    ip: string,
+  ): Promise<FacilityResponseDto>;
+
+  approveFacilityAccount(
+    actor: AuthenticatedUser,
+    facilityId: string,
+    dto: ApproveFacilityAccountDto,
+    ip: string,
+  ): Promise<FacilityResponseDto>;
+
+  submitFacilityLegalProfile(
+    actor: AuthenticatedUser,
+    dto: SubmitFacilityLegalProfileDto,
+    ip: string,
+  ): Promise<FacilityResponseDto>;
+
+  verifyFacilityLegal(
+    actor: AuthenticatedUser,
+    facilityId: string,
+    dto: VerifyFacilityLegalDto,
+    ip: string,
+  ): Promise<FacilityResponseDto>;
+
+  getMyFacility(actor: AuthenticatedUser): Promise<FacilityResponseDto>;
+
+  listFacilitiesForAdmin(
+    actor: AuthenticatedUser,
+    query?: { status?: string; page?: number; limit?: number },
+  ): Promise<{ items: FacilityResponseDto[]; total: number }>;
+
+  getFacilityDetailForAdmin(
+    actor: AuthenticatedUser,
+    facilityId: string,
+  ): Promise<FacilityResponseDto>;
+
+  // Doctor Provisioning & Onboarding
   provisionDoctorAccount(
     actor: AuthenticatedUser,
     dto: ProvisionDoctorDto,
@@ -41,4 +86,24 @@ export interface IDoctorsService {
     actor: AuthenticatedUser,
     doctorId: string,
   ): Promise<DoctorResponseDto>;
+
+  listDoctors(
+    actor: AuthenticatedUser,
+    query: ListDoctorsQueryDto,
+  ): Promise<{
+    items: DoctorResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }>;
+
+  listFacilityDoctors(
+    actor: AuthenticatedUser,
+    query: ListDoctorsQueryDto,
+  ): Promise<{
+    items: DoctorResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }>;
 }

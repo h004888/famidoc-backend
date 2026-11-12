@@ -4,12 +4,15 @@ import {
   IsEnum,
   IsInt,
   IsISO8601,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
   IsUUID,
   Max,
+  MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
 import { B2bContractStatus } from '@prisma/client';
 
@@ -93,6 +96,20 @@ export class SignStaffingContractDto {
   @IsOptional()
   @IsString()
   signatureHash?: string;
+}
+
+export class RejectStaffingContractDto {
+  @ApiProperty({
+    description: 'Lý do từ chối dự thảo hợp đồng hoặc yêu cầu sửa đổi điều khoản',
+    example: 'Đề xuất điều chỉnh tỷ lệ hoa hồng nền tảng thành 10% và thời hạn bắt đầu từ ngày 01/03/2026.',
+    minLength: 5,
+    maxLength: 500,
+  })
+  @IsString({ message: 'rejectionReason phải là chuỗi ký tự' })
+  @IsNotEmpty({ message: 'rejectionReason không được để trống' })
+  @MinLength(5, { message: 'rejectionReason phải có ít nhất 5 ký tự' })
+  @MaxLength(500, { message: 'rejectionReason không được vượt quá 500 ký tự' })
+  rejectionReason!: string;
 }
 
 export class ListStaffingContractsDto {
