@@ -21,6 +21,12 @@ import {
   PublicDoctorsResponseDto,
   PublicDoctorItemDto,
 } from '../../dtos/public-doctors-response.dto';
+import { PublicDoctorDetailDto } from '../../dtos/public-doctor-detail.dto';
+import {
+  LookupDoctorReviewsQueryDto,
+  PublicDoctorReviewsResponseDto,
+  PublicDoctorReviewItemDto,
+} from '../../dtos/public-doctor-reviews.dto';
 import { SubmitConsultationRequestDto } from '../../dtos/submit-consultation-request.dto';
 import { ConsultationRequestResponseDto } from '../../dtos/consultation-request-response.dto';
 
@@ -497,31 +503,33 @@ export class PublicServiceImpl implements IPublicService {
     };
   }
 
-  async getPublicDoctorDetail(id: string): Promise<PublicDoctorItemDto> {
-    const doctor = await this.prisma.doctor.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        doctorName: true,
-        specialty: true,
-        academicTitle: true,
-        experienceYears: true,
-        bio: true,
-        ratingAvg: true,
-        totalReviews: true,
-        activePanelCount: true,
-        maxPanelCapacity: true,
-        onboardingStatus: true,
-        facility: {
-          select: {
-            id: true,
-            facilityName: true,
-            address: true,
-            hotline: true,
+  async getPublicDoctorDetail(id: string): Promise<PublicDoctorDetailDto> {
+    const [doctor, packages] = await Promise.all([
+      this.prisma.doctor.findUnique({
+        where: { id },
+        include: {
+          facility: true,
+          user: true,
+          credentials: true,
+          _count: {
+            select: {
+              encounters: true,
+              reviews: true,
+            },
           },
         },
-      },
-    });
+      }),
+      this.prisma.servicePackage.findMany({
+        where: {
+          status: 'ACTIVE',
+          deletedAt: null,
+        },
+        orderBy: {
+          basePrice: 'asc',
+        },
+        take: 6,
+      }),
+    ]);
 
     if (!doctor || doctor.onboardingStatus !== 'ACTIVE') {
       throw new NotFoundException(
@@ -529,17 +537,79 @@ export class PublicServiceImpl implements IPublicService {
       );
     }
 
+    const specLower = (doctor.specialty || '').toLowerCase();
+    let specialtyKey = 'general';
+    if (specLower.includes('nhi') || specLower.includes('pediatric')) {
+      specialtyKey = 'pediatric';
+    } else if (
+      specLower.includes('tim') ||
+      specLower.includes('lão') ||
+      specLower.includes('geriatric')
+    ) {
+      specialtyKey = 'geriatric';
+    }
+
+    const educationList =
+      doctor.credentials && doctor.credentials.length > 0
+        ? doctor.credentials.map((c) =>
+            c.credentialType === 'DEGREE'
+              ? `${c.issuingAuthority} - ${c.certificateNumber}`
+              : `Chứng chỉ ${c.issuingAuthority} (${c.certificateNumber})`,
+          )
+        : [
+            `Bác sĩ Chuyên khoa - ${doctor.facility?.facilityName || 'Đại học Y Dược'}`,
+            'Chứng chỉ Quản lý Sức khỏe Gia đình Toàn diện',
+          ];
+
+    const formattedCarePackages = packages.map((pkg) => {
+      const priceNum = Number(pkg.basePrice);
+      const monthly = Math.round(priceNum / (pkg.durationMonths || 1));
+      return {
+        id: pkg.id,
+        packageCode: pkg.packageCode,
+        packageName: pkg.packageName,
+        durationMonths: pkg.durationMonths,
+        basePrice: priceNum,
+        formattedPrice: `${priceNum.toLocaleString('vi-VN')}đ`,
+        monthlyPrice: `${monthly.toLocaleString('vi-VN')}đ/tháng`,
+        periodicVisitsQuota: pkg.periodicVisitsQuota,
+        telehealthQuota: pkg.telehealthQuota,
+        highlight: pkg.description || undefined,
+        features: [
+          `${pkg.periodicVisitsQuota} lượt bác sĩ trực tiếp thăm khám tại nhà`,
+          `${pkg.telehealthQuota} lượt tư vấn video Telehealth 24/7`,
+          'Bác sĩ phụ trách chính & lập phác đồ điều trị gia đình',
+          'Hồ sơ bệnh án điện tử (EHR) lưu trữ trọn đời',
+        ],
+      };
+    });
+
     return {
       id: doctor.id,
       doctorName: doctor.doctorName,
-      specialty: doctor.specialty,
       academicTitle: doctor.academicTitle,
-      experienceYears: doctor.experienceYears,
-      bio: doctor.bio,
-      ratingAvg: Number(doctor.ratingAvg),
-      totalReviews: doctor.totalReviews,
+      specialty: doctor.specialty,
+      specialtyKey,
+      hospital: doctor.facility?.facilityName || 'Bệnh viện / Cơ sở Y tế Đối tác',
+      location:
+        (doctor.facility as any)?.provinceCity ||
+        doctor.facility?.address ||
+        'TP. Hồ Chí Minh',
+      isVerified: doctor.onboardingStatus === 'ACTIVE',
       isAvailable: doctor.activePanelCount < doctor.maxPanelCapacity,
-      facility: doctor.facility,
+      avatarUrl: (doctor as any).user?.avatarUrl || null,
+      stats: {
+        experienceYears: doctor.experienceYears,
+        ratingAvg: Number(doctor.ratingAvg),
+        totalReviews: doctor.totalReviews ?? (doctor as any)._count?.reviews ?? 0,
+        consultationCount: (doctor as any)._count?.encounters ?? 0,
+      },
+      services: ['home', 'telehealth', 'clinic'],
+      education: educationList,
+      bio: doctor.bio,
+      schedule:
+        'Thứ 2 - Thứ 7: 08:00 - 18:00 (Nhận khám tại nhà các buổi chiều và tư vấn trực tuyến 24/7)',
+      carePackages: formattedCarePackages,
     };
   }
 
@@ -581,6 +651,108 @@ export class PublicServiceImpl implements IPublicService {
       message:
         'Yêu cầu tư vấn của bạn đã được tiếp nhận thành công. Đội ngũ bác sĩ và nhân viên y tế FamiDoc sẽ liên hệ tư vấn trong thời gian sớm nhất.',
       submittedAt,
+    };
+  }
+
+  async getDoctorReviews(
+    id: string,
+    query: LookupDoctorReviewsQueryDto,
+  ): Promise<PublicDoctorReviewsResponseDto> {
+    const doctor = await this.prisma.doctor.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        onboardingStatus: true,
+      },
+    });
+
+    if (!doctor || doctor.onboardingStatus !== 'ACTIVE') {
+      throw new NotFoundException(
+        'Không tìm thấy bác sĩ hoặc bác sĩ chưa được kích hoạt',
+      );
+    }
+
+    const page = Math.max(1, query.page || 1);
+    const limit = Math.min(50, Math.max(1, query.limit || 5));
+    const skip = (page - 1) * limit;
+
+    const where: any = {
+      doctorId: id,
+    };
+
+    if (query.rating) {
+      where.ratingStars = query.rating;
+    }
+
+    const [total, reviews] = await Promise.all([
+      this.prisma.doctorReview.count({ where }),
+      this.prisma.doctorReview.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          familyUnit: {
+            include: {
+              representativeUser: {
+                select: {
+                  fullName: true,
+                  avatarUrl: true,
+                },
+              },
+              medicalContracts: {
+                where: { contractStatus: 'ACTIVE' },
+                take: 1,
+                include: {
+                  servicePackage: {
+                    select: {
+                      packageName: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const items: PublicDoctorReviewItemDto[] = reviews.map((r: any) => {
+      const repUser = r.familyUnit?.representativeUser;
+      const activeContract = r.familyUnit?.medicalContracts?.[0];
+      const homeAddress = r.familyUnit?.homeAddress || '';
+
+      let district: string | null = null;
+      if (homeAddress) {
+        const parts = homeAddress.split(',').map((p: string) => p.trim());
+        if (parts.length >= 2) {
+          district = parts[parts.length - 2];
+        } else {
+          district = parts[0];
+        }
+      }
+
+      return {
+        id: r.id,
+        patientName: repUser?.fullName || 'Hội viên gia đình',
+        ratingStars: r.ratingStars,
+        comment: r.reviewComment,
+        packageName:
+          activeContract?.servicePackage?.packageName || 'Gói Đồng Hành',
+        district,
+        avatarUrl: repUser?.avatarUrl || null,
+        createdAt: r.createdAt,
+      };
+    });
+
+    return {
+      items,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
     };
   }
 }
