@@ -45,12 +45,12 @@ export class FacilitiesDoctorsController {
   ) {}
 
   @Post(['', ':id/doctors'])
-  @Roles('HEALTHCARE_FACILITY', 'ADMIN')
+  @Roles('HEALTHCARE_FACILITY')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Cơ sở y tế khởi tạo tài khoản Bác sĩ trực thuộc (STT 15 - UC-20)',
     description:
-      'Cơ sở y tế (hoặc Quản trị viên) tạo tài khoản bác sĩ, thiết lập chuyên khoa, số năm kinh nghiệm và liên kết vào danh sách nhân sự của cơ sở.',
+      'Chỉ Cơ sở y tế đối tác mới có quyền tạo tài khoản cho bác sĩ trực thuộc đơn vị mình, thiết lập chuyên khoa, số năm kinh nghiệm và liên kết vào danh sách nhân sự của cơ sở.',
   })
   @ApiBody({ type: ProvisionDoctorDto })
   @ApiResponse({

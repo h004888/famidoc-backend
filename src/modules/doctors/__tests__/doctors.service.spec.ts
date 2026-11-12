@@ -140,10 +140,18 @@ describe('DoctorsServiceImpl', () => {
       facilityId: 'fac-uuid-1',
     };
 
-    it('should allow ADMIN to provision doctor for active facility', async () => {
+    it('should throw ForbiddenException if ADMIN attempts to provision doctor', async () => {
+      await expect(
+        service.provisionDoctorAccount(adminUser, dto, '127.0.0.1'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should allow HEALTHCARE_FACILITY to provision doctor for its own facility', async () => {
+      const { facilityId: _, ...facilityDto } = dto;
+
       const result = await service.provisionDoctorAccount(
-        adminUser,
-        dto,
+        facilityUser,
+        facilityDto,
         '127.0.0.1',
       );
 
@@ -160,18 +168,6 @@ describe('DoctorsServiceImpl', () => {
           resourceName: 'Doctor',
         }),
       });
-    });
-
-    it('should allow HEALTHCARE_FACILITY to provision doctor for its own facility', async () => {
-      const { facilityId: _, ...facilityDto } = dto;
-
-      const result = await service.provisionDoctorAccount(
-        facilityUser,
-        facilityDto,
-        '127.0.0.1',
-      );
-
-      expect(result).toBeDefined();
       expect(prismaService.healthcareFacility.findUnique).toHaveBeenCalledWith({
         where: { userId: facilityUser.id },
       });
@@ -181,7 +177,7 @@ describe('DoctorsServiceImpl', () => {
       prismaService.b2bStaffingContract.findFirst.mockResolvedValue(null);
 
       await expect(
-        service.provisionDoctorAccount(adminUser, dto, '127.0.0.1'),
+        service.provisionDoctorAccount(facilityUser, dto, '127.0.0.1'),
       ).rejects.toThrow(
         new BadRequestException(
           'Cơ sở y tế chưa có hợp đồng nhân lực B2B đang có hiệu lực',
@@ -190,7 +186,7 @@ describe('DoctorsServiceImpl', () => {
     });
 
     it('should send welcome email when doctor is provisioned', async () => {
-      await service.provisionDoctorAccount(adminUser, dto, '127.0.0.1');
+      await service.provisionDoctorAccount(facilityUser, dto, '127.0.0.1');
 
       expect(mailerService.sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -203,7 +199,7 @@ describe('DoctorsServiceImpl', () => {
       prismaService.user.findFirst.mockResolvedValue({ id: 'existing-user' });
 
       await expect(
-        service.provisionDoctorAccount(adminUser, dto, '127.0.0.1'),
+        service.provisionDoctorAccount(facilityUser, dto, '127.0.0.1'),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -211,7 +207,7 @@ describe('DoctorsServiceImpl', () => {
       prismaService.healthcareFacility.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.provisionDoctorAccount(adminUser, dto, '127.0.0.1'),
+        service.provisionDoctorAccount(facilityUser, dto, '127.0.0.1'),
       ).rejects.toThrow(BadRequestException);
     });
   });

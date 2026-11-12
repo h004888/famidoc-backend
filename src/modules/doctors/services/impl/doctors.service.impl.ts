@@ -39,38 +39,21 @@ export class DoctorsServiceImpl implements IDoctorsService {
     dto: ProvisionDoctorDto,
     ip: string,
   ): Promise<DoctorResponseDto> {
-    let targetFacilityId: string;
-
-    if (actor.role === 'ADMIN') {
-      if (!dto.facilityId) {
-        throw new BadRequestException(
-          'Vui lòng chỉ định cơ sở y tế trực thuộc (facilityId)',
-        );
-      }
-      const facility = await this.prisma.healthcareFacility.findUnique({
-        where: { id: dto.facilityId },
-      });
-      if (!facility || facility.verificationStatus !== 'ACTIVE') {
-        throw new BadRequestException(
-          'Cơ sở y tế không tồn tại hoặc chưa được kích hoạt hoạt động',
-        );
-      }
-      targetFacilityId = facility.id;
-    } else if (actor.role === 'HEALTHCARE_FACILITY') {
-      const facility = await this.prisma.healthcareFacility.findUnique({
-        where: { userId: actor.id },
-      });
-      if (!facility || facility.verificationStatus !== 'ACTIVE') {
-        throw new BadRequestException(
-          'Tài khoản của bạn chưa liên kết với cơ sở y tế hợp lệ',
-        );
-      }
-      targetFacilityId = facility.id;
-    } else {
+    if (actor.role !== 'HEALTHCARE_FACILITY') {
       throw new ForbiddenException(
-        'Chỉ Quản trị viên hoặc Cơ sở y tế mới có quyền tạo tài khoản bác sĩ',
+        'Chỉ Cơ sở y tế đối tác mới có quyền khởi tạo tài khoản Bác sĩ trực thuộc đơn vị mình',
       );
     }
+
+    const facility = await this.prisma.healthcareFacility.findUnique({
+      where: { userId: actor.id },
+    });
+    if (!facility || facility.verificationStatus !== 'ACTIVE') {
+      throw new BadRequestException(
+        'Tài khoản của bạn chưa liên kết với cơ sở y tế hợp lệ hoặc cơ sở y tế chưa được kích hoạt hoạt động',
+      );
+    }
+    const targetFacilityId = facility.id;
 
     const activeContract = await this.prisma.b2bStaffingContract.findFirst({
       where: {

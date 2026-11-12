@@ -24,6 +24,15 @@ describe('Doctors & Facilities Controllers', () => {
     ip: '127.0.0.1',
   } as unknown as AuthenticatedRequest;
 
+  const mockFacilityReq = {
+    user: {
+      id: 'fac-user-1',
+      role: 'HEALTHCARE_FACILITY' as const,
+      email: 'contact@hospital.vn',
+    },
+    ip: '127.0.0.1',
+  } as unknown as AuthenticatedRequest;
+
   const mockDoctorReq = {
     user: {
       id: 'doc-user-1',
@@ -98,13 +107,13 @@ describe('Doctors & Facilities Controllers', () => {
       };
 
       const result = await facilitiesDoctorsController.provisionDoctorAccount(
-        mockAdminReq,
+        mockFacilityReq,
         dto,
       );
 
       expect(result).toBe(mockDoctorResponse);
       expect(service.provisionDoctorAccount).toHaveBeenCalledWith(
-        mockAdminReq.user,
+        mockFacilityReq.user,
         dto,
         '127.0.0.1',
       );
