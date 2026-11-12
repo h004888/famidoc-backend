@@ -288,6 +288,23 @@ describe('ContractsServiceImpl - Staffing Contracts', () => {
         ),
       ).rejects.toThrow(ConflictException);
     });
+
+    it('should throw BadRequestException if contract has already expired', async () => {
+      sessionMock.findStaffingContract!.mockResolvedValue({
+        ...mockStaffingContract,
+        status: 'PENDING_SIGNATURE' as const,
+        endDate: new Date('2020-01-01'),
+      } as any);
+
+      await expect(
+        service.signStaffingContract(
+          adminUser,
+          'stf-uuid-1',
+          signDto,
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
   describe('listStaffingContracts & getStaffingContract', () => {
