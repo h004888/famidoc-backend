@@ -85,6 +85,8 @@ describe('ContractsServiceImpl - Staffing Contracts', () => {
         total: 1,
       }),
       recordStaffingAudit: jest.fn().mockResolvedValue(undefined),
+      findAdminUsers: jest.fn().mockResolvedValue([{ id: 'admin-uuid-1' }]),
+      createNotification: jest.fn().mockResolvedValue(undefined),
     };
 
     repositoryMock = {
@@ -304,6 +306,125 @@ describe('ContractsServiceImpl - Staffing Contracts', () => {
           '127.0.0.1',
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('rejectStaffingContract', () => {
+    const rejectDto = {
+      rejectionReason: 'Đề xuất giảm tỷ lệ hoa hồng nền tảng xuống 10% và lùi ngày bắt đầu sang tháng sau.',
+    };
+
+    it('should allow facility owner to reject staffing contract draft and notify admins', async () => {
+      sessionMock.updateStaffingContractStatus!.mockResolvedValueOnce({
+        ...mockStaffingContract,
+        status: 'TERMINATED' as const,
+      } as any);
+
+      const result = await service.rejectStaffingContract(
+        facilityUser,
+        'stf-uuid-1',
+        rejectDto,
+        '127.0.0.1',
+      );
+
+      expect(result).toBeDefined();
+      expect(result.status).toBe('TERMINATED');
+      expect(sessionMock.updateStaffingContractStatus).toHaveBeenCalledWith(
+        'stf-uuid-1',
+        'TERMINATED',
+      );
+      expect(sessionMock.recordStaffingAudit).toHaveBeenCalledWith(
+        facilityUser.id,
+        'STAFFING_CONTRACT_REJECTED',
+        'stf-uuid-1',
+        '127.0.0.1',
+      );
+      expect(sessionMock.createNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'admin-uuid-1',
+          type: 'STAFFING_CONTRACT_REJECTED',
+        }),
+      );
+    });
+
+    it('should allow ADMIN to cancel/reject staffing contract draft and notify facility', async () => {
+      sessionMock.updateStaffingContractStatus!.mockResolvedValueOnce({
+        ...mockStaffingContract,
+        status: 'TERMINATED' as const,
+      } as any);
+
+      const result = await service.rejectStaffingContract(
+        adminUser,
+        'stf-uuid-1',
+        rejectDto,
+        '127.0.0.1',
+      );
+
+      expect(result).toBeDefined();
+      expect(result.status).toBe('TERMINATED');
+      expect(sessionMock.createNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: mockFacility.userId,
+          type: 'STAFFING_CONTRACT_CANCELLED',
+        }),
+      );
+    });
+
+    it('should throw ForbiddenException if facility user rejects another facility contract', async () => {
+      const anotherFacilityUser: AuthenticatedUser = {
+        id: 'another-facility-user',
+        role: 'HEALTHCARE_FACILITY',
+        familyUnitId: null,
+      };
+
+      await expect(
+        service.rejectStaffingContract(
+          anotherFacilityUser,
+          'stf-uuid-1',
+          rejectDto,
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should throw ForbiddenException if unauthorized role (e.g. DOCTOR) attempts to reject', async () => {
+      await expect(
+        service.rejectStaffingContract(
+          doctorUser,
+          'stf-uuid-1',
+          rejectDto,
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should throw NotFoundException if contract does not exist', async () => {
+      sessionMock.findStaffingContract!.mockResolvedValueOnce(null);
+
+      await expect(
+        service.rejectStaffingContract(
+          adminUser,
+          'non-existing-id',
+          rejectDto,
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw ConflictException if contract is not in PENDING_SIGNATURE status', async () => {
+      sessionMock.findStaffingContract!.mockResolvedValueOnce({
+        ...mockStaffingContract,
+        status: 'ACTIVE' as const,
+      } as any);
+
+      await expect(
+        service.rejectStaffingContract(
+          facilityUser,
+          'stf-uuid-1',
+          rejectDto,
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(ConflictException);
     });
   });
 

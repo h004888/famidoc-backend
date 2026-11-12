@@ -14,6 +14,7 @@ import type {
 import type {
   CreateStaffingContractDto,
   SignStaffingContractDto,
+  RejectStaffingContractDto,
   ListStaffingContractsDto,
   StaffingContractResponseDto,
 } from '../../dtos/staffing-contract.dto';
@@ -79,6 +80,12 @@ export interface IContractsService {
     actor: AuthenticatedUser,
     id: string,
     dto: SignStaffingContractDto,
+    ip: string,
+  ): Promise<StaffingContractResponseDto>;
+  rejectStaffingContract(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: RejectStaffingContractDto,
     ip: string,
   ): Promise<StaffingContractResponseDto>;
   listStaffingContracts(

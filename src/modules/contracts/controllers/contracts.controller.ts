@@ -36,6 +36,7 @@ import {
 import {
   CreateStaffingContractDto,
   SignStaffingContractDto,
+  RejectStaffingContractDto,
   ListStaffingContractsDto,
   StaffingContractResponseDto,
 } from '../dtos/staffing-contract.dto';
@@ -328,6 +329,36 @@ export class ContractsController {
     @Body() dto: SignStaffingContractDto,
   ) {
     return this.service.signStaffingContract(
+      req.user,
+      id,
+      dto,
+      req.ip ?? 'unknown',
+    );
+  }
+
+  @Patch('staffing/:id/reject')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'HEALTHCARE_FACILITY')
+  @ApiOperation({
+    summary:
+      'Từ chối dự thảo hợp đồng cung ứng nhân lực B2B (Yêu cầu đàm phán / sửa đổi)',
+    description:
+      'Đại diện CSYT (hoặc Quản trị viên) từ chối dự thảo hợp đồng cung ứng nhân lực B2B kèm lý do phản hồi/yêu cầu sửa đổi điều khoản. Trạng thái chuyển sang TERMINATED và hệ thống phát thông báo đến các bên liên quan.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng cung ứng nhân lực' })
+  @ApiBody({ type: RejectStaffingContractDto })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Từ chối dự thảo hợp đồng thành công, trạng thái chuyển sang TERMINATED.',
+    type: StaffingContractResponseDto,
+  })
+  rejectStaffingContract(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: RejectStaffingContractDto,
+  ) {
+    return this.service.rejectStaffingContract(
       req.user,
       id,
       dto,

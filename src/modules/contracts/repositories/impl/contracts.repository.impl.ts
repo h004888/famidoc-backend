@@ -427,4 +427,20 @@ class PrismaContractsSession implements ContractsSession {
       },
     });
   }
+
+  async findAdminUsers(): Promise<{ id: string }[]> {
+    return this.tx.user.findMany({
+      where: { role: 'ADMIN', status: 'ACTIVE' },
+      select: { id: true },
+    });
+  }
+
+  async createNotification(data: {
+    userId: string;
+    title: string;
+    content: string;
+    type: string;
+  }): Promise<void> {
+    await this.tx.notification.create({ data });
+  }
 }

@@ -160,6 +160,13 @@ export interface ContractsSession {
     resourceId: string,
     ip: string,
   ): Promise<void>;
+  findAdminUsers(): Promise<{ id: string }[]>;
+  createNotification(data: {
+    userId: string;
+    title: string;
+    content: string;
+    type: string;
+  }): Promise<void>;
 }
 export interface IContractsRepository {
   transaction<T>(work: (session: ContractsSession) => Promise<T>): Promise<T>;
