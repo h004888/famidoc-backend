@@ -284,6 +284,47 @@ describe('DoctorsServiceImpl', () => {
         ),
       ).rejects.toThrow(ForbiddenException);
     });
+
+    it('should throw BadRequestException if doctor is already ACTIVE', async () => {
+      prismaService.doctor.findUnique.mockResolvedValue({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.ACTIVE,
+      });
+
+      await expect(
+        service.submitDoctorCredentials(
+          doctorUser,
+          'doc-uuid-1',
+          credDto,
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if credential issueDate is in the future', async () => {
+      prismaService.doctor.findUnique.mockResolvedValue({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.PENDING_SUBMISSION,
+      });
+
+      const futureDateDto = {
+        credentials: [
+          {
+            ...credDto.credentials[0],
+            issueDate: '2099-01-01',
+          },
+        ],
+      };
+
+      await expect(
+        service.submitDoctorCredentials(
+          doctorUser,
+          'doc-uuid-1',
+          futureDateDto,
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
   describe('approveDoctorCredentialsByFacility (STT 17 - UC-22)', () => {
@@ -341,6 +382,48 @@ describe('DoctorsServiceImpl', () => {
           '127.0.0.1',
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException if doctor is already ACTIVE', async () => {
+      prismaService.doctor.findUnique.mockResolvedValue({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.ACTIVE,
+      });
+
+      await expect(
+        service.approveDoctorCredentialsByFacility(
+          facilityUser,
+          'doc-uuid-1',
+          { approved: true },
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should handle facility rejection and send notification to doctor', async () => {
+      prismaService.doctor.findUnique.mockResolvedValue({
+        ...mockDoctor,
+        credentials: [{ id: 'cred-1' }],
+      });
+      prismaService.doctor.update.mockResolvedValue({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.PENDING_SUBMISSION,
+      });
+
+      const result = await service.approveDoctorCredentialsByFacility(
+        facilityUser,
+        'doc-uuid-1',
+        { approved: false, rejectionReason: 'Giấy tờ mờ' },
+        '127.0.0.1',
+      );
+
+      expect(result.onboardingStatus).toBe(DoctorOnboardingStatus.PENDING_SUBMISSION);
+      expect(prismaService.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: mockDoctor.userId,
+          type: 'DOCTOR_FACILITY_REJECTED',
+        }),
+      });
     });
   });
 
@@ -410,6 +493,33 @@ describe('DoctorsServiceImpl', () => {
           '127.0.0.1',
         ),
       ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should handle platform rejection and send notification to doctor', async () => {
+      prismaService.doctor.findUnique.mockResolvedValue({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.FACILITY_VERIFIED,
+        credentials: [{ id: 'cred-1' }],
+      });
+      prismaService.doctor.update.mockResolvedValue({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.PENDING_SUBMISSION,
+      });
+
+      const result = await service.approveDoctorCredentialsByPlatform(
+        adminUser,
+        'doc-uuid-1',
+        { approved: false, rejectionReason: 'Số CCHN không hợp lệ' },
+        '127.0.0.1',
+      );
+
+      expect(result.onboardingStatus).toBe(DoctorOnboardingStatus.PENDING_SUBMISSION);
+      expect(prismaService.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: mockDoctor.userId,
+          type: 'DOCTOR_PLATFORM_REJECTED',
+        }),
+      });
     });
   });
 });

@@ -421,7 +421,10 @@ export class ContractsServiceImpl implements IContractsService {
     const platformCommissionRate = dto.platformCommissionRate ?? 15.0;
     const facilityRevenueRate = dto.facilityRevenueRate ?? 85.0;
 
-    if (platformCommissionRate + facilityRevenueRate !== 100.0) {
+    if (
+      Math.round((platformCommissionRate + facilityRevenueRate) * 100) / 100 !==
+      100.0
+    ) {
       throw new BadRequestException(
         'Tổng tỷ lệ hoa hồng nền tảng và doanh thu cơ sở y tế phải đúng bằng 100%',
       );
@@ -534,6 +537,12 @@ export class ContractsServiceImpl implements IContractsService {
       if (contract.status !== 'PENDING_SIGNATURE') {
         throw new ConflictException(
           'Hợp đồng không ở trạng thái chờ ký hoặc đã có hiệu lực',
+        );
+      }
+
+      if (new Date(contract.endDate) < new Date()) {
+        throw new BadRequestException(
+          'Không thể ký hợp đồng đã quá hạn kết thúc',
         );
       }
 

@@ -181,6 +181,26 @@ export class DoctorsServiceImpl implements IDoctorsService {
       );
     }
 
+    if (doctor.onboardingStatus === 'ACTIVE') {
+      throw new BadRequestException(
+        'Bác sĩ đã hoàn tất onboarding và đang hoạt động (ACTIVE), không thể nộp lại hồ sơ',
+      );
+    }
+
+    for (const c of dto.credentials) {
+      const issueDate = new Date(c.issueDate);
+      if (isNaN(issueDate.getTime())) {
+        throw new BadRequestException(
+          `Ngày cấp chứng chỉ ${c.certificateNumber} không hợp lệ`,
+        );
+      }
+      if (issueDate > new Date()) {
+        throw new BadRequestException(
+          `Ngày cấp chứng chỉ ${c.certificateNumber} không được ở tương lai`,
+        );
+      }
+    }
+
     const updatedDoctor = await this.prisma.$transaction(async (tx) => {
       await tx.doctorCredential.deleteMany({
         where: { doctorId: actualDoctorId },
@@ -264,6 +284,12 @@ export class DoctorsServiceImpl implements IDoctorsService {
       );
     } else if (actor.role !== 'HEALTHCARE_FACILITY' && actor.role !== 'ADMIN') {
       throw new ForbiddenException('Bạn không có quyền thẩm định hồ sơ bác sĩ');
+    }
+
+    if (doctor.onboardingStatus === 'ACTIVE') {
+      throw new BadRequestException(
+        'Bác sĩ đã ở trạng thái ACTIVE, không cần thẩm định lại',
+      );
     }
 
     if (
@@ -351,6 +377,16 @@ export class DoctorsServiceImpl implements IDoctorsService {
             resourceId: doctorId,
             clientIp: ip || '127.0.0.1',
             timestamp: new Date(),
+          },
+        });
+
+        await tx.notification.create({
+          data: {
+            userId: doctor.userId,
+            title: 'Hồ sơ văn bằng chuyên môn bị Cơ sở y tế từ chối',
+            content: `Cơ sở y tế đã từ chối hồ sơ chuyên môn của bạn. Lý do: ${dto.rejectionReason || 'Không đạt yêu cầu'}. Vui lòng cập nhật lại.`,
+            type: 'DOCTOR_FACILITY_REJECTED',
+            referenceId: doctor.id,
           },
         });
 
@@ -482,6 +518,16 @@ export class DoctorsServiceImpl implements IDoctorsService {
             resourceId: doctorId,
             clientIp: ip || '127.0.0.1',
             timestamp: new Date(),
+          },
+        });
+
+        await tx.notification.create({
+          data: {
+            userId: doctor.userId,
+            title: 'Hồ sơ văn bằng chuyên môn bị Quản trị viên từ chối',
+            content: `Quản trị viên đã từ chối phê duyệt hồ sơ chuyên môn của bạn. Lý do: ${dto.rejectionReason || 'Không đạt yêu cầu pháp lý'}. Vui lòng kiểm tra và bổ sung lại.`,
+            type: 'DOCTOR_PLATFORM_REJECTED',
+            referenceId: doctor.id,
           },
         });
 
