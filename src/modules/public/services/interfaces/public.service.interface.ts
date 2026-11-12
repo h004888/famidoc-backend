@@ -9,6 +9,11 @@ import {
   PublicDoctorsResponseDto,
   PublicDoctorItemDto,
 } from '../../dtos/public-doctors-response.dto';
+import { PublicDoctorDetailDto } from '../../dtos/public-doctor-detail.dto';
+import {
+  LookupDoctorReviewsQueryDto,
+  PublicDoctorReviewsResponseDto,
+} from '../../dtos/public-doctor-reviews.dto';
 import { SubmitConsultationRequestDto } from '../../dtos/submit-consultation-request.dto';
 import { ConsultationRequestResponseDto } from '../../dtos/consultation-request-response.dto';
 
@@ -27,7 +32,11 @@ export interface IPublicService {
     dto: LookupDoctorDirectoryDto,
   ): Promise<PublicDoctorsResponseDto>;
   getPublicFacilityDetail(id: string): Promise<any>;
-  getPublicDoctorDetail(id: string): Promise<PublicDoctorItemDto>;
+  getPublicDoctorDetail(id: string): Promise<PublicDoctorDetailDto>;
+  getDoctorReviews(
+    id: string,
+    query: LookupDoctorReviewsQueryDto,
+  ): Promise<PublicDoctorReviewsResponseDto>;
   submitConsultationRequest(
     dto: SubmitConsultationRequestDto,
     clientIp?: string,

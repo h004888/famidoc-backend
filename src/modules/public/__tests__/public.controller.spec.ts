@@ -26,6 +26,7 @@ describe('PublicController', () => {
       submitConsultationRequest: jest.fn(),
       getPublicFacilityDetail: jest.fn(),
       getPublicDoctorDetail: jest.fn(),
+      getDoctorReviews: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -341,6 +342,38 @@ describe('PublicController', () => {
 
       expect(result).toBe(mockDoctor);
       expect(spy).toHaveBeenCalledWith(doctorId);
+    });
+  });
+
+  describe('getDoctorReviews', () => {
+    it('should delegate to publicService.getDoctorReviews', async () => {
+      const doctorId = 'doc-uuid-1';
+      const query = { page: 1, limit: 5 };
+      const mockReviews = {
+        items: [
+          {
+            id: 'rev-1',
+            patientName: 'Chị Lan',
+            ratingStars: 5,
+            comment: 'Tốt',
+            createdAt: new Date(),
+          },
+        ],
+        meta: {
+          total: 1,
+          page: 1,
+          limit: 5,
+          totalPages: 1,
+        },
+      };
+
+      const spy = jest.spyOn(service, 'getDoctorReviews');
+      spy.mockResolvedValue(mockReviews as any);
+
+      const result = await controller.getDoctorReviews(doctorId, query);
+
+      expect(result).toBe(mockReviews);
+      expect(spy).toHaveBeenCalledWith(doctorId, query);
     });
   });
 });

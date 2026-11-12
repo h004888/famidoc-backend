@@ -36,6 +36,12 @@ import {
   PublicDoctorItemDto,
   PublicDoctorsResponseDto,
 } from '../dtos/public-doctors-response.dto';
+import { PublicDoctorDetailDto } from '../dtos/public-doctor-detail.dto';
+import {
+  LookupDoctorReviewsQueryDto,
+  PublicDoctorReviewItemDto,
+  PublicDoctorReviewsResponseDto,
+} from '../dtos/public-doctor-reviews.dto';
 import { SubmitConsultationRequestDto } from '../dtos/submit-consultation-request.dto';
 import { ConsultationRequestResponseDto } from '../dtos/consultation-request-response.dto';
 
@@ -188,7 +194,7 @@ export class PublicController {
     example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
   @ApiStandardResponse({
-    type: PublicDoctorItemDto,
+    type: PublicDoctorDetailDto,
     status: 200,
     description: 'Chi tiết hồ sơ bác sĩ.',
   })
@@ -202,8 +208,40 @@ export class PublicController {
   })
   async getPublicDoctorDetail(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
-  ): Promise<PublicDoctorItemDto> {
+  ): Promise<PublicDoctorDetailDto> {
     return this.publicService.getPublicDoctorDetail(id);
+  }
+
+  @Get('doctors/:id/reviews')
+  @ApiOperation({
+    summary: 'Lấy danh sách đánh giá của bác sĩ có phân trang (UC-08)',
+    description:
+      'Cho phép xem danh sách nhận xét, phản hồi thực tế từ các hộ gia đình đã đăng ký bác sĩ phụ trách với hỗ trợ phân trang và lọc theo số sao.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID của bác sĩ',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
+  @ResponseMessage('Lấy danh sách đánh giá bác sĩ thành công')
+  @ApiStandardResponse({
+    type: PublicDoctorReviewItemDto,
+    isPaginated: true,
+    description: 'Danh sách đánh giá của bác sĩ kèm phân trang.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'ID bác sĩ không đúng định dạng UUID v4.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy bác sĩ hoặc bác sĩ chưa được kích hoạt.',
+  })
+  async getDoctorReviews(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Query() query: LookupDoctorReviewsQueryDto,
+  ): Promise<PublicDoctorReviewsResponseDto> {
+    return this.publicService.getDoctorReviews(id, query);
   }
 
   @Post(['consultation-requests', 'inquiries'])
