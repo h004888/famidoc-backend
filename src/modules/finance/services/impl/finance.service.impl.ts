@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
 import { getVietnamMonthWindow } from '../../../../core/business/business-helpers';
 import { moneyToNumber } from '../../../../core/database/prisma-transaction';
+import { StorageService } from '../../../../core/services/storage.service';
 import {
   FINANCE_REPOSITORY_TOKEN,
   type IFinanceRepository,
@@ -27,6 +28,7 @@ export class FinanceServiceImpl implements IFinanceService {
   constructor(
     @Inject(FINANCE_REPOSITORY_TOKEN)
     private readonly repository: IFinanceRepository,
+    private readonly storage: StorageService,
   ) {}
   getRevenueAnalytics(
     actor: AuthenticatedUser,
@@ -216,7 +218,9 @@ export class FinanceServiceImpl implements IFinanceService {
         if (
           dto.action === 'CONFIRM_TRANSFER' &&
           item.bankTransferOrderId === dto.bankTransferOrderId &&
-          moneyToNumber(item.facilityPayoutAmount) === dto.amountPaidVnd
+          moneyToNumber(item.facilityPayoutAmount) === dto.amountPaidVnd &&
+          item.transferEvidenceKey === dto.evidenceKey &&
+          item.settledAt?.getTime() === Date.parse(dto.paidAt!)
         )
           return item;
         throw new ConflictException('Settled statements cannot be overwritten');
@@ -239,15 +243,24 @@ export class FinanceServiceImpl implements IFinanceService {
         );
       if (
         !dto.evidenceKey?.startsWith(`${actor.id}/settlements/`) ||
-        dto.evidenceKey.includes('..')
+        dto.evidenceKey.includes('..') ||
+        dto.evidenceKey.includes('://')
       )
         throw new BadRequestException(
           'Provide your settlement evidence object key',
         );
       const paidAt = new Date(dto.paidAt!);
-      if (paidAt > new Date() || paidAt < item.createdAt)
+      if (
+        !Number.isFinite(paidAt.getTime()) ||
+        paidAt > new Date() ||
+        paidAt < item.createdAt
+      )
         throw new BadRequestException(
           'Transfer time must be between statement creation and now',
+        );
+      if (!(await this.storage.objectExists(dto.evidenceKey)))
+        throw new BadRequestException(
+          'Tệp chứng từ quyết toán chưa được tải lên.',
         );
       // Đây là xác nhận đối soát thủ công bởi Admin, không phải hàm tự chuyển tiền ngân hàng.
       const updated = await session.updateSettlement(item.id, {

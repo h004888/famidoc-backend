@@ -1051,11 +1051,11 @@ export class ContractsServiceImpl implements IContractsService {
       const terms = readFrozenContractTerms(contract.billingSnapshot);
       let amount: number;
       if (dto.type === 'QUOTA_EXPANSION') {
-        if (dto.additionalMembers)
+        if (dto.additionalMembers !== undefined)
           throw new BadRequestException('Quota expansion cannot add members');
         amount = calculateHomeVisitAddendum(terms, dto.extraHomeVisits!);
       } else {
-        if (dto.extraHomeVisits)
+        if (dto.extraHomeVisits !== undefined)
           throw new BadRequestException('Adding members does not add visits');
         if (await session.hasPendingMemberAddendum(id))
           throw new ConflictException(
@@ -1156,6 +1156,16 @@ export class ContractsServiceImpl implements IContractsService {
           throw new ConflictException(
             'A different replacement contract is already pending',
           );
+        const { benefits } = readFrozenContractTerms(existing.billingSnapshot);
+        const agreedVideoVisits =
+          benefits.videoQuotaPolicy === 'CONTRACT'
+            ? benefits.quotas.videoConsultations
+            : undefined;
+        // Gọi lại cùng dữ liệu thì trả hợp đồng cũ. Đổi hạn mức phải lập điều khoản mới.
+        if (agreedVideoVisits !== dto.videoConsultations)
+          throw new ConflictException(
+            'A replacement contract with different video terms is already pending',
+          );
         return this.toContractSummary(existing);
       }
       if (await session.hasOtherActiveContract(old.familyId, old.id))
@@ -1175,6 +1185,13 @@ export class ContractsServiceImpl implements IContractsService {
         );
       if (dto.kind === 'RENEWAL' && pkg.lineageCode !== oldTerms.package.code)
         throw new BadRequestException('Renewal must use the same package line');
+      const videoAgreedInContract = pkg.videoQuotaPolicy === 'CONTRACT';
+      if (videoAgreedInContract && dto.videoConsultations === undefined)
+        throw new BadRequestException(
+          'Cần nhập số lượt video đã thỏa thuận cho gói này.',
+        );
+      if (!videoAgreedInContract && dto.videoConsultations !== undefined)
+        throw new BadRequestException('Gói này có số lượt video cố định.');
       // Gói áp dụng cho toàn bộ gia đình. Số người lấy từ DB, không lấy danh sách do client chọn.
       const memberCount = await session.countFamilyMembers(old.familyId);
       if (memberCount < 1)
@@ -1196,6 +1213,7 @@ export class ContractsServiceImpl implements IContractsService {
             pkg.additionalMemberMonthlyPrice,
           ),
           quotaPeriod: pkg.quotaPeriod as QuotaPeriod,
+          videoQuotaPolicy: videoAgreedInContract ? 'CONTRACT' : undefined,
           quotas: {
             homeVisits: pkg.periodicVisitsQuota,
             videoConsultations: pkg.telehealthQuota,
@@ -1209,6 +1227,9 @@ export class ContractsServiceImpl implements IContractsService {
           retiredAt: null,
         },
         memberCount,
+        videoAgreedInContract
+          ? { videoConsultations: dto.videoConsultations }
+          : undefined,
       );
       const snapshot = {
         package: quote.package,
@@ -1225,7 +1246,7 @@ export class ContractsServiceImpl implements IContractsService {
         packageId: pkg.id,
         totalAmount: quote.pricing.totalPriceVnd,
         remainingHomeVisits: pkg.periodicVisitsQuota,
-        remainingTelehealth: pkg.telehealthQuota,
+        remainingTelehealth: quote.benefits.quotas.videoConsultations,
         startDate: today,
         endDate: addContractMonths(today, pkg.durationMonths),
         contractStatus: 'PENDING_APPROVAL',

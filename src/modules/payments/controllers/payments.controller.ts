@@ -45,7 +45,7 @@ export class PaymentsController {
   @Post(['vietqr', 'requests'])
   @ApiOperation({ summary: 'Tạo mã QR thanh toán VietQR cho hợp đồng hoặc phụ lục' })
   @ApiBody({ type: CreatePaymentRequestDto })
-  @ApiResponse({ status: 201, description: 'Tạo yêu cầu thanh toán VietQR thành công, trả về chuỗi qrDataUrl và transferContent' })
+  @ApiResponse({ status: 201, description: 'Tạo yêu cầu thanh toán VietQR thành công, trả về qrUrl và transferContent' })
   @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ hoặc trạng thái hợp đồng không được phép thanh toán' })
   createVietQRPayment(
     @Body() dto: CreatePaymentRequestDto,
