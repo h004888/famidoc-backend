@@ -41,6 +41,9 @@ import type { IAuthService } from '../interfaces/auth.service.interface';
 import { CreateAuthDto } from '../../dtos/create-auth.dto';
 import { UpdateAuthDto } from '../../dtos/update-auth.dto';
 
+const JWT_REMEMBER_EXPIRES_IN = '7d';
+const JWT_SESSION_EXPIRES_IN = '1h';
+
 @Injectable()
 export class AuthServiceImpl implements IAuthService {
   constructor(
@@ -371,7 +374,11 @@ export class AuthServiceImpl implements IAuthService {
         payload.scope = 'ONBOARDING_ONLY';
       }
 
-      const accessToken = this.jwtService.sign(payload);
+      const expiresIn =
+        dto.rememberMe === true
+          ? JWT_REMEMBER_EXPIRES_IN
+          : JWT_SESSION_EXPIRES_IN;
+      const accessToken = this.jwtService.sign(payload, { expiresIn });
 
       return {
         accessToken,

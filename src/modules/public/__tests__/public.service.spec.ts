@@ -567,6 +567,7 @@ describe('PublicServiceImpl', () => {
       expect(result.id).toBe('doc-1');
       expect(result.isAvailable).toBe(true);
       expect(result.ratingAvg).toBe(4.8);
+      expect(result.stats.ratingAvg).toBe(4.8);
     });
 
     it('should throw NotFoundException if doctor does not exist or not ACTIVE', async () => {

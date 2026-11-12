@@ -506,6 +506,58 @@ describe('AuthServiceImpl', () => {
     expect(res.accessToken).toBe('jwt_trim_token');
   });
 
+  // --- UC-02 LOGIN: Remember Me (7 ngày vs 1 giờ) ---
+  describe('Remember Me — cấp JWT theo thời hạn rememberMe', () => {
+    const buildActiveUser = (): any => ({
+      id: 'u-1',
+      email: 'user@famidoc.vn',
+      passwordHash: hashSync('Password@123', 4),
+      role: 'FAMILY_REP',
+      status: 'ACTIVE',
+    });
+
+    beforeEach(() => {
+      redisService.get.mockResolvedValue(null);
+      repository.findByEmail.mockResolvedValue(buildActiveUser());
+      jwtService.sign.mockReturnValue('jwt_token_remember');
+    });
+
+    it('[UT-S-26] rememberMe = true -> ký JWT với expiresIn 7 ngày', async () => {
+      await service.login({
+        email: 'user@famidoc.vn',
+        password: 'Password@123',
+        rememberMe: true,
+      });
+
+      expect(jwtService.sign).toHaveBeenCalledWith(expect.any(Object), {
+        expiresIn: '7d',
+      });
+    });
+
+    it('[UT-S-27] rememberMe = false -> ký JWT với expiresIn 1 giờ', async () => {
+      await service.login({
+        email: 'user@famidoc.vn',
+        password: 'Password@123',
+        rememberMe: false,
+      });
+
+      expect(jwtService.sign).toHaveBeenCalledWith(expect.any(Object), {
+        expiresIn: '1h',
+      });
+    });
+
+    it('[UT-S-28] Không truyền rememberMe -> fallback session mặc định 1 giờ', async () => {
+      await service.login({
+        email: 'user@famidoc.vn',
+        password: 'Password@123',
+      });
+
+      expect(jwtService.sign).toHaveBeenCalledWith(expect.any(Object), {
+        expiresIn: '1h',
+      });
+    });
+  });
+
   // --- UC-03 LOGOUT ---
   it('[UT-S-17] Đăng xuất an toàn (Logout - Đưa Token vào Redis Blacklist)', async () => {
     jwtService.decode.mockReturnValue({

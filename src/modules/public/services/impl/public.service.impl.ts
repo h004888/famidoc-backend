@@ -598,6 +598,10 @@ export class PublicServiceImpl implements IPublicService {
       isVerified: doctor.onboardingStatus === 'ACTIVE',
       isAvailable: doctor.activePanelCount < doctor.maxPanelCapacity,
       avatarUrl: (doctor as any).user?.avatarUrl || null,
+      ratingAvg: Number(doctor.ratingAvg),
+      totalReviews: doctor.totalReviews ?? (doctor as any)._count?.reviews ?? 0,
+      experienceYears: doctor.experienceYears,
+      facility: doctor.facility || null,
       stats: {
         experienceYears: doctor.experienceYears,
         ratingAvg: Number(doctor.ratingAvg),

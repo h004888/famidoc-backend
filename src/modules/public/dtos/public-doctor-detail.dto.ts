@@ -167,6 +167,29 @@ export class PublicDoctorDetailDto {
   })
   avatarUrl?: string | null;
 
+  @ApiPropertyOptional({
+    description: 'Điểm đánh giá trung bình (tương thích ngược)',
+    example: 4.8,
+  })
+  ratingAvg?: number;
+
+  @ApiPropertyOptional({
+    description: 'Tổng số lượt đánh giá (tương thích ngược)',
+    example: 20,
+  })
+  totalReviews?: number;
+
+  @ApiPropertyOptional({
+    description: 'Số năm kinh nghiệm lâm sàng (tương thích ngược)',
+    example: 7,
+  })
+  experienceYears?: number;
+
+  @ApiPropertyOptional({
+    description: 'Thông tin cơ sở y tế trực thuộc (tương thích ngược)',
+  })
+  facility?: any;
+
   @ApiProperty({
     description: 'Số liệu thống kê năng lực và uy tín bác sĩ',
     type: DoctorStatsDto,
