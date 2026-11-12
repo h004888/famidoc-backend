@@ -40,12 +40,30 @@ export class SePayWebhookController {
   @ApiResponse({ status: 200, description: 'Đã nhận và xử lý giao dịch thành công' })
   @ApiResponse({ status: 401, description: 'Xác thực webhook API Key hoặc chữ ký HMAC không hợp lệ' })
   async handleVietQRWebhook(@Body() dto: SePayWebhookDto) {
+    console.log('[DEBUG_CP03][WEBHOOK_CONTROLLER_RECEIVED]', {
+      sepayId: dto.id,
+      gateway: dto.gateway,
+      accountNumber: dto.accountNumber,
+      transferAmount: dto.transferAmount,
+      transferType: dto.transferType,
+      content: dto.content,
+      transactionDate: dto.transactionDate,
+      referenceCode: dto.referenceCode,
+    });
+
     // Guard đã xác thực chữ ký hoặc API key. Bản tin gửi thử chỉ cần xác nhận đã nhận.
-    if (dto.id === 0) return { success: true };
+    if (dto.id === 0) {
+      console.log('[DEBUG_CP04][WEBHOOK_TEST_PING_ACKNOWLEDGED]', { dtoId: dto.id });
+      return { success: true };
+    }
 
     // Chỉ ACK sau khi giao dịch cùng trạng thái liên quan đã ghi xong trong transaction.
     // success chỉ nghĩa là đã nhận/xử lý, không có nghĩa mọi giao dịch đều được ghép thanh toán.
     await this.service.handleVietQRWebhook(dto);
+    console.log('[DEBUG_CP12][WEBHOOK_CONTROLLER_COMPLETED]', {
+      sepayId: dto.id,
+      response: { success: true },
+    });
     return { success: true };
   }
 }

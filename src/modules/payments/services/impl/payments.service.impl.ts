@@ -198,12 +198,23 @@ export class PaymentsServiceImpl implements IPaymentsService {
     this.config.assertPaymentsEnabled();
     const transactionAt = parseSePayDate(dto.transactionDate);
     const fingerprint = transactionFingerprint(dto);
+    console.log('[DEBUG_CP05][WEBHOOK_SERVICE_START]', {
+      sepayId: dto.id,
+      parsedDate: transactionAt.toISOString(),
+      fingerprint,
+      env: this.config.getEnvironment(),
+    });
     return this.repository.transaction(async (session) => {
       const previous = await session.findTransaction(
         String(dto.id),
         this.config.getEnvironment(),
       );
       if (previous) {
+        console.log('[DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK]', {
+          isDuplicate: true,
+          previousId: previous.id,
+          fingerprintMatch: previous.fingerprint === fingerprint,
+        });
         if (previous.fingerprint !== fingerprint)
           throw new ConflictException(
             'Provider transaction ID reused with different data',
@@ -211,6 +222,10 @@ export class PaymentsServiceImpl implements IPaymentsService {
         // Retry đúng dữ liệu chỉ trả kết quả cũ, không cộng tiền hay kéo dài hợp đồng.
         return { duplicate: true, transaction: previous, activation: null };
       }
+      console.log('[DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK]', {
+        isDuplicate: false,
+        sepayId: dto.id,
+      });
       const reference = dto.referenceCode?.trim() ?? '';
       const bankReferenceKey = reference
         ? JSON.stringify([
@@ -245,12 +260,25 @@ export class PaymentsServiceImpl implements IPaymentsService {
         payment = await session.findRequestByCode(record.paymentCode);
         record.paymentRequestId = payment?.id ?? null;
       }
+      console.log('[DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE]', {
+        rawContent: dto.content,
+        extractedCodes: codes,
+        chosenCode: record.paymentCode,
+        paymentRequestFound: !!payment,
+        paymentRequestId: payment?.id ?? null,
+        expectedAmount: payment?.amountVnd ?? null,
+        receivedAmount: record.amountVnd,
+      });
       const reason = await this.reconciliationReason(
         session,
         record,
         payment,
         codes.length,
       );
+      console.log('[DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT]', {
+        matched: !reason,
+        reason: reason ?? 'NONE (VALID_MATCH)',
+      });
       // Giao dịch sai vẫn được lưu để kiểm tra, không bị "mất tiền" trong nhật ký ứng dụng.
       if (reason) {
         record.reason = reason;
@@ -258,6 +286,11 @@ export class PaymentsServiceImpl implements IPaymentsService {
           reason === TransactionReason.OUTGOING_TRANSFER
             ? TransactionOutcome.IGNORED
             : TransactionOutcome.REVIEW_REQUIRED;
+        console.log('[DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED]', {
+          recordId: record.id,
+          reason,
+          outcome: record.outcome,
+        });
         await session.saveTransaction(record);
         return { duplicate: false, transaction: record, activation: null };
       }
@@ -267,6 +300,12 @@ export class PaymentsServiceImpl implements IPaymentsService {
       payment.status = PaymentRequestStatus.PAID;
       payment.paidAt = record.transactionAt;
       payment.acceptedTransactionId = record.id;
+      console.log('[DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED]', {
+        recordId: record.id,
+        paymentRequestId: payment.id,
+        contractId: payment.contractId,
+        addendumId: payment.addendumId,
+      });
       // Ba thay đổi dưới đây nằm chung transaction, tránh PAID nhưng thiếu sổ giao dịch.
       await session.saveTransaction(record);
       await session.saveRequest(payment);
@@ -276,6 +315,12 @@ export class PaymentsServiceImpl implements IPaymentsService {
         payment.addendumId,
       );
       const activation = await this.activateInTransaction(session, contract);
+      console.log('[DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT]', {
+        contractId: activation.contractId,
+        status: activation.status,
+        activated: activation.activated,
+        blockingReasons: activation.blockingReasons,
+      });
       return { duplicate: false, transaction: record, activation };
     });
   }
