@@ -24,6 +24,7 @@ import type { ApproveFacilityAccountDto } from '../../dtos/approve-facility-acco
 import type { SubmitFacilityLegalProfileDto } from '../../dtos/submit-facility-legal-profile.dto';
 import type { VerifyFacilityLegalDto } from '../../dtos/verify-facility-legal.dto';
 import type { FacilityResponseDto } from '../../dtos/facility-response.dto';
+import type { ListDoctorsQueryDto } from '../../dtos/list-doctors-query.dto';
 
 @Injectable()
 export class DoctorsServiceImpl implements IDoctorsService {
@@ -81,7 +82,8 @@ export class DoctorsServiceImpl implements IDoctorsService {
       );
     }
 
-    const defaultPasswordHash = hashSync('FamiDoc@2026', 10);
+    const defaultInitialPassword = 'FamiDoc@Doctor2026';
+    const defaultPasswordHash = hashSync(defaultInitialPassword, 10);
 
     const result = await this.prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
@@ -131,14 +133,16 @@ export class DoctorsServiceImpl implements IDoctorsService {
         await this.mailerService.sendMail({
           to: dto.email,
           subject: 'Thư mời kích hoạt tài khoản Bác sĩ gia đình - FamiDoc',
-          text: `Kính gửi Bác sĩ ${dto.doctorName},\n\nTài khoản của bạn tại hệ thống FamiDoc đã được tạo thành công bởi cơ sở y tế. Vui lòng đăng nhập với mật khẩu mặc định 'FamiDoc@2026' và hoàn thiện hồ sơ chứng chỉ hành nghề để được phê duyệt.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+          text: `Kính gửi Bác sĩ ${dto.doctorName},\n\nTài khoản của bạn tại hệ thống FamiDoc đã được tạo thành công bởi cơ sở y tế. Vui lòng đăng nhập với mật khẩu mặc định '${defaultInitialPassword}' và hoàn thiện hồ sơ chứng chỉ hành nghề để được phê duyệt.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
         });
       } catch {
         // Continue even if mail fails
       }
     }
 
-    return this.formatDoctor(result);
+    const formatted = this.formatDoctor(result);
+    formatted.initialPassword = defaultInitialPassword;
+    return formatted;
   }
 
   async submitDoctorCredentials(
@@ -290,6 +294,12 @@ export class DoctorsServiceImpl implements IDoctorsService {
       );
     }
 
+    if (!dto.approved && (!dto.rejectionReason || !dto.rejectionReason.trim())) {
+      throw new BadRequestException(
+        'Vui lòng cung cấp lý do từ chối thẩm định (rejectionReason)',
+      );
+    }
+
     const updated = await this.prisma.$transaction(async (tx) => {
       if (dto.approved) {
         await tx.doctorCredential.updateMany({
@@ -413,6 +423,12 @@ export class DoctorsServiceImpl implements IDoctorsService {
       );
     }
 
+    if (!dto.approved && (!dto.rejectionReason || !dto.rejectionReason.trim())) {
+      throw new BadRequestException(
+        'Vui lòng cung cấp lý do từ chối phê duyệt (rejectionReason)',
+      );
+    }
+
     const updated = await this.prisma.$transaction(async (tx) => {
       if (dto.approved) {
         await tx.doctorCredential.updateMany({
@@ -531,6 +547,19 @@ export class DoctorsServiceImpl implements IDoctorsService {
     actor: AuthenticatedUser,
     doctorId: string,
   ): Promise<DoctorResponseDto> {
+    if (doctorId === 'me') {
+      const doc = await this.prisma.doctor.findUnique({
+        where: { userId: actor.id },
+        include: { facility: true, credentials: true },
+      });
+      if (!doc) {
+        throw new NotFoundException(
+          'Không tìm thấy thông tin bác sĩ liên kết với tài khoản này',
+        );
+      }
+      return this.formatDoctor(doc);
+    }
+
     const doctor = await this.prisma.doctor.findUnique({
       where: { id: doctorId },
       include: { facility: true, credentials: true },
@@ -540,7 +569,95 @@ export class DoctorsServiceImpl implements IDoctorsService {
       throw new NotFoundException('Không tìm thấy thông tin bác sĩ');
     }
 
+    if (actor.role === 'HEALTHCARE_FACILITY') {
+      if (doctor.facility?.userId !== actor.id) {
+        throw new ForbiddenException(
+          'Bạn không có quyền xem thông tin bác sĩ của cơ sở y tế khác',
+        );
+      }
+    }
+
     return this.formatDoctor(doctor);
+  }
+
+  async listDoctors(
+    actor: AuthenticatedUser,
+    query: ListDoctorsQueryDto,
+  ): Promise<{
+    items: DoctorResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    const page = Math.max(1, query.page || 1);
+    const limit = Math.min(50, Math.max(1, query.limit || 10));
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+
+    if (actor.role === 'HEALTHCARE_FACILITY') {
+      const facility = await this.prisma.healthcareFacility.findUnique({
+        where: { userId: actor.id },
+      });
+      if (!facility) {
+        return { items: [], total: 0, page, limit };
+      }
+      where.facilityId = facility.id;
+    } else if (actor.role === 'ADMIN') {
+      if (query.facilityId) {
+        where.facilityId = query.facilityId;
+      }
+    } else {
+      throw new ForbiddenException(
+        'Bạn không có quyền xem danh sách nhân sự bác sĩ',
+      );
+    }
+
+    if (query.onboardingStatus) {
+      where.onboardingStatus = query.onboardingStatus;
+    }
+
+    if (query.search) {
+      where.OR = [
+        { doctorName: { contains: query.search, mode: 'insensitive' } },
+        { specialty: { contains: query.search, mode: 'insensitive' } },
+      ];
+    }
+
+    const [total, items] = await Promise.all([
+      this.prisma.doctor.count({ where }),
+      this.prisma.doctor.findMany({
+        where,
+        skip,
+        take: limit,
+        include: { facility: true, credentials: true },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    return {
+      items: items.map((doc) => this.formatDoctor(doc)),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  async listFacilityDoctors(
+    actor: AuthenticatedUser,
+    query: ListDoctorsQueryDto,
+  ): Promise<{
+    items: DoctorResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
+    if (actor.role !== 'HEALTHCARE_FACILITY') {
+      throw new ForbiddenException(
+        'Chỉ Cơ sở y tế mới có quyền xem danh sách bác sĩ trực thuộc',
+      );
+    }
+    return this.listDoctors(actor, query);
   }
 
   private formatDoctor(doctor: any): DoctorResponseDto {

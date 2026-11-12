@@ -97,6 +97,8 @@ describe('DoctorsServiceImpl', () => {
       },
       doctor: {
         findUnique: jest.fn().mockResolvedValue(mockDoctor),
+        findMany: jest.fn().mockResolvedValue([mockDoctor]),
+        count: jest.fn().mockResolvedValue(1),
         create: jest.fn().mockResolvedValue(mockDoctor),
         update: jest.fn().mockResolvedValue(mockDoctor),
       },
@@ -157,6 +159,7 @@ describe('DoctorsServiceImpl', () => {
 
       expect(result).toBeDefined();
       expect(result.doctorName).toBe('BS. CKI Nguyễn Văn An');
+      expect(result.initialPassword).toBe('FamiDoc@Doctor2026');
       expect(result.onboardingStatus).toBe(
         DoctorOnboardingStatus.PENDING_SUBMISSION,
       );
@@ -421,6 +424,22 @@ describe('DoctorsServiceImpl', () => {
         }),
       });
     });
+
+    it('should throw BadRequestException if facility rejects without rejectionReason', async () => {
+      prismaService.doctor.findUnique.mockResolvedValue({
+        ...mockDoctor,
+        credentials: [{ id: 'cred-1' }],
+      });
+
+      await expect(
+        service.approveDoctorCredentialsByFacility(
+          facilityUser,
+          'doc-uuid-1',
+          { approved: false },
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
   });
 
   describe('approveDoctorCredentialsByPlatform (STT 18 - UC-22)', () => {
@@ -516,6 +535,98 @@ describe('DoctorsServiceImpl', () => {
           type: 'DOCTOR_PLATFORM_REJECTED',
         }),
       });
+    });
+
+    it('should throw BadRequestException if platform rejects without rejectionReason', async () => {
+      prismaService.doctor.findUnique.mockResolvedValue({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.FACILITY_VERIFIED,
+      });
+
+      await expect(
+        service.approveDoctorCredentialsByPlatform(
+          adminUser,
+          'doc-uuid-1',
+          { approved: false },
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('getDoctorProfile, listDoctors & listFacilityDoctors', () => {
+    it('should get doctor profile by ID', async () => {
+      prismaService.doctor.findUnique.mockResolvedValue(mockDoctor);
+
+      const result = await service.getDoctorProfile(adminUser, 'doc-uuid-1');
+
+      expect(result).toBeDefined();
+      expect(result.id).toBe('doc-uuid-1');
+    });
+
+    it('should get own doctor profile when ID is me', async () => {
+      prismaService.doctor.findUnique.mockResolvedValue(mockDoctor);
+
+      const result = await service.getDoctorProfile(doctorUser, 'me');
+
+      expect(result).toBeDefined();
+      expect(prismaService.doctor.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { userId: doctorUser.id },
+        }),
+      );
+    });
+
+    it('should throw ForbiddenException if facility tries to view another facility doctor', async () => {
+      prismaService.doctor.findUnique.mockResolvedValue({
+        ...mockDoctor,
+        facility: { id: 'other-fac', userId: 'other-user' },
+      });
+
+      await expect(
+        service.getDoctorProfile(facilityUser, 'doc-uuid-1'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('should allow ADMIN to list doctors with query filters', async () => {
+      prismaService.doctor.count.mockResolvedValue(1);
+      prismaService.doctor.findMany.mockResolvedValue([mockDoctor]);
+
+      const result = await service.listDoctors(adminUser, {
+        onboardingStatus: DoctorOnboardingStatus.FACILITY_VERIFIED,
+        page: 1,
+        limit: 10,
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(1);
+      expect(prismaService.doctor.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            onboardingStatus: DoctorOnboardingStatus.FACILITY_VERIFIED,
+          }),
+        }),
+      );
+    });
+
+    it('should allow HEALTHCARE_FACILITY to list doctors scoped to its facility', async () => {
+      prismaService.healthcareFacility.findUnique.mockResolvedValue(mockFacility);
+      prismaService.doctor.count.mockResolvedValue(1);
+      prismaService.doctor.findMany.mockResolvedValue([mockDoctor]);
+
+      const result = await service.listFacilityDoctors(facilityUser, {
+        page: 1,
+        limit: 10,
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(prismaService.doctor.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            facilityId: mockFacility.id,
+          }),
+        }),
+      );
     });
   });
 });

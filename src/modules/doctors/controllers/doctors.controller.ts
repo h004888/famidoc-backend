@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
   UsePipes,
@@ -33,6 +34,7 @@ import {
   ReviewDoctorCredentialsDto,
 } from '../dtos/verify-credentials.dto';
 import { DoctorResponseDto } from '../dtos/doctor-response.dto';
+import { ListDoctorsQueryDto } from '../dtos/list-doctors-query.dto';
 import {
   DOCTORS_SERVICE_TOKEN,
   type IDoctorsService,
@@ -211,6 +213,44 @@ export class DoctorsController {
     throw new BadRequestException(
       'Cấp thẩm định (tier) không hợp lệ (phải là 1 hoặc 2)',
     );
+  }
+
+  @Get('me')
+  @Roles('DOCTOR')
+  @AllowOnboarding()
+  @ApiOperation({
+    summary: 'Bác sĩ xem thông tin hồ sơ của chính mình',
+    description:
+      'Bác sĩ đăng nhập xem thông tin tài khoản, đơn vị y tế liên kết, tiến trình thẩm định và danh sách chứng chỉ đã nộp.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Thông tin chi tiết hồ sơ bác sĩ.',
+    type: DoctorResponseDto,
+  })
+  getMyDoctorProfile(
+    @Req() req: AuthenticatedRequest,
+  ): Promise<DoctorResponseDto> {
+    return this.service.getDoctorProfile(req.user, 'me');
+  }
+
+  @Get()
+  @Roles('ADMIN', 'HEALTHCARE_FACILITY')
+  @ApiOperation({
+    summary:
+      'Xem danh sách Bác sĩ trên hệ thống (Lọc theo trạng thái thẩm định)',
+    description:
+      'Quản trị viên (hoặc CSYT) xem danh sách bác sĩ, có thể lọc theo ?onboardingStatus=FACILITY_VERIFIED để tìm các bác sĩ đang chờ Quản trị viên duyệt Cấp 2.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách bác sĩ kèm phân trang.',
+  })
+  listDoctors(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: ListDoctorsQueryDto,
+  ) {
+    return this.service.listDoctors(req.user, query);
   }
 
   @Get(':id')

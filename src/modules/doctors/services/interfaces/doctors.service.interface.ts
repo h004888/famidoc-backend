@@ -11,6 +11,7 @@ import type { ApproveFacilityAccountDto } from '../../dtos/approve-facility-acco
 import type { SubmitFacilityLegalProfileDto } from '../../dtos/submit-facility-legal-profile.dto';
 import type { VerifyFacilityLegalDto } from '../../dtos/verify-facility-legal.dto';
 import type { FacilityResponseDto } from '../../dtos/facility-response.dto';
+import type { ListDoctorsQueryDto } from '../../dtos/list-doctors-query.dto';
 
 export const DOCTORS_SERVICE_TOKEN = Symbol('IDoctorsService');
 
@@ -85,4 +86,24 @@ export interface IDoctorsService {
     actor: AuthenticatedUser,
     doctorId: string,
   ): Promise<DoctorResponseDto>;
+
+  listDoctors(
+    actor: AuthenticatedUser,
+    query: ListDoctorsQueryDto,
+  ): Promise<{
+    items: DoctorResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }>;
+
+  listFacilityDoctors(
+    actor: AuthenticatedUser,
+    query: ListDoctorsQueryDto,
+  ): Promise<{
+    items: DoctorResponseDto[];
+    total: number;
+    page: number;
+    limit: number;
+  }>;
 }

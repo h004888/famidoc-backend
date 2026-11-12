@@ -73,6 +73,18 @@ describe('Doctors & Facilities Controllers', () => {
         onboardingStatus: DoctorOnboardingStatus.ACTIVE,
       }),
       getDoctorProfile: jest.fn().mockResolvedValue(mockDoctorResponse),
+      listDoctors: jest.fn().mockResolvedValue({
+        items: [mockDoctorResponse],
+        total: 1,
+        page: 1,
+        limit: 10,
+      }),
+      listFacilityDoctors: jest.fn().mockResolvedValue({
+        items: [mockDoctorResponse],
+        total: 1,
+        page: 1,
+        limit: 10,
+      }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -230,6 +242,38 @@ describe('Doctors & Facilities Controllers', () => {
       expect(service.getDoctorProfile).toHaveBeenCalledWith(
         mockAdminReq.user,
         'doc-uuid-1',
+      );
+    });
+
+    it('should delegate getMyDoctorProfile to service.getDoctorProfile with me', async () => {
+      const result = await doctorsController.getMyDoctorProfile(mockDoctorReq);
+
+      expect(result).toBe(mockDoctorResponse);
+      expect(service.getDoctorProfile).toHaveBeenCalledWith(
+        mockDoctorReq.user,
+        'me',
+      );
+    });
+
+    it('should delegate listDoctors to service.listDoctors', async () => {
+      const query = { page: 1, limit: 10 };
+      const result = await doctorsController.listDoctors(mockAdminReq, query);
+
+      expect(result.items).toHaveLength(1);
+      expect(service.listDoctors).toHaveBeenCalledWith(mockAdminReq.user, query);
+    });
+
+    it('should delegate listFacilityDoctors to service.listFacilityDoctors', async () => {
+      const query = { page: 1, limit: 10 };
+      const result = await facilitiesDoctorsController.listFacilityDoctors(
+        mockFacilityReq,
+        query,
+      );
+
+      expect(result.items).toHaveLength(1);
+      expect(service.listFacilityDoctors).toHaveBeenCalledWith(
+        mockFacilityReq.user,
+        query,
       );
     });
   });

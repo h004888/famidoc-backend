@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Inject,
   Post,
+  Query,
   Req,
   UseGuards,
   UsePipes,
@@ -22,6 +24,7 @@ import { RolesGuard, Roles } from '../../../core/auth/roles.guard';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
 import { ProvisionDoctorDto } from '../dtos/provision-doctor.dto';
 import { DoctorResponseDto } from '../dtos/doctor-response.dto';
+import { ListDoctorsQueryDto } from '../dtos/list-doctors-query.dto';
 import {
   DOCTORS_SERVICE_TOKEN,
   type IDoctorsService,
@@ -72,5 +75,23 @@ export class FacilitiesDoctorsController {
       dto,
       req.ip ?? 'unknown',
     );
+  }
+
+  @Get(['', ':id/doctors'])
+  @Roles('HEALTHCARE_FACILITY')
+  @ApiOperation({
+    summary: 'Cơ sở y tế xem danh sách Bác sĩ trực thuộc đơn vị mình',
+    description:
+      'Cơ sở y tế xem danh sách nhân sự bác sĩ trực thuộc để theo dõi tiến độ nộp bằng cấp chứng chỉ (PENDING_SUBMISSION) và thẩm định Cấp 1.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách bác sĩ trực thuộc kèm phân trang.',
+  })
+  listFacilityDoctors(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: ListDoctorsQueryDto,
+  ) {
+    return this.service.listFacilityDoctors(req.user, query);
   }
 }
