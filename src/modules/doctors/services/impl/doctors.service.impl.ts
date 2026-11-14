@@ -1019,7 +1019,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
       return fac;
     });
 
-    return this.formatFacility(updated);
+    return this.formatFacility(updated, dto.legalDocumentsUrl);
   }
 
   async verifyFacilityLegal(
@@ -1212,7 +1212,10 @@ export class DoctorsServiceImpl implements IDoctorsService {
     return this.formatFacility(facility);
   }
 
-  private formatFacility(facility: any): FacilityResponseDto {
+  private formatFacility(
+    facility: any,
+    legalDocumentsUrl?: string | null,
+  ): FacilityResponseDto {
     return {
       id: facility.id,
       userId: facility.userId,
@@ -1225,6 +1228,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
       bankAccountNumber: facility.bankAccountNumber,
       bankAccountHolder: facility.bankAccountHolder,
       verificationStatus: facility.verificationStatus,
+      legalDocumentsUrl: legalDocumentsUrl ?? null,
       createdAt: facility.createdAt,
       updatedAt: facility.updatedAt,
       ...(facility.user
