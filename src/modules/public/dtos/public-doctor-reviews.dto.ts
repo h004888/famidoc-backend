@@ -48,10 +48,11 @@ export class PublicDoctorReviewItemDto {
   id: string;
 
   @ApiProperty({
-    description: 'Họ tên hoặc danh xưng của người đại diện hộ gia đình đánh giá',
-    example: 'Chị Mai Lan',
+    description:
+      'Tên người đại diện hộ gia đình đã được ẩn danh một phần (giữ họ, rút gọn tên)',
+    example: 'Nguyễn V. A.',
   })
-  patientName: string;
+  patientDisplayName: string;
 
   @ApiProperty({
     description: 'Số sao đánh giá (1 đến 5 sao)',
@@ -79,12 +80,6 @@ export class PublicDoctorReviewItemDto {
     example: 'Quận 7',
   })
   district?: string | null;
-
-  @ApiPropertyOptional({
-    description: 'Ảnh đại diện người đánh giá',
-    example: '/images/medsev/avatar/female-1.jpg',
-  })
-  avatarUrl?: string | null;
 
   @ApiProperty({
     description: 'Thời điểm gửi đánh giá',

@@ -3,8 +3,12 @@ FROM node:24-bookworm-slim AS builder
 
 WORKDIR /app
 
-# Cài đặt OpenSSL cần thiết cho Prisma
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# Cài đặt OpenSSL cần thiết cho Prisma + Chromium cho Puppeteer
+RUN apt-get update -y && \
+    apt-get install -y --no-install-recommends openssl chromium fonts-dejavu-core fonts-liberation && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -21,8 +25,12 @@ FROM node:24-bookworm-slim AS runner
 
 WORKDIR /app
 
-# Cài đặt OpenSSL cho Prisma runtime
-RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+# Cài đặt OpenSSL cho Prisma runtime + Chromium + fonts cho Puppeteer
+RUN apt-get update -y && \
+    apt-get install -y --no-install-recommends openssl chromium fonts-dejavu-core fonts-liberation && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 ENV NODE_ENV=production
 ENV PORT=4000

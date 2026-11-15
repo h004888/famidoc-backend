@@ -13,10 +13,24 @@ export const PATIENTS_REPOSITORY_TOKEN = Symbol('PATIENTS_REPOSITORY');
 
 export interface IPatientsRepository {
   create(familyId: string, data: CreatePatientDto): Promise<Patient>;
+  createWithActiveContractLock?(
+    familyId: string,
+    data: CreatePatientDto,
+  ): Promise<Patient>;
+  createAndAttachToContract?(
+    familyId: string,
+    contractId: string,
+    data: CreatePatientDto,
+  ): Promise<Patient>;
+  findActiveContractByFamilyId?(
+    familyId: string,
+  ): Promise<{ id: string; memberCount: number } | null>;
+  countPatientsByFamilyId?(familyId: string): Promise<number>;
   findById(id: string): Promise<PatientDetail | null>;
   findByFamilyId(familyId: string): Promise<Patient[]>;
   findAll(): Promise<Patient[]>;
   update(id: string, data: UpdatePatientDto): Promise<Patient>;
+  softDeactivate?(id: string): Promise<Patient>;
   findFamilyUnitByRepresentativeUserId(representativeUserId: string): Promise<FamilyUnit | null>;
   findFamilyUnitById(id: string): Promise<FamilyUnit | null>;
   addAllergy(patientId: string, data: CreateAllergyDto): Promise<PatientAllergy>;

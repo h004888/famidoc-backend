@@ -8,6 +8,7 @@ import {
   IsString,
   IsUUID,
   MaxLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreatePatientDto {
@@ -27,14 +28,18 @@ export class CreatePatientDto {
   @IsEnum(Gender)
   gender!: Gender;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Mối quan hệ nhân thân với chủ hộ / đại diện gia đình (BỐ, MẸ, CON, VỢ, CHỒNG, BẢN THÂN...)',
     example: 'CON',
   })
-  @IsNotEmpty()
+  @ValidateIf(
+    (o: CreatePatientDto) =>
+      o.relationshipToRepresentative !== undefined || !o.relationshipToHead?.trim(),
+  )
+  @IsNotEmpty({ message: 'Vui lòng cung cấp quan hệ với chủ hộ / đại diện gia đình' })
   @IsString()
   @MaxLength(50)
-  relationshipToRepresentative!: string;
+  relationshipToRepresentative?: string;
 
   @ApiPropertyOptional({ description: 'Số CCCD/Định danh cá nhân', example: '001201500001' })
   @IsOptional()
@@ -49,7 +54,11 @@ export class CreatePatientDto {
   citizenId?: string;
 
   @ApiPropertyOptional({ description: 'Mối quan hệ nhân thân (alias của relationshipToRepresentative)' })
-  @IsOptional()
+  @ValidateIf(
+    (o: CreatePatientDto) =>
+      o.relationshipToHead !== undefined || !o.relationshipToRepresentative?.trim(),
+  )
+  @IsNotEmpty({ message: 'Vui lòng cung cấp quan hệ với chủ hộ / đại diện gia đình' })
   @IsString()
   @MaxLength(50)
   relationshipToHead?: string;
@@ -71,6 +80,18 @@ export class CreatePatientDto {
   @IsString()
   @MaxLength(30)
   healthInsuranceNumber?: string;
+
+  @ApiPropertyOptional({ description: 'Nơi ĐKKCB ban đầu (BHYT)', example: 'BV Đại học Y Dược TP.HCM' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  registeredHospital?: string;
+
+  @ApiPropertyOptional({ description: 'Bệnh nền đang theo dõi', example: 'Tăng huyết áp, Dạ dày' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  chronicDiseases?: string;
 
   @ApiPropertyOptional({ description: 'ID hộ gia đình (bắt buộc khi ADMIN tạo hộ)' })
   @IsOptional()

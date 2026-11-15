@@ -235,6 +235,28 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('should reject with PACKAGE_MEMBER_LIMIT when patientIds exceed package maxMembers', async () => {
+      const sevenPatients = Array.from({ length: 7 }, (_, i) => ({
+        id: `patient-${i + 1}`,
+      }));
+      sessionMock.findPatientsByIdsAndFamilyId.mockResolvedValueOnce(sevenPatients);
+
+      await expect(
+        service.createInitialMedicalContract(familyRepUser, {
+          packageId: 'pkg-1',
+          facilityId: 'fac-1',
+          patientIds: sevenPatients.map((p) => p.id),
+          memberCount: 7,
+        } as any),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          code: 'PACKAGE_MEMBER_LIMIT',
+          maxMembers: 6,
+          requestedMembers: 7,
+        }),
+      });
+    });
+
     it('should throw BadRequestException if package is not active', async () => {
       sessionMock.findPackage.mockResolvedValue(null);
 

@@ -15,6 +15,11 @@ export interface ContractSummary {
   upgradedFromId: string | null;
   memberCount: number;
   isDemo: boolean;
+  documensoEnvelopeId?: string | null;
+  documensoItemId?: string | null;
+  signingToken?: string | null;
+  signingUrl?: string | null;
+  additionalTerms?: string | null;
 }
 export interface ContractChangeTerms {
   id: string;

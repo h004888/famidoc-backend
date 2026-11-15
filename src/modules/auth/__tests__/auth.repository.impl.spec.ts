@@ -27,6 +27,12 @@ describe('AuthRepositoryImpl', () => {
       auditLog: {
         create: jest.fn(),
       },
+      otpChallenge: {
+        findUnique: jest.fn(),
+        upsert: jest.fn(),
+        update: jest.fn(),
+        deleteMany: jest.fn(),
+      },
       $transaction: jest.fn((cb) => cb(prismaService)),
     };
 
@@ -183,5 +189,85 @@ describe('AuthRepositoryImpl', () => {
       avatarUrl: null,
     };
     expect(entity.id).toBe('u-1');
+  });
+
+  it('[UT-R-09] completeFamilyRepRegistration tạo User/Family/Patient/AuditLog và xóa challenge trong cùng transaction', async () => {
+    const mockUser = { id: 'u-2', email: 'rep2@famidoc.vn', role: 'FAMILY_REP' };
+    prismaService.user.create.mockResolvedValue(mockUser);
+    prismaService.familyUnit.create.mockResolvedValue({ id: 'f-2' });
+    prismaService.patient.create.mockResolvedValue({ id: 'p-2' });
+    prismaService.auditLog.create.mockResolvedValue({ id: 'a-2' });
+    prismaService.otpChallenge.deleteMany.mockResolvedValue({ count: 1 });
+
+    const result = await repository.completeFamilyRepRegistration(
+      {
+        email: 'rep2@famidoc.vn',
+        phone: '0912345679',
+        passwordHash: 'hash123',
+        fullName: 'Tran Thi B',
+      },
+      'rep2@famidoc.vn',
+    );
+
+    expect(prismaService.$transaction).toHaveBeenCalled();
+    expect(prismaService.otpChallenge.deleteMany).toHaveBeenCalledWith({
+      where: {
+        purpose: 'REGISTER_FAMILY_REP',
+        email: 'rep2@famidoc.vn',
+      },
+    });
+    expect(result).toEqual(mockUser);
+  });
+
+  it('[UT-R-10] upsertOtpChallenge dọn bản ghi hết hạn cũ và upsert challenge theo (purpose, email)', async () => {
+    const expiresAt = new Date(Date.now() + 300_000);
+    const cooldownUntil = new Date(Date.now() + 60_000);
+    prismaService.otpChallenge.deleteMany.mockResolvedValue({ count: 0 });
+    prismaService.otpChallenge.upsert.mockResolvedValue({
+      id: 'otp-1',
+      purpose: 'REGISTER_FAMILY_REP',
+      email: 'new@famidoc.vn',
+      otpHash: 'sha256-hex',
+      expiresAt,
+      cooldownUntil,
+      attempts: 0,
+      maxAttempts: 5,
+    });
+
+    const record = await repository.upsertOtpChallenge({
+      purpose: 'REGISTER_FAMILY_REP',
+      email: 'new@famidoc.vn',
+      phone: '0912345678',
+      payload: { fullName: 'Nguyen A', passwordHash: 'bcrypt-hash' },
+      otpHash: 'sha256-hex',
+      expiresAt,
+      cooldownUntil,
+    });
+
+    expect(prismaService.otpChallenge.deleteMany).toHaveBeenCalled();
+    expect(prismaService.otpChallenge.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          purpose_email: {
+            purpose: 'REGISTER_FAMILY_REP',
+            email: 'new@famidoc.vn',
+          },
+        },
+      }),
+    );
+    expect(record.id).toBe('otp-1');
+  });
+
+  it('[UT-R-11] incrementOtpChallengeAttempts và deleteOtpChallenge gọi đúng Prisma API', async () => {
+    prismaService.otpChallenge.update.mockResolvedValue({ attempts: 3 });
+    prismaService.otpChallenge.deleteMany.mockResolvedValue({ count: 1 });
+
+    const attempts = await repository.incrementOtpChallengeAttempts('otp-1');
+    expect(attempts).toBe(3);
+
+    await repository.deleteOtpChallenge('REGISTER_FAMILY_REP', 'new@famidoc.vn');
+    expect(prismaService.otpChallenge.deleteMany).toHaveBeenCalledWith({
+      where: { purpose: 'REGISTER_FAMILY_REP', email: 'new@famidoc.vn' },
+    });
   });
 });

@@ -5,11 +5,11 @@ import { PublicPackageDetailDto } from '../../dtos/public-package-detail.dto';
 import { LookupHealthcareFacilitiesDto } from '../../dtos/lookup-facilities.dto';
 import { PublicFacilitiesResponseDto } from '../../dtos/public-facilities-response.dto';
 import { LookupDoctorDirectoryDto } from '../../dtos/lookup-doctors.dto';
+import { PublicDoctorsResponseDto } from '../../dtos/public-doctors-response.dto';
 import {
-  PublicDoctorsResponseDto,
-  PublicDoctorItemDto,
-} from '../../dtos/public-doctors-response.dto';
-import { PublicDoctorDetailDto } from '../../dtos/public-doctor-detail.dto';
+  PublicDoctorDetailDto,
+  DoctorCareModelDto,
+} from '../../dtos/public-doctor-detail.dto';
 import {
   LookupDoctorReviewsQueryDto,
   PublicDoctorReviewsResponseDto,
@@ -33,6 +33,7 @@ export interface IPublicService {
   ): Promise<PublicDoctorsResponseDto>;
   getPublicFacilityDetail(id: string): Promise<any>;
   getPublicDoctorDetail(id: string): Promise<PublicDoctorDetailDto>;
+  getPublicCareModel(): Promise<DoctorCareModelDto>;
   getDoctorReviews(
     id: string,
     query: LookupDoctorReviewsQueryDto,

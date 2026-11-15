@@ -1,6 +1,8 @@
 import {
   Prisma,
   type ContractAddendum,
+  type ContractDocumensoSigner,
+  type SignerRole,
   type ServicePackage,
   type ContractSignature,
   type B2bStaffingContract,
@@ -32,6 +34,13 @@ export const MEDICAL_CONTRACT_DETAIL_INCLUDE = {
     },
   },
   signatures: true,
+  documensoSigners: {
+    select: {
+      signerRole: true,
+      status: true,
+      completedAt: true,
+    },
+  },
   invoices: true,
 } as const;
 export type DetailedMedicalContract = Prisma.MedicalContractGetPayload<{
@@ -160,6 +169,53 @@ export interface ContractsSession {
     resourceId: string,
     ip: string,
   ): Promise<void>;
+  findFirstActiveAdminUser?(): Promise<{
+    id: string;
+    email: string;
+    fullName: string;
+  } | null>;
+  saveDocumensoSigners?(
+    signers: Array<{
+      contractId: string;
+      signerRole: SignerRole;
+      documensoRecipientId: number;
+      documensoToken: string;
+      documensoSigningUrl: string;
+      status: string;
+    }>,
+  ): Promise<void>;
+  findDocumensoSigners?(contractId: string): Promise<ContractDocumensoSigner[]>;
+  findFamilyGateStatus?(familyId: string): Promise<{
+    activeContract: {
+      id: string;
+      contractNumber: string;
+      memberCount: number;
+      endDate: Date;
+      packageName?: string | null;
+      packageDescription?: string | null;
+      doctor?: {
+        id: string;
+        fullName: string;
+        title: string;
+        hospitalName: string;
+        avatarUrl: string | null;
+        phone: string | null;
+        experienceYears: number;
+      } | null;
+    } | null;
+    pendingContract: {
+      id: string;
+      contractNumber: string;
+      contractStatus: string;
+    } | null;
+    familyUnit?: {
+      id: string;
+      homeAddress: string;
+      emergencyPhone: string;
+      representativeName: string;
+    } | null;
+    patientCount: number;
+  }>;
   findAdminUsers(): Promise<{ id: string }[]>;
   createNotification(data: {
     userId: string;

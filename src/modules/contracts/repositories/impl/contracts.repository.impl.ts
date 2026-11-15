@@ -252,11 +252,17 @@ class PrismaContractsSession implements ContractsSession {
   }
 
   findFacilityById(id: string) {
-    return this.tx.healthcareFacility.findUnique({ where: { id } });
+    return this.tx.healthcareFacility.findUnique({
+      where: { id },
+      include: { user: true },
+    });
   }
 
   findFacilityByUserId(userId: string) {
-    return this.tx.healthcareFacility.findUnique({ where: { userId } });
+    return this.tx.healthcareFacility.findUnique({
+      where: { userId },
+      include: { user: true },
+    });
   }
 
   findDoctorById(id: string) {
@@ -274,13 +280,164 @@ class PrismaContractsSession implements ContractsSession {
   }
 
   findFamilyById(id: string) {
-    return this.tx.familyUnit.findUnique({ where: { id } });
+    return this.tx.familyUnit.findUnique({
+      where: { id },
+      include: { representativeUser: true },
+    });
   }
 
   findFamilyByRepresentativeUserId(userId: string) {
     return this.tx.familyUnit.findUnique({
       where: { representativeUserId: userId },
+      include: { representativeUser: true },
     });
+  }
+
+  async findFirstActiveAdminUser() {
+    return this.tx.user.findFirst({
+      where: { role: 'ADMIN' },
+      select: { id: true, email: true, fullName: true },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async saveDocumensoSigners(
+    signers: Array<{
+      contractId: string;
+      signerRole: any;
+      documensoRecipientId: number;
+      documensoToken: string;
+      documensoSigningUrl: string;
+      status: string;
+    }>,
+  ) {
+    if (!signers.length) return;
+    await this.tx.contractDocumensoSigner.createMany({ data: signers });
+  }
+
+  findDocumensoSigners(contractId: string) {
+    return this.tx.contractDocumensoSigner.findMany({
+      where: { contractId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async findFamilyGateStatus(familyId: string) {
+    const [activeContractRow, pendingContract, familyUnitRow, patientCount] = await Promise.all([
+      this.tx.medicalContract.findFirst({
+        where: { familyId, contractStatus: 'ACTIVE' },
+        select: {
+          id: true,
+          contractNumber: true,
+          memberCount: true,
+          endDate: true,
+          servicePackage: {
+            select: {
+              packageName: true,
+              description: true,
+            },
+          },
+          facility: {
+            select: {
+              facilityName: true,
+              hotline: true,
+            },
+          },
+          doctor: {
+            select: {
+              id: true,
+              doctorName: true,
+              academicTitle: true,
+              specialty: true,
+              experienceYears: true,
+              user: {
+                select: {
+                  avatarUrl: true,
+                  phone: true,
+                },
+              },
+              facility: {
+                select: {
+                  facilityName: true,
+                  hotline: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.tx.medicalContract.findFirst({
+        where: {
+          familyId,
+          contractStatus: { in: ['PENDING_APPROVAL', 'PENDING_PAYMENT'] },
+        },
+        select: {
+          id: true,
+          contractNumber: true,
+          contractStatus: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.tx.familyUnit.findUnique({
+        where: { id: familyId },
+        select: {
+          id: true,
+          homeAddress: true,
+          emergencyPhone: true,
+          representativeUser: {
+            select: {
+              fullName: true,
+            },
+          },
+        },
+      }),
+      this.tx.patient.count({ where: { familyId, status: 'ACTIVE' } }),
+    ]);
+
+    const activeContract = activeContractRow
+      ? {
+          id: activeContractRow.id,
+          contractNumber: activeContractRow.contractNumber,
+          memberCount: activeContractRow.memberCount,
+          endDate: activeContractRow.endDate,
+          packageName: activeContractRow.servicePackage?.packageName ?? null,
+          packageDescription: activeContractRow.servicePackage?.description ?? null,
+          doctor: activeContractRow.doctor
+            ? {
+                id: activeContractRow.doctor.id,
+                fullName: activeContractRow.doctor.doctorName,
+                title:
+                  activeContractRow.doctor.academicTitle?.trim() ||
+                  activeContractRow.doctor.specialty ||
+                  'Bác sĩ Gia đình phụ trách hộ',
+                hospitalName:
+                  activeContractRow.doctor.facility?.facilityName ||
+                  activeContractRow.facility?.facilityName ||
+                  'Cơ sở y tế liên kết FamiDoc',
+                avatarUrl: activeContractRow.doctor.user?.avatarUrl ?? null,
+                phone:
+                  activeContractRow.doctor.user?.phone ||
+                  activeContractRow.doctor.facility?.hotline ||
+                  activeContractRow.facility?.hotline ||
+                  null,
+                experienceYears: activeContractRow.doctor.experienceYears,
+              }
+            : null,
+        }
+      : null;
+
+    const familyUnit = familyUnitRow
+      ? {
+          id: familyUnitRow.id,
+          homeAddress: familyUnitRow.homeAddress,
+          emergencyPhone: familyUnitRow.emergencyPhone,
+          representativeName:
+            familyUnitRow.representativeUser?.fullName ?? 'Đại diện hộ gia đình',
+        }
+      : null;
+
+    return { activeContract, pendingContract, familyUnit, patientCount };
   }
 
   findPatientsByIdsAndFamilyId(patientIds: string[], familyId: string) {

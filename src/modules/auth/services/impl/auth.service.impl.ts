@@ -11,7 +11,12 @@ import {
   ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { randomInt, randomUUID } from 'node:crypto';
+import {
+  createHmac,
+  randomInt,
+  randomUUID,
+  timingSafeEqual,
+} from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { JwtService } from '@nestjs/jwt';
 import { RegisterFamilyRepDto } from '../../dtos/register-family-rep.dto';
@@ -26,15 +31,18 @@ import {
   LoginSuccessResponse,
   ApiResponseMessage,
 } from '../../dtos/auth-responses.dto';
-import {
-  BusinessConflictException,
-  BaseApiException,
-} from '../../../../core/exceptions/api.exception';
+import { BusinessConflictException } from '../../../../core/exceptions/api.exception';
 import { AuthErrorCode } from '../../../../core/constants/error-codes.constant';
+import {
+  buildPasswordResetOtpEmail,
+  buildRegistrationOtpEmail,
+} from '../../templates/otp-email.template';
 
 import {
   AuthEntity,
   AUTH_REPOSITORY_TOKEN,
+  OtpChallengePurposeType,
+  OtpChallengeRecord,
 } from '../../repositories/interfaces/auth.repository.interface';
 import type { IAuthRepository } from '../../repositories/interfaces/auth.repository.interface';
 import type { IAuthService } from '../interfaces/auth.service.interface';
@@ -101,6 +109,45 @@ export class AuthServiceImpl implements IAuthService {
     return this.authRepository.delete(id);
   }
 
+  private hashOtp(
+    purpose: OtpChallengePurposeType,
+    email: string,
+    otp: string,
+  ): string {
+    const secret =
+      process.env.OTP_HASH_SECRET ||
+      process.env.JWT_SECRET ||
+      'famidoc-otp-hash-secret';
+    return createHmac('sha256', secret)
+      .update(`${purpose}:${email}:${otp}`)
+      .digest('hex');
+  }
+
+  private verifyOtpHash(
+    purpose: OtpChallengePurposeType,
+    email: string,
+    otp: string,
+    storedHash: string,
+  ): boolean {
+    const expected = this.hashOtp(purpose, email, otp);
+    const a = Buffer.from(expected, 'utf8');
+    const b = Buffer.from(storedHash || '', 'utf8');
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(a, b);
+  }
+
+  private assertCooldownCleared(challenge: OtpChallengeRecord | null): void {
+    if (!challenge?.cooldownUntil) return;
+    const remainingMs = new Date(challenge.cooldownUntil).getTime() - Date.now();
+    if (remainingMs > 0) {
+      const cooldownSeconds = Math.ceil(remainingMs / 1000);
+      throw new HttpException(
+        `Please wait ${cooldownSeconds} seconds before requesting a new OTP`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
+
   async registerFamilyRepresentative(
     dto: RegisterFamilyRepDto,
   ): Promise<RegisterInitiateResponse> {
@@ -113,8 +160,13 @@ export class AuthServiceImpl implements IAuthService {
       throw new BadRequestException('Confirm password does not match password');
     }
 
+    const email = dto.email.trim().toLowerCase();
+    const phone = dto.phone.trim();
+    const fullName = dto.fullName.trim();
+    let challengePersisted = false;
+
     try {
-      const existingEmail = await this.authRepository.findByEmail(dto.email);
+      const existingEmail = await this.authRepository.findByEmail(email);
       if (existingEmail) {
         throw new BusinessConflictException(
           AuthErrorCode.AUTH_EMAIL_ALREADY_EXISTS,
@@ -122,7 +174,7 @@ export class AuthServiceImpl implements IAuthService {
         );
       }
 
-      const existingPhone = await this.authRepository.findByPhone(dto.phone);
+      const existingPhone = await this.authRepository.findByPhone(phone);
       if (existingPhone) {
         throw new BusinessConflictException(
           AuthErrorCode.AUTH_PHONE_ALREADY_EXISTS,
@@ -130,56 +182,54 @@ export class AuthServiceImpl implements IAuthService {
         );
       }
 
-      const cooldown =
-        this.redisClient && typeof this.redisClient.ttl === 'function'
-          ? (await this.redisClient.ttl(`otp:cooldown:${dto.email}`)) || 0
-          : 0;
-      if (cooldown > 0) {
-        throw new HttpException(
-          `Please wait ${cooldown} seconds before requesting a new OTP`,
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
-      }
+      const existingChallenge = await this.authRepository.findOtpChallenge(
+        'REGISTER_FAMILY_REP',
+        email,
+      );
+      this.assertCooldownCleared(existingChallenge);
 
       const passwordHash = await this.hashPassword(dto.password);
+      const otp = randomInt(100000, 1000000).toString();
+      const now = Date.now();
 
-      // Lưu trực tiếp vào PostgreSQL
-      await this.authRepository.createFamilyRepWithProfile({
-        email: dto.email,
-        phone: dto.phone,
-        passwordHash,
-        fullName: dto.fullName,
+      await this.authRepository.upsertOtpChallenge({
+        purpose: 'REGISTER_FAMILY_REP',
+        email,
+        phone,
+        payload: {
+          fullName,
+          passwordHash,
+        },
+        otpHash: this.hashOtp('REGISTER_FAMILY_REP', email, otp),
+        expiresAt: new Date(now + 300 * 1000),
+        cooldownUntil: new Date(now + 60 * 1000),
+      });
+      challengePersisted = true;
+
+      const emailContent = buildRegistrationOtpEmail({
+        fullName,
+        otp,
+        expiresInMinutes: 5,
       });
 
-      const otp = randomInt(100000, 1000000).toString();
-
-      if (this.redisClient) {
-        await this.redisClient.set?.(
-          `otp:reg:${dto.email}`,
-          JSON.stringify({
-            fullName: dto.fullName,
-            phone: dto.phone,
-            passwordHash,
-            otp,
-          }),
-          'EX',
-          300,
-        );
-        await this.redisClient.set?.(`otp:cooldown:${dto.email}`, '1', 'EX', 60);
-      }
-
       await this.mailerService.sendMail({
-        to: dto.email,
-        subject: 'FamiDoc - Chào mừng bạn gia nhập hệ thống chăm sóc sức khỏe gia đình',
-        text: `Xin chào ${dto.fullName}, tài khoản đại diện gia đình của bạn đã được khởi tạo thành công trên hệ thống FamiDoc. Mã OTP xác thực (nếu cần): ${otp}. Bạn có thể đăng nhập ngay bằng email ${dto.email} hoặc số điện thoại ${dto.phone}.`,
+        to: email,
+        subject: emailContent.subject,
+        text: emailContent.text,
+        html: emailContent.html,
       });
 
       return {
-        email: dto.email,
+        email,
         expiresInSeconds: 300,
         ...(process.env.NODE_ENV !== 'production' ? { devOtp: otp } : {}),
       };
     } catch (err: any) {
+      if (challengePersisted) {
+        await this.authRepository
+          .deleteOtpChallenge('REGISTER_FAMILY_REP', email)
+          .catch(() => undefined);
+      }
       if (
         err instanceof ConflictException ||
         err instanceof BadRequestException ||
@@ -187,7 +237,7 @@ export class AuthServiceImpl implements IAuthService {
       ) {
         throw err;
       }
-      if (err.code === 'P2002') {
+      if (err?.code === 'P2002') {
         throw new BusinessConflictException(
           AuthErrorCode.AUTH_CONFLICT_ERROR,
           'This email/phone is already registered',
@@ -200,39 +250,70 @@ export class AuthServiceImpl implements IAuthService {
   }
 
   async resendEmailOtp(dto: ResendEmailOtpDto): Promise<ApiResponseMessage> {
-    const cooldown =
-      this.redisClient && typeof this.redisClient.ttl === 'function'
-        ? (await this.redisClient.ttl(`otp:cooldown:${dto.email}`)) || 0
-        : 0;
-    if (cooldown > 0) {
-      throw new HttpException(
-        `Please wait ${cooldown} seconds before requesting a new OTP`,
-        HttpStatus.TOO_MANY_REQUESTS,
+    const email = dto.email.trim().toLowerCase();
+    const challenge = await this.authRepository.findOtpChallenge(
+      'REGISTER_FAMILY_REP',
+      email,
+    );
+    this.assertCooldownCleared(challenge);
+
+    if (!challenge || !challenge.payload) {
+      throw new UnauthorizedException(
+        'Registration expired; please register again',
       );
     }
 
-    if (this.redisClient && typeof this.redisClient.get === 'function') {
-      const cached = await this.redisClient.get(`otp:reg:${dto.email}`);
-      if (cached) {
-        const data = JSON.parse(cached);
-        const newOtp = randomInt(100000, 1000000).toString();
-        data.otp = newOtp;
-        await this.redisClient.set?.(
-          `otp:reg:${dto.email}`,
-          JSON.stringify(data),
-          'EX',
-          300,
-        );
-        await this.redisClient.set?.(`otp:cooldown:${dto.email}`, '1', 'EX', 60);
-      }
-    }
-
     const newOtp = randomInt(100000, 1000000).toString();
-    await this.mailerService.sendMail({
-      to: dto.email,
-      subject: 'FamiDoc - Gửi lại mã OTP xác thực',
-      text: `Mã OTP mới của bạn là: ${newOtp}`,
+    const now = Date.now();
+
+    await this.authRepository.upsertOtpChallenge({
+      purpose: 'REGISTER_FAMILY_REP',
+      email,
+      phone: challenge.phone ?? null,
+      payload: challenge.payload,
+      otpHash: this.hashOtp('REGISTER_FAMILY_REP', email, newOtp),
+      expiresAt: new Date(now + 300 * 1000),
+      cooldownUntil: new Date(now + 60 * 1000),
     });
+
+    const fullName =
+      typeof challenge.payload.fullName === 'string'
+        ? challenge.payload.fullName
+        : 'Quý khách';
+    const emailContent = buildRegistrationOtpEmail({
+      fullName,
+      otp: newOtp,
+      expiresInMinutes: 5,
+    });
+
+    try {
+      await this.mailerService.sendMail({
+        to: email,
+        subject: emailContent.subject,
+        text: emailContent.text,
+        html: emailContent.html,
+      });
+    } catch (err: any) {
+      await this.authRepository
+        .upsertOtpChallenge({
+          purpose: 'REGISTER_FAMILY_REP',
+          email,
+          phone: challenge.phone ?? null,
+          payload: challenge.payload,
+          otpHash: challenge.otpHash,
+          expiresAt: challenge.expiresAt,
+          cooldownUntil: challenge.cooldownUntil,
+          attempts: challenge.attempts,
+          maxAttempts: challenge.maxAttempts,
+        })
+        .catch(() => undefined);
+      if (err instanceof HttpException) {
+        throw err;
+      }
+      throw new ServiceUnavailableException(
+        'Service unavailable, please try again later',
+      );
+    }
 
     return {
       message: 'Email sent successfully',
@@ -241,35 +322,65 @@ export class AuthServiceImpl implements IAuthService {
   }
 
   async verifyEmailOtp(dto: VerifyEmailOtpDto): Promise<AuthEntity> {
-    if (this.redisClient && typeof this.redisClient.get === 'function') {
-      const cached = await this.redisClient.get(`otp:reg:${dto.email}`);
-      if (cached) {
-        const data = JSON.parse(cached);
-        if (data.otp !== dto.otp) {
-          throw new UnauthorizedException('Invalid or expired OTP');
-        }
-        if (!data.passwordHash) {
-          throw new UnauthorizedException(
-            'Registration expired; please register again',
-          );
-        }
-        const user = await this.authRepository.createFamilyRepWithProfile({
-          email: dto.email,
-          phone: data.phone,
-          passwordHash: data.passwordHash,
-          fullName: data.fullName,
-          homeAddress: data.homeAddress,
-        });
-        await this.redisClient.del?.(`otp:reg:${dto.email}`);
-        return user;
-      }
-    }
+    const email = dto.email.trim().toLowerCase();
+    const challenge = await this.authRepository.findOtpChallenge(
+      'REGISTER_FAMILY_REP',
+      email,
+    );
 
-    const user = await this.authRepository.findByEmail(dto.email);
-    if (!user) {
+    if (!challenge || new Date(challenge.expiresAt).getTime() <= Date.now()) {
+      if (challenge) {
+        await this.authRepository
+          .deleteOtpChallenge('REGISTER_FAMILY_REP', email)
+          .catch(() => undefined);
+      }
       throw new UnauthorizedException('Invalid or expired OTP');
     }
-    return user;
+
+    if (challenge.attempts >= challenge.maxAttempts) {
+      throw new UnauthorizedException(
+        'OTP verification attempts exceeded; please request a new OTP',
+      );
+    }
+
+    if (!this.verifyOtpHash('REGISTER_FAMILY_REP', email, dto.otp, challenge.otpHash)) {
+      await this.authRepository.incrementOtpChallengeAttempts(challenge.id);
+      throw new UnauthorizedException('Invalid or expired OTP');
+    }
+
+    const payload = (challenge.payload ?? {}) as {
+      fullName?: string;
+      passwordHash?: string;
+      homeAddress?: string;
+    };
+    const phone = challenge.phone?.trim() ?? '';
+
+    if (!payload.passwordHash || !phone) {
+      throw new UnauthorizedException(
+        'Registration expired; please register again',
+      );
+    }
+
+    try {
+      return await this.authRepository.completeFamilyRepRegistration(
+        {
+          email,
+          phone,
+          passwordHash: payload.passwordHash,
+          fullName: payload.fullName || 'Chủ hộ',
+          homeAddress: payload.homeAddress,
+        },
+        email,
+      );
+    } catch (err: any) {
+      if (err?.code === 'P2002') {
+        throw new BusinessConflictException(
+          AuthErrorCode.AUTH_CONFLICT_ERROR,
+          'This email/phone is already registered',
+        );
+      }
+      throw err;
+    }
   }
 
   async login(
@@ -443,16 +554,11 @@ export class AuthServiceImpl implements IAuthService {
     dto: ForgotPasswordDto,
   ): Promise<ApiResponseMessage> {
     const email = dto.email.trim().toLowerCase();
-    const cooldown =
-      this.redisClient && typeof this.redisClient.ttl === 'function'
-        ? (await this.redisClient.ttl(`otp:cooldown:reset:${email}`)) || 0
-        : 0;
-    if (cooldown > 0) {
-      throw new HttpException(
-        `Please wait ${cooldown} seconds before requesting a new OTP`,
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
+    const existingChallenge = await this.authRepository.findOtpChallenge(
+      'RESET_PASSWORD',
+      email,
+    );
+    this.assertCooldownCleared(existingChallenge);
 
     const user = await this.authRepository.findByEmail(email);
     if (!user) {
@@ -463,16 +569,37 @@ export class AuthServiceImpl implements IAuthService {
     }
 
     const otp = randomInt(100000, 1000000).toString();
-    if (this.redisClient) {
-      await this.redisClient.set?.(`otp:reset:${email}`, otp, 'EX', 600);
-      await this.redisClient.set?.(`otp:cooldown:reset:${email}`, '1', 'EX', 60);
-    }
-
-    await this.mailerService.sendMail({
-      to: email,
-      subject: 'FamiDoc - Yêu cầu khôi phục mật khẩu',
-      text: `Mã OTP đặt lại mật khẩu của bạn là: ${otp} (hiệu lực 10 phút). Vui lòng không chia sẻ mã này cho bất kỳ ai.`,
+    const now = Date.now();
+    await this.authRepository.upsertOtpChallenge({
+      purpose: 'RESET_PASSWORD',
+      email,
+      otpHash: this.hashOtp('RESET_PASSWORD', email, otp),
+      expiresAt: new Date(now + 600 * 1000),
+      cooldownUntil: new Date(now + 60 * 1000),
     });
+
+    const emailContent = buildPasswordResetOtpEmail({
+      otp,
+      expiresInMinutes: 10,
+    });
+    try {
+      await this.mailerService.sendMail({
+        to: email,
+        subject: emailContent.subject,
+        text: emailContent.text,
+        html: emailContent.html,
+      });
+    } catch (err: any) {
+      await this.authRepository
+        .deleteOtpChallenge('RESET_PASSWORD', email)
+        .catch(() => undefined);
+      if (err instanceof HttpException) {
+        throw err;
+      }
+      throw new ServiceUnavailableException(
+        'Service unavailable, please try again later',
+      );
+    }
 
     return {
       message: `A confirmation email has been sent to ${email}`,
@@ -487,11 +614,19 @@ export class AuthServiceImpl implements IAuthService {
 
   async resetPassword(dto: ResetPasswordDto): Promise<ApiResponseMessage> {
     const email = dto.email.trim().toLowerCase();
-    if (this.redisClient && typeof this.redisClient.get === 'function') {
-      const cachedOtp = await this.redisClient.get(`otp:reset:${email}`);
-      if (!cachedOtp || cachedOtp !== dto.otp) {
-        throw new UnauthorizedException('Invalid or expired OTP');
-      }
+    const challenge = await this.authRepository.findOtpChallenge(
+      'RESET_PASSWORD',
+      email,
+    );
+    if (!challenge || new Date(challenge.expiresAt).getTime() <= Date.now()) {
+      throw new UnauthorizedException('Invalid or expired OTP');
+    }
+    if (challenge.attempts >= challenge.maxAttempts) {
+      throw new UnauthorizedException('Invalid or expired OTP');
+    }
+    if (!this.verifyOtpHash('RESET_PASSWORD', email, dto.otp, challenge.otpHash)) {
+      await this.authRepository.incrementOtpChallengeAttempts(challenge.id);
+      throw new UnauthorizedException('Invalid or expired OTP');
     }
 
     const user = await this.authRepository.findByEmail(email);
@@ -501,6 +636,8 @@ export class AuthServiceImpl implements IAuthService {
 
     const newHash = await this.hashPassword(dto.newPassword);
     await this.authRepository.updatePassword(user.id, newHash);
+    await this.authRepository.deleteOtpChallenge('RESET_PASSWORD', email);
+
     if (this.redisClient) {
       await this.redisClient.set?.(
         `token:revoked:${user.id}`,

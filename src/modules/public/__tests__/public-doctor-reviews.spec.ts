@@ -2,24 +2,18 @@ import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PublicController } from '../controllers/public.controller';
 import { PublicServiceImpl } from '../services/impl/public.service.impl';
-import {
-  IPublicService,
-  PUBLIC_SERVICE_TOKEN,
-} from '../services/interfaces/public.service.interface';
+import { PUBLIC_SERVICE_TOKEN } from '../services/interfaces/public.service.interface';
 import { PrismaService } from '../../../core/database/prisma.service';
 
 describe('PublicDoctorReviews (Task 2)', () => {
   describe('PublicServiceImpl.getDoctorReviews', () => {
     let service: PublicServiceImpl;
-    let prisma: {
-      doctor: { findUnique: jest.Mock };
-      doctorReview: { count: jest.Mock; findMany: jest.Mock };
-    };
+    let prisma: any;
 
     beforeEach(async () => {
       prisma = {
         doctor: { findUnique: jest.fn() },
-        doctorReview: { count: jest.Mock ? jest.fn() : jest.fn(), findMany: jest.fn() },
+        doctorReview: { count: jest.fn(), findMany: jest.fn() },
       };
 
       const module: TestingModule = await Test.createTestingModule({
@@ -49,19 +43,18 @@ describe('PublicDoctorReviews (Task 2)', () => {
           ratingStars: 5,
           reviewComment: 'Bác sĩ rất tận tình và chu đáo.',
           createdAt: new Date('2026-11-01T10:00:00Z'),
+          encounter: {
+            contract: {
+              servicePackage: {
+                packageName: 'Gói Đồng Hành',
+              },
+            },
+          },
           familyUnit: {
             homeAddress: '123 Nguyễn Thị Thập, Quận 7, TP.HCM',
             representativeUser: {
               fullName: 'Chị Mai Lan',
-              avatarUrl: '/images/avatar-1.jpg',
             },
-            medicalContracts: [
-              {
-                servicePackage: {
-                  packageName: 'Gói Đồng Hành',
-                },
-              },
-            ],
           },
         },
       ];
@@ -91,11 +84,12 @@ describe('PublicDoctorReviews (Task 2)', () => {
       expect(result.items).toHaveLength(1);
       expect(result.items[0]).toMatchObject({
         id: 'review-1',
-        patientName: 'Chị Mai Lan',
+        patientDisplayName: 'Chị M. L.',
         ratingStars: 5,
         comment: 'Bác sĩ rất tận tình và chu đáo.',
         packageName: 'Gói Đồng Hành',
       });
+      expect(result.items[0]).not.toHaveProperty('avatarUrl');
 
       expect(result).toHaveProperty('meta');
       expect(result.meta).toEqual({
