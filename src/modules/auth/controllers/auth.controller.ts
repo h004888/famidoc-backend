@@ -1,4 +1,5 @@
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
+import { AllowOnboarding } from '../../../core/auth/allow-onboarding.decorator';
 import { ApiStandardResponse } from '../../../core/decorators/api-standard-response.decorator';
 import { ResponseMessage } from '../../../core/decorators/response-message.decorator';
 import {
@@ -179,6 +180,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @AllowOnboarding()
   @Patch('change-password')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Đổi mật khẩu cho người dùng hiện tại' })

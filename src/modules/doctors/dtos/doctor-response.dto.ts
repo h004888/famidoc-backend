@@ -113,4 +113,11 @@ export class DoctorResponseDto {
 
   @ApiPropertyOptional({ type: [DoctorCredentialResponseDto] })
   credentials?: DoctorCredentialResponseDto[];
+
+  @ApiPropertyOptional({
+    description:
+      'Mật khẩu khởi tạo được cấp cho Bác sĩ (chỉ trả về khi CSYT vừa tạo mới tài khoản)',
+    example: 'FamiDoc@Doctor2026',
+  })
+  initialPassword?: string;
 }

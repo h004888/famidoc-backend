@@ -9,6 +9,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { getContractSignerRole } from '../../../../core/business/business-helpers';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
+import { StorageService } from '../../../../core/services/storage.service';
 import {
   COMPLAINTS_REPOSITORY_TOKEN,
   type IComplaintsRepository,
@@ -24,6 +25,7 @@ export class ComplaintsServiceImpl implements IComplaintsService {
   constructor(
     @Inject(COMPLAINTS_REPOSITORY_TOKEN)
     private readonly repository: IComplaintsRepository,
+    private readonly storage: StorageService,
   ) {}
   submitIncidentComplaint(
     actor: AuthenticatedUser,
@@ -63,6 +65,11 @@ export class ComplaintsServiceImpl implements IComplaintsService {
       if (!contract.doctor) {
         throw new BadRequestException('Hợp đồng chưa có bác sĩ phân công');
       }
+      const evidenceExists = await Promise.all(
+        keys.map((key) => this.storage.objectExists(key)),
+      );
+      if (evidenceExists.includes(false))
+        throw new BadRequestException('Có tệp bằng chứng chưa được tải lên.');
       const targetUserId =
         actor.role === 'DOCTOR'
           ? contract.familyUnit.representativeUserId

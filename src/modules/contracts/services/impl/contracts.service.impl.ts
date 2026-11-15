@@ -46,6 +46,7 @@ import type {
 import type {
   CreateStaffingContractDto,
   SignStaffingContractDto,
+  RejectStaffingContractDto,
   ListStaffingContractsDto,
   StaffingContractResponseDto,
 } from '../../dtos/staffing-contract.dto';
@@ -607,7 +608,10 @@ export class ContractsServiceImpl implements IContractsService {
     const platformCommissionRate = dto.platformCommissionRate ?? 15.0;
     const facilityRevenueRate = dto.facilityRevenueRate ?? 85.0;
 
-    if (platformCommissionRate + facilityRevenueRate !== 100.0) {
+    if (
+      Math.round((platformCommissionRate + facilityRevenueRate) * 100) / 100 !==
+      100.0
+    ) {
       throw new BadRequestException(
         'Tổng tỷ lệ hoa hồng nền tảng và doanh thu cơ sở y tế phải đúng bằng 100%',
       );
@@ -723,6 +727,12 @@ export class ContractsServiceImpl implements IContractsService {
         );
       }
 
+      if (new Date(contract.endDate) < new Date()) {
+        throw new BadRequestException(
+          'Không thể ký hợp đồng đã quá hạn kết thúc',
+        );
+      }
+
       const signedPdfUrl =
         dto.signedPdfUrl ||
         contract.signedPdfUrl ||
@@ -740,6 +750,75 @@ export class ContractsServiceImpl implements IContractsService {
         id,
         ip,
       );
+
+      return this.formatStaffingContract(updated);
+    });
+  }
+
+  async rejectStaffingContract(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: RejectStaffingContractDto,
+    ip: string,
+  ): Promise<StaffingContractResponseDto> {
+    return this.repository.transaction(async (session) => {
+      const contract = await session.findStaffingContract(id);
+      if (!contract) {
+        throw new NotFoundException(
+          'Không tìm thấy hợp đồng cung ứng nhân lực',
+        );
+      }
+
+      if (actor.role === 'HEALTHCARE_FACILITY') {
+        if (contract.facility.userId !== actor.id) {
+          throw new ForbiddenException(
+            'Bạn không có quyền từ chối hợp đồng của cơ sở y tế khác',
+          );
+        }
+      } else if (actor.role !== 'ADMIN') {
+        throw new ForbiddenException(
+          'Chỉ Quản trị viên hoặc Đại diện CSYT mới có quyền từ chối dự thảo hợp đồng',
+        );
+      }
+
+      if (contract.status !== 'PENDING_SIGNATURE') {
+        throw new ConflictException(
+          'Chỉ có thể từ chối hợp đồng đang ở trạng thái chờ ký (PENDING_SIGNATURE)',
+        );
+      }
+
+      const updated = await session.updateStaffingContractStatus(
+        id,
+        'TERMINATED',
+      );
+
+      await session.recordStaffingAudit(
+        actor.id,
+        'STAFFING_CONTRACT_REJECTED',
+        id,
+        ip,
+      );
+
+      if (actor.role === 'HEALTHCARE_FACILITY') {
+        const admins = await session.findAdminUsers();
+        for (const admin of admins) {
+          await session.createNotification({
+            userId: admin.id,
+            title: 'Cơ sở y tế từ chối dự thảo hợp đồng B2B',
+            content: `Cơ sở y tế ${contract.facility.facilityName} đã từ chối dự thảo hợp đồng ${contract.contractCode}. Lý do: ${dto.rejectionReason}`,
+            type: 'STAFFING_CONTRACT_REJECTED',
+          });
+        }
+      } else {
+        if (contract.facility.userId) {
+          await session.createNotification({
+            userId: contract.facility.userId,
+            title: 'Dự thảo hợp đồng B2B đã bị hủy bởi Quản trị viên',
+            content: `Quản trị viên đã hủy dự thảo hợp đồng ${contract.contractCode}. Lý do: ${dto.rejectionReason}`,
+            type: 'STAFFING_CONTRACT_CANCELLED',
+          });
+        }
+      }
 
       return this.formatStaffingContract(updated);
     });
@@ -1228,11 +1307,11 @@ export class ContractsServiceImpl implements IContractsService {
       const terms = readFrozenContractTerms(contract.billingSnapshot);
       let amount: number;
       if (dto.type === 'QUOTA_EXPANSION') {
-        if (dto.additionalMembers)
+        if (dto.additionalMembers !== undefined)
           throw new BadRequestException('Quota expansion cannot add members');
         amount = calculateHomeVisitAddendum(terms, dto.extraHomeVisits!);
       } else {
-        if (dto.extraHomeVisits)
+        if (dto.extraHomeVisits !== undefined)
           throw new BadRequestException('Adding members does not add visits');
         if (await session.hasPendingMemberAddendum(id))
           throw new ConflictException(
@@ -1333,6 +1412,16 @@ export class ContractsServiceImpl implements IContractsService {
           throw new ConflictException(
             'A different replacement contract is already pending',
           );
+        const { benefits } = readFrozenContractTerms(existing.billingSnapshot);
+        const agreedVideoVisits =
+          benefits.videoQuotaPolicy === 'CONTRACT'
+            ? benefits.quotas.videoConsultations
+            : undefined;
+        // Gọi lại cùng dữ liệu thì trả hợp đồng cũ. Đổi hạn mức phải lập điều khoản mới.
+        if (agreedVideoVisits !== dto.videoConsultations)
+          throw new ConflictException(
+            'A replacement contract with different video terms is already pending',
+          );
         return this.toContractSummary(existing);
       }
       if (await session.hasOtherActiveContract(old.familyId, old.id))
@@ -1352,6 +1441,13 @@ export class ContractsServiceImpl implements IContractsService {
         );
       if (dto.kind === 'RENEWAL' && pkg.lineageCode !== oldTerms.package.code)
         throw new BadRequestException('Renewal must use the same package line');
+      const videoAgreedInContract = pkg.videoQuotaPolicy === 'CONTRACT';
+      if (videoAgreedInContract && dto.videoConsultations === undefined)
+        throw new BadRequestException(
+          'Cần nhập số lượt video đã thỏa thuận cho gói này.',
+        );
+      if (!videoAgreedInContract && dto.videoConsultations !== undefined)
+        throw new BadRequestException('Gói này có số lượt video cố định.');
       // Gói áp dụng cho toàn bộ gia đình. Số người lấy từ DB, không lấy danh sách do client chọn.
       const memberCount = await session.countFamilyMembers(old.familyId);
       if (memberCount < 1)
@@ -1373,6 +1469,7 @@ export class ContractsServiceImpl implements IContractsService {
             pkg.additionalMemberMonthlyPrice,
           ),
           quotaPeriod: pkg.quotaPeriod as QuotaPeriod,
+          videoQuotaPolicy: videoAgreedInContract ? 'CONTRACT' : undefined,
           quotas: {
             homeVisits: pkg.periodicVisitsQuota,
             videoConsultations: pkg.telehealthQuota,
@@ -1386,6 +1483,9 @@ export class ContractsServiceImpl implements IContractsService {
           retiredAt: null,
         },
         memberCount,
+        videoAgreedInContract
+          ? { videoConsultations: dto.videoConsultations }
+          : undefined,
       );
       const snapshot = {
         package: quote.package,
@@ -1402,7 +1502,7 @@ export class ContractsServiceImpl implements IContractsService {
         packageId: pkg.id,
         totalAmount: quote.pricing.totalPriceVnd,
         remainingHomeVisits: pkg.periodicVisitsQuota,
-        remainingTelehealth: pkg.telehealthQuota,
+        remainingTelehealth: quote.benefits.quotas.videoConsultations,
         startDate: today,
         endDate: addContractMonths(today, pkg.durationMonths),
         contractStatus: 'PENDING_APPROVAL',

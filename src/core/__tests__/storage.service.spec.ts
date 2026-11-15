@@ -1,12 +1,18 @@
 import { StorageService } from '../services/storage.service';
+import { S3ServiceException } from '@aws-sdk/client-s3';
 
+const mockSend = jest.fn();
 jest.mock('@aws-sdk/client-s3', () => {
-  const mSend = jest.fn().mockResolvedValue({ ETag: '"test-etag-12345"' });
   return {
+    S3ServiceException:
+      jest.requireActual<typeof import('@aws-sdk/client-s3')>(
+        '@aws-sdk/client-s3',
+      ).S3ServiceException,
     S3Client: jest.fn().mockImplementation(() => ({
-      send: mSend,
+      send: mockSend,
     })),
     PutObjectCommand: jest.fn().mockImplementation((args) => args),
+    HeadObjectCommand: jest.fn().mockImplementation((args) => args),
   };
 });
 
@@ -24,6 +30,7 @@ describe('StorageService', () => {
       S3_REGION: 'us-east-1',
     };
     jest.clearAllMocks();
+    mockSend.mockReset().mockResolvedValue({ ETag: '"test-etag-12345"' });
     service = new StorageService();
   });
 
@@ -33,6 +40,30 @@ describe('StorageService', () => {
 
   it('nên khởi tạo dịch vụ thành công', () => {
     expect(service).toBeDefined();
+  });
+
+  it('kiểm tra metadata đúng bucket và khóa tệp', async () => {
+    const key = 'demo/settlements/proof.pdf';
+    await expect(service.objectExists(key)).resolves.toBe(true);
+    expect(mockSend).toHaveBeenCalledWith(
+      { Bucket: 'photos', Key: key },
+      expect.any(Object),
+    );
+  });
+
+  it('phân biệt tệp không tồn tại với lỗi truy cập S3', async () => {
+    mockSend.mockRejectedValueOnce(
+      new S3ServiceException({
+        name: 'NotFound',
+        $fault: 'client',
+        $metadata: { httpStatusCode: 404 },
+      }),
+    );
+    await expect(service.objectExists('missing.pdf')).resolves.toBe(false);
+    mockSend.mockRejectedValueOnce(new Error('Storage unavailable'));
+    await expect(service.objectExists('proof.pdf')).rejects.toMatchObject({
+      status: 503,
+    });
   });
 
   it('nên upload file và trả về s3Key tương đối', async () => {
@@ -54,4 +85,3 @@ describe('StorageService', () => {
     expect(s3Key).toMatch(/^avatars\/\d+-\d+\.png$/);
   });
 });
-

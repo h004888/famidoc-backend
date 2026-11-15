@@ -132,6 +132,7 @@ enum AddendumStatus {
 enum EncounterType {
   HOME_VISIT
   TELEHEALTH
+  FACILITY_VISIT
 }
 
 enum EncounterCategory {
@@ -677,6 +678,12 @@ model Encounter {
   scheduledDate   DateTime          @map("scheduled_date") @db.Date
   scheduledTime   DateTime          @map("scheduled_time") @db.Time
   rescheduleCount Int               @default(0) @map("reschedule_count")
+  proposedDate    DateTime?         @map("proposed_date") @db.Date
+  proposedTime    DateTime?         @map("proposed_time") @db.Time
+  proposedBy      String?           @map("proposed_by") @db.VarChar(50)
+  rescheduleReason String?          @map("reschedule_reason") @db.Text
+  conflictAlert   Boolean           @default(false) @map("conflict_alert")
+  conflictDetails String?           @map("conflict_details") @db.Text
   encounterStatus EncounterStatus   @default(REQUESTED) @map("encounter_status")
   cancelReason    String?           @map("cancel_reason") @db.Text
   createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz()

@@ -65,9 +65,34 @@ export class SePayWebhookGuard implements CanActivate {
       console.log('[DEBUG_CP02][WEBHOOK_GUARD_AUTH_PASSED]', { method: 'apikey' });
       return true;
     }
-    const secret = this.config.getWebhookSecret();
     const timestamp = request.headers['x-sepay-timestamp'];
     const signature = request.headers['x-sepay-signature'];
+    // Bản tin id=0 chỉ xác nhận đường nhận webhook và không ghi giao dịch.
+    const databaseUrl = process.env.DATABASE_URL ?? '';
+    if (
+      process.env.LOCAL_SEPAY_DEMO === '1' &&
+      process.env.NODE_ENV === 'development' &&
+      process.env.PAYMENTS_MODE === 'simulation' &&
+      request.path === '/api/v1/payments/webhook/vietqr' &&
+      request.body?.id === 0 &&
+      timestamp === undefined &&
+      signature === undefined &&
+      ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(
+        request.socket.remoteAddress ?? '',
+      ) &&
+      !request.headers.forwarded &&
+      !request.headers['x-forwarded-for'] &&
+      URL.canParse(databaseUrl)
+    ) {
+      const database = new URL(databaseUrl);
+      if (
+        database.host === '127.0.0.1:55432' &&
+        database.pathname === '/famidoc_payment_local'
+      ) {
+        return true;
+      }
+    }
+    const secret = this.config.getWebhookSecret();
     if (
       typeof timestamp !== 'string' ||
       !/^\d{1,12}$/.test(timestamp) ||

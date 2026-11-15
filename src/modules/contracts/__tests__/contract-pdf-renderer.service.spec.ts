@@ -37,7 +37,7 @@ describe('ContractPdfRendererService (Puppeteer-core, mutex queue = 1)', () => {
     );
     expect(setContent).toHaveBeenCalledWith(
       '<html><body>Xin chào</body></html>',
-      expect.objectContaining({ waitUntil: 'networkidle0' }),
+      expect.objectContaining({ waitUntil: 'load' }),
     );
     expect(pdf).toHaveBeenCalledWith(
       expect.objectContaining({ format: 'A4', printBackground: true }),

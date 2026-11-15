@@ -95,7 +95,7 @@ export class ContractPdfRendererService {
       page = await browser.newPage();
 
       await page.setContent(html, {
-        waitUntil: 'networkidle0',
+        waitUntil: 'load',
         timeout: 20_000,
       });
 

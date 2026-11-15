@@ -1,0 +1,155 @@
+import {
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnModuleDestroy,
+} from '@nestjs/common';
+import { PrismaService } from '../../../../core/database/prisma.service';
+
+@Injectable()
+export class EncounterRemindersService
+  implements OnApplicationBootstrap, OnModuleDestroy
+{
+  private timer?: NodeJS.Timeout;
+  private readonly logger = new Logger(EncounterRemindersService.name);
+
+  constructor(private readonly prisma: PrismaService) {}
+
+  onApplicationBootstrap() {
+    if (process.env.ENCOUNTER_REMINDERS_ENABLED === 'false') return;
+
+    const run = () => {
+      void this.runReminders().catch((err) =>
+        this.logger.error('Failed to run encounter reminders job', err),
+      );
+    };
+
+    run();
+    // Run reminder check every 15 minutes (900,000 ms)
+    this.timer = setInterval(run, 900_000);
+    this.timer.unref();
+  }
+
+  onModuleDestroy() {
+    if (this.timer) clearInterval(this.timer);
+  }
+
+  async runReminders() {
+    const now = new Date();
+
+    // 1. T-24 Hours Reminder Window (between 23h and 25h from now)
+    const start24h = new Date(now.getTime() + 23 * 3600_000);
+    const end24h = new Date(now.getTime() + 25 * 3600_000);
+
+    // 2. T-2 Hours Reminder Window (between 1h45m and 2h15m from now)
+    const start2h = new Date(now.getTime() + 105 * 60_000);
+    const end2h = new Date(now.getTime() + 135 * 60_000);
+
+    const minDate = new Date(now.getTime() - 24 * 3600_000);
+    const maxDate = new Date(now.getTime() + 3 * 86_400_000);
+
+    const upcomingEncounters = await this.prisma.encounter.findMany({
+      where: {
+        encounterStatus: 'CONFIRMED',
+        scheduledDate: {
+          gte: minDate,
+          lte: maxDate,
+        },
+      },
+      include: {
+        contract: {
+          include: {
+            familyUnit: true,
+          },
+        },
+        patient: true,
+        doctor: {
+          include: { user: true },
+        },
+      },
+    });
+
+    const notificationsToCreate: Array<{
+      userId: string;
+      title: string;
+      content: string;
+      type: string;
+      referenceId: string;
+    }> = [];
+
+    for (const enc of upcomingEncounters) {
+      // Calculate appointment exact timestamp
+      const encDate = new Date(enc.scheduledDate);
+      const encTime = new Date(enc.scheduledTime);
+      const exactTime = new Date(
+        Date.UTC(
+          encDate.getUTCFullYear(),
+          encDate.getUTCMonth(),
+          encDate.getUTCDate(),
+          encTime.getUTCHours(),
+          encTime.getUTCMinutes(),
+        ),
+      );
+
+      const diffMs = exactTime.getTime() - now.getTime();
+      const diffHours = diffMs / 3600_000;
+
+      const dateStr = enc.scheduledDate.toISOString().slice(0, 10);
+      const timeStr = enc.scheduledTime.toISOString().slice(11, 16);
+
+      // Check 24-hour reminder window (23.0h <= diff <= 25.0h)
+      if (diffHours >= 23 && diffHours <= 25) {
+        // Family reminder
+        notificationsToCreate.push({
+          userId: enc.contract.familyUnit.representativeUserId,
+          title: 'Nhắc lịch khám trước 24 giờ',
+          content: `Bạn có lịch khám ${enc.encounterType} cho bệnh nhân ${enc.patient.fullName} vào ngày mai lúc ${timeStr}. Vui lòng kiểm tra lại thời gian.`,
+          type: 'ENCOUNTER_REMINDER_24H',
+          referenceId: `${enc.id}_24H_FAM`,
+        });
+
+        // Doctor reminder
+        if (enc.doctor.user?.id) {
+          notificationsToCreate.push({
+            userId: enc.doctor.user.id,
+            title: 'Nhắc lịch khám bệnh nhân trước 24 giờ',
+            content: `Bác sĩ có lịch khám ${enc.encounterType} cho bệnh nhân ${enc.patient.fullName} vào ngày mai lúc ${timeStr}.`,
+            type: 'ENCOUNTER_REMINDER_24H',
+            referenceId: `${enc.id}_24H_DOC`,
+          });
+        }
+      }
+
+      // Check 2-hour reminder window (1.75h <= diff <= 2.25h)
+      if (diffHours >= 1.75 && diffHours <= 2.25) {
+        notificationsToCreate.push({
+          userId: enc.contract.familyUnit.representativeUserId,
+          title: 'Nhắc lịch khám trước 2 giờ',
+          content: `Lịch khám ${enc.encounterType} của bạn sẽ bắt đầu sau 2 giờ nữa (${timeStr}). Xin chuẩn bị sẵn sàng.`,
+          type: 'ENCOUNTER_REMINDER_2H',
+          referenceId: `${enc.id}_2H_FAM`,
+        });
+
+        if (enc.doctor.user?.id) {
+          notificationsToCreate.push({
+            userId: enc.doctor.user.id,
+            title: 'Nhắc ca khám sắp diễn ra trong 2 giờ',
+            content: `Ca khám ${enc.encounterType} bệnh nhân ${enc.patient.fullName} sẽ bắt đầu lúc ${timeStr}.`,
+            type: 'ENCOUNTER_REMINDER_2H',
+            referenceId: `${enc.id}_2H_DOC`,
+          });
+        }
+      }
+    }
+
+    if (notificationsToCreate.length > 0) {
+      await this.prisma.notification.createMany({
+        data: notificationsToCreate,
+        skipDuplicates: true,
+      });
+      this.logger.log(`Created ${notificationsToCreate.length} automated encounter reminders.`);
+    }
+
+    return { processed: notificationsToCreate.length };
+  }
+}

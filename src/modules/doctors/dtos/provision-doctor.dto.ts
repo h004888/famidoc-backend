@@ -79,7 +79,7 @@ export class ProvisionDoctorDto {
 
   @ApiPropertyOptional({
     description:
-      'UUID của cơ sở y tế trực thuộc (bắt buộc đối với Admin; nếu CSYT gọi thì hệ thống tự động suy diễn)',
+      'UUID của cơ sở y tế trực thuộc (hệ thống tự động suy diễn theo tài khoản Cơ sở y tế đang đăng nhập)',
     example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
   @IsOptional()

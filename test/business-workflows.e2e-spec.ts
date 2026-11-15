@@ -5,6 +5,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/core/database/prisma.service';
+import { StorageService } from '../src/core/services/storage.service';
 import { demoIds, seedDemo } from '../prisma/seed';
 import {
   namScenarioIds,
@@ -97,7 +98,15 @@ import {
       });
       const module = await Test.createTestingModule({
         imports: [AppModule],
-      }).compile();
+      })
+        .overrideProvider(StorageService)
+        .useValue({
+          objectExists: async (key: string) => [
+            `${demoIds.admin}/settlements/demo-proof.pdf`,
+            `${demoIds.otherUser}/complaints/demo-proof.pdf`,
+          ].includes(key),
+        })
+        .compile();
       app = module.createNestApplication({ rawBody: true });
       app.useGlobalPipes(
         new ValidationPipe({
@@ -153,6 +162,10 @@ import {
         { role: 'ADMIN' },
         400,
       );
+    });
+    it('requires a bearer token for VietQR creation and status', async () => {
+      await call('post', '/api/v1/payments/vietqr', 'anonymous', { contractId: active }, 401);
+      await call('get', `/api/v1/payments/${active}/status`, 'anonymous', undefined, 401);
     });
     it('allows one review for a completed encounter of the family', async () => {
       await call(
@@ -232,6 +245,18 @@ import {
         },
         400,
       );
+      await call(
+        'post',
+        '/api/v1/complaints',
+        'family2',
+        {
+          contractId: active,
+          category: 'DOCTOR_ABSENT',
+          description: 'DEMO - Bác sĩ không đến đúng hẹn.',
+          evidenceKeys: [`${demoIds.otherUser}/complaints/missing.pdf`],
+        },
+        400,
+      );
       const item = await call(
         'post',
         '/api/v1/complaints',
@@ -241,11 +266,13 @@ import {
           encounterId: namScenarioIds.completedEncounter,
           category: 'MISSED_VISIT',
           description: 'DEMO - Cần kiểm tra chất lượng dịch vụ.',
+          evidenceKeys: [`${demoIds.otherUser}/complaints/demo-proof.pdf`],
         },
         201,
       );
       complaintId = item.body.id;
       expect(item.body.targetUserId).toBe(demoIds.doctorUser);
+      expect(item.body.evidenceAttachments).toEqual([`${demoIds.otherUser}/complaints/demo-proof.pdf`]);
       const reverse = await call(
         'post',
         '/api/v1/complaints',
@@ -838,6 +865,13 @@ import {
         '/api/v1/finance/settlements/monthly',
         'admin',
         { ...confirmation, amountPaidVnd: 1 },
+        400,
+      );
+      await call(
+        'post',
+        '/api/v1/finance/settlements/monthly',
+        'admin',
+        { ...confirmation, evidenceKey: `${demoIds.admin}/settlements/missing.pdf` },
         400,
       );
       const settled = await call(
