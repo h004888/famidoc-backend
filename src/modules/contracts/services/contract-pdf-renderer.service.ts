@@ -1,7 +1,14 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  Optional,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import type { Browser, LaunchOptions } from 'puppeteer-core';
 
 export type PuppeteerLaunchFn = (options?: LaunchOptions) => Promise<Browser>;
+export const PUPPETEER_LAUNCHER_TOKEN = Symbol('PUPPETEER_LAUNCHER_TOKEN');
 
 /**
  * ContractPdfRendererService — hàng đợi tuần tự hóa (mutex concurrency = 1)
@@ -20,7 +27,11 @@ export class ContractPdfRendererService {
   private readonly launchOptions: string[];
   private readonly launcher?: PuppeteerLaunchFn;
 
-  constructor(launcher?: PuppeteerLaunchFn) {
+  constructor(
+    @Optional()
+    @Inject(PUPPETEER_LAUNCHER_TOKEN)
+    launcher?: PuppeteerLaunchFn,
+  ) {
     this.launcher = launcher;
     this.launchOptions = [
       '--no-sandbox',
