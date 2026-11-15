@@ -19,6 +19,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ResponseMessage } from '../../../core/decorators/response-message.decorator';
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../../../core/auth/roles.guard';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
@@ -47,6 +48,7 @@ export class FacilitiesController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  @ResponseMessage('Gửi đăng ký cơ sở y tế thành công, vui lòng chờ Quản trị viên thẩm định và cấp tài khoản qua email')
   @ApiOperation({
     summary: 'Cơ sở y tế gửi đăng ký thông tin cơ bản ban đầu (Public)',
     description:
@@ -90,6 +92,7 @@ export class FacilitiesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('HEALTHCARE_FACILITY')
   @ApiBearerAuth('JWT-auth')
+  @ResponseMessage('Nộp hồ sơ pháp lý cơ sở y tế thành công, chuyển sang chờ Quản trị viên thẩm định Cấp 2')
   @ApiOperation({
     summary:
       'Cơ sở y tế nộp hồ sơ pháp lý chuyên sâu & tài khoản ngân hàng (Sau khi đăng nhập)',

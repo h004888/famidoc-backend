@@ -1,7 +1,7 @@
 # Danh Mục Toàn Bộ API Backend (FamiDoc API Inventory)
 
-> **Tổng số Endpoint:** 99 APIs
-> **Số phân hệ (Tags):** 17 phân hệ
+> **Tổng số Endpoint:** 110 APIs
+> **Số phân hệ (Tags):** 18 phân hệ
 > **Swagger UI:** `/docs` hoặc `/api/docs`
 > **OpenAPI JSON Spec:** `openapi.json` (`/docs-json`)
 
@@ -189,3 +189,20 @@
 | `POST` | `/api/v1/patients/{id}/documents` | Đính kèm tài liệu y tế ban đầu (xét nghiệm, kết quả chẩn đoán hình ảnh...) |
 | `GET` | `/api/v1/patients/{id}/documents` | Lấy danh sách tài liệu y tế của bệnh nhân |
 
+
+
+### Encounters & Scheduling (11 APIs)
+
+| Method | Endpoint | Mô tả / Nghiệp vụ |
+| :--- | :--- | :--- |
+| `POST` | `/api/v1/encounters/periodic` | Bác sĩ phụ trách lên lộ trình khám định kỳ (Gói dịch vụ & bệnh án) |
+| `POST` | `/api/v1/encounters/ad-hoc` | Gia đình gửi yêu cầu khám đột xuất tới bác sĩ phụ trách |
+| `PATCH` | `/api/v1/encounters/{id}/finalize` | Bác sĩ rà soát và chốt lịch khám cùng hình thức khám gửi gia đình duyệt |
+| `PATCH` | `/api/v1/encounters/{id}/confirm` | Gia đình xác nhận đồng ý lịch khám & đối chiếu ca trực CSYT để đồng bộ lịch |
+| `POST` | `/api/v1/encounters/{id}/reschedule` | Gia đình đề xuất đổi lịch khám sang khung giờ thay thế (Quy tắc >= 4 giờ) |
+| `PATCH` | `/api/v1/encounters/{id}/reschedule-review` | Bác sĩ phản hồi yêu cầu dời lịch: Đồng ý hoặc Đề xuất khung giờ thay thế |
+| `POST` | `/api/v1/encounters/shifts` | CSYT phân bổ ca trực nội viện cho bác sĩ (phục vụ cân bằng tải) |
+| `GET` | `/api/v1/encounters/timetable/doctor` | Lấy thời khóa biểu lịch khám của bác sĩ |
+| `GET` | `/api/v1/encounters/timetable/family` | Lấy thời khóa biểu lịch khám của hộ gia đình |
+| `GET` | `/api/v1/encounters/facility/schedule-board` | CSYT giám sát bảng điều phối ca trực và lịch khám ngoại viện |
+| `GET` | `/api/v1/encounters/{id}` | Xem chi tiết thông tin và trạng thái buổi khám |
