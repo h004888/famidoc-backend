@@ -33,6 +33,9 @@ describe('PatientsServiceImpl', () => {
     relationshipToHead: 'CON',
     citizenId: '001201500001',
     healthInsuranceNumber: 'DN4010123456789',
+    bloodType: 'O+',
+    registeredHospital: null,
+    chronicDiseases: null,
     status: 'ACTIVE' as const,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -47,6 +50,9 @@ describe('PatientsServiceImpl', () => {
     relationshipToHead: 'SELF',
     citizenId: null,
     healthInsuranceNumber: null,
+    bloodType: null,
+    registeredHospital: null,
+    chronicDiseases: null,
     status: 'ACTIVE' as const,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -138,6 +144,70 @@ describe('PatientsServiceImpl', () => {
       expect(repository.create).toHaveBeenCalledWith('family-uuid-target', adminDto);
       expect(result.familyId).toBe('family-uuid-target');
     });
+
+    it('chặn tạo bệnh nhân với HTTP 403 khi hộ gia đình chưa có hợp đồng ACTIVE', async () => {
+      repository.findActiveContractByFamilyId = jest.fn().mockResolvedValue(null);
+      repository.countPatientsByFamilyId = jest.fn();
+      repository.createAndAttachToContract = jest.fn();
+
+      await expect(service.createPatient(mockFamilyRep, dto)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(repository.findActiveContractByFamilyId).toHaveBeenCalledWith(
+        'family-uuid-1',
+      );
+      expect(repository.createAndAttachToContract).not.toHaveBeenCalled();
+    });
+
+    it('chặn tạo bệnh nhân với HTTP 400 khi đã đạt trần memberCount của hợp đồng ACTIVE', async () => {
+      repository.findActiveContractByFamilyId = jest
+        .fn()
+        .mockResolvedValue({ id: 'contract-active-1', memberCount: 3 });
+      repository.countPatientsByFamilyId = jest.fn().mockResolvedValue(3);
+      repository.createAndAttachToContract = jest.fn();
+
+      await expect(service.createPatient(mockFamilyRep, dto)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(repository.countPatientsByFamilyId).toHaveBeenCalledWith(
+        'family-uuid-1',
+      );
+      expect(repository.createAndAttachToContract).not.toHaveBeenCalled();
+    });
+
+    it('tạo bệnh nhân thành công và gắn vào ContractMember khi còn suất trong hợp đồng ACTIVE', async () => {
+      repository.findActiveContractByFamilyId = jest
+        .fn()
+        .mockResolvedValue({ id: 'contract-active-1', memberCount: 4 });
+      repository.countPatientsByFamilyId = jest.fn().mockResolvedValue(2);
+      repository.createAndAttachToContract = jest
+        .fn()
+        .mockResolvedValue(mockPatient);
+
+      const result = await service.createPatient(mockFamilyRep, dto);
+
+      expect(repository.createAndAttachToContract).toHaveBeenCalledWith(
+        'family-uuid-1',
+        'contract-active-1',
+        dto,
+      );
+      expect(result).toEqual(mockPatient);
+    });
+
+    it('ưu tiên dùng createWithActiveContractLock khi repository cung cấp cơ chế khóa transaction atomic', async () => {
+      repository.createWithActiveContractLock = jest
+        .fn()
+        .mockResolvedValue(mockPatient);
+
+      const result = await service.createPatient(mockFamilyRep, dto);
+
+      expect(repository.createWithActiveContractLock).toHaveBeenCalledWith(
+        'family-uuid-1',
+        dto,
+      );
+      expect(repository.create).not.toHaveBeenCalled();
+      expect(result).toEqual(mockPatient);
+    });
   });
 
   describe('listFamilyMembers', () => {
@@ -219,6 +289,41 @@ describe('PatientsServiceImpl', () => {
 
       const result = await service.updatePatient(mockAdmin, 'patient-uuid-2', updateDto);
       expect(result.fullName).toBe('Đã Cập Nhật');
+    });
+  });
+
+  describe('detachPatient', () => {
+    it('FAMILY_REP tách thành viên không phải chủ hộ chuyển status sang INACTIVE', async () => {
+      repository.findById.mockResolvedValue(mockPatient);
+      const detached = { ...mockPatient, status: 'INACTIVE' as const };
+      repository.softDeactivate = jest.fn().mockResolvedValue(detached);
+
+      const result = await service.detachPatient(mockFamilyRep, 'patient-uuid-1');
+
+      expect(repository.softDeactivate).toHaveBeenCalledWith('patient-uuid-1');
+      expect(result.status).toBe('INACTIVE');
+    });
+
+    it('chặn tách chủ hộ (SELF) bằng BadRequestException', async () => {
+      repository.findById.mockResolvedValue({
+        ...mockPatient,
+        relationshipToHead: 'SELF',
+      });
+
+      await expect(
+        service.detachPatient(mockFamilyRep, 'patient-uuid-1'),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('chặn tách thành viên đã ở trạng thái INACTIVE', async () => {
+      repository.findById.mockResolvedValue({
+        ...mockPatient,
+        status: 'INACTIVE' as const,
+      });
+
+      await expect(
+        service.detachPatient(mockFamilyRep, 'patient-uuid-1'),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

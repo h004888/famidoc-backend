@@ -122,4 +122,50 @@ export interface IContractsService {
     dto: SignContractChangeDto,
     ip: string,
   ): Promise<ContractSignature>;
+  getSigningSession(
+    actor: AuthenticatedUser,
+    id: string,
+  ): Promise<{
+    contractId: string;
+    contractNumber: string;
+    contractStatus: string;
+    signerRole: string;
+    alreadySigned: boolean;
+    canSign: boolean;
+    signingToken: string | null;
+    signingUrl: string | null;
+    signedRoles: string[];
+    signedPdfUrl: string | null;
+    waitingReason?: string;
+  }>;
+  syncDocumensoEnvelope(
+    actor: AuthenticatedUser,
+    id: string,
+    ip: string,
+  ): Promise<{
+    synced: boolean;
+    contractId: string;
+    contractStatus: string;
+    signedRoles: string[];
+    signedPdfUrl: string | null;
+  }>;
+  downloadSignedPdf(
+    actor: AuthenticatedUser,
+    id: string,
+  ): Promise<{ buffer: Buffer; filename: string }>;
+  getFamilyGateStatus(actor: AuthenticatedUser): Promise<{
+    hasActiveContract: boolean;
+    activeContract: {
+      id: string;
+      contractNumber: string;
+      memberCount: number;
+      endDate: Date;
+    } | null;
+    pendingContract: {
+      id: string;
+      contractNumber: string;
+      contractStatus: string;
+    } | null;
+    patientCount: number;
+  }>;
 }

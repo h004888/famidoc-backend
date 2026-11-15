@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -17,11 +16,12 @@ import { PublicPackageDetailDto } from '../../dtos/public-package-detail.dto';
 import { LookupHealthcareFacilitiesDto } from '../../dtos/lookup-facilities.dto';
 import { PublicFacilitiesResponseDto } from '../../dtos/public-facilities-response.dto';
 import { LookupDoctorDirectoryDto } from '../../dtos/lookup-doctors.dto';
+import { PublicDoctorsResponseDto } from '../../dtos/public-doctors-response.dto';
 import {
-  PublicDoctorsResponseDto,
-  PublicDoctorItemDto,
-} from '../../dtos/public-doctors-response.dto';
-import { PublicDoctorDetailDto } from '../../dtos/public-doctor-detail.dto';
+  PublicDoctorDetailDto,
+  DoctorCareModelDto,
+  PublicDoctorReviewPreviewItemDto,
+} from '../../dtos/public-doctor-detail.dto';
 import {
   LookupDoctorReviewsQueryDto,
   PublicDoctorReviewsResponseDto,
@@ -504,16 +504,48 @@ export class PublicServiceImpl implements IPublicService {
   }
 
   async getPublicDoctorDetail(id: string): Promise<PublicDoctorDetailDto> {
-    const [doctor, packages] = await Promise.all([
+    const [doctor, packages, careItems, reviewRows] = await Promise.all([
       this.prisma.doctor.findUnique({
         where: { id },
-        include: {
-          facility: true,
-          user: true,
-          credentials: true,
+        select: {
+          id: true,
+          doctorName: true,
+          academicTitle: true,
+          specialty: true,
+          experienceYears: true,
+          bio: true,
+          ratingAvg: true,
+          totalReviews: true,
+          activePanelCount: true,
+          maxPanelCapacity: true,
+          onboardingStatus: true,
+          user: { select: { avatarUrl: true } },
+          facility: {
+            select: {
+              id: true,
+              facilityName: true,
+              address: true,
+              verificationStatus: true,
+            },
+          },
+          credentials: {
+            where: { platformApproved: true },
+            select: {
+              id: true,
+              credentialType: true,
+              issuingAuthority: true,
+              issueDate: true,
+              platformApproved: true,
+            },
+          },
+          treatedCases: {
+            where: { status: 'APPROVED' },
+            orderBy: [{ approvedAt: 'desc' }, { createdAt: 'desc' }],
+            select: { id: true, summary: true },
+          },
           _count: {
             select: {
-              encounters: true,
+              encounters: { where: { encounterStatus: 'COMPLETED' } },
               reviews: true,
             },
           },
@@ -528,6 +560,44 @@ export class PublicServiceImpl implements IPublicService {
           basePrice: 'asc',
         },
         take: 6,
+      }),
+      this.prisma.platformCareItem.findMany({
+        where: { isActive: true },
+        orderBy: { sortOrder: 'asc' },
+        select: {
+          id: true,
+          category: true,
+          title: true,
+          description: true,
+          icon: true,
+          sortOrder: true,
+        },
+      }),
+      this.prisma.doctorReview.findMany({
+        where: { doctorId: id, reviewComment: { not: null } },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          ratingStars: true,
+          reviewComment: true,
+          createdAt: true,
+          encounter: {
+            select: {
+              contract: {
+                select: {
+                  servicePackage: { select: { packageName: true } },
+                },
+              },
+            },
+          },
+          familyUnit: {
+            select: {
+              homeAddress: true,
+              representativeUser: { select: { fullName: true } },
+            },
+          },
+        },
       }),
     ]);
 
@@ -549,17 +619,8 @@ export class PublicServiceImpl implements IPublicService {
       specialtyKey = 'geriatric';
     }
 
-    const educationList =
-      doctor.credentials && doctor.credentials.length > 0
-        ? doctor.credentials.map((c) =>
-            c.credentialType === 'DEGREE'
-              ? `${c.issuingAuthority} - ${c.certificateNumber}`
-              : `Chứng chỉ ${c.issuingAuthority} (${c.certificateNumber})`,
-          )
-        : [
-            `Bác sĩ Chuyên khoa - ${doctor.facility?.facilityName || 'Đại học Y Dược'}`,
-            'Chứng chỉ Quản lý Sức khỏe Gia đình Toàn diện',
-          ];
+    const totalReviews = doctor.totalReviews ?? doctor._count?.reviews ?? 0;
+    const ratingAvg = totalReviews > 0 ? Number(doctor.ratingAvg) : null;
 
     const formattedCarePackages = packages.map((pkg) => {
       const priceNum = Number(pkg.basePrice);
@@ -574,6 +635,9 @@ export class PublicServiceImpl implements IPublicService {
         monthlyPrice: `${monthly.toLocaleString('vi-VN')}đ/tháng`,
         periodicVisitsQuota: pkg.periodicVisitsQuota,
         telehealthQuota: pkg.telehealthQuota,
+        includedMembers: pkg.includedMembers,
+        maxMembers: pkg.maxMembers,
+        additionalMemberMonthlyPrice: Number(pkg.additionalMemberMonthlyPrice),
         highlight: pkg.description || undefined,
         features: [
           `${pkg.periodicVisitsQuota} lượt bác sĩ trực tiếp thăm khám tại nhà`,
@@ -584,36 +648,184 @@ export class PublicServiceImpl implements IPublicService {
       };
     });
 
+    const reviewItems = reviewRows
+      .filter((row) => (row.reviewComment || '').trim().length > 0)
+      .map((row) => this.mapReviewRow(row));
+
     return {
       id: doctor.id,
       doctorName: doctor.doctorName,
       academicTitle: doctor.academicTitle,
       specialty: doctor.specialty,
       specialtyKey,
-      hospital: doctor.facility?.facilityName || 'Bệnh viện / Cơ sở Y tế Đối tác',
-      location:
-        (doctor.facility as any)?.provinceCity ||
-        doctor.facility?.address ||
-        'TP. Hồ Chí Minh',
-      isVerified: doctor.onboardingStatus === 'ACTIVE',
+      avatarUrl: doctor.user?.avatarUrl ?? null,
+      bio: doctor.bio,
+      isVerified:
+        doctor.onboardingStatus === 'ACTIVE' && doctor.credentials.length > 0,
       isAvailable: doctor.activePanelCount < doctor.maxPanelCapacity,
-      avatarUrl: (doctor as any).user?.avatarUrl || null,
-      ratingAvg: Number(doctor.ratingAvg),
-      totalReviews: doctor.totalReviews ?? (doctor as any)._count?.reviews ?? 0,
-      experienceYears: doctor.experienceYears,
-      facility: doctor.facility || null,
+      panel: {
+        activeCount: doctor.activePanelCount,
+        maxCapacity: doctor.maxPanelCapacity,
+      },
       stats: {
         experienceYears: doctor.experienceYears,
-        ratingAvg: Number(doctor.ratingAvg),
-        totalReviews: doctor.totalReviews ?? (doctor as any)._count?.reviews ?? 0,
-        consultationCount: (doctor as any)._count?.encounters ?? 0,
+        ratingAvg,
+        totalReviews,
+        completedEncounters: doctor._count?.encounters ?? 0,
       },
-      services: ['home', 'telehealth', 'clinic'],
-      education: educationList,
-      bio: doctor.bio,
-      schedule:
-        'Thứ 2 - Thứ 7: 08:00 - 18:00 (Nhận khám tại nhà các buổi chiều và tư vấn trực tuyến 24/7)',
+      facility: doctor.facility
+        ? {
+            id: doctor.facility.id,
+            facilityName: doctor.facility.facilityName,
+            address: doctor.facility.address,
+            verificationStatus: doctor.facility.verificationStatus,
+          }
+        : null,
+      credentials: doctor.credentials.map((credential) => ({
+        id: credential.id,
+        type: credential.credentialType,
+        typeLabel: this.credentialTypeLabel(credential.credentialType),
+        issuingAuthority: credential.issuingAuthority,
+        issueYear: credential.issueDate
+          ? new Date(credential.issueDate).getFullYear()
+          : 0,
+        verified: credential.platformApproved,
+      })),
+      treatedCases: doctor.treatedCases.map((item) => ({
+        id: item.id,
+        summary: item.summary,
+      })),
+      careModel: this.buildCareModel(careItems),
       carePackages: formattedCarePackages,
+      reviews: {
+        ratingAvg,
+        totalReviews,
+        items: reviewItems,
+      },
+    };
+  }
+
+  async getPublicCareModel(): Promise<DoctorCareModelDto> {
+    const items = await this.prisma.platformCareItem.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+      select: {
+        id: true,
+        category: true,
+        title: true,
+        description: true,
+        icon: true,
+        sortOrder: true,
+      },
+    });
+
+    return this.buildCareModel(items);
+  }
+
+  private buildCareModel(
+    items: Array<{
+      id: string;
+      category: string;
+      title: string;
+      description: string;
+      icon: string | null;
+      sortOrder: number;
+    }>,
+  ): DoctorCareModelDto {
+    const mapItem = (item: (typeof items)[number]) => ({
+      id: item.id,
+      category: item.category,
+      title: item.title,
+      description: item.description,
+      icon: item.icon,
+      sortOrder: item.sortOrder,
+    });
+
+    return {
+      serviceModes: items
+        .filter((item) => item.category === 'SERVICE_MODE')
+        .map(mapItem),
+      commitments: items
+        .filter((item) => item.category === 'COMMITMENT')
+        .map(mapItem),
+    };
+  }
+
+  private credentialTypeLabel(type: string): string {
+    switch (type) {
+      case 'PRACTICE_LICENSE_CCHN':
+        return 'Chứng chỉ hành nghề';
+      case 'FAMILY_MEDICINE_CERT':
+        return 'Chứng nhận Y học gia đình';
+      case 'DEGREE':
+        return 'Bằng cấp chuyên môn';
+      default:
+        return 'Chứng chỉ chuyên môn';
+    }
+  }
+
+  private maskPatientName(fullName?: string | null): string {
+    const trimmed = (fullName || '').trim();
+    if (!trimmed) {
+      return 'Hội viên gia đình';
+    }
+
+    const tokens = trimmed.split(/\s+/).filter(Boolean);
+    if (tokens.length === 1) {
+      return `${tokens[0].charAt(0).toUpperCase()}.`;
+    }
+
+    const [first, ...rest] = tokens;
+    const initials = rest
+      .map((token) => `${token.charAt(0).toUpperCase()}.`)
+      .join(' ');
+
+    return `${first} ${initials}`.trim();
+  }
+
+  private extractDistrict(homeAddress?: string | null): string | null {
+    if (!homeAddress) {
+      return null;
+    }
+
+    const parts = homeAddress
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    if (parts.length === 0) {
+      return null;
+    }
+
+    return parts.length >= 2 ? parts[parts.length - 2] : parts[0];
+  }
+
+  private mapReviewRow(row: {
+    id: string;
+    ratingStars: number;
+    reviewComment: string | null;
+    createdAt: Date;
+    encounter?: {
+      contract?: {
+        servicePackage?: { packageName: string } | null;
+      } | null;
+    } | null;
+    familyUnit?: {
+      homeAddress?: string | null;
+      representativeUser?: { fullName?: string | null } | null;
+    } | null;
+  }): PublicDoctorReviewPreviewItemDto {
+    return {
+      id: row.id,
+      patientDisplayName: this.maskPatientName(
+        row.familyUnit?.representativeUser?.fullName,
+      ),
+      ratingStars: row.ratingStars,
+      comment: row.reviewComment,
+      packageName:
+        row.encounter?.contract?.servicePackage?.packageName ?? null,
+      district: this.extractDistrict(row.familyUnit?.homeAddress),
+      reviewedAt: row.createdAt,
     };
   }
 
@@ -695,59 +907,42 @@ export class PublicServiceImpl implements IPublicService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: {
-          familyUnit: {
-            include: {
-              representativeUser: {
+        select: {
+          id: true,
+          ratingStars: true,
+          reviewComment: true,
+          createdAt: true,
+          encounter: {
+            select: {
+              contract: {
                 select: {
-                  fullName: true,
-                  avatarUrl: true,
+                  servicePackage: { select: { packageName: true } },
                 },
               },
-              medicalContracts: {
-                where: { contractStatus: 'ACTIVE' },
-                take: 1,
-                include: {
-                  servicePackage: {
-                    select: {
-                      packageName: true,
-                    },
-                  },
-                },
-              },
+            },
+          },
+          familyUnit: {
+            select: {
+              homeAddress: true,
+              representativeUser: { select: { fullName: true } },
             },
           },
         },
       }),
     ]);
 
-    const items: PublicDoctorReviewItemDto[] = reviews.map((r: any) => {
-      const repUser = r.familyUnit?.representativeUser;
-      const activeContract = r.familyUnit?.medicalContracts?.[0];
-      const homeAddress = r.familyUnit?.homeAddress || '';
-
-      let district: string | null = null;
-      if (homeAddress) {
-        const parts = homeAddress.split(',').map((p: string) => p.trim());
-        if (parts.length >= 2) {
-          district = parts[parts.length - 2];
-        } else {
-          district = parts[0];
-        }
-      }
-
-      return {
-        id: r.id,
-        patientName: repUser?.fullName || 'Hội viên gia đình',
-        ratingStars: r.ratingStars,
-        comment: r.reviewComment,
-        packageName:
-          activeContract?.servicePackage?.packageName || 'Gói Đồng Hành',
-        district,
-        avatarUrl: repUser?.avatarUrl || null,
-        createdAt: r.createdAt,
-      };
-    });
+    const items: PublicDoctorReviewItemDto[] = reviews.map((r) => ({
+      id: r.id,
+      patientDisplayName: this.maskPatientName(
+        r.familyUnit?.representativeUser?.fullName,
+      ),
+      ratingStars: r.ratingStars,
+      comment: r.reviewComment,
+      packageName:
+        r.encounter?.contract?.servicePackage?.packageName ?? null,
+      district: this.extractDistrict(r.familyUnit?.homeAddress),
+      createdAt: r.createdAt,
+    }));
 
     return {
       items,

@@ -27,6 +27,7 @@ describe('PublicController', () => {
       getPublicFacilityDetail: jest.fn(),
       getPublicDoctorDetail: jest.fn(),
       getDoctorReviews: jest.fn(),
+      getPublicCareModel: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({

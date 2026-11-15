@@ -17,7 +17,7 @@
 | :--- | :--- | :--- |
 | `GET` | `/health` | Kiểm tra trạng thái sẵn sàng của dịch vụ |
 
-### Public Portal (11 APIs)
+### Public Portal (13 APIs)
 
 | Method | Endpoint | Mô tả / Nghiệp vụ |
 | :--- | :--- | :--- |
@@ -30,6 +30,8 @@
 | `GET` | `/api/v1/public/facilities/{id}` | Xem chi tiết cơ sở y tế công khai theo ID (UC-08) |
 | `GET` | `/api/v1/public/doctors` | Tra cứu danh bạ bác sĩ gia đình công khai (STT 11 - UC-08) |
 | `GET` | `/api/v1/public/doctors/{id}` | Xem chi tiết bác sĩ gia đình công khai theo ID (UC-08) |
+| `GET` | `/api/v1/public/doctors/{id}/reviews` | Lấy danh sách đánh giá đã xác thực của bác sĩ có phân trang (UC-08) |
+| `GET` | `/api/v1/public/care-model` | Lấy phạm vi chăm sóc chung của nền tảng (hình thức khám và cam kết) |
 | `POST` | `/api/v1/public/consultation-requests` | Gửi yêu cầu tư vấn gói dịch vụ chăm sóc gia đình (STT 12 - UC-09) |
 | `POST` | `/api/v1/public/inquiries` | Gửi yêu cầu tư vấn gói dịch vụ chăm sóc gia đình (STT 12 - UC-09) |
 
@@ -85,6 +87,25 @@
 | `POST` | `/api/v1/admin/care-packages/{id}/versions` | Tạo phiên bản kế tiếp (next version) từ gói hiện tại |
 | `POST` | `/api/v1/admin/care-packages/{id}/publish` | Xuất bản gói chăm sóc ra công khai (chuyển sang ACTIVE) |
 | `POST` | `/api/v1/admin/care-packages/{id}/retire` | Ngừng cung cấp gói chăm sóc (chuyển sang RETIRED) |
+
+### Doctor Treated Cases (Admin) (5 APIs)
+
+| Method | Endpoint | Mô tả / Nghiệp vụ |
+| :--- | :--- | :--- |
+| `GET` | `/api/v1/admin/doctors/{doctorId}/treated-cases` | Quản trị viên xem mọi ca bệnh tiêu biểu của bác sĩ |
+| `POST` | `/api/v1/admin/doctors/{doctorId}/treated-cases` | Nhập ca bệnh tiêu biểu mới ở trạng thái chờ duyệt |
+| `PATCH` | `/api/v1/admin/doctors/{doctorId}/treated-cases/{id}` | Cập nhật nội dung ca bệnh; đổi nội dung sẽ quay lại chờ duyệt |
+| `POST` | `/api/v1/admin/doctors/{doctorId}/treated-cases/{id}/approve` | Duyệt công khai ca bệnh tiêu biểu |
+| `POST` | `/api/v1/admin/doctors/{doctorId}/treated-cases/{id}/reject` | Từ chối công khai ca bệnh kèm lý do |
+
+### Platform Care Content (Admin) (4 APIs)
+
+| Method | Endpoint | Mô tả / Nghiệp vụ |
+| :--- | :--- | :--- |
+| `GET` | `/api/v1/admin/platform-care-items` | Quản trị viên xem toàn bộ nội dung chăm sóc nền tảng |
+| `POST` | `/api/v1/admin/platform-care-items` | Tạo mục nội dung chăm sóc mới |
+| `PATCH` | `/api/v1/admin/platform-care-items/{id}` | Cập nhật nội dung chăm sóc |
+| `DELETE` | `/api/v1/admin/platform-care-items/{id}` | Ngừng công khai nội dung chăm sóc (xóa mềm) |
 
 ### Payments (7 APIs)
 

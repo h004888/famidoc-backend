@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
   Param,
@@ -93,6 +94,20 @@ export class PatientsController {
     @Body() dto: UpdatePatientDto,
   ) {
     return this.service.updatePatient(req.user, id, dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Tách thành viên khỏi danh sách hoạt động của hộ gia đình (soft-deactivate)' })
+  @ApiParam({ name: 'id', description: 'UUID của bệnh nhân' })
+  @ApiResponse({ status: 200, description: 'Đã tách thành viên và hoàn trả suất thành viên trong gói' })
+  @ApiResponse({ status: 400, description: 'Không thể tách chủ hộ hoặc thành viên đã tách trước đó' })
+  @ApiResponse({ status: 403, description: 'Không có quyền thao tác hồ sơ ngoài gia đình' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy hồ sơ bệnh nhân' })
+  detachPatient(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+  ) {
+    return this.service.detachPatient(req.user, id);
   }
 
   @Post(':id/allergies')

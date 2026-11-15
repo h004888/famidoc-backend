@@ -13,6 +13,7 @@ export interface IPatientsService {
   listFamilyMembers(user: AuthenticatedUser): Promise<Patient[]>;
   getPatientById(user: AuthenticatedUser, id: string): Promise<PatientDetail>;
   updatePatient(user: AuthenticatedUser, id: string, dto: UpdatePatientDto): Promise<Patient>;
+  detachPatient(user: AuthenticatedUser, id: string): Promise<Patient>;
   addAllergy(user: AuthenticatedUser, patientId: string, dto: CreateAllergyDto): Promise<PatientAllergy>;
   listAllergies(user: AuthenticatedUser, patientId: string): Promise<PatientAllergy[]>;
   addDocument(user: AuthenticatedUser, patientId: string, dto: CreatePatientDocumentDto): Promise<PatientDocument>;

@@ -44,6 +44,17 @@ enum DoctorCredentialType {
   DEGREE
 }
 
+enum DoctorTreatedCaseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PlatformCareCategory {
+  SERVICE_MODE
+  COMMITMENT
+}
+
 enum ServicePackageStatus {
   DRAFT
   ACTIVE
@@ -163,6 +174,11 @@ enum ComplaintStatus {
   CLOSED
 }
 
+enum OtpChallengePurpose {
+  REGISTER_FAMILY_REP
+  RESET_PASSWORD
+}
+
 // =========================================================================
 // 1. PHÂN HỆ XÁC THỰC, NGƯỜI DÙNG & RBAC (FE-01, FE-03)
 // =========================================================================
@@ -196,8 +212,28 @@ model User {
   facilityComplaintResponses        Complaint[]           @relation("ComplaintFacilityReviewer")
   resolvedComplaints                Complaint[]           @relation("ComplaintResolver")
   auditLogs                         AuditLog[]
+  approvedDoctorTreatedCases        DoctorTreatedCase[]   @relation("TreatedCaseApprover")
 
   @@map("users")
+}
+
+model OtpChallenge {
+  id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  purpose       OtpChallengePurpose
+  email         String              @db.VarChar(150)
+  phone         String?             @db.VarChar(15)
+  payload       Json?               @db.JsonB
+  otpHash       String              @map("otp_hash") @db.VarChar(64)
+  expiresAt     DateTime            @map("expires_at") @db.Timestamptz()
+  cooldownUntil DateTime            @map("cooldown_until") @db.Timestamptz()
+  attempts      Int                 @default(0)
+  maxAttempts   Int                 @default(5) @map("max_attempts")
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@unique([purpose, email], map: "otp_challenges_purpose_email_key")
+  @@index([expiresAt], map: "otp_challenges_expires_at_idx")
+  @@map("otp_challenges")
 }
 
 model Notification {
@@ -264,13 +300,14 @@ model Doctor {
   updatedAt        DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   // Relations
-  user             User               @relation(fields: [userId], references: [id], onDelete: Restrict)
-  facility         HealthcareFacility @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  user             User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  facility         HealthcareFacility  @relation(fields: [facilityId], references: [id], onDelete: Restrict)
   credentials      DoctorCredential[]
   shifts           DoctorShift[]
   medicalContracts MedicalContract[]
   encounters       Encounter[]
   reviews          DoctorReview[]
+  treatedCases     DoctorTreatedCase[]
 
   @@map("doctors")
 }
@@ -297,6 +334,25 @@ model DoctorCredential {
   platformApprover User?  @relation("PlatformApprovedByUser", fields: [platformApprovedBy], references: [id])
 
   @@map("doctor_credentials")
+}
+
+model DoctorTreatedCase {
+  id              String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  doctorId        String                  @map("doctor_id") @db.Uuid
+  summary         String                  @db.Text
+  status          DoctorTreatedCaseStatus @default(PENDING)
+  rejectionReason String?                 @map("rejection_reason") @db.Text
+  approvedBy      String?                 @map("approved_by") @db.Uuid
+  approvedAt      DateTime?               @map("approved_at") @db.Timestamptz()
+  createdAt       DateTime                @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt       DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  doctor   Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  approver User?  @relation("TreatedCaseApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+
+  @@index([doctorId, status], map: "idx_doctor_treated_cases_lookup")
+  @@map("doctor_treated_cases")
 }
 
 model DoctorShift {
@@ -354,6 +410,21 @@ model ServicePackage {
   @@map("service_packages")
 }
 
+model PlatformCareItem {
+  id          String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category    PlatformCareCategory
+  title       String               @db.VarChar(150)
+  description String               @default("") @db.Text
+  icon        String?              @db.VarChar(50)
+  sortOrder   Int                  @default(0) @map("sort_order")
+  isActive    Boolean              @default(true) @map("is_active")
+  createdAt   DateTime             @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt   DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  @@index([category, isActive, sortOrder], map: "idx_platform_care_items_order")
+  @@map("platform_care_items")
+}
+
 model B2bStaffingContract {
   id                     String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   contractCode           String            @unique @map("contract_code") @db.VarChar(50)
@@ -404,16 +475,19 @@ model Patient {
   relationshipToHead    String        @map("relationship_to_head") @db.VarChar(50)
   citizenId             String?       @map("citizen_id") @db.VarChar(20)
   healthInsuranceNumber String?       @map("health_insurance_number") @db.VarChar(30)
+  bloodType             String?       @map("blood_type") @db.VarChar(10)
+  registeredHospital    String?       @map("registered_hospital") @db.VarChar(150)
+  chronicDiseases       String?       @map("chronic_diseases") @db.Text
   status                PatientStatus @default(ACTIVE)
   createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt             DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   // Relations
-  familyUnit FamilyUnit        @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  allergies  PatientAllergy[]
-  documents  PatientDocument[]
-  encounters Encounter[]
-  vitalSigns VitalSign[]
+  familyUnit      FamilyUnit        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  allergies       PatientAllergy[]
+  documents       PatientDocument[]
+  encounters      Encounter[]
+  vitalSigns      VitalSign[]
   contractMembers ContractMember[]
 
   @@map("patients")
@@ -484,6 +558,11 @@ model MedicalContract {
   legacyMemberIds     Json?             @map("legacy_member_ids") @db.JsonB
   // Lưu cả yêu cầu đã từ chối/đã duyệt, không ghi đè lịch sử khi có yêu cầu mới.
   terminationRequests Json              @default("[]") @map("termination_requests") @db.JsonB
+  // Tích hợp Documenso self-hosted cho hợp đồng 4 bên qua Envelopes API.
+  documensoEnvelopeId  String?  @unique @map("documenso_envelope_id") @db.VarChar(100)
+  documensoItemId      String?  @map("documenso_item_id") @db.VarChar(100)
+  documensoSignedAt    DateTime? @map("documenso_signed_at") @db.Timestamptz()
+  additionalTerms      String?  @map("additional_terms") @db.Text
 
   // Relations
   familyUnit     FamilyUnit          @relation(fields: [familyId], references: [id], onDelete: Restrict)
@@ -491,6 +570,7 @@ model MedicalContract {
   doctor         Doctor?             @relation(fields: [doctorId], references: [id], onDelete: Restrict)
   servicePackage ServicePackage      @relation(fields: [packageId], references: [id], onDelete: Restrict)
   signatures     ContractSignature[]
+  documensoSigners ContractDocumensoSigner[]
   addenda        ContractAddendum[]
   members        ContractMember[]
   encounters     Encounter[]
@@ -505,29 +585,30 @@ model MedicalContract {
 }
 
 model ContractMember {
-  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  contractId        String           @map("contract_id") @db.Uuid
-  patientId         String           @map("patient_id") @db.Uuid
-  addedByAddendumId String?          @map("added_by_addendum_id") @db.Uuid
-  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz()
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contractId        String   @map("contract_id") @db.Uuid
+  patientId         String   @map("patient_id") @db.Uuid
+  addedByAddendumId String?  @map("added_by_addendum_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz()
 
-  contract          MedicalContract  @relation(fields: [contractId], references: [id], onDelete: Restrict)
-  patient           Patient          @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  contract MedicalContract @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  patient  Patient         @relation(fields: [patientId], references: [id], onDelete: Restrict)
 
   @@unique([contractId, patientId], map: "idx_contract_members_contract_patient")
   @@map("contract_members")
 }
 
 model ContractSignature {
-  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  contractId    String     @map("contract_id") @db.Uuid
-  addendumId    String?    @map("addendum_id") @db.Uuid
-  signerRole    SignerRole @map("signer_role")
-  signerUserId  String     @map("signer_user_id") @db.Uuid
-  signatureHash String     @map("signature_hash") @db.Text
-  termsHash     String?    @map("terms_hash") @db.VarChar(64)
-  signedAt      DateTime   @default(now()) @map("signed_at") @db.Timestamptz()
-  ipAddress     String     @map("ip_address") @db.VarChar(45)
+  id                  String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contractId          String     @map("contract_id") @db.Uuid
+  addendumId          String?    @map("addendum_id") @db.Uuid
+  signerRole          SignerRole @map("signer_role")
+  signerUserId        String     @map("signer_user_id") @db.Uuid
+  documensoRecipientId Int?  @map("documenso_recipient_id")
+  signatureHash       String     @map("signature_hash") @db.Text
+  termsHash           String?    @map("terms_hash") @db.VarChar(64)
+  signedAt            DateTime   @default(now()) @map("signed_at") @db.Timestamptz()
+  ipAddress           String     @map("ip_address") @db.VarChar(45)
 
   // Relations
   contract   MedicalContract   @relation(fields: [contractId], references: [id], onDelete: Cascade)
@@ -537,6 +618,24 @@ model ContractSignature {
   // Hai unique index có điều kiện trong migration: chữ ký hợp đồng và chữ ký từng phụ lục.
   @@index([contractId])
   @@map("contract_signatures")
+}
+
+model ContractDocumensoSigner {
+  id                  String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contractId          String     @map("contract_id") @db.Uuid
+  signerRole          SignerRole @map("signer_role")
+  documensoRecipientId Int       @unique @map("documenso_recipient_id")
+  documensoToken      String     @map("documenso_token") @db.VarChar(128)
+  documensoSigningUrl String     @map("documenso_signing_url") @db.Text
+  status              String     @default("PENDING") @db.VarChar(32)
+  completedAt         DateTime?  @map("completed_at") @db.Timestamptz()
+  createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt           DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  contract MedicalContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@unique([contractId, signerRole], map: "idx_contract_documenso_signers_contract_role")
+  @@map("contract_documenso_signers")
 }
 
 model ContractAddendum {

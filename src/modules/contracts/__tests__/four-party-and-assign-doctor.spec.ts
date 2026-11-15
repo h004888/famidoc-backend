@@ -4,7 +4,9 @@ import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
+  ValidationPipe,
 } from '@nestjs/common';
+import { CreateFourPartyContractDto } from '../dtos/create-medical-contract.dto';
 import { ContractsServiceImpl } from '../services/impl/contracts.service.impl';
 import { ContractsController } from '../controllers/contracts.controller';
 import {
@@ -279,6 +281,73 @@ describe('Four-Party Contract & Doctor Assignment (UC-16, UC-23, SD-16, SD-23)',
 
       expect(result).toBeDefined();
       expect(result.contractStatus).toBe('PENDING_APPROVAL');
+    });
+
+    it('should throw BadRequestException with PACKAGE_MEMBER_LIMIT when patientIds exceed package maxMembers', async () => {
+      const sevenPatients = Array.from({ length: 7 }, (_, i) => ({
+        id: `patient-${i + 1}`,
+      }));
+      sessionMock.findPatientsByIdsAndFamilyId.mockResolvedValueOnce(
+        sevenPatients,
+      );
+
+      await expect(
+        service.initiateFourPartyContract(familyRepUser, {
+          ...dto,
+          patientIds: sevenPatients.map((p) => p.id),
+          memberCount: 7,
+        }),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          code: 'PACKAGE_MEMBER_LIMIT',
+          maxMembers: 6,
+          requestedMembers: 7,
+        }),
+      });
+    });
+
+    it('should throw BadRequestException when memberCount disagrees with patientIds length', async () => {
+      await expect(
+        service.initiateFourPartyContract(familyRepUser, {
+          ...dto,
+          memberCount: 5,
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject duplicate patientIds and non-integer memberCount via ValidationPipe', async () => {
+      const pipe = new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      });
+      const validUuid1 = '11111111-1111-4111-8111-111111111111';
+      const validUuid2 = '22222222-2222-4222-8222-222222222222';
+      const validUuid3 = '33333333-3333-4333-8333-333333333333';
+
+      await expect(
+        pipe.transform(
+          {
+            packageId: validUuid1,
+            facilityId: validUuid2,
+            patientIds: [validUuid3, validUuid3],
+            memberCount: 2,
+          },
+          { type: 'body', metatype: CreateFourPartyContractDto },
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        pipe.transform(
+          {
+            packageId: validUuid1,
+            facilityId: validUuid2,
+            patientIds: [validUuid3],
+            memberCount: 1.5,
+          },
+          { type: 'body', metatype: CreateFourPartyContractDto },
+        ),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 

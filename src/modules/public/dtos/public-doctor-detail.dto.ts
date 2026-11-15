@@ -7,11 +7,13 @@ export class DoctorStatsDto {
   })
   experienceYears: number;
 
-  @ApiProperty({
-    description: 'Điểm đánh giá trung bình từ hộ gia đình (thang điểm 5.0)',
+  @ApiPropertyOptional({
+    description:
+      'Điểm đánh giá trung bình (thang điểm 5.0); null khi bác sĩ chưa có đánh giá',
     example: 4.96,
+    nullable: true,
   })
-  ratingAvg: number;
+  ratingAvg: number | null;
 
   @ApiProperty({
     description: 'Tổng số lượt đánh giá công khai',
@@ -20,10 +22,140 @@ export class DoctorStatsDto {
   totalReviews: number;
 
   @ApiProperty({
-    description: 'Tổng số ca khám / tư vấn đã hoàn thành',
+    description: 'Tổng số buổi khám đã hoàn tất',
     example: 2400,
   })
-  consultationCount: number;
+  completedEncounters: number;
+}
+
+export class DoctorPanelDto {
+  @ApiProperty({
+    description: 'Số hộ gia đình bác sĩ đang phụ trách',
+    example: 18,
+  })
+  activeCount: number;
+
+  @ApiProperty({
+    description: 'Số hộ gia đình tối đa bác sĩ có thể phụ trách',
+    example: 30,
+  })
+  maxCapacity: number;
+}
+
+export class PublicFacilitySummaryDto {
+  @ApiProperty({ description: 'UUID của cơ sở y tế' })
+  id: string;
+
+  @ApiProperty({
+    description: 'Tên cơ sở y tế',
+    example: 'Bệnh viện Đại học Y Dược TP.HCM',
+  })
+  facilityName: string;
+
+  @ApiProperty({
+    description: 'Địa chỉ cơ sở y tế',
+    example: '215 Hồng Bàng, Phường 11, Quận 5, TP. Hồ Chí Minh',
+  })
+  address: string;
+
+  @ApiProperty({
+    description: 'Trạng thái xác thực của cơ sở y tế',
+    example: 'ACTIVE',
+  })
+  verificationStatus: string;
+}
+
+export class DoctorCredentialItemDto {
+  @ApiProperty({ description: 'UUID của chứng chỉ' })
+  id: string;
+
+  @ApiProperty({
+    description: 'Loại chứng chỉ',
+    example: 'PRACTICE_LICENSE_CCHN',
+    enum: ['PRACTICE_LICENSE_CCHN', 'FAMILY_MEDICINE_CERT', 'DEGREE'],
+  })
+  type: string;
+
+  @ApiProperty({
+    description: 'Tên hiển thị của loại chứng chỉ',
+    example: 'Chứng chỉ hành nghề',
+  })
+  typeLabel: string;
+
+  @ApiProperty({
+    description: 'Đơn vị cấp chứng chỉ',
+    example: 'Sở Y tế TP. Hồ Chí Minh',
+  })
+  issuingAuthority: string;
+
+  @ApiProperty({
+    description: 'Năm cấp chứng chỉ',
+    example: 2018,
+  })
+  issueYear: number;
+
+  @ApiProperty({
+    description: 'Chứng chỉ đã được nền tảng xác thực',
+    example: true,
+  })
+  verified: boolean;
+}
+
+export class DoctorTreatedCaseItemDto {
+  @ApiProperty({ description: 'UUID của ca bệnh tiêu biểu' })
+  id: string;
+
+  @ApiProperty({
+    description: 'Mô tả ca bệnh đã được duyệt công khai',
+    example:
+      'Quản lý tăng huyết áp kháng trị cho bệnh nhân 72 tuổi kèm suy tim độ II.',
+  })
+  summary: string;
+}
+
+export class CareModelItemDto {
+  @ApiProperty({ description: 'UUID của mục nội dung chăm sóc' })
+  id: string;
+
+  @ApiProperty({
+    description: 'Nhóm nội dung',
+    example: 'SERVICE_MODE',
+    enum: ['SERVICE_MODE', 'COMMITMENT'],
+  })
+  category: string;
+
+  @ApiProperty({ description: 'Tiêu đề hiển thị', example: 'Khám tận nhà' })
+  title: string;
+
+  @ApiProperty({
+    description: 'Mô tả chi tiết',
+    example: 'Khám lâm sàng tại nhà, đo điện tim ECG và theo dõi định kỳ.',
+  })
+  description: string;
+
+  @ApiPropertyOptional({
+    description: 'Biểu tượng hiển thị',
+    example: 'home',
+    nullable: true,
+  })
+  icon?: string | null;
+
+  @ApiProperty({ description: 'Thứ tự hiển thị', example: 1 })
+  sortOrder: number;
+}
+
+export class DoctorCareModelDto {
+  @ApiProperty({
+    description: 'Các hình thức khám đang áp dụng',
+    type: [CareModelItemDto],
+  })
+  serviceModes: CareModelItemDto[];
+
+  @ApiProperty({
+    description: 'Các cam kết dịch vụ chung của nền tảng',
+    type: [CareModelItemDto],
+  })
+  commitments: CareModelItemDto[];
 }
 
 export class DoctorCarePackageItemDto {
@@ -90,20 +222,85 @@ export class DoctorCarePackageItemDto {
   @ApiPropertyOptional({
     description: 'Danh sách các quyền lợi chính kèm theo gói',
     type: [String],
-    example: [
-      '3 lượt bác sĩ trực tiếp thăm khám tại nhà',
-      '4 lượt tư vấn video Telehealth 24/7',
-      'Bác sĩ phụ trách chính & lập phác đồ điều trị gia đình',
-      'Hồ sơ bệnh án điện tử (EHR) lưu trữ trọn đời',
-    ],
   })
   features?: string[];
 
-  @ApiPropertyOptional({
-    description: 'Đánh dấu gói được nhiều gia đình lựa chọn nhất',
-    example: true,
+  @ApiProperty({
+    description: 'Số thành viên được bao gồm trong giá gói',
+    example: 3,
   })
-  popular?: boolean;
+  includedMembers: number;
+
+  @ApiProperty({
+    description: 'Số thành viên tối đa của gói (gồm cả thành viên thêm)',
+    example: 6,
+  })
+  maxMembers: number;
+
+  @ApiProperty({
+    description: 'Phụ phí mỗi thành viên thêm mỗi tháng (VND)',
+    example: 75000,
+  })
+  additionalMemberMonthlyPrice: number;
+}
+
+export class PublicDoctorReviewPreviewItemDto {
+  @ApiProperty({ description: 'UUID của đánh giá' })
+  id: string;
+
+  @ApiProperty({
+    description: 'Tên người đánh giá đã được ẩn danh một phần',
+    example: 'Nguyễn V. A.',
+  })
+  patientDisplayName: string;
+
+  @ApiProperty({ description: 'Số sao đánh giá', example: 5 })
+  ratingStars: number;
+
+  @ApiPropertyOptional({
+    description: 'Nội dung nhận xét',
+    example: 'Bác sĩ rất tận tâm và giải thích chi tiết phác đồ.',
+    nullable: true,
+  })
+  comment?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Tên gói tại buổi khám được đánh giá',
+    example: 'Gói Đồng Hành',
+    nullable: true,
+  })
+  packageName?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Quận/huyện của hộ gia đình',
+    example: 'Quận 7',
+    nullable: true,
+  })
+  district?: string | null;
+
+  @ApiProperty({
+    description: 'Thời điểm gửi đánh giá',
+    example: '2026-11-01T08:30:00.000Z',
+  })
+  reviewedAt: Date | string;
+}
+
+export class PublicDoctorReviewsSummaryDto {
+  @ApiProperty({
+    description: 'Điểm đánh giá trung bình; null khi chưa có đánh giá',
+    example: 4.96,
+    nullable: true,
+  })
+  ratingAvg: number | null;
+
+  @ApiProperty({ description: 'Tổng số đánh giá', example: 384 })
+  totalReviews: number;
+
+  @ApiProperty({
+    description: 'Tối đa 5 đánh giá mới nhất có nội dung',
+    type: [PublicDoctorReviewPreviewItemDto],
+  })
+  items: PublicDoctorReviewPreviewItemDto[];
 }
 
 export class PublicDoctorDetailDto {
@@ -122,6 +319,7 @@ export class PublicDoctorDetailDto {
   @ApiPropertyOptional({
     description: 'Học hàm, học vị chuyên môn',
     example: 'PGS. TS. Bác sĩ',
+    nullable: true,
   })
   academicTitle?: string | null;
 
@@ -137,58 +335,38 @@ export class PublicDoctorDetailDto {
   })
   specialtyKey: string;
 
-  @ApiProperty({
-    description: 'Cơ sở y tế hoặc bệnh viện trực thuộc',
-    example: 'Bệnh viện Đại học Y Dược TP.HCM',
+  @ApiPropertyOptional({
+    description: 'Đường dẫn ảnh đại diện chuyên nghiệp của bác sĩ',
+    example: '/images/medsev/home-one/doctor/1.jpg',
+    nullable: true,
   })
-  hospital: string;
+  avatarUrl?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Tiểu sử tóm tắt quá trình công tác và thế mạnh chuyên sâu',
+    example:
+      'Nguyên Phó Trưởng khoa Khám bệnh - Bệnh viện Đại học Y Dược TP.HCM.',
+    nullable: true,
+  })
+  bio?: string | null;
 
   @ApiProperty({
-    description: 'Tỉnh / thành phố nơi bác sĩ hoạt động',
-    example: 'TP. Hồ Chí Minh',
-  })
-  location: string;
-
-  @ApiProperty({
-    description: 'Trạng thái đã thẩm định chứng chỉ hành nghề và hồ sơ y tế',
+    description: 'Hồ sơ đã được nền tảng xác thực',
     example: true,
   })
   isVerified: boolean;
 
   @ApiProperty({
-    description: 'Khả năng tiếp nhận thêm hộ gia đình mới vào danh sách phụ trách',
+    description: 'Khả năng tiếp nhận thêm hộ gia đình mới',
     example: true,
   })
   isAvailable: boolean;
 
-  @ApiPropertyOptional({
-    description: 'Đường dẫn ảnh đại diện chuyên nghiệp của bác sĩ',
-    example: '/images/medsev/home-one/doctor/1.jpg',
+  @ApiProperty({
+    description: 'Thông tin sức chứa hộ gia đình của bác sĩ',
+    type: DoctorPanelDto,
   })
-  avatarUrl?: string | null;
-
-  @ApiPropertyOptional({
-    description: 'Điểm đánh giá trung bình (tương thích ngược)',
-    example: 4.8,
-  })
-  ratingAvg?: number;
-
-  @ApiPropertyOptional({
-    description: 'Tổng số lượt đánh giá (tương thích ngược)',
-    example: 20,
-  })
-  totalReviews?: number;
-
-  @ApiPropertyOptional({
-    description: 'Số năm kinh nghiệm lâm sàng (tương thích ngược)',
-    example: 7,
-  })
-  experienceYears?: number;
-
-  @ApiPropertyOptional({
-    description: 'Thông tin cơ sở y tế trực thuộc (tương thích ngược)',
-  })
-  facility?: any;
+  panel: DoctorPanelDto;
 
   @ApiProperty({
     description: 'Số liệu thống kê năng lực và uy tín bác sĩ',
@@ -196,41 +374,40 @@ export class PublicDoctorDetailDto {
   })
   stats: DoctorStatsDto;
 
-  @ApiProperty({
-    description: 'Các hình thức dịch vụ khám chữa bệnh tiếp nhận',
-    type: [String],
-    example: ['home', 'telehealth', 'clinic'],
-  })
-  services: string[];
-
-  @ApiProperty({
-    description: 'Quá trình đào tạo, học vị và chứng chỉ chuyên môn',
-    type: [String],
-    example: [
-      'Tiến sĩ Y khoa (Y học Gia đình & Nội khoa) - Đại học Paris Descartes (2008)',
-      'Thạc sĩ Y khoa chuyên ngành Nội khoa - Đại học Y Dược TP.HCM (2002)',
-      'Bác sĩ Đa khoa xuất sắc - Đại học Y Dược TP.HCM (1998)',
-    ],
-  })
-  education: string[];
-
   @ApiPropertyOptional({
-    description: 'Tiểu sử tóm tắt quá trình công tác và thế mạnh chuyên sâu',
-    example:
-      'Nguyên Phó Trưởng khoa Khám bệnh - Bệnh viện Đại học Y Dược TP.HCM. Hơn 24 năm kinh nghiệm thực hành lâm sàng...',
+    description: 'Thông tin công khai của cơ sở y tế trực thuộc',
+    type: PublicFacilitySummaryDto,
+    nullable: true,
   })
-  bio?: string | null;
+  facility: PublicFacilitySummaryDto | null;
 
-  @ApiPropertyOptional({
-    description: 'Khung giờ và lịch trực tiếp nhận tư vấn/thăm khám',
-    example:
-      'Thứ 2 - Thứ 7: 08:00 - 18:00 (Nhận khám tại nhà các buổi chiều và tư vấn trực tuyến 24/7)',
+  @ApiProperty({
+    description: 'Chứng chỉ đã được nền tảng xác thực',
+    type: [DoctorCredentialItemDto],
   })
-  schedule?: string | null;
+  credentials: DoctorCredentialItemDto[];
+
+  @ApiProperty({
+    description: 'Ca bệnh tiêu biểu đã được duyệt công khai',
+    type: [DoctorTreatedCaseItemDto],
+  })
+  treatedCases: DoctorTreatedCaseItemDto[];
+
+  @ApiProperty({
+    description: 'Phạm vi chăm sóc chung của nền tảng',
+    type: DoctorCareModelDto,
+  })
+  careModel: DoctorCareModelDto;
 
   @ApiProperty({
     description: 'Danh sách các gói chăm sóc sức khỏe gia đình khả dụng',
     type: [DoctorCarePackageItemDto],
   })
   carePackages: DoctorCarePackageItemDto[];
+
+  @ApiProperty({
+    description: 'Tóm tắt và các đánh giá đã xác thực mới nhất',
+    type: PublicDoctorReviewsSummaryDto,
+  })
+  reviews: PublicDoctorReviewsSummaryDto;
 }

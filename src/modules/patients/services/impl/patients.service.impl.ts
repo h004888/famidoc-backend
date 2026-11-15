@@ -82,6 +82,39 @@ export class PatientsServiceImpl implements IPatientsService {
 
   async createPatient(user: AuthenticatedUser, dto: CreatePatientDto): Promise<Patient> {
     const familyId = await this.resolveFamilyId(user, dto.familyId);
+
+    if (this.repository.createWithActiveContractLock) {
+      return this.repository.createWithActiveContractLock(familyId, dto);
+    }
+
+    if (this.repository.findActiveContractByFamilyId) {
+      const activeContract =
+        await this.repository.findActiveContractByFamilyId(familyId);
+      if (!activeContract) {
+        throw new ForbiddenException(
+          'Hộ gia đình cần đăng ký và kích hoạt gói dịch vụ (ACTIVE) trước khi thêm thành viên',
+        );
+      }
+
+      if (this.repository.countPatientsByFamilyId) {
+        const currentCount =
+          await this.repository.countPatientsByFamilyId(familyId);
+        if (currentCount >= activeContract.memberCount) {
+          throw new BadRequestException(
+            `Hộ gia đình đã đạt giới hạn tối đa ${activeContract.memberCount} thành viên của gói hiện tại. Vui lòng nâng cấp gói hoặc mua phụ lục bổ sung.`,
+          );
+        }
+      }
+
+      if (this.repository.createAndAttachToContract) {
+        return this.repository.createAndAttachToContract(
+          familyId,
+          activeContract.id,
+          dto,
+        );
+      }
+    }
+
     return this.repository.create(familyId, dto);
   }
 
@@ -109,6 +142,24 @@ export class PatientsServiceImpl implements IPatientsService {
   ): Promise<Patient> {
     await this.assertPatientAccess(user, id);
     return this.repository.update(id, dto);
+  }
+
+  async detachPatient(user: AuthenticatedUser, id: string): Promise<Patient> {
+    const patient = await this.assertPatientAccess(user, id);
+    if ((patient.relationshipToHead || '').trim().toUpperCase() === 'SELF') {
+      throw new BadRequestException(
+        'Không thể tách chủ hộ khỏi sổ hộ tịch gia đình',
+      );
+    }
+    if (patient.status === 'INACTIVE') {
+      throw new BadRequestException(
+        'Thành viên này đã được tách khỏi hộ gia đình',
+      );
+    }
+    if (this.repository.softDeactivate) {
+      return this.repository.softDeactivate(id);
+    }
+    return this.repository.update(id, { status: 'INACTIVE' });
   }
 
   async addAllergy(

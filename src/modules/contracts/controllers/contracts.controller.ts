@@ -10,10 +10,12 @@ import {
   Put,
   Query,
   Req,
+  Res,
   UseGuards,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -131,6 +133,75 @@ export class ContractsController {
     @Body() dto: SignContractChangeDto,
   ) {
     return this.signFourPartyContract(req, id, dto);
+  }
+
+  @Get('family/gate-status')
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_REP')
+  @ApiOperation({
+    summary:
+      'Kiểm tra trạng thái gói ACTIVE và hợp đồng đang chờ của hộ gia đình',
+    description:
+      'Dùng cho cổng bảo vệ khu vực quản trị gia đình (/family/*): chỉ mở khóa quản lý thành viên/đặt lịch/telemedicine khi có hợp đồng ACTIVE.',
+  })
+  getFamilyGateStatus(@Req() req: AuthenticatedRequest) {
+    return this.service.getFamilyGateStatus(req.user);
+  }
+
+  @Get('medical/:id/signing-session')
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_REP', 'HEALTHCARE_FACILITY', 'DOCTOR', 'ADMIN')
+  @ApiOperation({
+    summary: 'Lấy phiên ký Documenso nhúng theo vai trò của người dùng hiện tại',
+    description:
+      'Bên A (FAMILY_REP) nhận signingToken ngay sau khi tạo; Bên B/C/D nhận signingToken song song sau khi Bên A hoàn tất ký (HTTP 409 nếu Bên A chưa ký).',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng y tế' })
+  getSigningSession(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.service.getSigningSession(req.user, id);
+  }
+
+  @Post('four-party/:id/sync-documenso')
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_REP', 'HEALTHCARE_FACILITY', 'DOCTOR', 'ADMIN')
+  @ApiOperation({
+    summary:
+      'Đồng bộ trạng thái chữ ký trực tiếp từ Documenso sau khi ký trên giao diện nhúng',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng y tế' })
+  syncDocumensoEnvelope(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.service.syncDocumensoEnvelope(
+      req.user,
+      id,
+      req.ip ?? 'documenso-sync',
+    );
+  }
+
+  @Get('medical/:id/signed-pdf')
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_REP', 'HEALTHCARE_FACILITY', 'DOCTOR', 'ADMIN')
+  @ApiOperation({
+    summary: 'Tải hoặc xem tệp PDF hợp đồng đã ký qua proxy Documenso (bảo mật API key)',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng y tế' })
+  async downloadSignedPdf(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename } = await this.service.downloadSignedPdf(
+      req.user,
+      id,
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.send(buffer);
   }
 
   @Patch(':id/assign-doctor')

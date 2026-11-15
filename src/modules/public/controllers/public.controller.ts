@@ -36,7 +36,10 @@ import {
   PublicDoctorItemDto,
   PublicDoctorsResponseDto,
 } from '../dtos/public-doctors-response.dto';
-import { PublicDoctorDetailDto } from '../dtos/public-doctor-detail.dto';
+import {
+  PublicDoctorDetailDto,
+  DoctorCareModelDto,
+} from '../dtos/public-doctor-detail.dto';
 import {
   LookupDoctorReviewsQueryDto,
   PublicDoctorReviewItemDto,
@@ -180,6 +183,21 @@ export class PublicController {
     @Query() query: LookupDoctorDirectoryDto,
   ): Promise<PublicDoctorsResponseDto> {
     return this.publicService.lookupDoctorDirectory(query);
+  }
+
+  @Get('care-model')
+  @ApiOperation({
+    summary: 'Lấy phạm vi chăm sóc chung của nền tảng (hình thức khám và cam kết)',
+    description:
+      'Trả về các hình thức khám và cam kết dịch vụ đang áp dụng thống nhất cho mọi bác sĩ gia đình.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy nội dung chăm sóc nền tảng thành công.',
+    type: DoctorCareModelDto,
+  })
+  async getPublicCareModel(): Promise<DoctorCareModelDto> {
+    return this.publicService.getPublicCareModel();
   }
 
   @Get('doctors/:id')

@@ -45,6 +45,12 @@ describe('PublicServiceImpl', () => {
       familyUnit: {
         count: jest.fn().mockResolvedValue(150),
       },
+      platformCareItem: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      doctorReview: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       auditLog: {
         create: jest.fn().mockResolvedValue({ id: 1n }),
       },
@@ -554,6 +560,8 @@ describe('PublicServiceImpl', () => {
         activePanelCount: 15,
         maxPanelCapacity: 30,
         onboardingStatus: 'ACTIVE',
+        credentials: [],
+        treatedCases: [],
         facility: {
           id: 'fac-1',
           facilityName: 'Phòng khám Đa khoa Quốc tế',
@@ -566,7 +574,7 @@ describe('PublicServiceImpl', () => {
       expect(result).toBeDefined();
       expect(result.id).toBe('doc-1');
       expect(result.isAvailable).toBe(true);
-      expect(result.ratingAvg).toBe(4.8);
+      expect(result.reviews.ratingAvg).toBe(4.8);
       expect(result.stats.ratingAvg).toBe(4.8);
     });
 
