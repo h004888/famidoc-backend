@@ -278,6 +278,63 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
 
       expect(sessionMock.createMedicalContract).not.toHaveBeenCalled();
     });
+
+    it('tự động gọi deleteEnvelope để rollback Envelope Documenso khi lưu DB thất bại', async () => {
+      const sessionMock: any = {
+        findPackage: jest.fn().mockResolvedValue(mockPkg),
+        findFacilityById: jest.fn().mockResolvedValue(mockFacility),
+        findDoctorById: jest.fn().mockResolvedValue(mockDoctor),
+        findFamilyById: jest.fn().mockResolvedValue(mockFamily),
+        findFirstActiveAdminUser: jest
+          .fn()
+          .mockResolvedValue({ id: 'user-admin-1', email: 'admin@famidoc.online', fullName: 'Admin' }),
+        createMedicalContract: jest
+          .fn()
+          .mockRejectedValue(new Error('DB unique constraint error')),
+      };
+      const repoMock = {
+        transaction: jest.fn().mockImplementation(async (cb) => cb(sessionMock)),
+      };
+      const pdfRendererMock = {
+        renderPdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-1.4 mock')),
+      };
+      const documensoMock = {
+        createFourPartyEnvelope: jest.fn().mockResolvedValue({
+          envelopeId: 'envelope_rollback_db_fail',
+          envelopeItemId: 'item_rollback_db_fail',
+          signers: [
+            { role: 'FAMILY_REP', recipientId: 1, token: 'tok-a', signingUrl: 'https://sign.famidoc.online/sign/tok-a', status: 'NOT_SIGNED', completedAt: null },
+            { role: 'HEALTHCARE_FACILITY', recipientId: 2, token: 'tok-b', signingUrl: 'https://sign.famidoc.online/sign/tok-b', status: 'NOT_SIGNED', completedAt: null },
+            { role: 'ASSIGNED_DOCTOR', recipientId: 3, token: 'tok-c', signingUrl: 'https://sign.famidoc.online/sign/tok-c', status: 'NOT_SIGNED', completedAt: null },
+            { role: 'ADMIN', recipientId: 4, token: 'tok-d', signingUrl: 'https://sign.famidoc.online/sign/tok-d', status: 'NOT_SIGNED', completedAt: null },
+          ],
+        }),
+        deleteEnvelope: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const service = new ContractsServiceImpl(
+        repoMock as any,
+        undefined,
+        undefined,
+        documensoMock as any,
+        undefined,
+        pdfRendererMock as any,
+      );
+
+      await expect(
+        service.createInitialMedicalContract(familyUser, {
+          packageId: mockPkg.id,
+          facilityId: mockFacility.id,
+          doctorId: mockDoctor.id,
+          memberCount: 2,
+        }),
+      ).rejects.toThrow('DB unique constraint error');
+
+      expect(documensoMock.deleteEnvelope).toHaveBeenCalledTimes(1);
+      expect(documensoMock.deleteEnvelope).toHaveBeenCalledWith(
+        'envelope_rollback_db_fail',
+      );
+    });
   });
 
   describe('getSigningSession, parallel signing order & downloadSignedPdf', () => {

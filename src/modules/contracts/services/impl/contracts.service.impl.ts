@@ -411,9 +411,18 @@ export class ContractsServiceImpl implements IContractsService {
         ],
       });
 
-    return this.repository.transaction((session) =>
-      persistContract(session, prepared, documensoEnvelope),
-    );
+    try {
+      return await this.repository.transaction((session) =>
+        persistContract(session, prepared, documensoEnvelope),
+      );
+    } catch (error) {
+      if (documensoEnvelope?.envelopeId) {
+        await this.documensoClient.deleteEnvelope?.(
+          documensoEnvelope.envelopeId,
+        );
+      }
+      throw error;
+    }
   }
 
   async signInitialMedicalContract(

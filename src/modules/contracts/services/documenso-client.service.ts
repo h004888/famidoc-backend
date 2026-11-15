@@ -423,6 +423,17 @@ export class DocumensoClientService {
     return timingSafeEqual(actualBuf, expectedBuf);
   }
 
+  /**
+   * Xóa Envelope bù trừ trên Documenso (ví dụ khi lưu hợp đồng vào DB thất bại).
+   * Không ném lỗi để tránh che lấp lỗi gốc trong luồng rollback.
+   */
+  async deleteEnvelope(envelopeId: string): Promise<void> {
+    if (!envelopeId || !this.getApiToken()) {
+      return;
+    }
+    await this.rollbackEnvelope(this.getBaseUrl(), envelopeId);
+  }
+
   private async rollbackEnvelope(
     baseUrl: string,
     envelopeId: string,
