@@ -237,4 +237,27 @@ describe('DocumensoClientService', () => {
     expect(service.verifyWebhookSecret('short')).toBe(false);
     expect(service.verifyWebhookSecret(undefined)).toBe(false);
   });
+
+  it('deleteEnvelope(): gọi endpoint xóa Envelope và không ném lỗi khi Documenso từ chối', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ success: true }),
+      })
+      .mockRejectedValueOnce(new Error('network timeout'));
+    global.fetch = fetchMock;
+
+    await expect(service.deleteEnvelope('envelope_cleanup_1')).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://sign.famidoc.online/api/v2/envelope/delete',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ envelopeId: 'envelope_cleanup_1' }),
+      }),
+    );
+
+    await expect(service.deleteEnvelope('envelope_cleanup_2')).resolves.toBeUndefined();
+  });
 });
