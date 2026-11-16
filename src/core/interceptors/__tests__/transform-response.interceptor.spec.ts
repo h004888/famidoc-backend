@@ -5,7 +5,7 @@ import { TransformResponseInterceptor } from '../transform-response.interceptor'
 import { BYPASS_TRANSFORM_KEY, BypassTransform } from '../../decorators/bypass-transform.decorator';
 
 describe('TransformResponseInterceptor', () => {
-  let interceptor: TransformResponseInterceptor;
+  let interceptor: TransformResponseInterceptor<any>;
   let reflector: Reflector;
 
   beforeEach(() => {

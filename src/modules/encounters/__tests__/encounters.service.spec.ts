@@ -16,7 +16,7 @@ import type {
   EncountersSession,
   IEncountersRepository,
 } from '../repositories/interfaces/encounters.repository.interface';
-import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
+import type { AuthenticatedUser } from '../../../core/auth/authenticated-request';
 
 describe('EncountersService (Main Business Flow 2.3)', () => {
   let service: EncountersServiceImpl;

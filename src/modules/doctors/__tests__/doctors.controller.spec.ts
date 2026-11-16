@@ -85,6 +85,13 @@ describe('Doctors & Facilities Controllers', () => {
         page: 1,
         limit: 10,
       }),
+      registerFacility: jest.fn(),
+      approveFacilityAccount: jest.fn(),
+      submitFacilityLegalProfile: jest.fn(),
+      verifyFacilityLegal: jest.fn(),
+      getMyFacility: jest.fn(),
+      listFacilitiesForAdmin: jest.fn(),
+      getFacilityDetailForAdmin: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({

@@ -1,4 +1,4 @@
-import { ValidationPipe, ConflictException, ServiceUnavailableException, NotFoundException } from '@nestjs/common';
+import { ValidationPipe, ConflictException, ServiceUnavailableException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ContractsServiceImpl } from '../services/impl/contracts.service.impl';
 import { CreateMedicalContractDto } from '../dtos/create-medical-contract.dto';
 import type { AuthenticatedUser } from '../../../core/auth/authenticated-request';
@@ -355,6 +355,120 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
       expect(documensoMock.deleteEnvelope).toHaveBeenCalledWith(
         'envelope_rollback_db_fail',
       );
+    });
+  });
+
+  describe('Guard chặn dữ liệu demo (DEMO / .invalid) theo cờ môi trường', () => {
+    const demoAdmin = {
+      id: 'user-admin-demo',
+      email: 'admin@demo.famidoc.invalid',
+      fullName: 'DEMO - Quản trị viên',
+    };
+
+    function buildDemoSessionAndService() {
+      const sessionMock: any = {
+        findPackage: jest.fn().mockResolvedValue(mockPkg),
+        findFacilityById: jest.fn().mockResolvedValue(mockFacility),
+        findActiveStaffingContract: jest.fn().mockImplementation((facilityId: string) =>
+          Promise.resolve(
+            facilityId === mockFacility.id
+              ? { id: 'staffing-1', facilityId, status: 'ACTIVE' }
+              : null,
+          )
+        ),
+        findDoctorById: jest.fn().mockResolvedValue(mockDoctor),
+        findFamilyById: jest.fn().mockResolvedValue(mockFamily),
+        findFirstActiveAdminUser: jest.fn().mockResolvedValue(demoAdmin),
+        createMedicalContract: jest.fn().mockImplementation(async (data) =>
+          makeContractRecord(data),
+        ),
+        saveDocumensoSigners: jest.fn().mockResolvedValue(undefined),
+        createContractMembers: jest.fn(),
+        recordChange: jest.fn(),
+      };
+      const repoMock = {
+        transaction: jest.fn().mockImplementation(async (cb) => cb(sessionMock)),
+      };
+      const pdfRendererMock = {
+        renderPdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-1.4 mock')),
+      };
+      const documensoMock = {
+        createFourPartyEnvelope: jest.fn().mockResolvedValue({
+          envelopeId: 'envelope_demo',
+          envelopeItemId: 'item_demo',
+          signers: [
+            { role: 'FAMILY_REP', recipientId: 1, token: 'tok-a', signingUrl: 'https://sign.famidoc.online/sign/tok-a', status: 'NOT_SIGNED', completedAt: null },
+            { role: 'HEALTHCARE_FACILITY', recipientId: 2, token: 'tok-b', signingUrl: 'https://sign.famidoc.online/sign/tok-b', status: 'NOT_SIGNED', completedAt: null },
+            { role: 'ASSIGNED_DOCTOR', recipientId: 3, token: 'tok-c', signingUrl: 'https://sign.famidoc.online/sign/tok-c', status: 'NOT_SIGNED', completedAt: null },
+            { role: 'ADMIN', recipientId: 4, token: 'tok-d', signingUrl: 'https://sign.famidoc.online/sign/tok-d', status: 'NOT_SIGNED', completedAt: null },
+          ],
+        }),
+      };
+      const service = new ContractsServiceImpl(
+        repoMock as any,
+        undefined,
+        undefined,
+        documensoMock as any,
+        undefined,
+        pdfRendererMock as any,
+      );
+      return { sessionMock, pdfRendererMock, documensoMock, service };
+    }
+
+    const createContractPayload = {
+      packageId: mockPkg.id,
+      facilityId: mockFacility.id,
+      doctorId: mockDoctor.id,
+      memberCount: 2,
+    };
+
+    it('bật strict mode: chặn HTTP 400 khi thông tin các bên chứa DEMO/.invalid, không render PDF hay gọi Documenso', async () => {
+      const prevFlag = process.env.CONTRACT_STRICT_REAL_PARTIES;
+      process.env.CONTRACT_STRICT_REAL_PARTIES = 'true';
+      try {
+        const { sessionMock, pdfRendererMock, documensoMock, service } =
+          buildDemoSessionAndService();
+
+        await expect(
+          service.createInitialMedicalContract(familyUser, createContractPayload),
+        ).rejects.toThrow(BadRequestException);
+
+        await expect(
+          service.createInitialMedicalContract(familyUser, createContractPayload),
+        ).rejects.toThrow(/DEMO|\.invalid|thử nghiệm/);
+
+        expect(pdfRendererMock.renderPdf).not.toHaveBeenCalled();
+        expect(documensoMock.createFourPartyEnvelope).not.toHaveBeenCalled();
+        expect(sessionMock.createMedicalContract).not.toHaveBeenCalled();
+      } finally {
+        if (prevFlag === undefined) {
+          delete process.env.CONTRACT_STRICT_REAL_PARTIES;
+        } else {
+          process.env.CONTRACT_STRICT_REAL_PARTIES = prevFlag;
+        }
+      }
+    });
+
+    it('tắt strict mode: vẫn khởi tạo hợp đồng thành công ở dev/staging với dữ liệu seed demo', async () => {
+      const prevFlag = process.env.CONTRACT_STRICT_REAL_PARTIES;
+      delete process.env.CONTRACT_STRICT_REAL_PARTIES;
+      try {
+        const { pdfRendererMock, documensoMock, service } =
+          buildDemoSessionAndService();
+
+        const summary = await service.createInitialMedicalContract(
+          familyUser,
+          createContractPayload,
+        );
+
+        expect(pdfRendererMock.renderPdf).toHaveBeenCalledTimes(1);
+        expect(documensoMock.createFourPartyEnvelope).toHaveBeenCalledTimes(1);
+        expect(summary.documensoEnvelopeId).toBe('envelope_demo');
+      } finally {
+        if (prevFlag !== undefined) {
+          process.env.CONTRACT_STRICT_REAL_PARTIES = prevFlag;
+        }
+      }
     });
   });
 

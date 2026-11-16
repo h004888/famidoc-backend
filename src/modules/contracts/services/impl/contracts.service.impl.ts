@@ -66,7 +66,13 @@ import {
   isSignedPdfReady,
   resolveSignedPdfUrl,
 } from '../contract-signed-pdf-gate';
-import { buildDocumensoContractHtml } from '../../templates/build-documenso-contract-html';
+import {
+  buildDocumensoContractFieldValues,
+  buildDocumensoContractHtml,
+  isStrictRealPartyMode,
+  validateRealPartyContractData,
+} from '../../templates/build-documenso-contract-html';
+import type { BuildDocumensoContractHtmlInput } from '../../templates/build-documenso-contract-html';
 import {
   calculateHomeVisitAddendum,
   calculateMemberAddendum,
@@ -273,6 +279,40 @@ export class ContractsServiceImpl implements IContractsService {
         'MC' + randomUUID().replaceAll('-', '').toUpperCase();
       const admin = (await session.findFirstActiveAdminUser?.()) ?? null;
 
+      const contractInput: BuildDocumensoContractHtmlInput = {
+        contractNumber,
+        durationMonths: pkg.durationMonths,
+        pkg,
+        pricing: {
+          basePriceVnd: quote.pricing.basePriceVnd,
+          additionalMemberTotalVnd: quote.pricing.additionalMembersTotalVnd,
+          additionalMemberUnitPriceVnd: moneyToNumber(
+            pkg.additionalMemberMonthlyPrice,
+          ),
+          totalPriceVnd: quote.pricing.totalPriceVnd,
+        },
+        memberCount,
+        family,
+        facility,
+        doctor,
+        admin,
+        additionalTerms: dto.additionalTerms,
+      };
+
+      // Guard chặn dữ liệu thử nghiệm (DEMO / .invalid) ở thông tin 4 bên:
+      // khi bật chế độ nghiêm ngặt thì từ chối khởi tạo TRƯỚC khi render PDF
+      // và gọi Documenso để không phát hành hợp đồng pháp lý chứa dữ liệu mẫu.
+      if (isStrictRealPartyMode()) {
+        const validation = validateRealPartyContractData(
+          buildDocumensoContractFieldValues(contractInput),
+        );
+        if (!validation.valid) {
+          throw new BadRequestException(
+            `Thông tin các bên hợp đồng chứa dữ liệu thử nghiệm chưa hợp lệ: ${validation.issues.join('; ')}`,
+          );
+        }
+      }
+
       return {
         targetFamilyId,
         pkg,
@@ -285,6 +325,7 @@ export class ContractsServiceImpl implements IContractsService {
         snapshot,
         today,
         contractNumber,
+        contractInput,
       };
     };
 
@@ -382,26 +423,7 @@ export class ContractsServiceImpl implements IContractsService {
     }
 
     const prepared = await this.repository.transaction(validateAndPrepare);
-    const contractHtml = buildDocumensoContractHtml({
-      contractNumber: prepared.contractNumber,
-      durationMonths: prepared.pkg.durationMonths,
-      pkg: prepared.pkg,
-      pricing: {
-        basePriceVnd: prepared.quote.pricing.basePriceVnd,
-        additionalMemberTotalVnd:
-          prepared.quote.pricing.additionalMembersTotalVnd,
-        additionalMemberUnitPriceVnd: moneyToNumber(
-          prepared.pkg.additionalMemberMonthlyPrice,
-        ),
-        totalPriceVnd: prepared.quote.pricing.totalPriceVnd,
-      },
-      memberCount: prepared.memberCount,
-      family: prepared.family,
-      facility: prepared.facility,
-      doctor: prepared.doctor,
-      admin: prepared.admin,
-      additionalTerms: dto.additionalTerms,
-    });
+    const contractHtml = buildDocumensoContractHtml(prepared.contractInput);
 
     const pdfRenderer = this.pdfRenderer || new ContractPdfRendererService();
     const pdfBuffer = await pdfRenderer.renderPdf(contractHtml);

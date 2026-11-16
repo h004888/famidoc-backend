@@ -396,7 +396,7 @@ describe('PublicServiceImpl', () => {
       expect(result.items[0].ratingAvg).toBe(4.9);
       expect(typeof result.items[0].ratingAvg).toBe('number');
       expect(result.items[0].isAvailable).toBe(true);
-      expect(result.items[0].facility.facilityName).toBe('Phòng khám Hà Nội');
+      expect(result.items[0].facility!.facilityName).toBe('Phòng khám Hà Nội');
 
       expect(prismaService.doctor.findMany).toHaveBeenCalledWith({
         where: { onboardingStatus: 'ACTIVE' },

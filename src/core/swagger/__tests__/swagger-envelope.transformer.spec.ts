@@ -29,7 +29,7 @@ describe('Swagger Envelope Transformer (OpenAPI Auto-Enveloping)', () => {
 
     const transformed = transformOpenApiWithEnvelope(rawDoc);
     const op = transformed.paths['/api/v1/doctors/{id}']?.get;
-    const res200Schema = op?.responses?.['200']?.content?.['application/json']?.schema;
+    const res200Schema = (op?.responses?.['200'] as any)?.content?.['application/json']?.schema;
 
     expect(res200Schema).toBeDefined();
     expect(res200Schema.type).toBe('object');
@@ -73,7 +73,7 @@ describe('Swagger Envelope Transformer (OpenAPI Auto-Enveloping)', () => {
 
     const transformed = transformOpenApiWithEnvelope(rawDoc);
     const op = transformed.paths['/api/v1/care-packages']?.get;
-    const res200Schema = op?.responses?.['200']?.content?.['application/json']?.schema;
+    const res200Schema = (op?.responses?.['200'] as any)?.content?.['application/json']?.schema;
 
     expect(res200Schema.properties.meta).toBeDefined();
     expect(res200Schema.properties.meta.properties.pagination).toBeDefined();
@@ -110,7 +110,7 @@ describe('Swagger Envelope Transformer (OpenAPI Auto-Enveloping)', () => {
 
     const transformed = transformOpenApiWithEnvelope(rawDoc);
     const op = transformed.paths['/api/v1/payments/webhook/vietqr']?.post;
-    const res200Schema = op?.responses?.['200']?.content?.['application/json']?.schema;
+    const res200Schema = (op?.responses?.['200'] as any)?.content?.['application/json']?.schema;
 
     expect(res200Schema.properties.requestId).toBeUndefined();
     expect(res200Schema.properties.data).toBeUndefined();
@@ -153,7 +153,7 @@ describe('Swagger Envelope Transformer (OpenAPI Auto-Enveloping)', () => {
 
     const transformed = transformOpenApiWithEnvelope(rawDoc);
     const op = transformed.paths['/api/v1/auth/login']?.post;
-    const res200Schema = op?.responses?.['200']?.content?.['application/json']?.schema;
+    const res200Schema = (op?.responses?.['200'] as any)?.content?.['application/json']?.schema;
 
     expect(res200Schema.properties.data).toEqual({
       $ref: '#/components/schemas/LoginDataDto',

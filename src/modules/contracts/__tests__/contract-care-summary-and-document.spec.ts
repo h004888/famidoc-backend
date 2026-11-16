@@ -272,7 +272,7 @@ describe('Care Needs Summary & Document API (Task 6)', () => {
       expect(summary.contractNumber).toBe('CTR-2026-000001');
       expect(summary.members).toHaveLength(2);
 
-      const child = summary.members.find((m: any) => m.patientId === 'patient-child');
+      const child = summary.members.find((m: any) => m.patientId === 'patient-child')!;
       expect(child).toBeDefined();
       expect(child.fullName).toBe('Nguyễn Văn Con');
       expect(child.ageGroup).toBe('CHILD');
@@ -281,7 +281,7 @@ describe('Care Needs Summary & Document API (Task 6)', () => {
       expect(child.documents).toHaveLength(1);
       expect(child.documents[0].documentName).toBe('Sổ tiêm chủng mở rộng');
 
-      const adult = summary.members.find((m: any) => m.patientId === 'patient-adult');
+      const adult = summary.members.find((m: any) => m.patientId === 'patient-adult')!;
       expect(adult).toBeDefined();
       expect(adult.ageGroup).toBe('ADULT');
     });

@@ -33,7 +33,7 @@ describe('StandardApiResponseFilter (RFC 9457 Compliance)', () => {
       originalUrl: options?.url ?? '/api/v1/test',
     };
 
-    const res = {
+    const res: any = {
       status: jest.fn((code: number) => {
         statusCode = code;
         return res;

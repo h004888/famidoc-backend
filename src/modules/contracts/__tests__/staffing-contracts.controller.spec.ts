@@ -65,8 +65,15 @@ describe('ContractsController - Staffing Endpoints', () => {
       initiateFourPartyContract: jest.fn(),
       signFourPartyContract: jest.fn(),
       assignDoctorToPackage: jest.fn(),
-      createInitialMedicalContract: jest.fn(),
-      signInitialMedicalContract: jest.fn(),
+      listMedicalContracts: jest.fn(),
+      findMedicalContractById: jest.fn(),
+      getCareNeedsSummary: jest.fn(),
+      getContractDocument: jest.fn(),
+      cancelDraftMedicalContract: jest.fn(),
+      getSigningSession: jest.fn(),
+      syncDocumensoEnvelope: jest.fn(),
+      downloadSignedPdf: jest.fn(),
+      getFamilyGateStatus: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
