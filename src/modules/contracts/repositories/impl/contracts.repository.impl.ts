@@ -217,6 +217,19 @@ class PrismaContractsSession implements ContractsSession {
       },
     });
   }
+  async hasPaidInvoice(contractId: string) {
+    return !!(await this.tx.invoice.findFirst({
+      where: { contractId, paymentStatus: 'PAID' },
+      select: { id: true },
+    }));
+  }
+  async cancelPendingInvoices(contractId: string) {
+    // Hủy yêu cầu thanh toán VietQR còn chờ của bản nháp; không đụng hóa đơn đã PAID.
+    await this.tx.invoice.updateMany({
+      where: { contractId, paymentStatus: 'PENDING' },
+      data: { paymentStatus: 'CANCELLED' },
+    });
+  }
   findContractSignatures(contractId: string) {
     return this.tx.contractSignature.findMany({
       where: { contractId, addendumId: null },

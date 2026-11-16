@@ -176,6 +176,15 @@ export class ContractsServiceImpl implements IContractsService {
         );
       }
 
+      // Hợp đồng cũ chỉ được coi là thay thế hợp lệ khi còn bản nháp chưa thanh toán.
+      if (dto.replaceContractId) {
+        await this.requireReplaceableDraft(
+          session,
+          dto.replaceContractId,
+          targetFamilyId,
+        );
+      }
+
       let memberCount: number;
       if (patientIds.length > 0) {
         if (
@@ -260,6 +269,7 @@ export class ContractsServiceImpl implements IContractsService {
       };
     };
 
+    let replacedEnvelopeId: string | null = null;
     const persistContract = async (
       session: ContractsSession,
       prepared: Awaited<ReturnType<typeof validateAndPrepare>>,
@@ -267,6 +277,23 @@ export class ContractsServiceImpl implements IContractsService {
         ReturnType<DocumensoClientService['createFourPartyEnvelope']>
       > | null,
     ): Promise<ContractSummary> => {
+      // Hủy nguyên tử hợp đồng cũ ngay trước khi tạo mới để không sinh bản nháp trùng.
+      if (dto.replaceContractId) {
+        const replaced = await this.requireReplaceableDraft(
+          session,
+          dto.replaceContractId,
+          prepared.targetFamilyId,
+        );
+        replacedEnvelopeId = replaced.documensoEnvelopeId ?? null;
+        await this.terminateUnpaidDraft(
+          session,
+          replaced,
+          'Thay thế bằng hợp đồng mới do thay đổi gói hoặc số thành viên',
+          actor.id,
+          'REPLACE_UNPAID_CONTRACT_DRAFT',
+        );
+      }
+
       const createFn = session.createMedicalContract || session.createUpgrade;
       const item = await createFn.call(session, {
         contractNumber: prepared.contractNumber,
@@ -327,10 +354,12 @@ export class ContractsServiceImpl implements IContractsService {
     };
 
     if (!this.documensoClient) {
-      return this.repository.transaction(async (session) => {
+      const created = await this.repository.transaction(async (session) => {
         const prepared = await validateAndPrepare(session);
         return persistContract(session, prepared, null);
       });
+      await this.deleteEnvelopeSafely(replacedEnvelopeId);
+      return created;
     }
 
     const prepared = await this.repository.transaction(validateAndPrepare);
@@ -411,8 +440,9 @@ export class ContractsServiceImpl implements IContractsService {
         ],
       });
 
+    let created: ContractSummary;
     try {
-      return await this.repository.transaction((session) =>
+      created = await this.repository.transaction((session) =>
         persistContract(session, prepared, documensoEnvelope),
       );
     } catch (error) {
@@ -423,6 +453,8 @@ export class ContractsServiceImpl implements IContractsService {
       }
       throw error;
     }
+    await this.deleteEnvelopeSafely(replacedEnvelopeId);
+    return created;
   }
 
   async signInitialMedicalContract(
@@ -518,6 +550,66 @@ export class ContractsServiceImpl implements IContractsService {
     dto: CreateMedicalContractDto,
   ): Promise<ContractSummary> {
     return this.createInitialMedicalContract(actor, dto);
+  }
+
+  async cancelDraftMedicalContract(
+    actor: AuthenticatedUser,
+    id: string,
+    reason?: string,
+  ): Promise<{ id: string; contractStatus: 'TERMINATED' }> {
+    if (!['FAMILY_REP', 'ADMIN'].includes(actor.role)) {
+      throw new ForbiddenException(
+        'Chỉ Đại diện gia đình hoặc Quản trị viên mới có quyền hủy bản nháp hợp đồng',
+      );
+    }
+    const contract = await this.repository.transaction(async (session) => {
+      const target = await session.findContractForUpdate(id);
+      if (!target) throw new NotFoundException('Không tìm thấy hợp đồng y tế');
+      let allowedFamilyId: string | null = target.familyId;
+      if (actor.role !== 'ADMIN') {
+        allowedFamilyId =
+          actor.familyUnitId ??
+          (await session.findFamilyByRepresentativeUserId?.(actor.id))?.id ??
+          null;
+        if (!allowedFamilyId) {
+          throw new ForbiddenException(
+            'Tài khoản đại diện gia đình chưa liên kết với hộ gia đình',
+          );
+        }
+      }
+      const replaceable = await this.requireReplaceableDraft(
+        session,
+        id,
+        allowedFamilyId,
+      );
+      await this.terminateUnpaidDraft(
+        session,
+        replaceable,
+        reason?.trim() ||
+          (actor.role === 'ADMIN'
+            ? 'Quản trị viên hủy bản nháp hợp đồng chưa thanh toán'
+            : 'Đại diện hộ gia đình hủy bản nháp hợp đồng chưa thanh toán'),
+        actor.id,
+        'CANCEL_UNPAID_CONTRACT_DRAFT',
+      );
+      return replaceable;
+    });
+    // Documenso nằm ngoài transaction: lỗi phía đối tác chỉ ghi cảnh báo, bản nháp nội bộ đã đóng.
+    await this.deleteEnvelopeSafely(contract.documensoEnvelopeId);
+    return { id: contract.id, contractStatus: 'TERMINATED' };
+  }
+
+  private async deleteEnvelopeSafely(envelopeId?: string | null) {
+    if (!envelopeId || !this.documensoClient) return;
+    try {
+      await this.documensoClient.deleteEnvelope(envelopeId);
+    } catch (error) {
+      this.logger.warn(
+        `Không hủy được phong bì Documenso ${envelopeId}: ${
+          (error as Error)?.message ?? error
+        }`,
+      );
+    }
   }
 
   signFourPartyContract(
@@ -1873,6 +1965,45 @@ export class ContractsServiceImpl implements IContractsService {
       throw new NotFoundException('Contract not found');
     }
     return contract;
+  }
+  // Chỉ bản nháp chưa thanh toán mới được hủy/thay thế; hóa đơn PAID khóa vĩnh viễn.
+  private async requireReplaceableDraft(
+    session: ContractsSession,
+    contractId: string,
+    familyId: string,
+  ): Promise<ChangeContract> {
+    const contract = await session.findContractForUpdate(contractId);
+    if (!contract)
+      throw new NotFoundException('Không tìm thấy hợp đồng cần hủy bản nháp');
+    if (contract.familyId !== familyId) {
+      throw new ForbiddenException(
+        'Hợp đồng cần hủy không thuộc hộ gia đình hiện tại',
+      );
+    }
+    if (
+      !['PENDING_APPROVAL', 'PENDING_PAYMENT'].includes(contract.contractStatus)
+    ) {
+      throw new ConflictException(
+        'Chỉ có thể hủy hợp đồng đang ở trạng thái PENDING_APPROVAL hoặc PENDING_PAYMENT',
+      );
+    }
+    if (await session.hasPaidInvoice(contractId)) {
+      throw new ConflictException(
+        'Hợp đồng đã có giao dịch thanh toán PAID, không thể hủy bản nháp',
+      );
+    }
+    return contract;
+  }
+  private async terminateUnpaidDraft(
+    session: ContractsSession,
+    contract: ChangeContract,
+    reason: string,
+    actorId: string,
+    action: string,
+  ) {
+    await session.updateContractStatus(contract.id, 'TERMINATED', reason);
+    await session.cancelPendingInvoices(contract.id);
+    await session.recordChange(actorId, contract, action, contract.id);
   }
   private assertContractServing(contract: ChangeContract) {
     if (

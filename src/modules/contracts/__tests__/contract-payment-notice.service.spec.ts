@@ -49,7 +49,7 @@ describe('ContractPaymentNoticeService', () => {
     const payload = mailer.sendMail.mock.calls[0][0];
     expect(payload.to).toBe('dai.dien@famidoc.test');
 
-    const expectedUrl = `https://app.famidoc.test/family/subscription/tracking?contractId=${contractRow.id}`;
+    const expectedUrl = `https://app.famidoc.test/booking/tracking?contractId=${contractRow.id}`;
     for (const body of [payload.text, payload.html]) {
       expect(body).toContain('MCTEST0001');
       expect(body).toContain('Gói Toàn Diện Gia Đình (12 Tháng)');
