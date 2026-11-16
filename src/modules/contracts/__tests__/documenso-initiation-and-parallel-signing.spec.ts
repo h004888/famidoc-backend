@@ -1,4 +1,4 @@
-import { ValidationPipe, ConflictException, ServiceUnavailableException, NotFoundException } from '@nestjs/common';
+import { ValidationPipe, ConflictException, ServiceUnavailableException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ContractsServiceImpl } from '../services/impl/contracts.service.impl';
 import { CreateMedicalContractDto } from '../dtos/create-medical-contract.dto';
 import type { AuthenticatedUser } from '../../../core/auth/authenticated-request';
@@ -173,6 +173,13 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
       const sessionMock: any = {
         findPackage: jest.fn().mockResolvedValue(mockPkg),
         findFacilityById: jest.fn().mockResolvedValue(mockFacility),
+        findActiveStaffingContract: jest.fn().mockImplementation((facilityId: string) =>
+          Promise.resolve(
+            facilityId === mockFacility.id
+              ? { id: 'staffing-1', facilityId, status: 'ACTIVE' }
+              : null,
+          )
+        ),
         findDoctorById: jest.fn().mockResolvedValue(mockDoctor),
         findFamilyById: jest.fn().mockResolvedValue(mockFamily),
         findFirstActiveAdminUser: jest
@@ -241,6 +248,13 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
       const sessionMock: any = {
         findPackage: jest.fn().mockResolvedValue(mockPkg),
         findFacilityById: jest.fn().mockResolvedValue(mockFacility),
+        findActiveStaffingContract: jest.fn().mockImplementation((facilityId: string) =>
+          Promise.resolve(
+            facilityId === mockFacility.id
+              ? { id: 'staffing-1', facilityId, status: 'ACTIVE' }
+              : null,
+          )
+        ),
         findDoctorById: jest.fn().mockResolvedValue(mockDoctor),
         findFamilyById: jest.fn().mockResolvedValue(mockFamily),
         findFirstActiveAdminUser: jest.fn().mockResolvedValue(null),
@@ -283,6 +297,13 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
       const sessionMock: any = {
         findPackage: jest.fn().mockResolvedValue(mockPkg),
         findFacilityById: jest.fn().mockResolvedValue(mockFacility),
+        findActiveStaffingContract: jest.fn().mockImplementation((facilityId: string) =>
+          Promise.resolve(
+            facilityId === mockFacility.id
+              ? { id: 'staffing-1', facilityId, status: 'ACTIVE' }
+              : null,
+          )
+        ),
         findDoctorById: jest.fn().mockResolvedValue(mockDoctor),
         findFamilyById: jest.fn().mockResolvedValue(mockFamily),
         findFirstActiveAdminUser: jest
@@ -337,6 +358,120 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
     });
   });
 
+  describe('Guard chặn dữ liệu demo (DEMO / .invalid) theo cờ môi trường', () => {
+    const demoAdmin = {
+      id: 'user-admin-demo',
+      email: 'admin@demo.famidoc.invalid',
+      fullName: 'DEMO - Quản trị viên',
+    };
+
+    function buildDemoSessionAndService() {
+      const sessionMock: any = {
+        findPackage: jest.fn().mockResolvedValue(mockPkg),
+        findFacilityById: jest.fn().mockResolvedValue(mockFacility),
+        findActiveStaffingContract: jest.fn().mockImplementation((facilityId: string) =>
+          Promise.resolve(
+            facilityId === mockFacility.id
+              ? { id: 'staffing-1', facilityId, status: 'ACTIVE' }
+              : null,
+          )
+        ),
+        findDoctorById: jest.fn().mockResolvedValue(mockDoctor),
+        findFamilyById: jest.fn().mockResolvedValue(mockFamily),
+        findFirstActiveAdminUser: jest.fn().mockResolvedValue(demoAdmin),
+        createMedicalContract: jest.fn().mockImplementation(async (data) =>
+          makeContractRecord(data),
+        ),
+        saveDocumensoSigners: jest.fn().mockResolvedValue(undefined),
+        createContractMembers: jest.fn(),
+        recordChange: jest.fn(),
+      };
+      const repoMock = {
+        transaction: jest.fn().mockImplementation(async (cb) => cb(sessionMock)),
+      };
+      const pdfRendererMock = {
+        renderPdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-1.4 mock')),
+      };
+      const documensoMock = {
+        createFourPartyEnvelope: jest.fn().mockResolvedValue({
+          envelopeId: 'envelope_demo',
+          envelopeItemId: 'item_demo',
+          signers: [
+            { role: 'FAMILY_REP', recipientId: 1, token: 'tok-a', signingUrl: 'https://sign.famidoc.online/sign/tok-a', status: 'NOT_SIGNED', completedAt: null },
+            { role: 'HEALTHCARE_FACILITY', recipientId: 2, token: 'tok-b', signingUrl: 'https://sign.famidoc.online/sign/tok-b', status: 'NOT_SIGNED', completedAt: null },
+            { role: 'ASSIGNED_DOCTOR', recipientId: 3, token: 'tok-c', signingUrl: 'https://sign.famidoc.online/sign/tok-c', status: 'NOT_SIGNED', completedAt: null },
+            { role: 'ADMIN', recipientId: 4, token: 'tok-d', signingUrl: 'https://sign.famidoc.online/sign/tok-d', status: 'NOT_SIGNED', completedAt: null },
+          ],
+        }),
+      };
+      const service = new ContractsServiceImpl(
+        repoMock as any,
+        undefined,
+        undefined,
+        documensoMock as any,
+        undefined,
+        pdfRendererMock as any,
+      );
+      return { sessionMock, pdfRendererMock, documensoMock, service };
+    }
+
+    const createContractPayload = {
+      packageId: mockPkg.id,
+      facilityId: mockFacility.id,
+      doctorId: mockDoctor.id,
+      memberCount: 2,
+    };
+
+    it('bật strict mode: chặn HTTP 400 khi thông tin các bên chứa DEMO/.invalid, không render PDF hay gọi Documenso', async () => {
+      const prevFlag = process.env.CONTRACT_STRICT_REAL_PARTIES;
+      process.env.CONTRACT_STRICT_REAL_PARTIES = 'true';
+      try {
+        const { sessionMock, pdfRendererMock, documensoMock, service } =
+          buildDemoSessionAndService();
+
+        await expect(
+          service.createInitialMedicalContract(familyUser, createContractPayload),
+        ).rejects.toThrow(BadRequestException);
+
+        await expect(
+          service.createInitialMedicalContract(familyUser, createContractPayload),
+        ).rejects.toThrow(/DEMO|\.invalid|thử nghiệm/);
+
+        expect(pdfRendererMock.renderPdf).not.toHaveBeenCalled();
+        expect(documensoMock.createFourPartyEnvelope).not.toHaveBeenCalled();
+        expect(sessionMock.createMedicalContract).not.toHaveBeenCalled();
+      } finally {
+        if (prevFlag === undefined) {
+          delete process.env.CONTRACT_STRICT_REAL_PARTIES;
+        } else {
+          process.env.CONTRACT_STRICT_REAL_PARTIES = prevFlag;
+        }
+      }
+    });
+
+    it('tắt strict mode: vẫn khởi tạo hợp đồng thành công ở dev/staging với dữ liệu seed demo', async () => {
+      const prevFlag = process.env.CONTRACT_STRICT_REAL_PARTIES;
+      delete process.env.CONTRACT_STRICT_REAL_PARTIES;
+      try {
+        const { pdfRendererMock, documensoMock, service } =
+          buildDemoSessionAndService();
+
+        const summary = await service.createInitialMedicalContract(
+          familyUser,
+          createContractPayload,
+        );
+
+        expect(pdfRendererMock.renderPdf).toHaveBeenCalledTimes(1);
+        expect(documensoMock.createFourPartyEnvelope).toHaveBeenCalledTimes(1);
+        expect(summary.documensoEnvelopeId).toBe('envelope_demo');
+      } finally {
+        if (prevFlag !== undefined) {
+          process.env.CONTRACT_STRICT_REAL_PARTIES = prevFlag;
+        }
+      }
+    });
+  });
+
   describe('getSigningSession, parallel signing order & downloadSignedPdf', () => {
     it('chặn Bên B, C, D với HTTP 409 trước khi Bên A ký và mở khóa song song sau khi Bên A ký', async () => {
       const contract = makeContractRecord();
@@ -371,7 +506,8 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
       const familySession = await service.getSigningSession(familyUser, contract.id);
       expect(familySession.signingToken).toBe('tok-a');
       expect(familySession.signingUrl).toBe('https://sign.famidoc.online/sign/tok-a');
-      expect(familySession.signedPdfUrl).toBe('/api/v1/contracts/medical/contract-1/signed-pdf');
+      // 0/4 chữ ký: chưa được trả URL PDF đã ký.
+      expect(familySession.signedPdfUrl).toBeNull();
 
       // Bên A ký xong
       const hash = calculateContractTermsHash(contract);
@@ -390,6 +526,8 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
       expect(docSession.signingToken).toBe('tok-c');
       expect(facSession.signingToken).toBe('tok-b');
       expect(admSession.signingToken).toBe('tok-d');
+      // 1/4 chữ ký: vẫn chưa có URL PDF đã ký.
+      expect(docSession.signedPdfUrl).toBeNull();
 
       await service.signInitialMedicalContract(
         doctorUser,
@@ -403,6 +541,12 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
         { acceptedTerms: true, termsHash: hash },
         '127.0.0.1',
       );
+
+      // 3/4 chữ ký: vẫn chưa có URL PDF đã ký.
+      const sessionAtThreeOfFour = await service.getSigningSession(adminUser, contract.id);
+      expect(sessionAtThreeOfFour.signedRoles).toHaveLength(3);
+      expect(sessionAtThreeOfFour.signedPdfUrl).toBeNull();
+
       await service.signInitialMedicalContract(
         adminUser,
         contract.id,
@@ -411,16 +555,117 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
       );
 
       expect(sessionMock.updateContractStatus).toHaveBeenCalledWith(contract.id, 'PENDING_PAYMENT');
+
+      // 4/4 chữ ký: mở khóa URL PDF đã ký.
+      const sessionAtFourOfFour = await service.getSigningSession(adminUser, contract.id);
+      expect(sessionAtFourOfFour.signedRoles).toHaveLength(4);
+      expect(sessionAtFourOfFour.signedPdfUrl).toBe(
+        '/api/v1/contracts/medical/contract-1/signed-pdf',
+      );
     });
 
-    it('downloadSignedPdf(): tải PDF qua DocumensoClientService cho bên hợp lệ và báo 404 nếu chưa có documensoItemId', async () => {
-      const contractWithItem = makeContractRecord({ documensoItemId: 'item_signed_1' });
+    it('getSigningSession(): coi hợp đồng đã đủ điều kiện khi 3/4 chữ ký nhưng đã PENDING_PAYMENT', async () => {
+      const contract = makeContractRecord({ contractStatus: 'PENDING_PAYMENT' });
+      const sessionMock: any = {
+        findContractForUpdate: jest.fn().mockResolvedValue(contract),
+        findContractSignatures: jest.fn().mockResolvedValue([
+          { signerRole: 'FAMILY_REP' },
+          { signerRole: 'HEALTHCARE_FACILITY' },
+          { signerRole: 'ASSIGNED_DOCTOR' },
+        ]),
+        findDocumensoSigners: jest.fn().mockResolvedValue([
+          { signerRole: 'ADMIN', documensoToken: 'tok-d', documensoSigningUrl: 'https://sign.famidoc.online/sign/tok-d' },
+        ]),
+      };
+      const repoMock = {
+        transaction: jest.fn().mockImplementation(async (cb) => cb(sessionMock)),
+      };
+      const service = new ContractsServiceImpl(repoMock as any);
+
+      const session = await service.getSigningSession(adminUser, contract.id);
+      expect(session.signedRoles).toHaveLength(3);
+      expect(session.signedPdfUrl).toBe(
+        '/api/v1/contracts/medical/contract-1/signed-pdf',
+      );
+    });
+
+    it('downloadSignedPdf(): báo 404 khi chưa có documensoItemId', async () => {
       const contractWithoutItem = makeContractRecord({ documensoItemId: null });
       const sessionMock: any = {
-        findContractForUpdate: jest
-          .fn()
-          .mockResolvedValueOnce(contractWithItem)
-          .mockResolvedValueOnce(contractWithoutItem),
+        findContractForUpdate: jest.fn().mockResolvedValue(contractWithoutItem),
+        findContractSignatures: jest.fn().mockResolvedValue([
+          { signerRole: 'FAMILY_REP' },
+          { signerRole: 'HEALTHCARE_FACILITY' },
+          { signerRole: 'ASSIGNED_DOCTOR' },
+          { signerRole: 'ADMIN' },
+        ]),
+      };
+      const repoMock = {
+        transaction: jest.fn().mockImplementation(async (cb) => cb(sessionMock)),
+      };
+      const documensoMock = {
+        downloadSignedItemPdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-signed')),
+      };
+
+      const service = new ContractsServiceImpl(
+        repoMock as any,
+        undefined,
+        undefined,
+        documensoMock as any,
+      );
+
+      await expect(service.downloadSignedPdf(familyUser, 'contract-1')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(documensoMock.downloadSignedItemPdf).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['0/4', [] as string[]],
+      ['1/4', ['FAMILY_REP']],
+      ['2/4', ['FAMILY_REP', 'HEALTHCARE_FACILITY']],
+      ['3/4', ['FAMILY_REP', 'HEALTHCARE_FACILITY', 'ASSIGNED_DOCTOR']],
+    ])(
+      'downloadSignedPdf(): ném 409 Conflict khi hợp đồng mới có %s chữ ký',
+      async (_label, roles) => {
+        const contract = makeContractRecord({ documensoItemId: 'item_signed_1' });
+        const sessionMock: any = {
+          findContractForUpdate: jest.fn().mockResolvedValue(contract),
+          findContractSignatures: jest
+            .fn()
+            .mockResolvedValue(roles.map((signerRole) => ({ signerRole }))),
+        };
+        const repoMock = {
+          transaction: jest.fn().mockImplementation(async (cb) => cb(sessionMock)),
+        };
+        const documensoMock = {
+          downloadSignedItemPdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-signed')),
+        };
+
+        const service = new ContractsServiceImpl(
+          repoMock as any,
+          undefined,
+          undefined,
+          documensoMock as any,
+        );
+
+        await expect(
+          service.downloadSignedPdf(familyUser, 'contract-1'),
+        ).rejects.toThrow(ConflictException);
+        expect(documensoMock.downloadSignedItemPdf).not.toHaveBeenCalled();
+      },
+    );
+
+    it('downloadSignedPdf(): tải PDF qua DocumensoClientService khi đã đủ 4/4 chữ ký', async () => {
+      const contract = makeContractRecord({ documensoItemId: 'item_signed_1' });
+      const sessionMock: any = {
+        findContractForUpdate: jest.fn().mockResolvedValue(contract),
+        findContractSignatures: jest.fn().mockResolvedValue([
+          { signerRole: 'FAMILY_REP' },
+          { signerRole: 'HEALTHCARE_FACILITY' },
+          { signerRole: 'ASSIGNED_DOCTOR' },
+          { signerRole: 'ADMIN' },
+        ]),
       };
       const repoMock = {
         transaction: jest.fn().mockImplementation(async (cb) => cb(sessionMock)),
@@ -440,10 +685,38 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
       expect(res.buffer.toString('ascii')).toBe('%PDF-signed');
       expect(res.filename).toBe('MC-DOCUMENSO-01-signed.pdf');
       expect(documensoMock.downloadSignedItemPdf).toHaveBeenCalledWith('item_signed_1');
+    });
 
-      await expect(service.downloadSignedPdf(familyUser, 'contract-1')).rejects.toThrow(
-        NotFoundException,
+    it('downloadSignedPdf(): cho phép tải khi signatures chỉ 3 role nhưng trạng thái đã PENDING_PAYMENT', async () => {
+      const contract = makeContractRecord({
+        documensoItemId: 'item_signed_1',
+        contractStatus: 'PENDING_PAYMENT',
+      });
+      const sessionMock: any = {
+        findContractForUpdate: jest.fn().mockResolvedValue(contract),
+        findContractSignatures: jest.fn().mockResolvedValue([
+          { signerRole: 'FAMILY_REP' },
+          { signerRole: 'HEALTHCARE_FACILITY' },
+          { signerRole: 'ASSIGNED_DOCTOR' },
+        ]),
+      };
+      const repoMock = {
+        transaction: jest.fn().mockImplementation(async (cb) => cb(sessionMock)),
+      };
+      const documensoMock = {
+        downloadSignedItemPdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-signed')),
+      };
+
+      const service = new ContractsServiceImpl(
+        repoMock as any,
+        undefined,
+        undefined,
+        documensoMock as any,
       );
+
+      const res = await service.downloadSignedPdf(familyUser, 'contract-1');
+      expect(res.buffer.toString('ascii')).toBe('%PDF-signed');
+      expect(documensoMock.downloadSignedItemPdf).toHaveBeenCalledWith('item_signed_1');
     });
   });
 

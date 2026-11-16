@@ -22,6 +22,13 @@ import type { CreateMedicalContractDto } from '../../dtos/create-medical-contrac
 import type { AssignDoctorToPackageDto } from '../../dtos/assign-doctor.dto';
 import type { ListMedicalContractsQueryDto } from '../../dtos/list-medical-contracts-query.dto';
 import type { DetailedMedicalContract } from '../../repositories/interfaces/contracts.repository.interface';
+
+/** Tùy chọn khi đọc chi tiết hợp đồng y tế. */
+export interface FindMedicalContractOptions {
+  /** Ép backend kiểm tra Documenso ngay, bỏ qua khoảng chờ giảm tần suất. */
+  forceSync?: boolean;
+}
+
 export const CONTRACTS_SERVICE_TOKEN = Symbol('IContractsService');
 export interface IContractsService {
   listMedicalContracts(
@@ -36,6 +43,8 @@ export interface IContractsService {
   findMedicalContractById(
     actor: AuthenticatedUser,
     id: string,
+    options?: FindMedicalContractOptions,
+    ip?: string,
   ): Promise<DetailedMedicalContract>;
   getCareNeedsSummary(
     actor: AuthenticatedUser,

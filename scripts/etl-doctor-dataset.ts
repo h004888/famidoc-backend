@@ -2,6 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { hashSync } from 'bcryptjs';
+import { todayInVietnam } from '../src/core/business/business-helpers';
+
+/** Cộng tháng theo UTC trên mốc ngày đã chuẩn hóa của `todayInVietnam()`. */
+function addMonthsToDate(date: Date, months: number): Date {
+  const next = new Date(date.getTime());
+  next.setUTCMonth(next.getUTCMonth() + months);
+  return next;
+}
 
 export interface NormalizedFacility {
   id: string;
@@ -24,6 +32,18 @@ export interface NormalizedFacility {
   bankAccountNumber: string;
   bankAccountHolder: string;
   verificationStatus: 'ACTIVE';
+  /**
+   * Hợp đồng cung ứng nhân lực B2B đi kèm cơ sở. Không có bản ghi `ACTIVE`
+   * còn hiệu lực thì cơ sở không thể nhận hợp đồng gia đình hoặc thanh toán.
+   */
+  staffingContract: {
+    contractCode: string;
+    status: 'ACTIVE';
+    startDate: string;
+    endDate: string;
+    platformCommissionRate: number;
+    facilityRevenueRate: number;
+  };
 }
 
 export interface NormalizedDoctor {
@@ -369,6 +389,12 @@ export function runEtl(): NormalizedDatasetResult {
 
   const defaultPasswordHash = hashSync('FamidocDoctor@2026', 10);
   const now = new Date().toISOString();
+  // Kỳ hạn hợp đồng B2B mẫu cho cơ sở curated: hiệu lực trọn năm tính từ hôm nay.
+  const curationStartDate = todayInVietnam().toISOString().slice(0, 10);
+  const curationEndDate = addMonthsToDate(
+    todayInVietnam(),
+    12,
+  ).toISOString().slice(0, 10);
 
   // 1. Chuẩn hóa 15 Cơ sở Y tế
   const facilities: NormalizedFacility[] = SEED_FACILITIES.map((fac, idx) => {
@@ -398,6 +424,16 @@ export function runEtl(): NormalizedDatasetResult {
       bankAccountNumber: `007100${(idx + 1).toString().padStart(6, '0')}`,
       bankAccountHolder: fac.facilityName.toUpperCase(),
       verificationStatus: 'ACTIVE',
+      // Mỗi cơ sở ACTIVE trong dataset curated phải có hợp đồng B2B hiệu lực,
+      // nếu không luồng thanh toán/hợp đồng 4 bên sẽ bị chặn sau khi nạp dữ liệu.
+      staffingContract: {
+        contractCode: `B2B-CURATED-${(idx + 1).toString().padStart(3, '0')}`,
+        status: 'ACTIVE',
+        startDate: curationStartDate,
+        endDate: curationEndDate,
+        platformCommissionRate: 15,
+        facilityRevenueRate: 85,
+      },
     };
   });
 

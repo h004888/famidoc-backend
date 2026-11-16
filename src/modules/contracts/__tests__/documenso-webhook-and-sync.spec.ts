@@ -142,6 +142,63 @@ describe('DocumensoWebhookAndSync', () => {
     expect(signatureCreateMock).not.toHaveBeenCalled();
   });
 
+  it('applySignedRecipients(): trả signedPdfUrl = null khi mới có 1/4 chữ ký', async () => {
+    const result = await service.applySignedRecipients(
+      'contract-1',
+      [
+        { recipientId: 101, signingStatus: 'SIGNED', completedAt: '2026-11-15T00:00:00Z' },
+      ],
+      '127.0.0.1',
+    );
+
+    expect(result.signedRoles).toEqual(['FAMILY_REP']);
+    expect(result.signedPdfUrl).toBeNull();
+  });
+
+  it('applySignedRecipients(): trả signedPdfUrl = null khi mới có 3/4 chữ ký', async () => {
+    existingSignatures = [
+      { signerRole: 'FAMILY_REP' },
+      { signerRole: 'HEALTHCARE_FACILITY' },
+      { signerRole: 'ASSIGNED_DOCTOR' },
+    ];
+
+    const result = await service.applySignedRecipients(
+      'contract-1',
+      [
+        { recipientId: 101, signingStatus: 'SIGNED', completedAt: '2026-11-15T00:00:00Z' },
+        { recipientId: 102, signingStatus: 'SIGNED', completedAt: '2026-11-15T00:01:00Z' },
+        { recipientId: 103, signingStatus: 'SIGNED', completedAt: '2026-11-15T00:02:00Z' },
+        { recipientId: 104, signingStatus: 'NOT_SIGNED' },
+      ],
+      '127.0.0.1',
+    );
+
+    expect(result.signedRoles).toHaveLength(3);
+    expect(result.contractStatus).toBe('PENDING_APPROVAL');
+    expect(result.signedPdfUrl).toBeNull();
+  });
+
+  it('syncContractFromDocumenso(): trả signedPdfUrl = null khi hợp đồng chưa đủ 4/4 chữ ký', async () => {
+    jest.spyOn(client, 'getEnvelope').mockResolvedValue({
+      id: 'envelope_1',
+      status: 'PENDING',
+      title: 'Contract',
+      envelopeItems: [{ id: 'item_1' }],
+      recipients: [
+        { id: 101, email: 'a@test.com', name: 'A', token: 't1', role: 'SIGNER', signingStatus: 'SIGNED', signedAt: '2026-11-15T00:00:00Z' },
+        { id: 102, email: 'b@test.com', name: 'B', token: 't2', role: 'SIGNER', signingStatus: 'SIGNED', signedAt: '2026-11-15T00:01:00Z' },
+        { id: 103, email: 'c@test.com', name: 'C', token: 't3', role: 'SIGNER', signingStatus: 'SIGNED', signedAt: '2026-11-15T00:02:00Z' },
+        { id: 104, email: 'd@test.com', name: 'D', token: 't4', role: 'SIGNER', signingStatus: 'NOT_SIGNED' },
+      ],
+    });
+
+    const result = await service.syncContractFromDocumenso('contract-1', '127.0.0.1');
+
+    expect(result.signedRoles).toHaveLength(3);
+    expect(result.signedPdfUrl).toBeNull();
+    expect(paymentNoticeMock.sendPaymentNotice).not.toHaveBeenCalled();
+  });
+
   it('syncContractFromDocumenso(): gọi getEnvelope và ghi nhận đủ 4 chữ ký -> PENDING_PAYMENT + gửi mail VietQR', async () => {
     jest.spyOn(client, 'getEnvelope').mockResolvedValue({
       id: 'envelope_1',
@@ -162,5 +219,71 @@ describe('DocumensoWebhookAndSync', () => {
     expect(result.signedRoles).toHaveLength(4);
     expect(result.signedPdfUrl).toBe('/api/v1/contracts/medical/contract-1/signed-pdf');
     expect(paymentNoticeMock.sendPaymentNotice).toHaveBeenCalledWith('contract-1');
+  });
+
+  describe('syncContractIfNeeded()', () => {
+    const signedEnvelope = {
+      id: 'envelope_1',
+      status: 'PENDING',
+      title: 'Contract',
+      envelopeItems: [{ id: 'item_1' }],
+      recipients: [
+        { id: 101, email: 'a@test.com', name: 'A', token: 't1', role: 'SIGNER', signingStatus: 'SIGNED', signedAt: '2026-11-15T00:00:00Z' },
+        { id: 102, email: 'b@test.com', name: 'B', token: 't2', role: 'SIGNER', signingStatus: 'NOT_SIGNED' },
+        { id: 103, email: 'c@test.com', name: 'C', token: 't3', role: 'SIGNER', signingStatus: 'NOT_SIGNED' },
+        { id: 104, email: 'd@test.com', name: 'D', token: 't4', role: 'SIGNER', signingStatus: 'NOT_SIGNED' },
+      ],
+    };
+
+    it('trong khoảng cooldown không gọi lại Documenso', async () => {
+      const getEnvelopeSpy = jest
+        .spyOn(client, 'getEnvelope')
+        .mockResolvedValue(signedEnvelope as any);
+
+      const first = await service.syncContractIfNeeded('contract-1');
+      const second = await service.syncContractIfNeeded('contract-1');
+
+      expect(first?.contractId).toBe('contract-1');
+      expect(second).toBeNull();
+      expect(getEnvelopeSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('force: true bỏ qua cooldown và gọi Documenso ngay', async () => {
+      const getEnvelopeSpy = jest
+        .spyOn(client, 'getEnvelope')
+        .mockResolvedValue(signedEnvelope as any);
+
+      await service.syncContractIfNeeded('contract-1');
+      const forced = await service.syncContractIfNeeded('contract-1', {
+        force: true,
+      });
+
+      expect(forced?.contractId).toBe('contract-1');
+      expect(getEnvelopeSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('gộp hai lời gọi đồng thời cùng hợp đồng thành một lần getEnvelope', async () => {
+      const getEnvelopeSpy = jest
+        .spyOn(client, 'getEnvelope')
+        .mockResolvedValue(signedEnvelope as any);
+
+      const [a, b] = await Promise.all([
+        service.syncContractIfNeeded('contract-1'),
+        service.syncContractIfNeeded('contract-1'),
+      ]);
+
+      expect(getEnvelopeSpy).toHaveBeenCalledTimes(1);
+      expect(a).not.toBeNull();
+      expect(b).not.toBeNull();
+      expect(a?.contractId).toBe(b?.contractId);
+    });
+
+    it('fail-open: lỗi Documenso không ném ra ngoài mà trả null', async () => {
+      jest
+        .spyOn(client, 'getEnvelope')
+        .mockRejectedValue(new Error('Documenso timeout'));
+
+      await expect(service.syncContractIfNeeded('contract-1')).resolves.toBeNull();
+    });
   });
 });

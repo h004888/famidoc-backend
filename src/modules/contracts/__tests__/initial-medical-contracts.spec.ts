@@ -12,6 +12,7 @@ import {
 } from '../repositories/interfaces/contracts.repository.interface';
 import type { AuthenticatedUser } from '../../../core/auth/authenticated-request';
 import { calculateContractTermsHash } from '../pricing/contract-terms-hash';
+import { todayInVietnam } from '../../../core/business/business-helpers';
 
 describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () => {
   let service: ContractsServiceImpl;
@@ -113,6 +114,13 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
     sessionMock = {
       findPackage: jest.fn().mockResolvedValue(mockPackage),
       findFacilityById: jest.fn().mockResolvedValue(mockFacility),
+      findActiveStaffingContract: jest.fn().mockImplementation((facilityId: string) =>
+        Promise.resolve(
+          facilityId === mockFacility.id
+            ? { id: 'staffing-1', facilityId, status: 'ACTIVE' }
+            : null,
+        )
+      ),
       findDoctorById: jest.fn().mockResolvedValue(mockDoctor),
       findFamilyById: jest.fn().mockResolvedValue(mockFamily),
       findPatientsByIdsAndFamilyId: jest
@@ -288,6 +296,65 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
       await expect(
         service.createInitialMedicalContract(familyRepUser, dto as any),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject contract initiation when facility has no active B2B staffing contract', async () => {
+      sessionMock.findActiveStaffingContract.mockResolvedValue(null);
+
+      await expect(
+        service.createInitialMedicalContract(familyRepUser, {
+          packageId: 'pkg-1',
+          facilityId: 'fac-1',
+          doctorId: 'doc-1',
+          patientIds: ['patient-1'],
+        } as any),
+      ).rejects.toThrow(
+        'Cơ sở y tế chưa có hợp đồng cung ứng nhân lực B2B còn hiệu lực'
+      );
+
+      // Không được tạo hợp đồng hay gửi phong bì ký khi cơ sở chưa đủ điều kiện.
+      expect(sessionMock.createMedicalContract).not.toHaveBeenCalled();
+    });
+
+    it('should reject contract initiation when B2B staffing contract already expired', async () => {
+      const today = todayInVietnam();
+      sessionMock.findActiveStaffingContract.mockImplementation(
+        (facilityId: string, atDate: Date) =>
+          Promise.resolve(
+            facilityId === mockFacility.id && atDate <= today
+              ? null
+              : { id: 'staffing-expired', facilityId, status: 'ACTIVE' }
+          )
+      );
+
+      await expect(
+        service.createInitialMedicalContract(familyRepUser, {
+          packageId: 'pkg-1',
+          facilityId: 'fac-1',
+          doctorId: 'doc-1',
+          patientIds: ['patient-1'],
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(sessionMock.createMedicalContract).not.toHaveBeenCalled();
+    });
+
+    it('should verify staffing contract against todayInVietnam()', async () => {
+      sessionMock.findPatientsByIdsAndFamilyId.mockResolvedValue([
+        { id: 'patient-1' },
+      ]);
+
+      await service.createInitialMedicalContract(familyRepUser, {
+        packageId: 'pkg-1',
+        facilityId: 'fac-1',
+        doctorId: 'doc-1',
+        patientIds: ['patient-1'],
+      } as any);
+
+      expect(sessionMock.findActiveStaffingContract).toHaveBeenCalledWith(
+        'fac-1',
+        todayInVietnam()
+      );
     });
 
     it('should throw ConflictException if doctor has reached maximum active households (30/30)', async () => {

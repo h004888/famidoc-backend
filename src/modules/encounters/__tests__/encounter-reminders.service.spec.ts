@@ -1,5 +1,5 @@
 import { EncounterRemindersService } from '../services/impl/encounter-reminders.service';
-import type { PrismaService } from '../../../../core/database/prisma.service';
+import type { PrismaService } from '../../../core/database/prisma.service';
 import { EncounterType } from '@prisma/client';
 
 describe('EncounterRemindersService', () => {

@@ -11,6 +11,10 @@ import { createTermsHash } from '../../../core/business/business-helpers';
 import { calculateContractTermsHash } from '../pricing/contract-terms-hash';
 import { ContractPaymentNoticeService } from './contract-payment-notice.service';
 import { DocumensoClientService } from './documenso-client.service';
+import {
+  hasAllFourSignatures,
+  resolveSignedPdfUrl,
+} from './contract-signed-pdf-gate';
 
 export interface DocumensoWebhookRecipientPayload {
   id?: number;
@@ -44,9 +48,30 @@ export interface DocumensoSyncResult {
   signedPdfUrl: string | null;
 }
 
+export interface SyncContractIfNeededOptions {
+  /** Bỏ qua khoảng chờ giảm tần suất (dùng khi người dùng bấm cập nhật thủ công). */
+  force?: boolean;
+  /** Địa chỉ IP ghi vào bản ghi chữ ký khi đồng bộ thành công. */
+  ipAddress?: string;
+  /** Ghi đè khoảng chờ giảm tần suất mặc định giữa hai lần kiểm tra Documenso. */
+  cooldownMs?: number;
+}
+
+/** Khoảng chờ mặc định giữa hai lần kiểm tra Documenso cho cùng một hợp đồng. */
+export const DEFAULT_SYNC_COOLDOWN_MS = 5_000;
+
 @Injectable()
 export class DocumensoSyncService {
   private readonly logger = new Logger(DocumensoSyncService.name);
+
+  /** Gộp các lời gọi đồng thời cho cùng một hợp đồng (single-flight). */
+  private readonly inFlightSyncs = new Map<
+    string,
+    Promise<DocumensoSyncResult | null>
+  >();
+
+  /** Mốc thời gian hoàn tất lần kiểm tra Documenso gần nhất theo hợp đồng. */
+  private readonly lastSyncAt = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -146,6 +171,58 @@ export class DocumensoSyncService {
     }));
 
     return this.applySignedRecipients(contract.id, recipients, ipAddress);
+  }
+
+  /**
+   * Đồng bộ tiến độ ký từ Documenso theo kiểu "best effort" phục vụ màn hình
+   * theo dõi: gộp các lời gọi đồng thời cùng hợp đồng (single-flight), giảm tần
+   * suất bằng cooldown và **fail-open** (trả `null` thay vì ném lỗi) để nhịp
+   * polling nền không bị gián đoạn khi Documenso tạm thời không phản hồi.
+   *
+   * `force: true` bỏ qua cooldown để người dùng ép kiểm tra ngay khi bấm
+   * `"Cập nhật tiến độ"`.
+   */
+  async syncContractIfNeeded(
+    contractId: string,
+    options: SyncContractIfNeededOptions = {},
+  ): Promise<DocumensoSyncResult | null> {
+    const inFlight = this.inFlightSyncs.get(contractId);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const cooldownMs = options.cooldownMs ?? DEFAULT_SYNC_COOLDOWN_MS;
+    const lastSyncedAt = this.lastSyncAt.get(contractId);
+    if (
+      !options.force &&
+      lastSyncedAt !== undefined &&
+      Date.now() - lastSyncedAt < cooldownMs
+    ) {
+      return null;
+    }
+
+    const run = (async (): Promise<DocumensoSyncResult | null> => {
+      try {
+        return await this.syncContractFromDocumenso(
+          contractId,
+          options.ipAddress?.slice(0, 45) || 'documenso-sync',
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Bỏ qua lần kiểm tra Documenso cho hợp đồng ${contractId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        return null;
+      } finally {
+        // Ghi nhận cả lần thất bại để không dội yêu cầu liên tục vào Documenso.
+        this.lastSyncAt.set(contractId, Date.now());
+        this.inFlightSyncs.delete(contractId);
+      }
+    })();
+
+    this.inFlightSyncs.set(contractId, run);
+    return run;
   }
 
   async applySignedRecipients(
@@ -283,11 +360,7 @@ export class DocumensoSyncService {
         }
       }
 
-      const allFourSigned =
-        signedRoles.has('FAMILY_REP') &&
-        signedRoles.has('HEALTHCARE_FACILITY') &&
-        signedRoles.has('ASSIGNED_DOCTOR') &&
-        signedRoles.has('ADMIN');
+      const allFourSigned = hasAllFourSignatures(signedRoles);
 
       let finalStatus = contract.contractStatus;
       let shouldSendPaymentNotice = false;
@@ -314,9 +387,11 @@ export class DocumensoSyncService {
           contractId: contract.id,
           contractStatus: finalStatus,
           signedRoles: Array.from(signedRoles),
-          signedPdfUrl: contract.documensoItemId
-            ? `/api/v1/contracts/medical/${contract.id}/signed-pdf`
-            : null,
+          signedPdfUrl: resolveSignedPdfUrl(contract.id, {
+            documensoItemId: contract.documensoItemId,
+            contractStatus: finalStatus,
+            signedRoles,
+          }),
         } satisfies DocumensoSyncResult,
       };
     });

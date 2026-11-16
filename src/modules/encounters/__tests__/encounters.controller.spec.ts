@@ -1,6 +1,6 @@
 import { EncountersController } from '../controllers/encounters.controller';
 import type { IEncountersService } from '../services/interfaces/encounters.service.interface';
-import type { AuthenticatedRequest } from '../../../../core/auth/authenticated-request';
+import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
 import { EncounterType } from '@prisma/client';
 
 describe('EncountersController', () => {

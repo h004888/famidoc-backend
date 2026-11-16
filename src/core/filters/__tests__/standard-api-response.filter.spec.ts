@@ -1,4 +1,9 @@
-import { HttpStatus, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  HttpStatus,
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { StandardApiResponseFilter } from '../standard-api-response.filter';
 import { ResourceNotFoundException, ValidationException } from '../../exceptions/api.exception';
 
@@ -28,7 +33,7 @@ describe('StandardApiResponseFilter (RFC 9457 Compliance)', () => {
       originalUrl: options?.url ?? '/api/v1/test',
     };
 
-    const res = {
+    const res: any = {
       status: jest.fn((code: number) => {
         statusCode = code;
         return res;
@@ -116,6 +121,42 @@ describe('StandardApiResponseFilter (RFC 9457 Compliance)', () => {
     expect(json.code).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
     expect(json.error.errorCode).toBe('INTERNAL_SERVER_ERROR');
     expect(json.error.detail).not.toContain('root123');
+  });
+
+  it('nên bảo toàn blockingReasons trong ProblemDetails khi HttpException trả 409 Conflict', () => {
+    const { host, getJson, getStatus } = createMockArgumentsHost({
+      url: '/api/v1/payments/requests',
+    });
+
+    const ex = new ConflictException({
+      message: 'Contract is not ready for payment',
+      blockingReasons: ['DOCTOR_VERIFICATION_REQUIRED'],
+    });
+    filter.catch(ex, host);
+
+    expect(getStatus()).toBe(HttpStatus.CONFLICT);
+    const json = getJson();
+    expect(json.success).toBe(false);
+    expect(json.code).toBe(HttpStatus.CONFLICT);
+    expect(json.error.errorCode).toBe('CONFLICT_ERROR');
+    expect(json.error.detail).toBe('Contract is not ready for payment');
+    expect(json.error.blockingReasons).toEqual(['DOCTOR_VERIFICATION_REQUIRED']);
+  });
+
+  it('không gắn blockingReasons khi payload không có hoặc là mảng rỗng', () => {
+    const withoutReasons = createMockArgumentsHost({ url: '/api/v1/payments/requests' });
+    filter.catch(new ConflictException('Contract is not ready for payment'), withoutReasons.host);
+    expect(withoutReasons.getJson().error).not.toHaveProperty('blockingReasons');
+
+    const emptyReasons = createMockArgumentsHost({ url: '/api/v1/payments/requests' });
+    filter.catch(
+      new ConflictException({
+        message: 'Contract is not ready for payment',
+        blockingReasons: [],
+      }),
+      emptyReasons.host,
+    );
+    expect(emptyReasons.getJson().error).not.toHaveProperty('blockingReasons');
   });
 
   it('nên tự động suy luận domain error code theo URL instance khi nhận HttpException thuần', () => {

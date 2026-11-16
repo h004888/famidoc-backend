@@ -36,7 +36,10 @@ import {
   type ContractsSession,
   type DetailedMedicalContract,
 } from '../../repositories/interfaces/contracts.repository.interface';
-import type { IContractsService } from '../interfaces/contracts.service.interface';
+import type {
+  FindMedicalContractOptions,
+  IContractsService,
+} from '../interfaces/contracts.service.interface';
 import type {
   CreateContractAddendumDto,
   CreatePackageUpgradeDto,
@@ -59,7 +62,17 @@ import { ContractPaymentNoticeService } from '../contract-payment-notice.service
 import { ContractPdfRendererService } from '../contract-pdf-renderer.service';
 import { DocumensoClientService } from '../documenso-client.service';
 import { DocumensoSyncService } from '../documenso-sync.service';
-import { buildDocumensoContractHtml } from '../../templates/build-documenso-contract-html';
+import {
+  isSignedPdfReady,
+  resolveSignedPdfUrl,
+} from '../contract-signed-pdf-gate';
+import {
+  buildDocumensoContractFieldValues,
+  buildDocumensoContractHtml,
+  isStrictRealPartyMode,
+  validateRealPartyContractData,
+} from '../../templates/build-documenso-contract-html';
+import type { BuildDocumensoContractHtmlInput } from '../../templates/build-documenso-contract-html';
 import {
   calculateHomeVisitAddendum,
   calculateMemberAddendum,
@@ -142,6 +155,18 @@ export class ContractsServiceImpl implements IContractsService {
       if (!facility || facility.verificationStatus !== 'ACTIVE') {
         throw new BadRequestException(
           'Cơ sở y tế không hợp lệ hoặc chưa được kích hoạt',
+        );
+      }
+
+      // Chặn sớm: thiếu hợp đồng cung ứng nhân lực B2B hiệu lực thì chắc chắn
+      // không thể thanh toán/đối soát về sau, nên không được gửi phong bì ký.
+      const activeStaffing = await session.findActiveStaffingContract(
+        dto.facilityId,
+        todayInVietnam(),
+      );
+      if (!activeStaffing) {
+        throw new BadRequestException(
+          'Cơ sở y tế chưa có hợp đồng cung ứng nhân lực B2B còn hiệu lực. Vui lòng chọn cơ sở y tế khác hoặc liên hệ Ban quản trị FamiDoc để hoàn tất hợp đồng hợp tác.',
         );
       }
 
@@ -254,6 +279,40 @@ export class ContractsServiceImpl implements IContractsService {
         'MC' + randomUUID().replaceAll('-', '').toUpperCase();
       const admin = (await session.findFirstActiveAdminUser?.()) ?? null;
 
+      const contractInput: BuildDocumensoContractHtmlInput = {
+        contractNumber,
+        durationMonths: pkg.durationMonths,
+        pkg,
+        pricing: {
+          basePriceVnd: quote.pricing.basePriceVnd,
+          additionalMemberTotalVnd: quote.pricing.additionalMembersTotalVnd,
+          additionalMemberUnitPriceVnd: moneyToNumber(
+            pkg.additionalMemberMonthlyPrice,
+          ),
+          totalPriceVnd: quote.pricing.totalPriceVnd,
+        },
+        memberCount,
+        family,
+        facility,
+        doctor,
+        admin,
+        additionalTerms: dto.additionalTerms,
+      };
+
+      // Guard chặn dữ liệu thử nghiệm (DEMO / .invalid) ở thông tin 4 bên:
+      // khi bật chế độ nghiêm ngặt thì từ chối khởi tạo TRƯỚC khi render PDF
+      // và gọi Documenso để không phát hành hợp đồng pháp lý chứa dữ liệu mẫu.
+      if (isStrictRealPartyMode()) {
+        const validation = validateRealPartyContractData(
+          buildDocumensoContractFieldValues(contractInput),
+        );
+        if (!validation.valid) {
+          throw new BadRequestException(
+            `Thông tin các bên hợp đồng chứa dữ liệu thử nghiệm chưa hợp lệ: ${validation.issues.join('; ')}`,
+          );
+        }
+      }
+
       return {
         targetFamilyId,
         pkg,
@@ -266,6 +325,7 @@ export class ContractsServiceImpl implements IContractsService {
         snapshot,
         today,
         contractNumber,
+        contractInput,
       };
     };
 
@@ -363,26 +423,7 @@ export class ContractsServiceImpl implements IContractsService {
     }
 
     const prepared = await this.repository.transaction(validateAndPrepare);
-    const contractHtml = buildDocumensoContractHtml({
-      contractNumber: prepared.contractNumber,
-      durationMonths: prepared.pkg.durationMonths,
-      pkg: prepared.pkg,
-      pricing: {
-        basePriceVnd: prepared.quote.pricing.basePriceVnd,
-        additionalMemberTotalVnd:
-          prepared.quote.pricing.additionalMembersTotalVnd,
-        additionalMemberUnitPriceVnd: moneyToNumber(
-          prepared.pkg.additionalMemberMonthlyPrice,
-        ),
-        totalPriceVnd: prepared.quote.pricing.totalPriceVnd,
-      },
-      memberCount: prepared.memberCount,
-      family: prepared.family,
-      facility: prepared.facility,
-      doctor: prepared.doctor,
-      admin: prepared.admin,
-      additionalTerms: dto.additionalTerms,
-    });
+    const contractHtml = buildDocumensoContractHtml(prepared.contractInput);
 
     const pdfRenderer = this.pdfRenderer || new ContractPdfRendererService();
     const pdfBuffer = await pdfRenderer.renderPdf(contractHtml);
@@ -1073,34 +1114,36 @@ export class ContractsServiceImpl implements IContractsService {
   async findMedicalContractById(
     actor: AuthenticatedUser,
     id: string,
+    options?: FindMedicalContractOptions,
+    ip?: string,
   ): Promise<DetailedMedicalContract> {
-    return this.repository.transaction(async (session) => {
-      const contract = await session.findMedicalContractById(id);
-      if (!contract) {
+    const contract = await this.repository.transaction(async (session) => {
+      const found = await session.findMedicalContractById(id);
+      if (!found) {
         throw new NotFoundException('Không tìm thấy hợp đồng y tế');
       }
 
       if (actor.role === 'ADMIN') {
-        return contract;
+        return found;
       }
 
       let isAllowed = false;
       if (
         actor.role === 'FAMILY_REP' &&
-        (contract.familyUnit?.representativeUserId === actor.id ||
-          contract.familyId === actor.familyUnitId)
+        (found.familyUnit?.representativeUserId === actor.id ||
+          found.familyId === actor.familyUnitId)
       ) {
         isAllowed = true;
       } else if (
         actor.role === 'HEALTHCARE_FACILITY' &&
-        (contract.facility?.userId === actor.id ||
-          contract.facilityId === actor.id)
+        (found.facility?.userId === actor.id ||
+          found.facilityId === actor.id)
       ) {
         isAllowed = true;
       } else if (
         actor.role === 'DOCTOR' &&
-        contract.doctor &&
-        (contract.doctor.userId === actor.id || contract.doctorId === actor.id)
+        found.doctor &&
+        (found.doctor.userId === actor.id || found.doctorId === actor.id)
       ) {
         isAllowed = true;
       }
@@ -1111,8 +1154,34 @@ export class ContractsServiceImpl implements IContractsService {
         );
       }
 
-      return contract;
+      return found;
     });
+
+    // Đồng bộ Documenso **ngoài** transaction đọc để không giữ transaction
+    // serializable trong lúc chờ HTTP tới máy chủ ký điện tử.
+    const needsSync =
+      contract.contractStatus === 'PENDING_APPROVAL' &&
+      Boolean(contract.documensoEnvelopeId) &&
+      Boolean(this.documensoSync);
+
+    if (!needsSync) {
+      return contract;
+    }
+
+    const syncResult = await this.documensoSync!.syncContractIfNeeded(id, {
+      force: Boolean(options?.forceSync),
+      ipAddress: ip,
+    });
+
+    if (!syncResult) {
+      return contract;
+    }
+
+    const refreshed = await this.repository.transaction((session) =>
+      session.findMedicalContractById(id),
+    );
+
+    return refreshed ?? contract;
   }
 
   async getCareNeedsSummary(
@@ -2071,9 +2140,11 @@ export class ContractsServiceImpl implements IContractsService {
         signingToken: canSign ? signer.documensoToken : null,
         signingUrl: canSign ? signer.documensoSigningUrl : null,
         signedRoles,
-        signedPdfUrl: itemId
-          ? `/api/v1/contracts/medical/${contract.id}/signed-pdf`
-          : null,
+        signedPdfUrl: resolveSignedPdfUrl(contract.id, {
+          documensoItemId: itemId,
+          contractStatus: contract.contractStatus,
+          signedRoles,
+        }),
       };
     });
   }
@@ -2096,14 +2167,32 @@ export class ContractsServiceImpl implements IContractsService {
     actor: AuthenticatedUser,
     id: string,
   ): Promise<{ buffer: Buffer; filename: string }> {
-    const contract = await this.repository.transaction((session) =>
-      this.requirePartyContract(session, id, actor),
+    const { contract, signedRoles } = await this.repository.transaction(
+      async (session) => {
+        const contract = await this.requirePartyContract(session, id, actor);
+        const signatures = await session.findContractSignatures(id);
+        return {
+          contract,
+          signedRoles: signatures.map((s) => s.signerRole),
+        };
+      },
     );
     const itemId = (contract as { documensoItemId?: string | null })
       .documensoItemId;
     if (!itemId) {
       throw new NotFoundException(
         'Hợp đồng này chưa có tệp PDF trên hệ thống ký số Documenso',
+      );
+    }
+    if (
+      !isSignedPdfReady({
+        documensoItemId: itemId,
+        contractStatus: contract.contractStatus,
+        signedRoles,
+      })
+    ) {
+      throw new ConflictException(
+        'Hợp đồng chưa hoàn tất đủ 4/4 chữ ký nên chưa thể xuất bản PDF đã ký. Vui lòng chờ cả bốn bên ký xong.',
       );
     }
     if (!this.documensoClient) {

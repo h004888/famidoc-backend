@@ -123,9 +123,20 @@ export class StandardApiResponseFilter implements ExceptionFilter {
       let detail = message;
       let errorCode = 'BAD_REQUEST';
       let invalidParams: InvalidParamItem[] | undefined;
+      let blockingReasons: string[] | undefined;
 
       if (typeof res === 'object' && res !== null) {
         const resObj = res as Record<string, any>;
+        // Các mã chặn nghiệp vụ (ví dụ thanh toán chưa đủ điều kiện) phải giữ nguyên
+        // trong ProblemDetails để client chẩn đoán được lý do cụ thể.
+        if (
+          Array.isArray(resObj.blockingReasons) &&
+          resObj.blockingReasons.length > 0
+        ) {
+          blockingReasons = resObj.blockingReasons.filter(
+            (reason: unknown): reason is string => typeof reason === 'string',
+          );
+        }
         // Xử lý lỗi validation từ class-validator
         if (Array.isArray(resObj.message)) {
           status = HttpStatus.UNPROCESSABLE_ENTITY;
@@ -151,6 +162,7 @@ export class StandardApiResponseFilter implements ExceptionFilter {
         errorCode,
         instance,
         ...(invalidParams ? { invalidParams } : {}),
+        ...(blockingReasons ? { blockingReasons } : {}),
       };
 
       const errorPayload: ApiErrorResponse = {

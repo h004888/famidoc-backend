@@ -31,7 +31,6 @@ export const DOCUMENSO_FIELD_NAMES = [
   'contract_number',
   'created_date_vi',
   'party_a_name',
-  'party_a_id_number',
   'party_a_address',
   'party_a_phone',
   'party_a_email',

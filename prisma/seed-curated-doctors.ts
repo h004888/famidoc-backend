@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, UserStatus, FacilityVerificationStatus, DoctorOnboardingStatus, DoctorCredentialType } from '@prisma/client';
+import { PrismaClient, UserRole, UserStatus, FacilityVerificationStatus, DoctorOnboardingStatus, DoctorCredentialType, B2bContractStatus } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import { hash } from 'bcryptjs';
@@ -42,7 +42,7 @@ export async function seedCuratedDoctors() {
         },
       });
 
-      await tx.healthcareFacility.upsert({
+      const upsertedFacility = await tx.healthcareFacility.upsert({
         where: { licenseNumber: fac.licenseNumber },
         update: {
           facilityName: fac.facilityName,
@@ -63,6 +63,29 @@ export async function seedCuratedDoctors() {
           bankAccountNumber: fac.bankAccountNumber,
           bankAccountHolder: fac.bankAccountHolder,
           verificationStatus: FacilityVerificationStatus.ACTIVE,
+        },
+      });
+
+      // Cơ sở ACTIVE bắt buộc có hợp đồng cung ứng nhân lực B2B còn hiệu lực,
+      // nếu không luồng thanh toán VietQR và tạo hợp đồng 4 bên sẽ bị chặn.
+      await tx.b2bStaffingContract.upsert({
+        where: { contractCode: fac.staffingContract.contractCode },
+        update: {
+          facilityId: upsertedFacility.id,
+          status: B2bContractStatus.ACTIVE,
+          startDate: new Date(fac.staffingContract.startDate),
+          endDate: new Date(fac.staffingContract.endDate),
+          platformCommissionRate: fac.staffingContract.platformCommissionRate,
+          facilityRevenueRate: fac.staffingContract.facilityRevenueRate,
+        },
+        create: {
+          contractCode: fac.staffingContract.contractCode,
+          facilityId: upsertedFacility.id,
+          status: B2bContractStatus.ACTIVE,
+          startDate: new Date(fac.staffingContract.startDate),
+          endDate: new Date(fac.staffingContract.endDate),
+          platformCommissionRate: fac.staffingContract.platformCommissionRate,
+          facilityRevenueRate: fac.staffingContract.facilityRevenueRate,
         },
       });
     }

@@ -3,9 +3,14 @@ import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import { randomInt, randomUUID } from 'node:crypto';
 import { compare } from 'bcryptjs';
 import request from 'supertest';
-import type { ICacheStore } from '../src/core/auth/auth-access.module';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/core/database/prisma.service';
+
+// Tối thiểu các thao tác cache Redis mà spec này dùng tới (get/del).
+interface ICacheStore {
+  get(key: string): Promise<string | null>;
+  del(...keys: string[]): Promise<number>;
+}
 
 // Kiểm tra hai route đăng ký sau merge. Chỉ gửi mail giả trong test; không gọi SMTP thật.
 (process.env.RUN_DB_TESTS === '1' ? describe : describe.skip)(

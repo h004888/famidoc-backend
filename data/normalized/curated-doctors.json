@@ -1,6 +1,6 @@
 {
   "metadata": {
-    "generatedAt": "2026-11-11T09:35:59.393Z",
+    "generatedAt": "2026-11-16T13:28:07.893Z",
     "version": "2.0.0-standardized-120-doctors",
     "totalFacilities": 15,
     "totalDoctors": 120,
@@ -28,10 +28,10 @@
   },
   "facilities": [
     {
-      "id": "386586b0-34a0-43f0-9c87-528983872698",
-      "userId": "fd2c6fb1-1cc1-4cb0-8c43-b275bcedec52",
+      "id": "b3f12281-9cea-48f9-a403-9c7a183e2f86",
+      "userId": "b99f9260-942f-4528-9b61-dee21a56043d",
       "user": {
-        "id": "fd2c6fb1-1cc1-4cb0-8c43-b275bcedec52",
+        "id": "b99f9260-942f-4528-9b61-dee21a56043d",
         "phone": "+84901000001",
         "email": "facility_1@famidoc.invalid",
         "fullName": "Quản trị - Bệnh viện Đại học Y Dược TP.HCM",
@@ -47,13 +47,21 @@
       "bankName": "Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)",
       "bankAccountNumber": "007100000001",
       "bankAccountHolder": "BỆNH VIỆN ĐẠI HỌC Y DƯỢC TP.HCM",
-      "verificationStatus": "ACTIVE"
+      "verificationStatus": "ACTIVE",
+      "staffingContract": {
+        "contractCode": "B2B-CURATED-001",
+        "status": "ACTIVE",
+        "startDate": "2026-11-16",
+        "endDate": "2027-11-16",
+        "platformCommissionRate": 15,
+        "facilityRevenueRate": 85
+      }
     },
     {
-      "id": "86d90813-a6bd-4cff-93d4-66335a3fbdbb",
-      "userId": "21ab9d82-8675-4dba-9373-4cf8eeba709e",
+      "id": "03bbfa60-2076-4b20-92f5-ebe4e32d83b9",
+      "userId": "4633aa20-2369-479a-9938-064bd75e598a",
       "user": {
-        "id": "21ab9d82-8675-4dba-9373-4cf8eeba709e",
+        "id": "4633aa20-2369-479a-9938-064bd75e598a",
         "phone": "+84901000002",
         "email": "facility_2@famidoc.invalid",
         "fullName": "Quản trị - Bệnh viện Chợ Rẫy",
@@ -69,13 +77,21 @@
       "bankName": "Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)",
       "bankAccountNumber": "007100000002",
       "bankAccountHolder": "BỆNH VIỆN CHỢ RẪY",
-      "verificationStatus": "ACTIVE"
+      "verificationStatus": "ACTIVE",
+      "staffingContract": {
+        "contractCode": "B2B-CURATED-002",
+        "status": "ACTIVE",
+        "startDate": "2026-11-16",
+        "endDate": "2027-11-16",
+        "platformCommissionRate": 15,
+        "facilityRevenueRate": 85
+      }
     },
     {
-      "id": "2df430ba-6710-4d71-b478-4608e1156f81",
-      "userId": "ee533760-1de8-482e-8897-126a91593910",
+      "id": "25bbacf8-3348-4d7a-ac8d-0b1cf0b661ed",
+      "userId": "1c2f35f9-7a4b-44c1-9cb5-f12832d950b5",
       "user": {
-        "id": "ee533760-1de8-482e-8897-126a91593910",
+        "id": "1c2f35f9-7a4b-44c1-9cb5-f12832d950b5",
         "phone": "+84901000003",
         "email": "facility_3@famidoc.invalid",
         "fullName": "Quản trị - Bệnh viện Nhi Đồng 1",
@@ -91,13 +107,21 @@
       "bankName": "Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)",
       "bankAccountNumber": "007100000003",
       "bankAccountHolder": "BỆNH VIỆN NHI ĐỒNG 1",
-      "verificationStatus": "ACTIVE"
+      "verificationStatus": "ACTIVE",
+      "staffingContract": {
+        "contractCode": "B2B-CURATED-003",
+        "status": "ACTIVE",
+        "startDate": "2026-11-16",
+        "endDate": "2027-11-16",
+        "platformCommissionRate": 15,
+        "facilityRevenueRate": 85
+      }
     },
     {
-      "id": "ba40ee8a-986f-4f60-8a2a-664ed21712f9",
-      "userId": "a21cbb7c-bdb4-40cc-808c-5d3378bb82e4",
+      "id": "944031b1-b0a9-4020-965d-6b38fbd2aad7",
+      "userId": "d2494d1c-5e78-4a74-9f28-a0165470396a",
       "user": {
-        "id": "a21cbb7c-bdb4-40cc-808c-5d3378bb82e4",
+        "id": "d2494d1c-5e78-4a74-9f28-a0165470396a",
         "phone": "+84901000004",
         "email": "facility_4@famidoc.invalid",
         "fullName": "Quản trị - Bệnh viện Nhi Đồng 2",
@@ -113,13 +137,21 @@
       "bankName": "Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)",
       "bankAccountNumber": "007100000004",
       "bankAccountHolder": "BỆNH VIỆN NHI ĐỒNG 2",
-      "verificationStatus": "ACTIVE"
+      "verificationStatus": "ACTIVE",
+      "staffingContract": {
+        "contractCode": "B2B-CURATED-004",
+        "status": "ACTIVE",
+        "startDate": "2026-11-16",
+        "endDate": "2027-11-16",
+        "platformCommissionRate": 15,
+        "facilityRevenueRate": 85
+      }
     },
     {
-      "id": "19e1d90b-3fac-4fbb-a2a1-c62d1353f86c",
-      "userId": "af1ebc2f-6d14-44e0-83bc-a2abc2911fee",
+      "id": "86ed5a6c-642f-4f00-b199-971c6be5929a",
+      "userId": "319f66ee-386d-4389-85a9-e83411176f97",
       "user": {
-        "id": "af1ebc2f-6d14-44e0-83bc-a2abc2911fee",
+        "id": "319f66ee-386d-4389-85a9-e83411176f97",
         "phone": "+84901000005",
         "email": "facility_5@famidoc.invalid",
         "fullName": "Quản trị - Bệnh viện Từ Dũ",
@@ -135,13 +167,21 @@
       "bankName": "Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)",
       "bankAccountNumber": "007100000005",
       "bankAccountHolder": "BỆNH VIỆN TỪ DŨ",
-      "verificationStatus": "ACTIVE"
+      "verificationStatus": "ACTIVE",
+      "staffingContract": {
+        "contractCode": "B2B-CURATED-005",
+        "status": "ACTIVE",
+        "startDate": "2026-11-16",
+        "endDate": "2027-11-16",
+        "platformCommissionRate": 15,
+        "facilityRevenueRate": 85
+      }
     },
     {
-      "id": "070ca05e-a6ee-49e5-943a-d18c9ca05a0c",
-      "userId": "7eb36ece-97a3-4f85-bf59-8e79e4a93308",
+      "id": "1a481340-ef4c-4b57-a06a-3a837c0f63ce",
+      "userId": "7839bb34-2e96-4044-aaeb-d1b4d85ccc22",
       "user": {
-        "id": "7eb36ece-97a3-4f85-bf59-8e79e4a93308",
+        "id": "7839bb34-2e96-4044-aaeb-d1b4d85ccc22",
         "phone": "+84901000006",
         "email": "facility_6@famidoc.invalid",
         "fullName": "Quản trị - Bệnh viện Nhân Dân Gia Định",
@@ -157,13 +197,21 @@
       "bankName": "Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)",
       "bankAccountNumber": "007100000006",
       "bankAccountHolder": "BỆNH VIỆN NHÂN DÂN GIA ĐỊNH",
-      "verificationStatus": "ACTIVE"
+      "verificationStatus": "ACTIVE",
+      "staffingContract": {
+        "contractCode": "B2B-CURATED-006",
+        "status": "ACTIVE",
+        "startDate": "2026-11-16",
+        "endDate": "2027-11-16",
+        "platformCommissionRate": 15,
+        "facilityRevenueRate": 85
+      }
     },
     {
-      "id": "bb53e10c-2e2b-4f8a-8e08-d1feca0d649e",
-      "userId": "012b2ed5-884a-48bc-be7a-ac7676584363",
+      "id": "5543790a-e9b5-4daf-aeb9-64fa3f438594",
+      "userId": "9002c176-8e40-47a5-b45d-bf49facfe014",
       "user": {
-        "id": "012b2ed5-884a-48bc-be7a-ac7676584363",
+        "id": "9002c176-8e40-47a5-b45d-bf49facfe014",
         "phone": "+84901000007",
         "email": "facility_7@famidoc.invalid",
         "fullName": "Quản trị - Bệnh viện Bạch Mai",
@@ -179,13 +227,21 @@
       "bankName": "Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)",
       "bankAccountNumber": "007100000007",
       "bankAccountHolder": "BỆNH VIỆN BẠCH MAI",
-      "verificationStatus": "ACTIVE"
+      "verificationStatus": "ACTIVE",
+      "staffingContract": {
+        "contractCode": "B2B-CURATED-007",
+        "status": "ACTIVE",
+        "startDate": "2026-11-16",
+        "endDate": "2027-11-16",
+        "platformCommissionRate": 15,
+        "facilityRevenueRate": 85
+      }
     },
     {
-      "id": "0bc05b13-7f7a-4bce-a9a0-11d91b645755",
-      "userId": "c65cfe41-e4d0-4715-a8c0-f558a8be28a6",
+      "id": "08ec92c2-64d4-4ed0-bce3-e8cac6659b3d",
+      "userId": "dce8f4ef-b5d6-48b1-a016-8490345242bb",
       "user": {
-        "id": "c65cfe41-e4d0-4715-a8c0-f558a8be28a6",
+        "id": "dce8f4ef-b5d6-48b1-a016-8490345242bb",
         "phone": "+84901000008",
         "email": "facility_8@famidoc.invalid",
         "fullName": "Quản trị - Bệnh viện Hữu Nghị Việt Đức",
@@ -201,13 +257,21 @@
       "bankName": "Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)",
       "bankAccountNumber": "007100000008",
       "bankAccountHolder": "BỆNH VIỆN HỮU NGHỊ VIỆT ĐỨC",
-      "verificationStatus": "ACTIVE"
+      "verificationStatus": "ACTIVE",
+      "staffingContract": {
+        "contractCode": "B2B-CURATED-008",
+        "status": "ACTIVE",
+        "startDate": "2026-11-16",
+        "endDate": "2027-11-16",
+        "platformCommissionRate": 15,
+        "facilityRevenueRate": 85
+      }
     },
     {
-      "id": "82fd0deb-3f6c-4d51-9733-3e74c67c6f79",
-      "userId": "150eafd3-3713-4264-ba96-6080ee153676",
+      "id": "28bfb310-b569-41f0-85f1-81d57465e744",
+      "userId": "abaa48be-0457-4a67-8a6c-37200567576b",
       "user": {
-        "id": "150eafd3-3713-4264-ba96-6080ee153676",
+        "id": "abaa48be-0457-4a67-8a6c-37200567576b",
         "phone": "+84901000009",
         "email": "facility_9@famidoc.invalid",
         "fullName": "Quản trị - Bệnh viện Nhi Trung ương",
@@ -223,13 +287,21 @@
       "bankName": "Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)",
       "bankAccountNumber": "007100000009",
       "bankAccountHolder": "BỆNH VIỆN NHI TRUNG ƯƠNG",
-      "verificationStatus": "ACTIVE"
+      "verificationStatus": "ACTIVE",
+      "staffingContract": {
+        "contractCode": "B2B-CURATED-009",
+        "status": "ACTIVE",
+        "startDate": "2026-11-16",
+        "endDate": "2027-11-16",
+        "platformCommissionRate": 15,
+        "facilityRevenueRate": 85
+      }
     },
     {
-      "id": "a0eee457-19d3-4aee-921d-a675886dc3bd",
-      "userId": "cd1cb364-1f59-4416-a81b-e6cd7b86b543",
+      "id": "c07502e6-8a69-49ad-8409-2c9e05b3de88",
+      "userId": "65a77ca9-0751-4752-b22c-b064e8eb395c",
       "user": {
-        "id": "cd1cb364-1f59-4416-a81b-e6cd7b86b543",
+        "id": "65a77ca9-0751-4752-b22c-b064e8eb395c",
         "phone": "+84901000010",
         "email": "facility_10@famidoc.invalid",
         "fullName": "Quản trị - Bệnh viện Phụ sản Hà Nội",
@@ -245,13 +317,21 @@
       "bankName": "Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)",
       "bankAccountNumber": "007100000010",
       "bankAccountHolder": "BỆNH VIỆN PHỤ SẢN HÀ NỘI",
-      "verificationStatus": "ACTIVE"
+      "verificationStatus": "ACTIVE",
+      "staffingContract": {
+        "contractCode": "B2B-CURATED-010",
+        "status": "ACTIVE",
+        "startDate": "2026-11-16",
+        "endDate": "2027-11-16",
+        "platformCommissionRate": 15,
+        "facilityRevenueRate": 85
+      }
     },
     {
-      "id": "325750af-1c2b-4b3f-aafc-7d17fc699f50",
-      "userId": "45333ed8-3599-4986-884a-5c6ae3e06862",
+      "id": "d0c08a4a-d701-42a9-998d-56fff6e32c69",
+      "userId": "39062240-9bd3-4695-b01d-505fc8dea804",
       "user": {
-        "id": "45333ed8-3599-4986-884a-5c6ae3e06862",
+        "id": "39062240-9bd3-4695-b01d-505fc8dea804",
         "phone": "+84901000011",
         "email": "facility_11@famidoc.invalid",
         "fullName": "Quản trị - Bệnh viện Phụ sản Trung ương",
@@ -267,13 +347,21 @@
       "bankName": "Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)",
       "bankAccountNumber": "007100000011",
       "bankAccountHolder": "BỆNH VIỆN PHỤ SẢN TRUNG ƯƠNG",
-      "verificationStatus": "ACTIVE"
+      "verificationStatus": "ACTIVE",
+      "staffingContract": {
+        "contractCode": "B2B-CURATED-011",
+        "status": "ACTIVE",
+        "startDate": "2026-11-16",
+        "endDate": "2027-11-16",
+        "platformCommissionRate": 15,
+        "facilityRevenueRate": 85
+      }
     },
     {
-      "id": "39a36b8d-a846-41d3-941c-8092a633dbc0",
-      "userId": "07fb516d-84c1-4868-af7f-9296fa1971fc",
+      "id": "4f7d9943-9e4f-4c3f-918d-3be688d8dc1f",
+      "userId": "3065d08b-8315-48a9-8aef-7bff36b87c40",
       "user": {
-        "id": "07fb516d-84c1-4868-af7f-9296fa1971fc",
+        "id": "3065d08b-8315-48a9-8aef-7bff36b87c40",
         "phone": "+84901000012",
         "email": "facility_12@famidoc.invalid",
         "fullName": "Quản trị - Bệnh viện Đa khoa Quốc tế Vinmec Times City",
@@ -289,13 +377,21 @@
       "bankName": "Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)",
       "bankAccountNumber": "007100000012",
       "bankAccountHolder": "BỆNH VIỆN ĐA KHOA QUỐC TẾ VINMEC TIMES CITY",
-      "verificationStatus": "ACTIVE"
+      "verificationStatus": "ACTIVE",
+      "staffingContract": {
+        "contractCode": "B2B-CURATED-012",
+        "status": "ACTIVE",
+        "startDate": "2026-11-16",
+        "endDate": "2027-11-16",
+        "platformCommissionRate": 15,
+        "facilityRevenueRate": 85
+      }
     },
     {
-      "id": "6c9a3026-941e-462d-8459-fe21b984733d",
-      "userId": "51bbc054-b767-47ff-9778-fe8b35a125bd",
+      "id": "bd820cdd-bc4a-4284-b7c2-b1bf4acb2a07",
+      "userId": "6ebe0bdc-ad4a-4f91-b2e4-a8dc1e8c2553",
       "user": {
-        "id": "51bbc054-b767-47ff-9778-fe8b35a125bd",
+        "id": "6ebe0bdc-ad4a-4f91-b2e4-a8dc1e8c2553",
         "phone": "+84901000013",
         "email": "facility_13@famidoc.invalid",
         "fullName": "Quản trị - Bệnh viện Đa khoa Đà Nẵng",
@@ -311,13 +407,21 @@
       "bankName": "Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)",
       "bankAccountNumber": "007100000013",
       "bankAccountHolder": "BỆNH VIỆN ĐA KHOA ĐÀ NẴNG",
-      "verificationStatus": "ACTIVE"
+      "verificationStatus": "ACTIVE",
+      "staffingContract": {
+        "contractCode": "B2B-CURATED-013",
+        "status": "ACTIVE",
+        "startDate": "2026-11-16",
+        "endDate": "2027-11-16",
+        "platformCommissionRate": 15,
+        "facilityRevenueRate": 85
+      }
     },
     {
-      "id": "96a3d44c-5ffd-4a80-820b-af7e3292a35b",
-      "userId": "73656158-4924-48ad-8ed6-8adc7824e245",
+      "id": "9f1e690e-76b0-439c-9f2e-d7ee85dd5770",
+      "userId": "97aed06c-3c23-4a83-b061-86bfa9fc7207",
       "user": {
-        "id": "73656158-4924-48ad-8ed6-8adc7824e245",
+        "id": "97aed06c-3c23-4a83-b061-86bfa9fc7207",
         "phone": "+84901000014",
         "email": "facility_14@famidoc.invalid",
         "fullName": "Quản trị - Bệnh viện Phụ sản - Nhi Đà Nẵng",
@@ -333,13 +437,21 @@
       "bankName": "Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)",
       "bankAccountNumber": "007100000014",
       "bankAccountHolder": "BỆNH VIỆN PHỤ SẢN - NHI ĐÀ NẴNG",
-      "verificationStatus": "ACTIVE"
+      "verificationStatus": "ACTIVE",
+      "staffingContract": {
+        "contractCode": "B2B-CURATED-014",
+        "status": "ACTIVE",
+        "startDate": "2026-11-16",
+        "endDate": "2027-11-16",
+        "platformCommissionRate": 15,
+        "facilityRevenueRate": 85
+      }
     },
     {
-      "id": "1d2d1b72-5c31-49d5-9c6d-af17af969a5e",
-      "userId": "ced9f0b2-78fd-4a65-9314-63e2ad3613da",
+      "id": "5df2b856-a29c-4f74-b9bf-cce587f52dbe",
+      "userId": "55c2bca2-ad77-4f77-84f3-b50329c20128",
       "user": {
-        "id": "ced9f0b2-78fd-4a65-9314-63e2ad3613da",
+        "id": "55c2bca2-ad77-4f77-84f3-b50329c20128",
         "phone": "+84901000015",
         "email": "facility_15@famidoc.invalid",
         "fullName": "Quản trị - Bệnh viện Hoàn Mỹ Đà Nẵng",
@@ -355,18 +467,26 @@
       "bankName": "Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)",
       "bankAccountNumber": "007100000015",
       "bankAccountHolder": "BỆNH VIỆN HOÀN MỸ ĐÀ NẴNG",
-      "verificationStatus": "ACTIVE"
+      "verificationStatus": "ACTIVE",
+      "staffingContract": {
+        "contractCode": "B2B-CURATED-015",
+        "status": "ACTIVE",
+        "startDate": "2026-11-16",
+        "endDate": "2027-11-16",
+        "platformCommissionRate": 15,
+        "facilityRevenueRate": 85
+      }
     }
   ],
   "doctors": [
     {
-      "id": "844fa430-5b4e-4007-9796-3386892f75a4",
-      "userId": "6a50389d-2b68-47e7-98e1-a1583aabb360",
-      "facilityId": "386586b0-34a0-43f0-9c87-528983872698",
+      "id": "9c04e10d-4246-4162-9407-56b4260aa1ea",
+      "userId": "db95bcc6-c865-410d-a14a-190ebc73695b",
+      "facilityId": "b3f12281-9cea-48f9-a403-9c7a183e2f86",
       "facilityName": "Bệnh viện Đại học Y Dược TP.HCM",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "6a50389d-2b68-47e7-98e1-a1583aabb360",
+        "id": "db95bcc6-c865-410d-a14a-190ebc73695b",
         "phone": "+84988000001",
         "email": "doctor_1@famidoc.invalid",
         "fullName": "Nguyễn Văn Hoài",
@@ -386,7 +506,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "8fa26096-06c6-424e-871e-4d025662d836",
+        "id": "ca0319cb-d837-4d6e-8125-87aeace683b1",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1000/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -397,13 +517,13 @@
       }
     },
     {
-      "id": "3068d660-8214-4b78-9a40-66f57101a1a2",
-      "userId": "ab3fc04e-90f6-40b6-9638-cc7c31e556e2",
-      "facilityId": "86d90813-a6bd-4cff-93d4-66335a3fbdbb",
+      "id": "27af41f4-d372-45ee-97dd-a94682a82dbc",
+      "userId": "9a2d296b-a39b-4b90-b9b4-3df2b78d36ca",
+      "facilityId": "03bbfa60-2076-4b20-92f5-ebe4e32d83b9",
       "facilityName": "Bệnh viện Chợ Rẫy",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "ab3fc04e-90f6-40b6-9638-cc7c31e556e2",
+        "id": "9a2d296b-a39b-4b90-b9b4-3df2b78d36ca",
         "phone": "+84988000002",
         "email": "doctor_2@famidoc.invalid",
         "fullName": "Trần Thị Thu Hà",
@@ -423,7 +543,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "a8836eff-e379-46d7-b7f9-ad6ff72b2f09",
+        "id": "74a71c7d-fea6-4866-aaba-d551c423ec11",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1001/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -434,13 +554,13 @@
       }
     },
     {
-      "id": "5c162d1f-a31b-4349-ac8a-25f64ab5a4ed",
-      "userId": "58541fbf-e119-49f8-9b43-6b1a5e4881fa",
-      "facilityId": "2df430ba-6710-4d71-b478-4608e1156f81",
+      "id": "d213ff4d-e15b-43d6-a12f-b1741d0c2c6b",
+      "userId": "64b04186-5dea-4da9-96b7-e014ea456a6f",
+      "facilityId": "25bbacf8-3348-4d7a-ac8d-0b1cf0b661ed",
       "facilityName": "Bệnh viện Nhi Đồng 1",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "58541fbf-e119-49f8-9b43-6b1a5e4881fa",
+        "id": "64b04186-5dea-4da9-96b7-e014ea456a6f",
         "phone": "+84988000003",
         "email": "doctor_3@famidoc.invalid",
         "fullName": "Lê Hoàng Nam",
@@ -460,7 +580,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "1636c488-f019-4a09-bf09-cda31882990d",
+        "id": "d644f9a8-c805-4069-8d4a-2b44d8397c36",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1002/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -471,13 +591,13 @@
       }
     },
     {
-      "id": "90bc6de3-7b1f-434c-9b8a-77672fd51b3c",
-      "userId": "8ae78733-4e66-46a2-bf7e-f6164f463fc7",
-      "facilityId": "ba40ee8a-986f-4f60-8a2a-664ed21712f9",
+      "id": "62d4c515-478d-4137-a8a7-102253d3f0dc",
+      "userId": "63d3096a-d653-42fd-a781-47f04d4eb13d",
+      "facilityId": "944031b1-b0a9-4020-965d-6b38fbd2aad7",
       "facilityName": "Bệnh viện Nhi Đồng 2",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "8ae78733-4e66-46a2-bf7e-f6164f463fc7",
+        "id": "63d3096a-d653-42fd-a781-47f04d4eb13d",
         "phone": "+84988000004",
         "email": "doctor_4@famidoc.invalid",
         "fullName": "Phạm Minh Đức",
@@ -497,7 +617,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "0eb28fd6-81d3-4731-b1e0-817c5ecfab28",
+        "id": "c1dee222-4bc5-48b1-a82d-a32bf07ccde8",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1003/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -508,13 +628,13 @@
       }
     },
     {
-      "id": "911f7e26-37c7-4012-a202-a3607e56af32",
-      "userId": "91f8ad5b-fc43-4655-b310-dc3c1809c367",
-      "facilityId": "19e1d90b-3fac-4fbb-a2a1-c62d1353f86c",
+      "id": "5ae6d8e4-7f78-4d17-b156-3bfd186b58b7",
+      "userId": "9fa73fce-f8f3-4efb-af89-2e1e9051a134",
+      "facilityId": "86ed5a6c-642f-4f00-b199-971c6be5929a",
       "facilityName": "Bệnh viện Từ Dũ",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "91f8ad5b-fc43-4655-b310-dc3c1809c367",
+        "id": "9fa73fce-f8f3-4efb-af89-2e1e9051a134",
         "phone": "+84988000005",
         "email": "doctor_5@famidoc.invalid",
         "fullName": "Hoàng Bích Ngọc",
@@ -534,7 +654,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "3cae2dff-2e6b-4584-aab0-5d0fef626ab5",
+        "id": "1563f1b4-4b0f-404d-b761-548657a11787",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1004/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -545,13 +665,13 @@
       }
     },
     {
-      "id": "e14b1c15-d70a-4c4f-896c-e8f458d1cede",
-      "userId": "08be7591-816c-4d59-8d96-cced5a70ecab",
-      "facilityId": "070ca05e-a6ee-49e5-943a-d18c9ca05a0c",
+      "id": "6a9ae364-5a63-4c6b-a2d0-7426fa6b0ffc",
+      "userId": "0a4800c2-c405-482a-8fa8-960009461a99",
+      "facilityId": "1a481340-ef4c-4b57-a06a-3a837c0f63ce",
       "facilityName": "Bệnh viện Nhân Dân Gia Định",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "08be7591-816c-4d59-8d96-cced5a70ecab",
+        "id": "0a4800c2-c405-482a-8fa8-960009461a99",
         "phone": "+84988000006",
         "email": "doctor_6@famidoc.invalid",
         "fullName": "Vũ Đình Trọng",
@@ -571,7 +691,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "0b425b85-928f-4d45-a66e-4bb2b74352c2",
+        "id": "d0643988-21e2-4940-a90a-8d82407b56e0",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1005/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -582,13 +702,13 @@
       }
     },
     {
-      "id": "8815591c-b54b-4e05-b09b-e35ee91a78f0",
-      "userId": "3a04e58e-aa02-4794-935a-caf083c3e937",
-      "facilityId": "bb53e10c-2e2b-4f8a-8e08-d1feca0d649e",
+      "id": "5c56be8f-20c5-487a-8940-836108b23ab2",
+      "userId": "58bc4f86-24e1-4109-b296-bcfcd66563da",
+      "facilityId": "5543790a-e9b5-4daf-aeb9-64fa3f438594",
       "facilityName": "Bệnh viện Bạch Mai",
       "city": "Hà Nội",
       "user": {
-        "id": "3a04e58e-aa02-4794-935a-caf083c3e937",
+        "id": "58bc4f86-24e1-4109-b296-bcfcd66563da",
         "phone": "+84988000007",
         "email": "doctor_7@famidoc.invalid",
         "fullName": "Đặng Quốc Huy",
@@ -608,7 +728,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "07c379f0-d641-4ebe-88ea-3d7c183feb47",
+        "id": "b05a02bd-7918-4605-92cc-b02469a3870f",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1006/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -619,13 +739,13 @@
       }
     },
     {
-      "id": "41cd8f57-4c62-4aa8-8f3f-004f9d3ad8cf",
-      "userId": "706a4c23-2723-4cec-b21e-38f37e88d9be",
-      "facilityId": "0bc05b13-7f7a-4bce-a9a0-11d91b645755",
+      "id": "27f5debb-2924-4a32-a123-92252e74d860",
+      "userId": "569ad672-8acd-4b29-9e9c-39c45ff10c49",
+      "facilityId": "08ec92c2-64d4-4ed0-bce3-e8cac6659b3d",
       "facilityName": "Bệnh viện Hữu Nghị Việt Đức",
       "city": "Hà Nội",
       "user": {
-        "id": "706a4c23-2723-4cec-b21e-38f37e88d9be",
+        "id": "569ad672-8acd-4b29-9e9c-39c45ff10c49",
         "phone": "+84988000008",
         "email": "doctor_8@famidoc.invalid",
         "fullName": "Bùi Phương Linh",
@@ -645,7 +765,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "e8dc85ee-57a7-460d-a350-d3ce95d0c3de",
+        "id": "87685e3f-62f4-4e31-a085-9142901908c2",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1007/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -656,13 +776,13 @@
       }
     },
     {
-      "id": "d3835d99-40bf-4e5e-92a1-7c176a677377",
-      "userId": "371cdf93-f923-4d81-b5d5-b749c89568d5",
-      "facilityId": "82fd0deb-3f6c-4d51-9733-3e74c67c6f79",
+      "id": "83ea1bdb-7b53-47ed-8d0d-3955d996852d",
+      "userId": "0a635ffe-00e9-4cd3-9f21-256ddda6df1a",
+      "facilityId": "28bfb310-b569-41f0-85f1-81d57465e744",
       "facilityName": "Bệnh viện Nhi Trung ương",
       "city": "Hà Nội",
       "user": {
-        "id": "371cdf93-f923-4d81-b5d5-b749c89568d5",
+        "id": "0a635ffe-00e9-4cd3-9f21-256ddda6df1a",
         "phone": "+84988000009",
         "email": "doctor_9@famidoc.invalid",
         "fullName": "Ngô Thanh Tùng",
@@ -682,7 +802,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "c3395e09-c7a1-4b97-bf0e-4013514b514c",
+        "id": "e30fba48-2984-46b4-8508-de3852a5966f",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1008/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -693,13 +813,13 @@
       }
     },
     {
-      "id": "8b01cfa4-0b79-4ca9-aecc-24713a96ded9",
-      "userId": "767a9584-8667-4b29-a02e-962d28c8abc4",
-      "facilityId": "a0eee457-19d3-4aee-921d-a675886dc3bd",
+      "id": "bf439faf-6743-4f3a-82f1-61b91a2a7644",
+      "userId": "f7e3d326-3106-4889-a6c8-0cec0859ae5b",
+      "facilityId": "c07502e6-8a69-49ad-8409-2c9e05b3de88",
       "facilityName": "Bệnh viện Phụ sản Hà Nội",
       "city": "Hà Nội",
       "user": {
-        "id": "767a9584-8667-4b29-a02e-962d28c8abc4",
+        "id": "f7e3d326-3106-4889-a6c8-0cec0859ae5b",
         "phone": "+84988000010",
         "email": "doctor_10@famidoc.invalid",
         "fullName": "Đỗ Mai Hương",
@@ -719,7 +839,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "22d73fdd-690f-4b8a-837f-7a8f93247006",
+        "id": "2ee8bf51-c77c-4cba-9136-a77070dbc231",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1009/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -730,13 +850,13 @@
       }
     },
     {
-      "id": "251b1936-a603-4377-b00a-b20e3b667476",
-      "userId": "8eb37fb7-39ee-4ff2-a381-1e665eaa053b",
-      "facilityId": "325750af-1c2b-4b3f-aafc-7d17fc699f50",
+      "id": "8408017c-083c-4436-b9ea-68165de03a7e",
+      "userId": "8da7960d-3db8-4369-a525-819945c5ae37",
+      "facilityId": "d0c08a4a-d701-42a9-998d-56fff6e32c69",
       "facilityName": "Bệnh viện Phụ sản Trung ương",
       "city": "Hà Nội",
       "user": {
-        "id": "8eb37fb7-39ee-4ff2-a381-1e665eaa053b",
+        "id": "8da7960d-3db8-4369-a525-819945c5ae37",
         "phone": "+84988000011",
         "email": "doctor_11@famidoc.invalid",
         "fullName": "Dương Khắc Tiệp",
@@ -756,7 +876,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "e09d5717-83ee-4dcb-abe2-6d1b89fabd43",
+        "id": "9de9c307-2a0a-4a1c-afaf-9f9d7fde2d80",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1010/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -767,13 +887,13 @@
       }
     },
     {
-      "id": "7ebeea5e-c515-4672-b720-b9ee7a0029a5",
-      "userId": "943a668d-3bf4-436d-acc9-746715a2040a",
-      "facilityId": "39a36b8d-a846-41d3-941c-8092a633dbc0",
+      "id": "219ca459-6c4d-4920-b9d1-bec60fb5a265",
+      "userId": "f0234c6a-18ea-4d8a-be0c-b85b46cec979",
+      "facilityId": "4f7d9943-9e4f-4c3f-918d-3be688d8dc1f",
       "facilityName": "Bệnh viện Đa khoa Quốc tế Vinmec Times City",
       "city": "Hà Nội",
       "user": {
-        "id": "943a668d-3bf4-436d-acc9-746715a2040a",
+        "id": "f0234c6a-18ea-4d8a-be0c-b85b46cec979",
         "phone": "+84988000012",
         "email": "doctor_12@famidoc.invalid",
         "fullName": "Lý Quốc Bảo",
@@ -793,7 +913,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "c1bc601f-aab6-42d1-a833-301597446401",
+        "id": "db0efcfd-f04e-4c81-aa79-6d74cbd6874e",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1011/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -804,13 +924,13 @@
       }
     },
     {
-      "id": "4e177e9a-9f9c-4ac2-8c7f-932371d7b44b",
-      "userId": "1a832584-80d2-4b88-b809-affb1099447e",
-      "facilityId": "6c9a3026-941e-462d-8459-fe21b984733d",
+      "id": "5cf6d34d-2f72-43c4-ae07-60ec48f61cdc",
+      "userId": "39f85aa1-4395-42ca-8621-d584110ab957",
+      "facilityId": "bd820cdd-bc4a-4284-b7c2-b1bf4acb2a07",
       "facilityName": "Bệnh viện Đa khoa Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "1a832584-80d2-4b88-b809-affb1099447e",
+        "id": "39f85aa1-4395-42ca-8621-d584110ab957",
         "phone": "+84988000013",
         "email": "doctor_13@famidoc.invalid",
         "fullName": "Hồ Thị Cẩm Nhung",
@@ -830,7 +950,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "de29aeaf-e051-4921-96b4-24dab5ea815b",
+        "id": "a5f9e1a6-48d8-4e74-9c2a-2d7e7d8d8c3c",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1012/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -841,13 +961,13 @@
       }
     },
     {
-      "id": "a2b10738-7ba4-43f1-a6a9-07554e8be6ce",
-      "userId": "4d589153-2cc2-43f1-9661-06c65483628a",
-      "facilityId": "96a3d44c-5ffd-4a80-820b-af7e3292a35b",
+      "id": "0670830a-3955-455e-abc3-b95cecc0778f",
+      "userId": "8b88a888-8401-4162-a782-39abccba66df",
+      "facilityId": "9f1e690e-76b0-439c-9f2e-d7ee85dd5770",
       "facilityName": "Bệnh viện Phụ sản - Nhi Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "4d589153-2cc2-43f1-9661-06c65483628a",
+        "id": "8b88a888-8401-4162-a782-39abccba66df",
         "phone": "+84988000014",
         "email": "doctor_14@famidoc.invalid",
         "fullName": "Võ Trọng Nghĩa",
@@ -867,7 +987,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "c20e7b7c-3a24-4603-9e7b-670847c93b37",
+        "id": "18db9486-6bb9-44e5-a661-cc32ae7362ec",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1013/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -878,13 +998,13 @@
       }
     },
     {
-      "id": "c3d98944-c6b5-44a2-8ee5-9f24196e6f6f",
-      "userId": "2ec7653c-8a15-4773-b953-32964f7a6fb3",
-      "facilityId": "1d2d1b72-5c31-49d5-9c6d-af17af969a5e",
+      "id": "834ad2de-c764-4697-a7c7-c97e997ae3f5",
+      "userId": "ed86ef5d-1824-40fd-8e15-efa741e9352f",
+      "facilityId": "5df2b856-a29c-4f74-b9bf-cce587f52dbe",
       "facilityName": "Bệnh viện Hoàn Mỹ Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "2ec7653c-8a15-4773-b953-32964f7a6fb3",
+        "id": "ed86ef5d-1824-40fd-8e15-efa741e9352f",
         "phone": "+84988000015",
         "email": "doctor_15@famidoc.invalid",
         "fullName": "Phan Thanh Bình",
@@ -904,7 +1024,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "bf881e31-fe24-422c-ac46-0eb79d27dc9e",
+        "id": "ffdbf4d5-1bff-4bbb-ae44-772197648cff",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1014/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -915,13 +1035,13 @@
       }
     },
     {
-      "id": "3e1d8c3e-2ab0-4329-b4e1-dee776d5c3d2",
-      "userId": "b1baec86-6519-4dd8-9e02-8abb25cd162e",
-      "facilityId": "386586b0-34a0-43f0-9c87-528983872698",
+      "id": "e9648ecf-5d93-4660-a835-43edbfe85e36",
+      "userId": "7f5e2c8a-0e0a-4f68-b206-915d9b0d1272",
+      "facilityId": "b3f12281-9cea-48f9-a403-9c7a183e2f86",
       "facilityName": "Bệnh viện Đại học Y Dược TP.HCM",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "b1baec86-6519-4dd8-9e02-8abb25cd162e",
+        "id": "7f5e2c8a-0e0a-4f68-b206-915d9b0d1272",
         "phone": "+84988000016",
         "email": "doctor_16@famidoc.invalid",
         "fullName": "Trịnh Kim Oanh",
@@ -941,7 +1061,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "7d355f1c-0b4b-4010-99f1-86d4fdd257e0",
+        "id": "18c4fa8e-4e17-465e-8758-230c4fd750f8",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1015/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -952,13 +1072,13 @@
       }
     },
     {
-      "id": "3c5e2f29-5772-4429-86e1-67d1e715a729",
-      "userId": "2f30c18f-0383-4eca-b2e3-25539acc13b8",
-      "facilityId": "86d90813-a6bd-4cff-93d4-66335a3fbdbb",
+      "id": "c63d6e28-6503-481d-a7f3-82d640e2a62e",
+      "userId": "ecf4aba2-061e-45eb-b059-e8546f0d54ef",
+      "facilityId": "03bbfa60-2076-4b20-92f5-ebe4e32d83b9",
       "facilityName": "Bệnh viện Chợ Rẫy",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "2f30c18f-0383-4eca-b2e3-25539acc13b8",
+        "id": "ecf4aba2-061e-45eb-b059-e8546f0d54ef",
         "phone": "+84988000017",
         "email": "doctor_17@famidoc.invalid",
         "fullName": "Đinh Văn Thắng",
@@ -978,7 +1098,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "8e079e50-e80c-4211-af84-b8e9d8146184",
+        "id": "26ba1050-2eb1-4f4a-bc1f-10362f5eda3d",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1016/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -989,13 +1109,13 @@
       }
     },
     {
-      "id": "c2a1f861-f10c-4469-90a8-322b492f7372",
-      "userId": "3a5b44a8-4ef6-4c95-9d06-e1f49b1b9ac0",
-      "facilityId": "2df430ba-6710-4d71-b478-4608e1156f81",
+      "id": "b8b785b8-8772-43cf-aace-cb1fc168a36f",
+      "userId": "44b602f9-b35b-4ddd-8ab9-d4acc505cc9a",
+      "facilityId": "25bbacf8-3348-4d7a-ac8d-0b1cf0b661ed",
       "facilityName": "Bệnh viện Nhi Đồng 1",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "3a5b44a8-4ef6-4c95-9d06-e1f49b1b9ac0",
+        "id": "44b602f9-b35b-4ddd-8ab9-d4acc505cc9a",
         "phone": "+84988000018",
         "email": "doctor_18@famidoc.invalid",
         "fullName": "Lâm Khánh Chi",
@@ -1015,7 +1135,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "158ab876-8897-4b97-8091-e594a0772fc6",
+        "id": "1236e172-3e4e-4526-abcb-a09965c0f91b",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1017/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -1026,13 +1146,13 @@
       }
     },
     {
-      "id": "faa76dce-8b59-4c4f-9d88-242578cf7613",
-      "userId": "adc620ae-9ed0-4ec2-a7fe-a5b75158c544",
-      "facilityId": "ba40ee8a-986f-4f60-8a2a-664ed21712f9",
+      "id": "2a219649-4732-45aa-8975-853d208b4758",
+      "userId": "15816556-55c9-436e-bb02-fd0a22e1b8d9",
+      "facilityId": "944031b1-b0a9-4020-965d-6b38fbd2aad7",
       "facilityName": "Bệnh viện Nhi Đồng 2",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "adc620ae-9ed0-4ec2-a7fe-a5b75158c544",
+        "id": "15816556-55c9-436e-bb02-fd0a22e1b8d9",
         "phone": "+84988000019",
         "email": "doctor_19@famidoc.invalid",
         "fullName": "Tạ Quang Bửu",
@@ -1052,7 +1172,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "39e4f754-7689-41b1-b299-da6ac0c128d9",
+        "id": "555e4f93-2b01-4c48-b0cc-777d61ef69f2",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1018/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -1063,13 +1183,13 @@
       }
     },
     {
-      "id": "52c61fda-e0e8-43b4-b5bc-0145bb3ee40f",
-      "userId": "7719d92a-025b-492e-bb5b-a3bc8cf2de04",
-      "facilityId": "19e1d90b-3fac-4fbb-a2a1-c62d1353f86c",
+      "id": "f721c568-5bb9-4bec-bf44-f11536d997b8",
+      "userId": "f6e8f417-8da1-4d88-803f-fc8fbf1767ce",
+      "facilityId": "86ed5a6c-642f-4f00-b199-971c6be5929a",
       "facilityName": "Bệnh viện Từ Dũ",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "7719d92a-025b-492e-bb5b-a3bc8cf2de04",
+        "id": "f6e8f417-8da1-4d88-803f-fc8fbf1767ce",
         "phone": "+84988000020",
         "email": "doctor_20@famidoc.invalid",
         "fullName": "Mai Thu Huyền",
@@ -1089,7 +1209,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "e17fda62-bd09-418f-8483-2e8031e72d59",
+        "id": "d1c12035-f5f3-44ed-9c0c-9154ea78d95b",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1019/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -1100,13 +1220,13 @@
       }
     },
     {
-      "id": "b06a1899-636f-40e5-8a94-e6616d798ef1",
-      "userId": "79514ac7-ac15-46d2-a419-a51d4b645ea5",
-      "facilityId": "070ca05e-a6ee-49e5-943a-d18c9ca05a0c",
+      "id": "3597f3a1-c4bd-4f10-822e-a565f1cf7a1d",
+      "userId": "3578e01a-3947-4444-a9f1-68e63cb91d44",
+      "facilityId": "1a481340-ef4c-4b57-a06a-3a837c0f63ce",
       "facilityName": "Bệnh viện Nhân Dân Gia Định",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "79514ac7-ac15-46d2-a419-a51d4b645ea5",
+        "id": "3578e01a-3947-4444-a9f1-68e63cb91d44",
         "phone": "+84988000021",
         "email": "doctor_21@famidoc.invalid",
         "fullName": "Đoàn Văn Hậu",
@@ -1126,7 +1246,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "2d3b3f53-0e20-40b0-9ae9-3cf92a964f6b",
+        "id": "d6f24988-eb3d-4be0-9ac6-68a5e6c9875c",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1020/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -1137,13 +1257,13 @@
       }
     },
     {
-      "id": "e4c972f4-fef9-4564-9081-29128f738f84",
-      "userId": "c976400c-3bf6-4e5d-983a-29017c49339e",
-      "facilityId": "bb53e10c-2e2b-4f8a-8e08-d1feca0d649e",
+      "id": "5d08c4af-562b-4158-8783-e7fa159b8b42",
+      "userId": "6150b8a7-9093-4dc7-b4b5-5e5e7f3394bd",
+      "facilityId": "5543790a-e9b5-4daf-aeb9-64fa3f438594",
       "facilityName": "Bệnh viện Bạch Mai",
       "city": "Hà Nội",
       "user": {
-        "id": "c976400c-3bf6-4e5d-983a-29017c49339e",
+        "id": "6150b8a7-9093-4dc7-b4b5-5e5e7f3394bd",
         "phone": "+84988000022",
         "email": "doctor_22@famidoc.invalid",
         "fullName": "Trương Bá Đạo",
@@ -1163,7 +1283,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "043885d3-bb52-408d-bae7-30f3070ee9f6",
+        "id": "c56e602a-aad6-4a5e-81ff-c965dfa3abd2",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1021/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -1174,13 +1294,13 @@
       }
     },
     {
-      "id": "20ceb700-1903-4b24-a6cc-957d46f42af8",
-      "userId": "12fbe741-fec3-42f3-b960-a9b01c72b4cf",
-      "facilityId": "0bc05b13-7f7a-4bce-a9a0-11d91b645755",
+      "id": "51e13d59-00c9-4e5d-9ef4-b758e200f353",
+      "userId": "6f8d8e2d-be20-466e-b20d-9cbf87615b76",
+      "facilityId": "08ec92c2-64d4-4ed0-bce3-e8cac6659b3d",
       "facilityName": "Bệnh viện Hữu Nghị Việt Đức",
       "city": "Hà Nội",
       "user": {
-        "id": "12fbe741-fec3-42f3-b960-a9b01c72b4cf",
+        "id": "6f8d8e2d-be20-466e-b20d-9cbf87615b76",
         "phone": "+84988000023",
         "email": "doctor_23@famidoc.invalid",
         "fullName": "Lương Thế Vinh",
@@ -1200,7 +1320,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "fb427b48-d9b0-49ee-9f9c-63fd227676a1",
+        "id": "f1a32d2d-f11f-4952-bd32-13520d078289",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1022/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -1211,13 +1331,13 @@
       }
     },
     {
-      "id": "981c356d-7b8f-4aa6-b8f8-71bb620ff467",
-      "userId": "4dfc11a5-1e2d-46c0-ba36-c88f0f57bb26",
-      "facilityId": "82fd0deb-3f6c-4d51-9733-3e74c67c6f79",
+      "id": "4ffa6e3c-cbc3-45fe-bb54-a6a8c3c0d03f",
+      "userId": "70f9e482-960f-43e5-924a-5e6f3b6853da",
+      "facilityId": "28bfb310-b569-41f0-85f1-81d57465e744",
       "facilityName": "Bệnh viện Nhi Trung ương",
       "city": "Hà Nội",
       "user": {
-        "id": "4dfc11a5-1e2d-46c0-ba36-c88f0f57bb26",
+        "id": "70f9e482-960f-43e5-924a-5e6f3b6853da",
         "phone": "+84988000024",
         "email": "doctor_24@famidoc.invalid",
         "fullName": "Cao Thị Thúy",
@@ -1237,7 +1357,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "0ca9d918-d13a-4d8d-a649-e51baaad5b4f",
+        "id": "31bc7453-c070-4380-87f7-3d2d94576b4f",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1023/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -1248,13 +1368,13 @@
       }
     },
     {
-      "id": "461cd6aa-017b-44d5-b2d7-df4b676521f4",
-      "userId": "37ecdaa4-5b96-47c6-8732-aaebdda57f1c",
-      "facilityId": "a0eee457-19d3-4aee-921d-a675886dc3bd",
+      "id": "b82e4ddc-155a-4e5c-81f8-95d74ede4f5f",
+      "userId": "97d3de3b-e879-4a19-a351-075812c9ee56",
+      "facilityId": "c07502e6-8a69-49ad-8409-2c9e05b3de88",
       "facilityName": "Bệnh viện Phụ sản Hà Nội",
       "city": "Hà Nội",
       "user": {
-        "id": "37ecdaa4-5b96-47c6-8732-aaebdda57f1c",
+        "id": "97d3de3b-e879-4a19-a351-075812c9ee56",
         "phone": "+84988000025",
         "email": "doctor_25@famidoc.invalid",
         "fullName": "Nguyễn Hữu Dũng",
@@ -1274,7 +1394,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "f626edd8-c30e-4af5-8707-59438f39e098",
+        "id": "32cfcfcd-1886-4a14-b61e-407057008f0a",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1024/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -1285,13 +1405,13 @@
       }
     },
     {
-      "id": "12022b1a-c579-4e97-a3aa-0142cb5d6c24",
-      "userId": "7af6f9cd-34ab-4bb1-9ffa-2c0cbad731f6",
-      "facilityId": "325750af-1c2b-4b3f-aafc-7d17fc699f50",
+      "id": "ea00823a-b60f-4b94-b9ce-4ea9b2beb0e7",
+      "userId": "a6c9d46d-5bee-4985-b55c-25d6517111e5",
+      "facilityId": "d0c08a4a-d701-42a9-998d-56fff6e32c69",
       "facilityName": "Bệnh viện Phụ sản Trung ương",
       "city": "Hà Nội",
       "user": {
-        "id": "7af6f9cd-34ab-4bb1-9ffa-2c0cbad731f6",
+        "id": "a6c9d46d-5bee-4985-b55c-25d6517111e5",
         "phone": "+84988000026",
         "email": "doctor_26@famidoc.invalid",
         "fullName": "Trần Đình Khang",
@@ -1311,7 +1431,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "618b5578-5eb6-44c2-a152-c394d5081bd9",
+        "id": "7cdde544-df78-4c3a-9813-dbc8882b0178",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1025/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -1322,13 +1442,13 @@
       }
     },
     {
-      "id": "254f5ee6-1c6f-4d83-a131-1077104ef221",
-      "userId": "514e8afb-9e28-4161-a55f-da8c54e6558d",
-      "facilityId": "39a36b8d-a846-41d3-941c-8092a633dbc0",
+      "id": "cebdb2ca-1387-406f-99d6-7da203d3d895",
+      "userId": "6fb32464-6912-464d-9840-4ff09e727819",
+      "facilityId": "4f7d9943-9e4f-4c3f-918d-3be688d8dc1f",
       "facilityName": "Bệnh viện Đa khoa Quốc tế Vinmec Times City",
       "city": "Hà Nội",
       "user": {
-        "id": "514e8afb-9e28-4161-a55f-da8c54e6558d",
+        "id": "6fb32464-6912-464d-9840-4ff09e727819",
         "phone": "+84988000027",
         "email": "doctor_27@famidoc.invalid",
         "fullName": "Lê Thị Mỹ Hạnh",
@@ -1348,7 +1468,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "6e18232c-d7b4-4f10-ae3e-a0d29ade31a7",
+        "id": "f24395ca-ec0e-4b60-a459-4d7bcbca9437",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1026/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -1359,13 +1479,13 @@
       }
     },
     {
-      "id": "f01c595b-3b4a-4f30-84bd-e0b100fea5a4",
-      "userId": "a6032312-4501-4504-acba-ebbf0646f05e",
-      "facilityId": "6c9a3026-941e-462d-8459-fe21b984733d",
+      "id": "9eb8b792-73b2-4b14-b735-494e07e294e2",
+      "userId": "3d9c6363-f6f5-4e38-a368-aad6aaa68f79",
+      "facilityId": "bd820cdd-bc4a-4284-b7c2-b1bf4acb2a07",
       "facilityName": "Bệnh viện Đa khoa Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "a6032312-4501-4504-acba-ebbf0646f05e",
+        "id": "3d9c6363-f6f5-4e38-a368-aad6aaa68f79",
         "phone": "+84988000028",
         "email": "doctor_28@famidoc.invalid",
         "fullName": "Phạm Văn Thành",
@@ -1385,7 +1505,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "0855ed3f-e722-4357-98ff-c3ed0721ee0c",
+        "id": "cd462ec4-f897-49d7-bc43-6c02ee24be65",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1027/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -1396,13 +1516,13 @@
       }
     },
     {
-      "id": "fc8e71f2-92f3-46be-abb3-433f7c9c5295",
-      "userId": "69e88e23-6f94-4afe-9822-50a4c72cc27f",
-      "facilityId": "96a3d44c-5ffd-4a80-820b-af7e3292a35b",
+      "id": "72d34ebc-cf1e-4609-bbb6-0aac0df3c542",
+      "userId": "3df34cce-1bc5-4aa7-a3c6-135e280796f8",
+      "facilityId": "9f1e690e-76b0-439c-9f2e-d7ee85dd5770",
       "facilityName": "Bệnh viện Phụ sản - Nhi Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "69e88e23-6f94-4afe-9822-50a4c72cc27f",
+        "id": "3df34cce-1bc5-4aa7-a3c6-135e280796f8",
         "phone": "+84988000029",
         "email": "doctor_29@famidoc.invalid",
         "fullName": "Hoàng Văn Quân",
@@ -1422,7 +1542,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "77788fe0-872c-4c37-8892-6df610506edf",
+        "id": "fbc55804-ecf7-4a9d-84fb-0e3ba5b4ef8f",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1028/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -1433,13 +1553,13 @@
       }
     },
     {
-      "id": "b3763bfa-819c-4256-b15d-8d0f771ec386",
-      "userId": "7bdfbf5d-489c-4539-811f-1a07adaa4e59",
-      "facilityId": "1d2d1b72-5c31-49d5-9c6d-af17af969a5e",
+      "id": "6cc1db06-6d49-4a3d-bc67-bb5d916f9695",
+      "userId": "d341fcf0-3782-432c-8026-bfd95a004be3",
+      "facilityId": "5df2b856-a29c-4f74-b9bf-cce587f52dbe",
       "facilityName": "Bệnh viện Hoàn Mỹ Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "7bdfbf5d-489c-4539-811f-1a07adaa4e59",
+        "id": "d341fcf0-3782-432c-8026-bfd95a004be3",
         "phone": "+84988000030",
         "email": "doctor_30@famidoc.invalid",
         "fullName": "Vũ Thị Minh Thư",
@@ -1459,7 +1579,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "40fbaf15-1d09-40c4-b675-30ac188adcde",
+        "id": "a0efaa66-1675-4819-b19f-ba0badfffae4",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1029/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -1470,13 +1590,13 @@
       }
     },
     {
-      "id": "46ca0634-7732-4d6a-8af7-24ae1e76f434",
-      "userId": "b95e879e-46d0-4670-be73-58aa67e63d3b",
-      "facilityId": "386586b0-34a0-43f0-9c87-528983872698",
+      "id": "82e1ca0e-8a80-4d00-9176-08b30ee6ace9",
+      "userId": "7a94615a-86b4-49da-beac-6b2ce62f672a",
+      "facilityId": "b3f12281-9cea-48f9-a403-9c7a183e2f86",
       "facilityName": "Bệnh viện Đại học Y Dược TP.HCM",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "b95e879e-46d0-4670-be73-58aa67e63d3b",
+        "id": "7a94615a-86b4-49da-beac-6b2ce62f672a",
         "phone": "+84988000031",
         "email": "doctor_31@famidoc.invalid",
         "fullName": "Đặng Thùy Trâm",
@@ -1496,7 +1616,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "d8e98e09-005c-4477-92b4-d53735783594",
+        "id": "6a23ced5-26d9-4211-ae98-acd4260604b6",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1030/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -1507,13 +1627,13 @@
       }
     },
     {
-      "id": "f820bcf7-4107-4efd-b96b-021e5884d41c",
-      "userId": "908ada0b-fffe-4a16-8444-a22a243d765f",
-      "facilityId": "86d90813-a6bd-4cff-93d4-66335a3fbdbb",
+      "id": "c0ca38b5-112e-4e2f-9c8b-55c361b5aba0",
+      "userId": "5486087f-e33e-4bc3-947a-bc0f74ba16f7",
+      "facilityId": "03bbfa60-2076-4b20-92f5-ebe4e32d83b9",
       "facilityName": "Bệnh viện Chợ Rẫy",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "908ada0b-fffe-4a16-8444-a22a243d765f",
+        "id": "5486087f-e33e-4bc3-947a-bc0f74ba16f7",
         "phone": "+84988000032",
         "email": "doctor_32@famidoc.invalid",
         "fullName": "Bùi Đức Long",
@@ -1533,7 +1653,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "734ed6c0-745f-43b6-9338-21f4f0f45d8c",
+        "id": "9a09c385-66fa-47d3-8148-1c1429f94980",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1031/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -1544,13 +1664,13 @@
       }
     },
     {
-      "id": "3928cc0e-71cc-4390-943a-c7cefeeb272a",
-      "userId": "b8f77315-bdec-43e9-921c-8026ded7067d",
-      "facilityId": "2df430ba-6710-4d71-b478-4608e1156f81",
+      "id": "89c240ba-589f-423d-a9c0-a165d5bf7f9a",
+      "userId": "88256e3c-9fdb-4779-99a4-6a73b75d56e5",
+      "facilityId": "25bbacf8-3348-4d7a-ac8d-0b1cf0b661ed",
       "facilityName": "Bệnh viện Nhi Đồng 1",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "b8f77315-bdec-43e9-921c-8026ded7067d",
+        "id": "88256e3c-9fdb-4779-99a4-6a73b75d56e5",
         "phone": "+84988000033",
         "email": "doctor_33@famidoc.invalid",
         "fullName": "Nguyễn Hồng Sơn",
@@ -1570,7 +1690,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "d71a16a0-b44b-48cf-ad01-a839d68f0e8d",
+        "id": "19cb8416-7975-4323-b0d7-4782fed66c03",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1032/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -1581,13 +1701,13 @@
       }
     },
     {
-      "id": "62aaf23c-29ff-4595-ac70-863882f7ae31",
-      "userId": "5ff92ce0-a6f5-47a4-ae18-38f173ac2d19",
-      "facilityId": "ba40ee8a-986f-4f60-8a2a-664ed21712f9",
+      "id": "8e7e1f04-3d87-41cf-9b39-7bd7f9b910e2",
+      "userId": "264cffea-89d7-41b5-b662-5e9b8ed78589",
+      "facilityId": "944031b1-b0a9-4020-965d-6b38fbd2aad7",
       "facilityName": "Bệnh viện Nhi Đồng 2",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "5ff92ce0-a6f5-47a4-ae18-38f173ac2d19",
+        "id": "264cffea-89d7-41b5-b662-5e9b8ed78589",
         "phone": "+84988000034",
         "email": "doctor_34@famidoc.invalid",
         "fullName": "Trần Bảo Ngọc",
@@ -1607,7 +1727,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "50f1c1bf-ff8b-4182-9ec6-217aee7caec1",
+        "id": "3d194cfc-e03f-4d64-9c9e-266abb4f26b7",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1033/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -1618,13 +1738,13 @@
       }
     },
     {
-      "id": "60db2135-138b-4788-9b0d-a3aa87c9bee5",
-      "userId": "86bc9d03-be8d-421e-837b-f44af3c1f8b1",
-      "facilityId": "19e1d90b-3fac-4fbb-a2a1-c62d1353f86c",
+      "id": "3a6fc09e-8894-4669-8bf1-4f36fbebcebc",
+      "userId": "34cd3234-c55c-4a43-8517-3964fffa1bd3",
+      "facilityId": "86ed5a6c-642f-4f00-b199-971c6be5929a",
       "facilityName": "Bệnh viện Từ Dũ",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "86bc9d03-be8d-421e-837b-f44af3c1f8b1",
+        "id": "34cd3234-c55c-4a43-8517-3964fffa1bd3",
         "phone": "+84988000035",
         "email": "doctor_35@famidoc.invalid",
         "fullName": "Lê Thanh Hải",
@@ -1644,7 +1764,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "94360f8f-0328-430b-83f0-377b53394bd4",
+        "id": "0ba6c2d0-85f8-4b43-9229-f77d4024facf",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1034/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -1655,13 +1775,13 @@
       }
     },
     {
-      "id": "83fcd966-a9d2-4c73-9ae3-4d2cdac119b3",
-      "userId": "6a6ea57d-08bd-4ce2-808c-307b7ae0affe",
-      "facilityId": "070ca05e-a6ee-49e5-943a-d18c9ca05a0c",
+      "id": "7b717168-46b0-41af-8ce6-fdb7b774bb81",
+      "userId": "edbd8453-c222-4e6b-903f-32684ec4342b",
+      "facilityId": "1a481340-ef4c-4b57-a06a-3a837c0f63ce",
       "facilityName": "Bệnh viện Nhân Dân Gia Định",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "6a6ea57d-08bd-4ce2-808c-307b7ae0affe",
+        "id": "edbd8453-c222-4e6b-903f-32684ec4342b",
         "phone": "+84988000036",
         "email": "doctor_36@famidoc.invalid",
         "fullName": "Phạm Quỳnh Anh",
@@ -1681,7 +1801,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "6a40da41-5abe-47e8-b149-9b49d0eda9aa",
+        "id": "f2d429f3-dd88-499f-8a40-4503ccc38d55",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1035/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -1692,13 +1812,13 @@
       }
     },
     {
-      "id": "d67cd72d-dd4b-4f82-be0f-060fde28e740",
-      "userId": "87706fe4-ee2d-46e0-8a17-a4f93762c282",
-      "facilityId": "bb53e10c-2e2b-4f8a-8e08-d1feca0d649e",
+      "id": "f8b24c23-a725-48bc-8d78-645b9b43a7d5",
+      "userId": "2bff4246-e047-450e-bf0f-524f7e70aa52",
+      "facilityId": "5543790a-e9b5-4daf-aeb9-64fa3f438594",
       "facilityName": "Bệnh viện Bạch Mai",
       "city": "Hà Nội",
       "user": {
-        "id": "87706fe4-ee2d-46e0-8a17-a4f93762c282",
+        "id": "2bff4246-e047-450e-bf0f-524f7e70aa52",
         "phone": "+84988000037",
         "email": "doctor_37@famidoc.invalid",
         "fullName": "Hoàng Anh Tuấn",
@@ -1718,7 +1838,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "eee6a2f7-372e-40d1-94c6-fc2ed17d732a",
+        "id": "e7a54a95-1b6c-4e78-b7fe-966db6b060f4",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1036/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -1729,13 +1849,13 @@
       }
     },
     {
-      "id": "f184eb4e-b7e2-4481-9fa7-405af4ee0990",
-      "userId": "b9508907-dd0e-4969-b13b-e056d356b669",
-      "facilityId": "0bc05b13-7f7a-4bce-a9a0-11d91b645755",
+      "id": "f7a119ae-0dcb-483c-8fee-27b54e6289cd",
+      "userId": "74ba83b2-a80a-40bd-97fe-a900c0997bbb",
+      "facilityId": "08ec92c2-64d4-4ed0-bce3-e8cac6659b3d",
       "facilityName": "Bệnh viện Hữu Nghị Việt Đức",
       "city": "Hà Nội",
       "user": {
-        "id": "b9508907-dd0e-4969-b13b-e056d356b669",
+        "id": "74ba83b2-a80a-40bd-97fe-a900c0997bbb",
         "phone": "+84988000038",
         "email": "doctor_38@famidoc.invalid",
         "fullName": "Vũ Thị Thu Trang",
@@ -1755,7 +1875,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "fc11cdb1-f1d6-42d0-8803-857b5af26f30",
+        "id": "d402a061-7497-4b43-ae74-3db01f9515c7",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1037/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -1766,13 +1886,13 @@
       }
     },
     {
-      "id": "ce65042f-5845-4466-80d2-fc4076c19374",
-      "userId": "c2eeb2d9-c83e-4d3f-8e5b-818ff2920195",
-      "facilityId": "82fd0deb-3f6c-4d51-9733-3e74c67c6f79",
+      "id": "781d83cc-110b-4d9a-a595-71e3b921eed9",
+      "userId": "ed4153ac-57f8-42d8-9a85-7f5851e6b970",
+      "facilityId": "28bfb310-b569-41f0-85f1-81d57465e744",
       "facilityName": "Bệnh viện Nhi Trung ương",
       "city": "Hà Nội",
       "user": {
-        "id": "c2eeb2d9-c83e-4d3f-8e5b-818ff2920195",
+        "id": "ed4153ac-57f8-42d8-9a85-7f5851e6b970",
         "phone": "+84988000039",
         "email": "doctor_39@famidoc.invalid",
         "fullName": "Đặng Nhật Minh",
@@ -1792,7 +1912,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "1279ae24-daba-4352-a303-e6ba7347800e",
+        "id": "e6bdc778-6ba4-4f39-a99d-c4a9d7bac976",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1038/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -1803,13 +1923,13 @@
       }
     },
     {
-      "id": "c08a4dac-2bb8-4661-9626-482efc142dd3",
-      "userId": "b4162990-193d-411b-a95f-afcf3f2aaecc",
-      "facilityId": "a0eee457-19d3-4aee-921d-a675886dc3bd",
+      "id": "1fd834f1-320c-499d-a04a-aa29fae8756f",
+      "userId": "3e837111-df46-4015-8e30-13d7a76df778",
+      "facilityId": "c07502e6-8a69-49ad-8409-2c9e05b3de88",
       "facilityName": "Bệnh viện Phụ sản Hà Nội",
       "city": "Hà Nội",
       "user": {
-        "id": "b4162990-193d-411b-a95f-afcf3f2aaecc",
+        "id": "3e837111-df46-4015-8e30-13d7a76df778",
         "phone": "+84988000040",
         "email": "doctor_40@famidoc.invalid",
         "fullName": "Bùi Lan Hương",
@@ -1829,7 +1949,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "e7d41490-f54b-45e3-9321-0c9b2474944a",
+        "id": "ca485312-6330-4784-acb3-4d7a5639a57b",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1039/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -1840,13 +1960,13 @@
       }
     },
     {
-      "id": "8c2cad8d-3564-4993-8d74-2dcb58227e60",
-      "userId": "b40d24d0-b3fd-4ec5-8fe7-ac7d1b9e2b9d",
-      "facilityId": "325750af-1c2b-4b3f-aafc-7d17fc699f50",
+      "id": "3e81cbc6-1135-4d18-bed3-54e171c0af91",
+      "userId": "70f763da-2487-45db-8db6-71d3aafbd377",
+      "facilityId": "d0c08a4a-d701-42a9-998d-56fff6e32c69",
       "facilityName": "Bệnh viện Phụ sản Trung ương",
       "city": "Hà Nội",
       "user": {
-        "id": "b40d24d0-b3fd-4ec5-8fe7-ac7d1b9e2b9d",
+        "id": "70f763da-2487-45db-8db6-71d3aafbd377",
         "phone": "+84988000041",
         "email": "doctor_41@famidoc.invalid",
         "fullName": "Ngô Gia Bảo",
@@ -1866,7 +1986,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "2055085b-ab1d-4c64-a7b1-6dd8aa07067a",
+        "id": "12cb34ca-0862-4f54-9a32-1e1e4cd6ef47",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1040/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -1877,13 +1997,13 @@
       }
     },
     {
-      "id": "e727d32a-7e66-4f21-9f55-c67250285c29",
-      "userId": "e8b3e2bf-fc6b-4825-a633-60dea8a55d2f",
-      "facilityId": "39a36b8d-a846-41d3-941c-8092a633dbc0",
+      "id": "6d25afc4-dde4-481f-b350-6dc1a15d2c35",
+      "userId": "a67ef9b4-4fe3-4ac1-8ddf-f3297ffc2d5f",
+      "facilityId": "4f7d9943-9e4f-4c3f-918d-3be688d8dc1f",
       "facilityName": "Bệnh viện Đa khoa Quốc tế Vinmec Times City",
       "city": "Hà Nội",
       "user": {
-        "id": "e8b3e2bf-fc6b-4825-a633-60dea8a55d2f",
+        "id": "a67ef9b4-4fe3-4ac1-8ddf-f3297ffc2d5f",
         "phone": "+84988000042",
         "email": "doctor_42@famidoc.invalid",
         "fullName": "Đỗ Trọng Tấn",
@@ -1903,7 +2023,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "eb00e8bc-c1bf-40ab-b736-90572440f6ce",
+        "id": "aacfd613-65bc-4c51-af26-530b63f56649",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1041/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -1914,13 +2034,13 @@
       }
     },
     {
-      "id": "2a8f7b2f-dafa-4321-9489-8548b504270c",
-      "userId": "b64fff79-5c8d-4fbe-aec2-229f6f5bcafa",
-      "facilityId": "6c9a3026-941e-462d-8459-fe21b984733d",
+      "id": "f277a37d-dcf0-449c-90c7-4e4036db6ace",
+      "userId": "7bc43b5f-e964-4507-9de9-3a5f144c6790",
+      "facilityId": "bd820cdd-bc4a-4284-b7c2-b1bf4acb2a07",
       "facilityName": "Bệnh viện Đa khoa Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "b64fff79-5c8d-4fbe-aec2-229f6f5bcafa",
+        "id": "7bc43b5f-e964-4507-9de9-3a5f144c6790",
         "phone": "+84988000043",
         "email": "doctor_43@famidoc.invalid",
         "fullName": "Dương Thúy Vi",
@@ -1940,7 +2060,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "ce710f53-326d-42b9-9fbc-0a5e4240f27e",
+        "id": "1c4493c8-0058-473f-a0c3-817378a186f8",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1042/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -1951,13 +2071,13 @@
       }
     },
     {
-      "id": "efc611e8-2032-425f-9082-f9b46abaf4d6",
-      "userId": "8f4529f2-29c1-4f5b-aa2f-4d119b31c289",
-      "facilityId": "96a3d44c-5ffd-4a80-820b-af7e3292a35b",
+      "id": "fa15bcba-153b-473c-af7b-80a0fb1b72a2",
+      "userId": "93fb5743-55ec-48ad-bb96-1cb711ec58b0",
+      "facilityId": "9f1e690e-76b0-439c-9f2e-d7ee85dd5770",
       "facilityName": "Bệnh viện Phụ sản - Nhi Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "8f4529f2-29c1-4f5b-aa2f-4d119b31c289",
+        "id": "93fb5743-55ec-48ad-bb96-1cb711ec58b0",
         "phone": "+84988000044",
         "email": "doctor_44@famidoc.invalid",
         "fullName": "Lý Hải Đăng",
@@ -1977,7 +2097,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "744f79f1-7639-4b2a-9acd-ae747996ce51",
+        "id": "70fe2e5b-1363-4b2c-a8da-06eae27fc608",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1043/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -1988,13 +2108,13 @@
       }
     },
     {
-      "id": "089ffead-024b-4165-a564-90df36ad5382",
-      "userId": "ac8b944b-98fe-4a7c-8f83-2f321a04afe7",
-      "facilityId": "1d2d1b72-5c31-49d5-9c6d-af17af969a5e",
+      "id": "97e546d5-2d8c-4eb3-9a28-5fad89a57036",
+      "userId": "920381ff-c2b6-4e1d-b5b0-3923bdd73f17",
+      "facilityId": "5df2b856-a29c-4f74-b9bf-cce587f52dbe",
       "facilityName": "Bệnh viện Hoàn Mỹ Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "ac8b944b-98fe-4a7c-8f83-2f321a04afe7",
+        "id": "920381ff-c2b6-4e1d-b5b0-3923bdd73f17",
         "phone": "+84988000045",
         "email": "doctor_45@famidoc.invalid",
         "fullName": "Hồ Ngọc Hà",
@@ -2014,7 +2134,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "8aa0ab03-bed9-46bd-b7a1-8ec229abb138",
+        "id": "a389681e-9b8f-497c-aba5-d6cac4632693",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1044/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -2025,13 +2145,13 @@
       }
     },
     {
-      "id": "d7eddc2f-0b8e-4814-bb95-5ae7c7a4cf71",
-      "userId": "35d511dc-36f2-49ca-ae7f-b75a90874bcd",
-      "facilityId": "386586b0-34a0-43f0-9c87-528983872698",
+      "id": "89b71482-73b7-4f31-b8b5-46962b867bde",
+      "userId": "e0dd999b-df2c-45a2-bc7b-0c1be562a121",
+      "facilityId": "b3f12281-9cea-48f9-a403-9c7a183e2f86",
       "facilityName": "Bệnh viện Đại học Y Dược TP.HCM",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "35d511dc-36f2-49ca-ae7f-b75a90874bcd",
+        "id": "e0dd999b-df2c-45a2-bc7b-0c1be562a121",
         "phone": "+84988000046",
         "email": "doctor_46@famidoc.invalid",
         "fullName": "Võ Văn Kiệt",
@@ -2051,7 +2171,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "431168c3-0c93-4644-9646-57d43ea6e446",
+        "id": "974a3cc6-0cde-491e-96d8-052dc02d4dd4",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1045/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -2062,13 +2182,13 @@
       }
     },
     {
-      "id": "295d1162-d661-4718-89f0-408a159615e3",
-      "userId": "69d3b45b-79f4-4684-904b-de55c1c0cab2",
-      "facilityId": "86d90813-a6bd-4cff-93d4-66335a3fbdbb",
+      "id": "cc68668a-5c48-479c-afa7-92149370584f",
+      "userId": "9094c40f-f0e6-4688-a3c9-ee9d44b171b3",
+      "facilityId": "03bbfa60-2076-4b20-92f5-ebe4e32d83b9",
       "facilityName": "Bệnh viện Chợ Rẫy",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "69d3b45b-79f4-4684-904b-de55c1c0cab2",
+        "id": "9094c40f-f0e6-4688-a3c9-ee9d44b171b3",
         "phone": "+84988000047",
         "email": "doctor_47@famidoc.invalid",
         "fullName": "Phan Đăng Lưu",
@@ -2088,7 +2208,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "13acc758-d31e-47e9-b290-48c0037f6cd2",
+        "id": "37a0a0e9-b9ff-4c69-836e-bc09eb755fff",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1046/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -2099,13 +2219,13 @@
       }
     },
     {
-      "id": "cfefd98b-ee90-48bc-a705-8ae4a3a43799",
-      "userId": "b58373e0-6db3-44c5-b62e-c4192c986654",
-      "facilityId": "2df430ba-6710-4d71-b478-4608e1156f81",
+      "id": "bb1298b7-6e51-4773-aa41-390c0acd78b4",
+      "userId": "d8791843-2f03-4871-a38f-45402eb5744c",
+      "facilityId": "25bbacf8-3348-4d7a-ac8d-0b1cf0b661ed",
       "facilityName": "Bệnh viện Nhi Đồng 1",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "b58373e0-6db3-44c5-b62e-c4192c986654",
+        "id": "d8791843-2f03-4871-a38f-45402eb5744c",
         "phone": "+84988000048",
         "email": "doctor_48@famidoc.invalid",
         "fullName": "Trịnh Đình Trọng",
@@ -2125,7 +2245,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "b066d56f-9051-4e98-a92e-5e64042ef12b",
+        "id": "541889ca-87d0-4794-918f-4e91cbdb7d65",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1047/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -2136,13 +2256,13 @@
       }
     },
     {
-      "id": "13d0ece4-a575-44c1-836a-2f23049345f0",
-      "userId": "ae906352-0b60-42b9-b609-77797451e913",
-      "facilityId": "ba40ee8a-986f-4f60-8a2a-664ed21712f9",
+      "id": "ff993faa-f788-4808-bc6b-eb1a99385f36",
+      "userId": "0a0e82a1-c5c7-4b35-8af4-b2f2a65762fe",
+      "facilityId": "944031b1-b0a9-4020-965d-6b38fbd2aad7",
       "facilityName": "Bệnh viện Nhi Đồng 2",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "ae906352-0b60-42b9-b609-77797451e913",
+        "id": "0a0e82a1-c5c7-4b35-8af4-b2f2a65762fe",
         "phone": "+84988000049",
         "email": "doctor_49@famidoc.invalid",
         "fullName": "Đinh Bộ Lĩnh",
@@ -2162,7 +2282,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "72fd0735-2f84-4c8a-a09a-c00b017c45bc",
+        "id": "e0b535a2-21b0-4609-aa1f-a0e786b2a885",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1048/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -2173,13 +2293,13 @@
       }
     },
     {
-      "id": "d31fa2dc-cfe3-4643-bf62-ca0ffaef4eb4",
-      "userId": "dd073a1b-c262-4c2b-9282-af79467b5c6b",
-      "facilityId": "19e1d90b-3fac-4fbb-a2a1-c62d1353f86c",
+      "id": "372f888f-5357-4852-af14-97dc6bb503fd",
+      "userId": "570ff7d1-9e62-4df0-b4b9-a12290687a39",
+      "facilityId": "86ed5a6c-642f-4f00-b199-971c6be5929a",
       "facilityName": "Bệnh viện Từ Dũ",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "dd073a1b-c262-4c2b-9282-af79467b5c6b",
+        "id": "570ff7d1-9e62-4df0-b4b9-a12290687a39",
         "phone": "+84988000050",
         "email": "doctor_50@famidoc.invalid",
         "fullName": "Lâm Nhật Tiến",
@@ -2199,7 +2319,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "461dfb7c-22ec-45a2-baec-35ccca0c2349",
+        "id": "dab346e4-198d-453a-ae9a-f331abc92f9f",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1049/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -2210,13 +2330,13 @@
       }
     },
     {
-      "id": "ac7cf342-51ab-4e57-8acf-0a7482a777e4",
-      "userId": "a5c27b6e-95f5-4f03-86ce-2557d8c7abff",
-      "facilityId": "070ca05e-a6ee-49e5-943a-d18c9ca05a0c",
+      "id": "0b6d8f6a-18c5-4af3-84e9-5c98064c0d34",
+      "userId": "78af0850-2421-4e98-8743-703511b065eb",
+      "facilityId": "1a481340-ef4c-4b57-a06a-3a837c0f63ce",
       "facilityName": "Bệnh viện Nhân Dân Gia Định",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "a5c27b6e-95f5-4f03-86ce-2557d8c7abff",
+        "id": "78af0850-2421-4e98-8743-703511b065eb",
         "phone": "+84988000051",
         "email": "doctor_51@famidoc.invalid",
         "fullName": "Tạ Duy Anh",
@@ -2236,7 +2356,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "0f6dcbab-ab32-40ce-853f-424454480b6c",
+        "id": "731a3cff-1133-455e-90bd-00a9f8a2de64",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1050/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -2247,13 +2367,13 @@
       }
     },
     {
-      "id": "4a32d7c9-bb71-4667-8c0b-b1145de504f8",
-      "userId": "294355e2-6121-4e42-a4a4-bef11c67e2b5",
-      "facilityId": "bb53e10c-2e2b-4f8a-8e08-d1feca0d649e",
+      "id": "7dcbddac-f5fb-480f-bc39-a30110bd8d48",
+      "userId": "47b07c64-7c11-4c8f-aa26-686f98dbd8cc",
+      "facilityId": "5543790a-e9b5-4daf-aeb9-64fa3f438594",
       "facilityName": "Bệnh viện Bạch Mai",
       "city": "Hà Nội",
       "user": {
-        "id": "294355e2-6121-4e42-a4a4-bef11c67e2b5",
+        "id": "47b07c64-7c11-4c8f-aa26-686f98dbd8cc",
         "phone": "+84988000052",
         "email": "doctor_52@famidoc.invalid",
         "fullName": "Mai Phương Thúy",
@@ -2273,7 +2393,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "d479b63c-4c5c-4d3f-9ef4-b9d3ac59fd74",
+        "id": "fb538259-deb3-495d-8226-dedaeb65adfd",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1051/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -2284,13 +2404,13 @@
       }
     },
     {
-      "id": "ed8f7717-9d8b-46b0-bde9-c9be3cc1fabf",
-      "userId": "20e569ea-dcb2-40c8-a1c0-de52ae6ad389",
-      "facilityId": "0bc05b13-7f7a-4bce-a9a0-11d91b645755",
+      "id": "5a4637b6-aa19-4b77-b3b6-c9ebdc34be50",
+      "userId": "da69a572-2da0-4321-9445-61f159856fb4",
+      "facilityId": "08ec92c2-64d4-4ed0-bce3-e8cac6659b3d",
       "facilityName": "Bệnh viện Hữu Nghị Việt Đức",
       "city": "Hà Nội",
       "user": {
-        "id": "20e569ea-dcb2-40c8-a1c0-de52ae6ad389",
+        "id": "da69a572-2da0-4321-9445-61f159856fb4",
         "phone": "+84988000053",
         "email": "doctor_53@famidoc.invalid",
         "fullName": "Đoàn Nguyên Đức",
@@ -2310,7 +2430,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "d0a4ec18-cd7c-48f6-894c-0da8cdc604d7",
+        "id": "e3632c3d-b2cd-4b4f-8c77-7c2818ac4b50",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1052/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -2321,13 +2441,13 @@
       }
     },
     {
-      "id": "22af0b23-2847-4abc-baee-da3a5db3f48d",
-      "userId": "e7033f5c-e27b-4c24-a04c-010b291ea427",
-      "facilityId": "82fd0deb-3f6c-4d51-9733-3e74c67c6f79",
+      "id": "f7c60b5d-4825-4de8-a9e9-ab86f548998f",
+      "userId": "0360cbf8-356a-42cf-8be2-3da8085a80d6",
+      "facilityId": "28bfb310-b569-41f0-85f1-81d57465e744",
       "facilityName": "Bệnh viện Nhi Trung ương",
       "city": "Hà Nội",
       "user": {
-        "id": "e7033f5c-e27b-4c24-a04c-010b291ea427",
+        "id": "0360cbf8-356a-42cf-8be2-3da8085a80d6",
         "phone": "+84988000054",
         "email": "doctor_54@famidoc.invalid",
         "fullName": "Trương Vĩnh Ký",
@@ -2347,7 +2467,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "94bf7628-b865-4453-bf75-583f9f9b0ded",
+        "id": "6fdd233d-b811-476d-bea1-4264c20dc2f2",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1053/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -2358,13 +2478,13 @@
       }
     },
     {
-      "id": "16010231-034c-434c-ba7f-3519029077be",
-      "userId": "8fd2efa3-2543-46b2-847e-22f7ed532d8b",
-      "facilityId": "a0eee457-19d3-4aee-921d-a675886dc3bd",
+      "id": "ee8b6e19-9388-42be-80aa-8fd80c175942",
+      "userId": "91f18ed4-96e8-4221-a262-a8125b1a2b68",
+      "facilityId": "c07502e6-8a69-49ad-8409-2c9e05b3de88",
       "facilityName": "Bệnh viện Phụ sản Hà Nội",
       "city": "Hà Nội",
       "user": {
-        "id": "8fd2efa3-2543-46b2-847e-22f7ed532d8b",
+        "id": "91f18ed4-96e8-4221-a262-a8125b1a2b68",
         "phone": "+84988000055",
         "email": "doctor_55@famidoc.invalid",
         "fullName": "Lương Bích Hữu",
@@ -2384,7 +2504,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "6b4ab00e-5f3a-4ccd-9de9-5f9acac85213",
+        "id": "537d79f9-ea6d-4a10-b724-530a0a64d31d",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1054/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -2395,13 +2515,13 @@
       }
     },
     {
-      "id": "34b9c390-2555-46f6-9ca9-63e6707bb063",
-      "userId": "f11503dc-477d-4f2e-ac05-c387b4b63ef3",
-      "facilityId": "325750af-1c2b-4b3f-aafc-7d17fc699f50",
+      "id": "072fab18-1156-4773-9040-aea120aa3bd9",
+      "userId": "b0fe2170-4e0c-41b3-a196-8fa0b02534cf",
+      "facilityId": "d0c08a4a-d701-42a9-998d-56fff6e32c69",
       "facilityName": "Bệnh viện Phụ sản Trung ương",
       "city": "Hà Nội",
       "user": {
-        "id": "f11503dc-477d-4f2e-ac05-c387b4b63ef3",
+        "id": "b0fe2170-4e0c-41b3-a196-8fa0b02534cf",
         "phone": "+84988000056",
         "email": "doctor_56@famidoc.invalid",
         "fullName": "Cao Bá Quát",
@@ -2421,7 +2541,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "0165cdb9-f4d0-420e-b000-c515a0c79aeb",
+        "id": "cbf7327f-83b5-4138-b236-77a6bd5676d1",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1055/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -2432,13 +2552,13 @@
       }
     },
     {
-      "id": "f8f0135a-2095-44c5-b3b9-a057ddc23b83",
-      "userId": "09903e3e-08e2-4130-abc2-3145d72b6da2",
-      "facilityId": "39a36b8d-a846-41d3-941c-8092a633dbc0",
+      "id": "94f2bc94-4d1d-4528-add2-ada2c069e5d2",
+      "userId": "f1bbda68-0b03-452c-8fa7-465d9badb53a",
+      "facilityId": "4f7d9943-9e4f-4c3f-918d-3be688d8dc1f",
       "facilityName": "Bệnh viện Đa khoa Quốc tế Vinmec Times City",
       "city": "Hà Nội",
       "user": {
-        "id": "09903e3e-08e2-4130-abc2-3145d72b6da2",
+        "id": "f1bbda68-0b03-452c-8fa7-465d9badb53a",
         "phone": "+84988000057",
         "email": "doctor_57@famidoc.invalid",
         "fullName": "Nguyễn Du",
@@ -2458,7 +2578,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "78260a49-5313-4152-96a4-ade709cb59f2",
+        "id": "a0abbbc6-f041-44b7-ad9f-73e97936dd65",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1056/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -2469,13 +2589,13 @@
       }
     },
     {
-      "id": "e1b1928f-6f03-4407-8ff5-b9a0aa6a689c",
-      "userId": "cd2589e1-e90d-4a95-ab2c-912808203712",
-      "facilityId": "6c9a3026-941e-462d-8459-fe21b984733d",
+      "id": "6db4c212-0546-428b-8159-f401cb8a19e5",
+      "userId": "50ada195-9dec-4f2d-93d5-0bc093b14b45",
+      "facilityId": "bd820cdd-bc4a-4284-b7c2-b1bf4acb2a07",
       "facilityName": "Bệnh viện Đa khoa Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "cd2589e1-e90d-4a95-ab2c-912808203712",
+        "id": "50ada195-9dec-4f2d-93d5-0bc093b14b45",
         "phone": "+84988000058",
         "email": "doctor_58@famidoc.invalid",
         "fullName": "Trần Hưng Đạo",
@@ -2495,7 +2615,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "45d35a63-86bf-4246-a61a-1dc429aa9e29",
+        "id": "41c4c6a0-273d-447a-bcc6-1c31e1c34b8a",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1057/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -2506,13 +2626,13 @@
       }
     },
     {
-      "id": "9d311dab-5f21-4272-9062-609910ebfd32",
-      "userId": "3ab4adcb-1c29-46c7-a9ba-b724cb274ee2",
-      "facilityId": "96a3d44c-5ffd-4a80-820b-af7e3292a35b",
+      "id": "60e1cf8e-022c-4b42-8b45-d01f29eacd7b",
+      "userId": "f797a312-c0d3-471d-b04d-c4358c781a7b",
+      "facilityId": "9f1e690e-76b0-439c-9f2e-d7ee85dd5770",
       "facilityName": "Bệnh viện Phụ sản - Nhi Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "3ab4adcb-1c29-46c7-a9ba-b724cb274ee2",
+        "id": "f797a312-c0d3-471d-b04d-c4358c781a7b",
         "phone": "+84988000059",
         "email": "doctor_59@famidoc.invalid",
         "fullName": "Lê Quý Đôn",
@@ -2532,7 +2652,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "128edfa1-be80-46d2-9200-9d53a0ee943a",
+        "id": "ea22dcae-a3b4-4eb5-9577-b8254d1eeebf",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1058/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -2543,13 +2663,13 @@
       }
     },
     {
-      "id": "67bb3619-d560-499d-bd4b-ac2466b35761",
-      "userId": "e32b73b2-e1b9-42ec-9ced-429dc12f5887",
-      "facilityId": "1d2d1b72-5c31-49d5-9c6d-af17af969a5e",
+      "id": "f9a7679d-e442-41b0-9cd0-76dfae954e74",
+      "userId": "99e63609-0484-422c-bdcc-e94fdb42fa59",
+      "facilityId": "5df2b856-a29c-4f74-b9bf-cce587f52dbe",
       "facilityName": "Bệnh viện Hoàn Mỹ Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "e32b73b2-e1b9-42ec-9ced-429dc12f5887",
+        "id": "99e63609-0484-422c-bdcc-e94fdb42fa59",
         "phone": "+84988000060",
         "email": "doctor_60@famidoc.invalid",
         "fullName": "Phạm Ngũ Lão",
@@ -2569,7 +2689,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "c4cbb50b-4e53-44d3-9fb9-4c79f572cc36",
+        "id": "c52f266a-bc80-4650-8fe6-62a25c73d7fd",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1059/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -2580,13 +2700,13 @@
       }
     },
     {
-      "id": "23ecdba6-439e-4268-81ff-84c8aca09a65",
-      "userId": "3b499c16-1d8b-498a-a7d7-27a5f9ad141e",
-      "facilityId": "386586b0-34a0-43f0-9c87-528983872698",
+      "id": "833d2c00-d1dc-4193-852c-72087db53877",
+      "userId": "cb16a5fb-0a70-4b6f-adb3-c44c7116772f",
+      "facilityId": "b3f12281-9cea-48f9-a403-9c7a183e2f86",
       "facilityName": "Bệnh viện Đại học Y Dược TP.HCM",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "3b499c16-1d8b-498a-a7d7-27a5f9ad141e",
+        "id": "cb16a5fb-0a70-4b6f-adb3-c44c7116772f",
         "phone": "+84988000061",
         "email": "doctor_61@famidoc.invalid",
         "fullName": "Hoàng Diệu",
@@ -2606,7 +2726,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "a489fd5a-ecd9-4c43-a022-d982b91ae2ec",
+        "id": "df20b260-95a0-4a10-9b9f-38c9a25d60a3",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1060/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -2617,13 +2737,13 @@
       }
     },
     {
-      "id": "f8b019db-8f09-47c0-b5d3-18a39575bcbe",
-      "userId": "c7d4e8d6-582d-4ee1-9ee7-0dfe54e77aff",
-      "facilityId": "86d90813-a6bd-4cff-93d4-66335a3fbdbb",
+      "id": "63ef20ac-aaf2-4904-a7b0-7d9b0ee8c397",
+      "userId": "820ce2ee-045b-4698-865b-8c777a3e5d9b",
+      "facilityId": "03bbfa60-2076-4b20-92f5-ebe4e32d83b9",
       "facilityName": "Bệnh viện Chợ Rẫy",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "c7d4e8d6-582d-4ee1-9ee7-0dfe54e77aff",
+        "id": "820ce2ee-045b-4698-865b-8c777a3e5d9b",
         "phone": "+84988000062",
         "email": "doctor_62@famidoc.invalid",
         "fullName": "Vũ Trọng Phụng",
@@ -2643,7 +2763,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "4ba4c8e2-2bc8-4441-b4c5-9827b89667b5",
+        "id": "9a26ea0e-3e59-403f-a550-f8fd1c68cd32",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1061/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -2654,13 +2774,13 @@
       }
     },
     {
-      "id": "d84aeb89-a77d-4659-aa88-71af9f334cbd",
-      "userId": "0cb5435f-c0d4-49a6-87cf-618dd795672c",
-      "facilityId": "2df430ba-6710-4d71-b478-4608e1156f81",
+      "id": "f9f63485-7bdd-474e-9a9f-ee4b367a77f8",
+      "userId": "918b6698-3c00-4128-999d-072b45e5f01a",
+      "facilityId": "25bbacf8-3348-4d7a-ac8d-0b1cf0b661ed",
       "facilityName": "Bệnh viện Nhi Đồng 1",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "0cb5435f-c0d4-49a6-87cf-618dd795672c",
+        "id": "918b6698-3c00-4128-999d-072b45e5f01a",
         "phone": "+84988000063",
         "email": "doctor_63@famidoc.invalid",
         "fullName": "Đặng Dung",
@@ -2680,7 +2800,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "87007da9-00a8-4e26-82f7-19987da7271d",
+        "id": "a527f029-d650-45ee-963a-caed9cfe2873",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1062/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -2691,13 +2811,13 @@
       }
     },
     {
-      "id": "6ecd618f-3d0c-4930-81e5-5c734be834b9",
-      "userId": "d5d35706-8f8d-451b-a048-9352e2361847",
-      "facilityId": "ba40ee8a-986f-4f60-8a2a-664ed21712f9",
+      "id": "c0a83717-7a02-4f5c-bbb0-ff29d36e8299",
+      "userId": "33e208b5-570e-4fc9-af81-586d2b81e7e4",
+      "facilityId": "944031b1-b0a9-4020-965d-6b38fbd2aad7",
       "facilityName": "Bệnh viện Nhi Đồng 2",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "d5d35706-8f8d-451b-a048-9352e2361847",
+        "id": "33e208b5-570e-4fc9-af81-586d2b81e7e4",
         "phone": "+84988000064",
         "email": "doctor_64@famidoc.invalid",
         "fullName": "Bùi Viện",
@@ -2717,7 +2837,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "a8fc6405-aad6-419d-bc6f-72d54afc4189",
+        "id": "754c63a0-0fe7-460e-b0a1-a937c9caa398",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1063/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -2728,13 +2848,13 @@
       }
     },
     {
-      "id": "6c2b3178-2c35-40ee-930c-f32003016175",
-      "userId": "fa13d01a-def6-42a9-bd66-12840cc6927e",
-      "facilityId": "19e1d90b-3fac-4fbb-a2a1-c62d1353f86c",
+      "id": "d85df4d7-baa4-4dd0-8a9a-e55e3b61ebeb",
+      "userId": "e0ab8a96-ecc8-42a1-87fa-8b20f112c0cf",
+      "facilityId": "86ed5a6c-642f-4f00-b199-971c6be5929a",
       "facilityName": "Bệnh viện Từ Dũ",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "fa13d01a-def6-42a9-bd66-12840cc6927e",
+        "id": "e0ab8a96-ecc8-42a1-87fa-8b20f112c0cf",
         "phone": "+84988000065",
         "email": "doctor_65@famidoc.invalid",
         "fullName": "Ngô Quyền",
@@ -2754,7 +2874,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "3ff79603-260e-44b5-ad6d-69482db5e4f1",
+        "id": "a8f48eac-8674-4278-8087-aadde5f0abeb",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1064/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -2765,13 +2885,13 @@
       }
     },
     {
-      "id": "3f38bd28-b0e7-4441-ae43-4cee5476ffd8",
-      "userId": "3fb8a038-6b15-47d5-aeab-91166da324ca",
-      "facilityId": "070ca05e-a6ee-49e5-943a-d18c9ca05a0c",
+      "id": "cf84f5df-42e2-444f-9b25-31515cdcc622",
+      "userId": "0e5114c4-021c-4aec-aee5-fa2d9e0149f5",
+      "facilityId": "1a481340-ef4c-4b57-a06a-3a837c0f63ce",
       "facilityName": "Bệnh viện Nhân Dân Gia Định",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "3fb8a038-6b15-47d5-aeab-91166da324ca",
+        "id": "0e5114c4-021c-4aec-aee5-fa2d9e0149f5",
         "phone": "+84988000066",
         "email": "doctor_66@famidoc.invalid",
         "fullName": "Đỗ Nhuận",
@@ -2791,7 +2911,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "2754fb91-5817-4665-9ed6-6387da5b24a8",
+        "id": "2a427ad7-1e68-409e-b4bb-5e26ce8429bc",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1065/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -2802,13 +2922,13 @@
       }
     },
     {
-      "id": "860c0363-2428-4693-af0d-4311f6969d65",
-      "userId": "f53120ea-8dd3-4429-a7cf-8e5bcd22be6e",
-      "facilityId": "bb53e10c-2e2b-4f8a-8e08-d1feca0d649e",
+      "id": "baf57f26-2940-4ade-8e95-ddaefb66bf1d",
+      "userId": "3a74a86e-241f-4864-be53-276cc2e95156",
+      "facilityId": "5543790a-e9b5-4daf-aeb9-64fa3f438594",
       "facilityName": "Bệnh viện Bạch Mai",
       "city": "Hà Nội",
       "user": {
-        "id": "f53120ea-8dd3-4429-a7cf-8e5bcd22be6e",
+        "id": "3a74a86e-241f-4864-be53-276cc2e95156",
         "phone": "+84988000067",
         "email": "doctor_67@famidoc.invalid",
         "fullName": "Dương Quảng Hàm",
@@ -2828,7 +2948,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "006a6754-9d9c-46d5-94db-ae7736601a2b",
+        "id": "36b5b4aa-9273-4f6d-8ab8-5e10d5c6d779",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1066/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -2839,13 +2959,13 @@
       }
     },
     {
-      "id": "b91a652c-b180-4ad7-ada2-733ea75313be",
-      "userId": "b67e035e-99c1-4ec8-aacf-e0d28582515b",
-      "facilityId": "0bc05b13-7f7a-4bce-a9a0-11d91b645755",
+      "id": "6f041563-d4a5-46a2-8763-11169d502b44",
+      "userId": "bd85de4d-c6ee-4293-9b0a-962c04f4eac2",
+      "facilityId": "08ec92c2-64d4-4ed0-bce3-e8cac6659b3d",
       "facilityName": "Bệnh viện Hữu Nghị Việt Đức",
       "city": "Hà Nội",
       "user": {
-        "id": "b67e035e-99c1-4ec8-aacf-e0d28582515b",
+        "id": "bd85de4d-c6ee-4293-9b0a-962c04f4eac2",
         "phone": "+84988000068",
         "email": "doctor_68@famidoc.invalid",
         "fullName": "Lý Thường Kiệt",
@@ -2865,7 +2985,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "b63a0c8f-ac92-4a12-b867-60a0321eb2b3",
+        "id": "c0a4f328-be7c-4c63-a227-98aab06da97d",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1067/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -2876,13 +2996,13 @@
       }
     },
     {
-      "id": "f5165c4e-1303-423d-aca1-66401f20717d",
-      "userId": "2837724d-4ee1-4f9c-b0ef-ece579cd3987",
-      "facilityId": "82fd0deb-3f6c-4d51-9733-3e74c67c6f79",
+      "id": "4a2c4ba8-3b0d-42e8-8b6d-efcc578e80a7",
+      "userId": "8adc3ac0-3b3a-462f-af90-8fc570a0a5e0",
+      "facilityId": "28bfb310-b569-41f0-85f1-81d57465e744",
       "facilityName": "Bệnh viện Nhi Trung ương",
       "city": "Hà Nội",
       "user": {
-        "id": "2837724d-4ee1-4f9c-b0ef-ece579cd3987",
+        "id": "8adc3ac0-3b3a-462f-af90-8fc570a0a5e0",
         "phone": "+84988000069",
         "email": "doctor_69@famidoc.invalid",
         "fullName": "Hồ Xuân Hương",
@@ -2902,7 +3022,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "3c982520-1bde-42fe-876c-052e6e2b6848",
+        "id": "c2a8f235-5119-4a3f-96d5-acf83cd4ef05",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1068/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -2913,13 +3033,13 @@
       }
     },
     {
-      "id": "805af64c-6289-42e0-bec5-647000bf142e",
-      "userId": "6476701f-71ee-45cd-a3a3-299483bfdc64",
-      "facilityId": "a0eee457-19d3-4aee-921d-a675886dc3bd",
+      "id": "7085fda4-1459-4d6c-8997-7269533119d1",
+      "userId": "443f5173-f3e9-4512-aff7-3f01d9756011",
+      "facilityId": "c07502e6-8a69-49ad-8409-2c9e05b3de88",
       "facilityName": "Bệnh viện Phụ sản Hà Nội",
       "city": "Hà Nội",
       "user": {
-        "id": "6476701f-71ee-45cd-a3a3-299483bfdc64",
+        "id": "443f5173-f3e9-4512-aff7-3f01d9756011",
         "phone": "+84988000070",
         "email": "doctor_70@famidoc.invalid",
         "fullName": "Võ Thị Sáu",
@@ -2939,7 +3059,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "39b4f574-05db-49e0-bb29-2e4722ad8c66",
+        "id": "cad964f2-ba69-4c26-892e-ee657e66da9e",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1069/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -2950,13 +3070,13 @@
       }
     },
     {
-      "id": "40d9adfa-8c5a-40f9-96f6-3ff83f43018e",
-      "userId": "c8d566bf-21a6-441b-820f-ed524c95b0f3",
-      "facilityId": "325750af-1c2b-4b3f-aafc-7d17fc699f50",
+      "id": "b870d828-96a8-4afd-89c6-d31e09edfeca",
+      "userId": "d8c9e4d6-fba5-4107-b045-36b1dcd90cd3",
+      "facilityId": "d0c08a4a-d701-42a9-998d-56fff6e32c69",
       "facilityName": "Bệnh viện Phụ sản Trung ương",
       "city": "Hà Nội",
       "user": {
-        "id": "c8d566bf-21a6-441b-820f-ed524c95b0f3",
+        "id": "d8c9e4d6-fba5-4107-b045-36b1dcd90cd3",
         "phone": "+84988000071",
         "email": "doctor_71@famidoc.invalid",
         "fullName": "Phan Bội Châu",
@@ -2976,7 +3096,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "f06ac659-a69c-4874-8fae-5db3e33eb424",
+        "id": "ec145ea4-3d62-41e1-9e76-af729f4d91ef",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1070/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -2987,13 +3107,13 @@
       }
     },
     {
-      "id": "a1f52366-4ed9-4acd-b301-563313f69bd4",
-      "userId": "9ea86438-c67f-4fea-8579-d885f2f48db9",
-      "facilityId": "39a36b8d-a846-41d3-941c-8092a633dbc0",
+      "id": "1fa165a5-a11e-4f70-8563-28a6766a68b0",
+      "userId": "e5653e93-5e7a-4f4c-a650-6726f3f26701",
+      "facilityId": "4f7d9943-9e4f-4c3f-918d-3be688d8dc1f",
       "facilityName": "Bệnh viện Đa khoa Quốc tế Vinmec Times City",
       "city": "Hà Nội",
       "user": {
-        "id": "9ea86438-c67f-4fea-8579-d885f2f48db9",
+        "id": "e5653e93-5e7a-4f4c-a650-6726f3f26701",
         "phone": "+84988000072",
         "email": "doctor_72@famidoc.invalid",
         "fullName": "Trịnh Hoài Đức",
@@ -3013,7 +3133,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "6334ad3b-bb96-4c95-967c-e6a810cf9496",
+        "id": "7b84e34f-77a7-4a7d-b01f-1a2c3cba37c3",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1071/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -3024,13 +3144,13 @@
       }
     },
     {
-      "id": "40d8936b-e5ca-40d9-b996-9cda96659daa",
-      "userId": "67050293-e5ec-4f1f-bbeb-7c28be8beb39",
-      "facilityId": "6c9a3026-941e-462d-8459-fe21b984733d",
+      "id": "c82be7fe-b1b1-4f21-bb3b-76ec40ff68da",
+      "userId": "d5a3fcf6-0b4e-409d-b488-31ead57b0d7e",
+      "facilityId": "bd820cdd-bc4a-4284-b7c2-b1bf4acb2a07",
       "facilityName": "Bệnh viện Đa khoa Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "67050293-e5ec-4f1f-bbeb-7c28be8beb39",
+        "id": "d5a3fcf6-0b4e-409d-b488-31ead57b0d7e",
         "phone": "+84988000073",
         "email": "doctor_73@famidoc.invalid",
         "fullName": "Đinh Tiên Hoàng",
@@ -3050,7 +3170,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "c3d347ad-4f44-45d7-b52f-87a3f400e6f5",
+        "id": "041787c4-bb00-4c31-8900-09d55a290b19",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1072/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -3061,13 +3181,13 @@
       }
     },
     {
-      "id": "3feca956-be80-4db8-bbbb-1c867c9e7c2b",
-      "userId": "ff95302d-9257-48d5-8c34-e118ef01f101",
-      "facilityId": "96a3d44c-5ffd-4a80-820b-af7e3292a35b",
+      "id": "f074f80f-e5b2-4623-8ec5-bb2f81feee2d",
+      "userId": "6d288d50-0ba7-4ba7-a0b9-0007da701e3e",
+      "facilityId": "9f1e690e-76b0-439c-9f2e-d7ee85dd5770",
       "facilityName": "Bệnh viện Phụ sản - Nhi Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "ff95302d-9257-48d5-8c34-e118ef01f101",
+        "id": "6d288d50-0ba7-4ba7-a0b9-0007da701e3e",
         "phone": "+84988000074",
         "email": "doctor_74@famidoc.invalid",
         "fullName": "Lâm Quang Thự",
@@ -3087,7 +3207,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "b2bbfcc1-4a9d-43b9-b16e-cd187d51df21",
+        "id": "2b91c26c-dc46-4f04-94a7-84f747d63462",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1073/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -3098,13 +3218,13 @@
       }
     },
     {
-      "id": "d22ac8ec-8c76-457d-9bb5-4a2c6eca1142",
-      "userId": "51535e9b-d831-437f-8707-0ebe3a9faed7",
-      "facilityId": "1d2d1b72-5c31-49d5-9c6d-af17af969a5e",
+      "id": "3e0735b8-1274-47ce-a228-5a875b79d9d8",
+      "userId": "c2ba55c3-3e7e-4525-a876-d0e43faad1c1",
+      "facilityId": "5df2b856-a29c-4f74-b9bf-cce587f52dbe",
       "facilityName": "Bệnh viện Hoàn Mỹ Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "51535e9b-d831-437f-8707-0ebe3a9faed7",
+        "id": "c2ba55c3-3e7e-4525-a876-d0e43faad1c1",
         "phone": "+84988000075",
         "email": "doctor_75@famidoc.invalid",
         "fullName": "Tạ Uyên",
@@ -3124,7 +3244,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "cb1b1759-28a7-4dc8-b2a7-6acaf410d9ca",
+        "id": "34969b33-ef60-402f-82de-cbc383a1c326",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1074/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -3135,13 +3255,13 @@
       }
     },
     {
-      "id": "54b0af59-26da-4ffd-a421-88c2f658bbc7",
-      "userId": "ac9fd626-1af4-48ca-b06a-80bcc3511fd4",
-      "facilityId": "386586b0-34a0-43f0-9c87-528983872698",
+      "id": "e4f6de2d-e0c9-42c6-9bc0-d2ed1a3c89e3",
+      "userId": "0af7397e-4383-442a-980a-41ec566d1a35",
+      "facilityId": "b3f12281-9cea-48f9-a403-9c7a183e2f86",
       "facilityName": "Bệnh viện Đại học Y Dược TP.HCM",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "ac9fd626-1af4-48ca-b06a-80bcc3511fd4",
+        "id": "0af7397e-4383-442a-980a-41ec566d1a35",
         "phone": "+84988000076",
         "email": "doctor_76@famidoc.invalid",
         "fullName": "Mai Hắc Đế",
@@ -3161,7 +3281,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "9301bfc7-cf56-456e-b01c-64641689094a",
+        "id": "0fc6a58f-1ddc-4f62-92e6-2745637fb094",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1075/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -3172,13 +3292,13 @@
       }
     },
     {
-      "id": "ec844736-5c20-47ca-99bf-3f19ded3e854",
-      "userId": "377bc686-4125-4787-b8ca-2c19911e3ab5",
-      "facilityId": "86d90813-a6bd-4cff-93d4-66335a3fbdbb",
+      "id": "d0e7ae8d-d56b-41ae-8c68-a90014349bab",
+      "userId": "9b7b1734-cf3e-47f8-9b5b-7e67c0310afe",
+      "facilityId": "03bbfa60-2076-4b20-92f5-ebe4e32d83b9",
       "facilityName": "Bệnh viện Chợ Rẫy",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "377bc686-4125-4787-b8ca-2c19911e3ab5",
+        "id": "9b7b1734-cf3e-47f8-9b5b-7e67c0310afe",
         "phone": "+84988000077",
         "email": "doctor_77@famidoc.invalid",
         "fullName": "Đoàn Thị Điểm",
@@ -3198,7 +3318,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "c1c06e77-09c0-4e8e-95e5-70bc7fe6f36a",
+        "id": "3afd5ba5-df7c-468b-b348-336e0958d0db",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1076/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -3209,13 +3329,13 @@
       }
     },
     {
-      "id": "8258672a-cdca-4a99-b053-7b5682baf537",
-      "userId": "b173941d-61c4-4808-b7c4-2d9cee947483",
-      "facilityId": "2df430ba-6710-4d71-b478-4608e1156f81",
+      "id": "eadd19e8-49e0-495f-bf76-ace8988bbb08",
+      "userId": "2a49cf6b-188a-4a07-ae8e-02b8dcc187d3",
+      "facilityId": "25bbacf8-3348-4d7a-ac8d-0b1cf0b661ed",
       "facilityName": "Bệnh viện Nhi Đồng 1",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "b173941d-61c4-4808-b7c4-2d9cee947483",
+        "id": "2a49cf6b-188a-4a07-ae8e-02b8dcc187d3",
         "phone": "+84988000078",
         "email": "doctor_78@famidoc.invalid",
         "fullName": "Trương Hán Siêu",
@@ -3235,7 +3355,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "ca90249f-ec9b-49b6-a4ca-48ffb8977f4f",
+        "id": "cb4f56fc-3ee1-4fbb-8cef-eb685245c3b0",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1077/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -3246,13 +3366,13 @@
       }
     },
     {
-      "id": "e803e904-b857-4b11-80fb-b51adcb5128f",
-      "userId": "cd7b59df-47d5-441b-a74b-879176b95f23",
-      "facilityId": "ba40ee8a-986f-4f60-8a2a-664ed21712f9",
+      "id": "f2cd7131-03f8-40f3-a603-98f67d275bdd",
+      "userId": "0d280053-96dd-4c59-8fe5-17888e4321f0",
+      "facilityId": "944031b1-b0a9-4020-965d-6b38fbd2aad7",
       "facilityName": "Bệnh viện Nhi Đồng 2",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "cd7b59df-47d5-441b-a74b-879176b95f23",
+        "id": "0d280053-96dd-4c59-8fe5-17888e4321f0",
         "phone": "+84988000079",
         "email": "doctor_79@famidoc.invalid",
         "fullName": "Lương Văn Can",
@@ -3272,7 +3392,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "0310b738-3c6f-405c-8788-ca5ffcd0791e",
+        "id": "c2fdcf17-bf20-4799-b688-b8d07002cb52",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1078/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -3283,13 +3403,13 @@
       }
     },
     {
-      "id": "e53114b2-3259-4f3f-9bbc-5bc85be37198",
-      "userId": "4c19bacf-6347-4b9f-9664-5f20561d966a",
-      "facilityId": "19e1d90b-3fac-4fbb-a2a1-c62d1353f86c",
+      "id": "20699c0e-d387-4ef5-a07f-9b0d6ab9c936",
+      "userId": "66daf220-875e-4448-a92c-f30ba186fdd9",
+      "facilityId": "86ed5a6c-642f-4f00-b199-971c6be5929a",
       "facilityName": "Bệnh viện Từ Dũ",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "4c19bacf-6347-4b9f-9664-5f20561d966a",
+        "id": "66daf220-875e-4448-a92c-f30ba186fdd9",
         "phone": "+84988000080",
         "email": "doctor_80@famidoc.invalid",
         "fullName": "Cao Thắng",
@@ -3309,7 +3429,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "ff0afa48-5e17-44a2-9a5b-97305522bf4f",
+        "id": "71c616f8-3dc7-40f1-898e-7d0321880f4f",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1079/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -3320,13 +3440,13 @@
       }
     },
     {
-      "id": "28eba122-5406-46b5-b8da-8a9f497ae9aa",
-      "userId": "6eefac77-add0-43ff-b626-260f27ae5cf6",
-      "facilityId": "070ca05e-a6ee-49e5-943a-d18c9ca05a0c",
+      "id": "07cb3ab8-d8a9-4ed7-b9cb-d458e9bd0f88",
+      "userId": "e79f8405-3397-41a4-b387-6ae735922364",
+      "facilityId": "1a481340-ef4c-4b57-a06a-3a837c0f63ce",
       "facilityName": "Bệnh viện Nhân Dân Gia Định",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "6eefac77-add0-43ff-b626-260f27ae5cf6",
+        "id": "e79f8405-3397-41a4-b387-6ae735922364",
         "phone": "+84988000081",
         "email": "doctor_81@famidoc.invalid",
         "fullName": "Nguyễn Tri Phương",
@@ -3346,7 +3466,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "8911631f-250f-45de-ab62-b010c6c72376",
+        "id": "468e32f0-d534-46f4-aaa0-b7eb4d3f74fc",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1080/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -3357,13 +3477,13 @@
       }
     },
     {
-      "id": "718a090e-ae2d-4f69-92f0-09b2216b866b",
-      "userId": "e3efdd69-df70-4ecd-8c2f-b25fec1652a0",
-      "facilityId": "bb53e10c-2e2b-4f8a-8e08-d1feca0d649e",
+      "id": "57aa7212-5228-4925-a2ed-1ac99769af00",
+      "userId": "c53603e7-5150-44eb-96b3-c8d858fb0a17",
+      "facilityId": "5543790a-e9b5-4daf-aeb9-64fa3f438594",
       "facilityName": "Bệnh viện Bạch Mai",
       "city": "Hà Nội",
       "user": {
-        "id": "e3efdd69-df70-4ecd-8c2f-b25fec1652a0",
+        "id": "c53603e7-5150-44eb-96b3-c8d858fb0a17",
         "phone": "+84988000082",
         "email": "doctor_82@famidoc.invalid",
         "fullName": "Trần Phú",
@@ -3383,7 +3503,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "a9160612-0d6c-4bd6-b92c-51f77cb7df9b",
+        "id": "049d1dd5-d6be-420b-b3b5-d0e8aed75a26",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1081/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -3394,13 +3514,13 @@
       }
     },
     {
-      "id": "5847a77d-cba6-4f43-933c-522df88bc15f",
-      "userId": "0e41e07b-dd21-47a2-a056-65c8b52b1ab5",
-      "facilityId": "0bc05b13-7f7a-4bce-a9a0-11d91b645755",
+      "id": "2fecdbb7-e077-4737-ae3c-be7e814e69a8",
+      "userId": "8e863915-6444-4188-9df0-af304eb2d101",
+      "facilityId": "08ec92c2-64d4-4ed0-bce3-e8cac6659b3d",
       "facilityName": "Bệnh viện Hữu Nghị Việt Đức",
       "city": "Hà Nội",
       "user": {
-        "id": "0e41e07b-dd21-47a2-a056-65c8b52b1ab5",
+        "id": "8e863915-6444-4188-9df0-af304eb2d101",
         "phone": "+84988000083",
         "email": "doctor_83@famidoc.invalid",
         "fullName": "Lê Văn Tám",
@@ -3420,7 +3540,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "7f65f410-c3b3-41bc-931c-2a708883b8c6",
+        "id": "aae9f52e-e1ed-48b4-9383-4f5ab1b4e3b6",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1082/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -3431,13 +3551,13 @@
       }
     },
     {
-      "id": "4eb77283-bd05-4d20-ac23-6b2bb92d39d4",
-      "userId": "b033a784-2bd2-463a-a93c-2d63bacc894f",
-      "facilityId": "82fd0deb-3f6c-4d51-9733-3e74c67c6f79",
+      "id": "a157071b-d6b3-427a-adae-24c528afdf62",
+      "userId": "cc027f12-7c85-4165-ae34-5f5a5c56f840",
+      "facilityId": "28bfb310-b569-41f0-85f1-81d57465e744",
       "facilityName": "Bệnh viện Nhi Trung ương",
       "city": "Hà Nội",
       "user": {
-        "id": "b033a784-2bd2-463a-a93c-2d63bacc894f",
+        "id": "cc027f12-7c85-4165-ae34-5f5a5c56f840",
         "phone": "+84988000084",
         "email": "doctor_84@famidoc.invalid",
         "fullName": "Phạm Hồng Thái",
@@ -3457,7 +3577,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "0c643718-c58d-456d-8f87-4532b1504b42",
+        "id": "a5b7c598-3b90-4876-bc01-c2ebdbcde1b2",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1083/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -3468,13 +3588,13 @@
       }
     },
     {
-      "id": "3fdc8708-2eb3-4198-864d-74bb962113f2",
-      "userId": "1c69ac16-ba6d-4824-b9fe-cf5b00fd2ebd",
-      "facilityId": "a0eee457-19d3-4aee-921d-a675886dc3bd",
+      "id": "9d688b40-2815-41c1-8d35-176813045c89",
+      "userId": "4c44549f-892c-4944-abcb-d16633a3a3a4",
+      "facilityId": "c07502e6-8a69-49ad-8409-2c9e05b3de88",
       "facilityName": "Bệnh viện Phụ sản Hà Nội",
       "city": "Hà Nội",
       "user": {
-        "id": "1c69ac16-ba6d-4824-b9fe-cf5b00fd2ebd",
+        "id": "4c44549f-892c-4944-abcb-d16633a3a3a4",
         "phone": "+84988000085",
         "email": "doctor_85@famidoc.invalid",
         "fullName": "Hoàng Hoa Thám",
@@ -3494,7 +3614,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "eb8b82f3-dccf-4abd-8147-a61f14e7b5c4",
+        "id": "716b111b-207e-401e-9c35-e5cf82055fae",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1084/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -3505,13 +3625,13 @@
       }
     },
     {
-      "id": "0073fb3c-422a-4a09-820b-83331820fdd9",
-      "userId": "b9d9cbfc-fab0-4fcc-b5e2-1a54004ccf58",
-      "facilityId": "325750af-1c2b-4b3f-aafc-7d17fc699f50",
+      "id": "65acdb13-be86-4e7f-abe5-0efd2812d766",
+      "userId": "0f53650b-e379-411d-a653-eeba0f3ad694",
+      "facilityId": "d0c08a4a-d701-42a9-998d-56fff6e32c69",
       "facilityName": "Bệnh viện Phụ sản Trung ương",
       "city": "Hà Nội",
       "user": {
-        "id": "b9d9cbfc-fab0-4fcc-b5e2-1a54004ccf58",
+        "id": "0f53650b-e379-411d-a653-eeba0f3ad694",
         "phone": "+84988000086",
         "email": "doctor_86@famidoc.invalid",
         "fullName": "Vũ Ngọc Phan",
@@ -3531,7 +3651,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "4237172d-15e0-4c19-9780-521369f4bb9f",
+        "id": "e385cfac-6794-40ef-bd57-2d1852b6f8e6",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1085/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -3542,13 +3662,13 @@
       }
     },
     {
-      "id": "a6864a3c-e4fe-4099-97f6-8d5ced596fe0",
-      "userId": "56c3d928-815c-468a-babf-876d827195f5",
-      "facilityId": "39a36b8d-a846-41d3-941c-8092a633dbc0",
+      "id": "843532eb-3d87-42c5-aae5-963523f74017",
+      "userId": "2a69a154-3e4d-4c41-8a7b-11ef4ca8b081",
+      "facilityId": "4f7d9943-9e4f-4c3f-918d-3be688d8dc1f",
       "facilityName": "Bệnh viện Đa khoa Quốc tế Vinmec Times City",
       "city": "Hà Nội",
       "user": {
-        "id": "56c3d928-815c-468a-babf-876d827195f5",
+        "id": "2a69a154-3e4d-4c41-8a7b-11ef4ca8b081",
         "phone": "+84988000087",
         "email": "doctor_87@famidoc.invalid",
         "fullName": "Đặng Thai Mai",
@@ -3568,7 +3688,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "1e220377-ffa4-4d21-989d-67420a590a50",
+        "id": "0f1009d1-066b-4377-8804-ed6404ae6feb",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1086/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -3579,13 +3699,13 @@
       }
     },
     {
-      "id": "04c42887-70e7-4a7f-a81f-1af7fc928aa8",
-      "userId": "39a4523b-1ba9-4956-bff6-5a1fd33d471e",
-      "facilityId": "6c9a3026-941e-462d-8459-fe21b984733d",
+      "id": "e2cefa59-a21e-44af-974d-cacd7b51ef27",
+      "userId": "3b749d1c-32a8-4994-a938-c2a75327aaf0",
+      "facilityId": "bd820cdd-bc4a-4284-b7c2-b1bf4acb2a07",
       "facilityName": "Bệnh viện Đa khoa Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "39a4523b-1ba9-4956-bff6-5a1fd33d471e",
+        "id": "3b749d1c-32a8-4994-a938-c2a75327aaf0",
         "phone": "+84988000088",
         "email": "doctor_88@famidoc.invalid",
         "fullName": "Bùi Bằng Đoàn",
@@ -3605,7 +3725,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "87658434-9df9-48b1-8c5a-f8267200acdd",
+        "id": "7add446b-7459-4fb5-83aa-91272f92a445",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1087/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -3616,13 +3736,13 @@
       }
     },
     {
-      "id": "ca03ab5b-3dea-426a-96cc-a55037fc7802",
-      "userId": "780e36f4-4312-4271-a984-fa6b248e300e",
-      "facilityId": "96a3d44c-5ffd-4a80-820b-af7e3292a35b",
+      "id": "ab8aba03-7259-4240-ae11-b628317155ce",
+      "userId": "0ac35667-8733-463f-af28-1629b5a91ee7",
+      "facilityId": "9f1e690e-76b0-439c-9f2e-d7ee85dd5770",
       "facilityName": "Bệnh viện Phụ sản - Nhi Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "780e36f4-4312-4271-a984-fa6b248e300e",
+        "id": "0ac35667-8733-463f-af28-1629b5a91ee7",
         "phone": "+84988000089",
         "email": "doctor_89@famidoc.invalid",
         "fullName": "Ngô Sĩ Liên",
@@ -3642,7 +3762,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "454cc9ce-c51f-459f-bdd7-0b09fa1ea15d",
+        "id": "7af59614-1b50-4ede-a43e-5a137d374c61",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1088/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -3653,13 +3773,13 @@
       }
     },
     {
-      "id": "f6a62cc0-d8ba-481d-b46e-eced8e7fd1b6",
-      "userId": "3e03995d-c6dd-417a-b453-be8c57266298",
-      "facilityId": "1d2d1b72-5c31-49d5-9c6d-af17af969a5e",
+      "id": "01c1109d-34dc-4079-a76e-c3e0e109b01a",
+      "userId": "b090c005-2f7e-48c6-a435-2c1f01c0f3f1",
+      "facilityId": "5df2b856-a29c-4f74-b9bf-cce587f52dbe",
       "facilityName": "Bệnh viện Hoàn Mỹ Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "3e03995d-c6dd-417a-b453-be8c57266298",
+        "id": "b090c005-2f7e-48c6-a435-2c1f01c0f3f1",
         "phone": "+84988000090",
         "email": "doctor_90@famidoc.invalid",
         "fullName": "Đỗ Tất Lợi",
@@ -3679,7 +3799,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "5e4a20a4-56ac-41e7-b6ee-5013efadf09d",
+        "id": "0bd106de-b9ad-4b31-bb44-aa23f37fc2e1",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1089/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -3690,13 +3810,13 @@
       }
     },
     {
-      "id": "104b9823-7ced-4c0d-8b18-7f8226d09c98",
-      "userId": "c78e159d-6ed9-483e-8eee-9e20e6442d1d",
-      "facilityId": "386586b0-34a0-43f0-9c87-528983872698",
+      "id": "72ed2afd-6552-4dbd-82e8-4fd714d8ec26",
+      "userId": "dd5ef22b-cfc7-4b62-980f-be6860d356a6",
+      "facilityId": "b3f12281-9cea-48f9-a403-9c7a183e2f86",
       "facilityName": "Bệnh viện Đại học Y Dược TP.HCM",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "c78e159d-6ed9-483e-8eee-9e20e6442d1d",
+        "id": "dd5ef22b-cfc7-4b62-980f-be6860d356a6",
         "phone": "+84988000091",
         "email": "doctor_91@famidoc.invalid",
         "fullName": "Dương Văn An",
@@ -3716,7 +3836,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "3489e0f9-66ef-47db-a806-fc2c13d94cc2",
+        "id": "948e19fa-12f0-43d8-9844-7a308832260d",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1090/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -3727,13 +3847,13 @@
       }
     },
     {
-      "id": "f4f18b2f-6312-44ea-a7c4-10cbc4201b77",
-      "userId": "aab7a082-5985-4467-8994-cf0c0c0899d7",
-      "facilityId": "86d90813-a6bd-4cff-93d4-66335a3fbdbb",
+      "id": "d658d819-aa8e-4211-b1ae-588d8df7be21",
+      "userId": "ed08c3af-d9b5-4461-a826-d4dc2a3708a0",
+      "facilityId": "03bbfa60-2076-4b20-92f5-ebe4e32d83b9",
       "facilityName": "Bệnh viện Chợ Rẫy",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "aab7a082-5985-4467-8994-cf0c0c0899d7",
+        "id": "ed08c3af-d9b5-4461-a826-d4dc2a3708a0",
         "phone": "+84988000092",
         "email": "doctor_92@famidoc.invalid",
         "fullName": "Lý Đạo Thành",
@@ -3753,7 +3873,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "0bcbf6c4-978f-4a5a-9fcb-15f7ffed81dc",
+        "id": "459de7fb-8c16-4061-85a0-4ab5cc442625",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1091/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -3764,13 +3884,13 @@
       }
     },
     {
-      "id": "fb44ec50-0a6f-49a1-8ba9-27ba07b9899d",
-      "userId": "d067ad02-8f04-44cf-be50-7b9988eb80a2",
-      "facilityId": "2df430ba-6710-4d71-b478-4608e1156f81",
+      "id": "64ea3ee4-9ce8-4482-bc8b-4546f1464d55",
+      "userId": "ba39f2c8-f4bf-42ee-8562-476b7fc475f3",
+      "facilityId": "25bbacf8-3348-4d7a-ac8d-0b1cf0b661ed",
       "facilityName": "Bệnh viện Nhi Đồng 1",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "d067ad02-8f04-44cf-be50-7b9988eb80a2",
+        "id": "ba39f2c8-f4bf-42ee-8562-476b7fc475f3",
         "phone": "+84988000093",
         "email": "doctor_93@famidoc.invalid",
         "fullName": "Hồ Đắc Di",
@@ -3790,7 +3910,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "def1437a-b2ef-42bb-84ad-ae20cb82555b",
+        "id": "cd8a1f60-cc2a-456a-b674-dbf407a4fd43",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1092/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -3801,13 +3921,13 @@
       }
     },
     {
-      "id": "970e955f-2cfb-4c5d-af4c-13bbcaac71a6",
-      "userId": "0b8ee89b-720b-4f85-a7d9-f36cb1b55bfc",
-      "facilityId": "ba40ee8a-986f-4f60-8a2a-664ed21712f9",
+      "id": "3dd21aad-d7f7-493a-8c1f-dcd1969e96ab",
+      "userId": "1d8e0a2d-6bd3-4151-ac64-142ebf8c2059",
+      "facilityId": "944031b1-b0a9-4020-965d-6b38fbd2aad7",
       "facilityName": "Bệnh viện Nhi Đồng 2",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "0b8ee89b-720b-4f85-a7d9-f36cb1b55bfc",
+        "id": "1d8e0a2d-6bd3-4151-ac64-142ebf8c2059",
         "phone": "+84988000094",
         "email": "doctor_94@famidoc.invalid",
         "fullName": "Võ Trường Toản",
@@ -3827,7 +3947,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "8238d91b-b5bb-4d05-bdc8-242906fcb855",
+        "id": "19aced9d-b391-4d60-a3e3-28678652bfc1",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1093/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -3838,13 +3958,13 @@
       }
     },
     {
-      "id": "3a0c8565-787c-4068-abd1-622500f7b0cb",
-      "userId": "e0f31592-0d4d-4f71-ae29-fcc0662ba267",
-      "facilityId": "19e1d90b-3fac-4fbb-a2a1-c62d1353f86c",
+      "id": "a2cd73d7-5986-4c67-84df-d0b384a56a88",
+      "userId": "b8ae0a93-44ae-4ef4-99b6-399178be4a0f",
+      "facilityId": "86ed5a6c-642f-4f00-b199-971c6be5929a",
       "facilityName": "Bệnh viện Từ Dũ",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "e0f31592-0d4d-4f71-ae29-fcc0662ba267",
+        "id": "b8ae0a93-44ae-4ef4-99b6-399178be4a0f",
         "phone": "+84988000095",
         "email": "doctor_95@famidoc.invalid",
         "fullName": "Phan Chu Trinh",
@@ -3864,7 +3984,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "01d1451c-3c38-4226-a784-2081ebf1522a",
+        "id": "b642d2a3-bde4-4364-af0b-7ff3287de5d3",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1094/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -3875,13 +3995,13 @@
       }
     },
     {
-      "id": "4dfa09a1-3894-48b5-87fd-ad8dc8fd8d35",
-      "userId": "a44c56df-d8eb-48fb-8dcb-8a08426bfc1b",
-      "facilityId": "070ca05e-a6ee-49e5-943a-d18c9ca05a0c",
+      "id": "c6e95887-2500-4d23-a276-3e2e96af2ebd",
+      "userId": "4d431d70-4a15-448c-80b8-46e6593e1561",
+      "facilityId": "1a481340-ef4c-4b57-a06a-3a837c0f63ce",
       "facilityName": "Bệnh viện Nhân Dân Gia Định",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "a44c56df-d8eb-48fb-8dcb-8a08426bfc1b",
+        "id": "4d431d70-4a15-448c-80b8-46e6593e1561",
         "phone": "+84988000096",
         "email": "doctor_96@famidoc.invalid",
         "fullName": "Trịnh Công Sơn",
@@ -3901,7 +4021,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "bd277f3a-ea4a-4efa-b49e-8d7e6a34bd88",
+        "id": "feb137c4-e742-421f-abb3-2924eb153e6b",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1095/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -3912,13 +4032,13 @@
       }
     },
     {
-      "id": "7131f5e9-72f2-4bfc-a358-f8992dcc5429",
-      "userId": "abf345a8-c83e-41bd-8e87-885a51ce0b0d",
-      "facilityId": "bb53e10c-2e2b-4f8a-8e08-d1feca0d649e",
+      "id": "9455e1f9-3f07-4610-8cbb-4c3cadee9b03",
+      "userId": "acb6f95b-e8ae-4e61-8bea-463e9bb0db5f",
+      "facilityId": "5543790a-e9b5-4daf-aeb9-64fa3f438594",
       "facilityName": "Bệnh viện Bạch Mai",
       "city": "Hà Nội",
       "user": {
-        "id": "abf345a8-c83e-41bd-8e87-885a51ce0b0d",
+        "id": "acb6f95b-e8ae-4e61-8bea-463e9bb0db5f",
         "phone": "+84988000097",
         "email": "doctor_97@famidoc.invalid",
         "fullName": "Đinh Núp",
@@ -3938,7 +4058,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "1b760444-c8d6-4577-99ff-b5fab46b9892",
+        "id": "46c2bc2e-6ddd-4c71-b66e-065cd806d8a2",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1096/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -3949,13 +4069,13 @@
       }
     },
     {
-      "id": "cfadbac2-acd3-4564-a920-8e10f4ec9eb6",
-      "userId": "3e9d2120-b1ef-4439-a884-179b703c7a30",
-      "facilityId": "0bc05b13-7f7a-4bce-a9a0-11d91b645755",
+      "id": "e4cd4539-dca4-4c2d-8c79-2fe9cc2a6cca",
+      "userId": "4826ce2d-406c-4cc7-9941-72ead80956cf",
+      "facilityId": "08ec92c2-64d4-4ed0-bce3-e8cac6659b3d",
       "facilityName": "Bệnh viện Hữu Nghị Việt Đức",
       "city": "Hà Nội",
       "user": {
-        "id": "3e9d2120-b1ef-4439-a884-179b703c7a30",
+        "id": "4826ce2d-406c-4cc7-9941-72ead80956cf",
         "phone": "+84988000098",
         "email": "doctor_98@famidoc.invalid",
         "fullName": "Lâm Đồng",
@@ -3975,7 +4095,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "38524326-576c-4b38-9809-d43dadd6e959",
+        "id": "26ea6077-7d3f-4770-af1c-d73a5cbcd0a6",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1097/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -3986,13 +4106,13 @@
       }
     },
     {
-      "id": "570ee006-d57b-4337-8068-de6c5449b026",
-      "userId": "2ea9d3a7-cd57-4ef5-890c-3578404491ef",
-      "facilityId": "82fd0deb-3f6c-4d51-9733-3e74c67c6f79",
+      "id": "c3540126-9b15-43ca-87ff-d96fb0543113",
+      "userId": "4358ee8f-5472-4bca-874d-94284ac34923",
+      "facilityId": "28bfb310-b569-41f0-85f1-81d57465e744",
       "facilityName": "Bệnh viện Nhi Trung ương",
       "city": "Hà Nội",
       "user": {
-        "id": "2ea9d3a7-cd57-4ef5-890c-3578404491ef",
+        "id": "4358ee8f-5472-4bca-874d-94284ac34923",
         "phone": "+84988000099",
         "email": "doctor_99@famidoc.invalid",
         "fullName": "Tạ Hiện",
@@ -4012,7 +4132,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "177df10d-bde5-4774-8f3d-d95bd95bc4d5",
+        "id": "315fc605-6c50-4ce2-91aa-5c066affd7f0",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1098/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -4023,13 +4143,13 @@
       }
     },
     {
-      "id": "02e3e07f-9a81-4e15-99f0-5d66bd1f792b",
-      "userId": "a9291e1a-32d7-4cc6-8c49-17fab87ee696",
-      "facilityId": "a0eee457-19d3-4aee-921d-a675886dc3bd",
+      "id": "05501c3a-16ba-4f52-ace7-d4633586a3f6",
+      "userId": "aa6f9a54-a099-4b5a-8f06-8cce412a411f",
+      "facilityId": "c07502e6-8a69-49ad-8409-2c9e05b3de88",
       "facilityName": "Bệnh viện Phụ sản Hà Nội",
       "city": "Hà Nội",
       "user": {
-        "id": "a9291e1a-32d7-4cc6-8c49-17fab87ee696",
+        "id": "aa6f9a54-a099-4b5a-8f06-8cce412a411f",
         "phone": "+84988000100",
         "email": "doctor_100@famidoc.invalid",
         "fullName": "Mai Chí Thọ",
@@ -4049,7 +4169,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "0dbff9f9-bf5b-4dc0-ab6a-38d077cc828d",
+        "id": "dd2e3040-f445-4075-b4c0-ef9686a71e13",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1099/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -4060,13 +4180,13 @@
       }
     },
     {
-      "id": "655be4cc-955a-4415-937d-8c2599eb7ee8",
-      "userId": "888272af-8900-46b7-b8e7-0faa9b22bd50",
-      "facilityId": "325750af-1c2b-4b3f-aafc-7d17fc699f50",
+      "id": "22101145-0adf-463c-9580-09d312457da9",
+      "userId": "357d7e64-94ec-46e0-b2d4-e2c081ab8457",
+      "facilityId": "d0c08a4a-d701-42a9-998d-56fff6e32c69",
       "facilityName": "Bệnh viện Phụ sản Trung ương",
       "city": "Hà Nội",
       "user": {
-        "id": "888272af-8900-46b7-b8e7-0faa9b22bd50",
+        "id": "357d7e64-94ec-46e0-b2d4-e2c081ab8457",
         "phone": "+84988000101",
         "email": "doctor_101@famidoc.invalid",
         "fullName": "Đoàn Phú Tứ",
@@ -4086,7 +4206,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "50e60e54-f129-4047-99be-254a28a35656",
+        "id": "c105944d-5531-43cf-a2ba-76682c1a9952",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1100/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -4097,13 +4217,13 @@
       }
     },
     {
-      "id": "5310741f-5cca-4a05-8b8a-6ff690fd8133",
-      "userId": "39769ae6-28e7-4816-a9ef-80703263c758",
-      "facilityId": "39a36b8d-a846-41d3-941c-8092a633dbc0",
+      "id": "a86568bd-7ceb-4aa5-aeb2-23e6ff21341f",
+      "userId": "d32fb50c-ad27-4e63-8030-8bd21d97ca83",
+      "facilityId": "4f7d9943-9e4f-4c3f-918d-3be688d8dc1f",
       "facilityName": "Bệnh viện Đa khoa Quốc tế Vinmec Times City",
       "city": "Hà Nội",
       "user": {
-        "id": "39769ae6-28e7-4816-a9ef-80703263c758",
+        "id": "d32fb50c-ad27-4e63-8030-8bd21d97ca83",
         "phone": "+84988000102",
         "email": "doctor_102@famidoc.invalid",
         "fullName": "Trương Định",
@@ -4123,7 +4243,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "acb9f47f-8a2a-4069-ac4e-b3d0d3709495",
+        "id": "45e0fe75-56ee-40d5-9451-c5024f6536f5",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1101/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -4134,13 +4254,13 @@
       }
     },
     {
-      "id": "6d1b7a4d-263c-4568-a0a1-59a5c39a97c5",
-      "userId": "9906da91-e09a-412d-aa72-53bedf092fe8",
-      "facilityId": "6c9a3026-941e-462d-8459-fe21b984733d",
+      "id": "b0b4be9d-800c-4769-a793-6b483a60c68d",
+      "userId": "0166fc86-1469-460d-aaff-94070f871f02",
+      "facilityId": "bd820cdd-bc4a-4284-b7c2-b1bf4acb2a07",
       "facilityName": "Bệnh viện Đa khoa Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "9906da91-e09a-412d-aa72-53bedf092fe8",
+        "id": "0166fc86-1469-460d-aaff-94070f871f02",
         "phone": "+84988000103",
         "email": "doctor_103@famidoc.invalid",
         "fullName": "Lương Đình Của",
@@ -4160,7 +4280,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "956df0f0-f8b0-4690-a13e-a6e9a3810390",
+        "id": "09aa8afe-ae0d-452b-9a71-a11a67ce45ef",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1102/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -4171,13 +4291,13 @@
       }
     },
     {
-      "id": "a3c8ab6b-04e2-4f85-9afb-c2f01149ee79",
-      "userId": "2ce11a18-0c92-4462-8883-4d975871594f",
-      "facilityId": "96a3d44c-5ffd-4a80-820b-af7e3292a35b",
+      "id": "6d606eaa-549e-405a-80ed-ca1d204ed1d6",
+      "userId": "12377d07-63c8-4778-8df7-95a5b4d8d49b",
+      "facilityId": "9f1e690e-76b0-439c-9f2e-d7ee85dd5770",
       "facilityName": "Bệnh viện Phụ sản - Nhi Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "2ce11a18-0c92-4462-8883-4d975871594f",
+        "id": "12377d07-63c8-4778-8df7-95a5b4d8d49b",
         "phone": "+84988000104",
         "email": "doctor_104@famidoc.invalid",
         "fullName": "Cao Xuân Dục",
@@ -4197,7 +4317,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "d6498abf-52a2-411a-8e0c-ecb887d8b871",
+        "id": "4a50bc87-94e7-4a09-ae3f-07c27c3ba32c",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1103/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -4208,13 +4328,13 @@
       }
     },
     {
-      "id": "9dae2084-7080-4ba2-beb9-a86f620174be",
-      "userId": "078c67b6-fae5-4720-8ced-b2b669d84f2d",
-      "facilityId": "1d2d1b72-5c31-49d5-9c6d-af17af969a5e",
+      "id": "806e1719-e3ce-4fdb-98cb-b9b22fc0b83c",
+      "userId": "14b998d4-20a4-4d69-a09c-a85093e94f39",
+      "facilityId": "5df2b856-a29c-4f74-b9bf-cce587f52dbe",
       "facilityName": "Bệnh viện Hoàn Mỹ Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "078c67b6-fae5-4720-8ced-b2b669d84f2d",
+        "id": "14b998d4-20a4-4d69-a09c-a85093e94f39",
         "phone": "+84988000105",
         "email": "doctor_105@famidoc.invalid",
         "fullName": "Nguyễn Khuyến",
@@ -4234,7 +4354,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "764b1051-d4a6-4c76-8b76-a5002747abe2",
+        "id": "284a34ec-32c6-4bde-a0ab-173252bdde01",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1104/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -4245,13 +4365,13 @@
       }
     },
     {
-      "id": "50d711d9-4266-4cfd-b5a3-b459cb15e437",
-      "userId": "60e932d6-f942-4c8c-a96e-26a154e55028",
-      "facilityId": "386586b0-34a0-43f0-9c87-528983872698",
+      "id": "659669d1-3529-429e-a5c4-72c560a6928a",
+      "userId": "4e263e07-c6eb-40bc-ad14-02cefbd42b5f",
+      "facilityId": "b3f12281-9cea-48f9-a403-9c7a183e2f86",
       "facilityName": "Bệnh viện Đại học Y Dược TP.HCM",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "60e932d6-f942-4c8c-a96e-26a154e55028",
+        "id": "4e263e07-c6eb-40bc-ad14-02cefbd42b5f",
         "phone": "+84988000106",
         "email": "doctor_106@famidoc.invalid",
         "fullName": "Trần Nhật Duật",
@@ -4271,7 +4391,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "7df77af0-3773-4873-9a16-6dfdc5f879d2",
+        "id": "6ae7b600-7004-437a-bfaf-50e3febde207",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1105/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -4282,13 +4402,13 @@
       }
     },
     {
-      "id": "3f3d5c5b-d8fd-4b13-b5a0-88906d9673d0",
-      "userId": "01fab76a-075b-4277-a6d7-8fa7225baa4f",
-      "facilityId": "86d90813-a6bd-4cff-93d4-66335a3fbdbb",
+      "id": "ee60fc2c-a1c1-4eb8-94df-e0a18645a7f3",
+      "userId": "174f62e4-2b18-4101-8084-aa681f3efc13",
+      "facilityId": "03bbfa60-2076-4b20-92f5-ebe4e32d83b9",
       "facilityName": "Bệnh viện Chợ Rẫy",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "01fab76a-075b-4277-a6d7-8fa7225baa4f",
+        "id": "174f62e4-2b18-4101-8084-aa681f3efc13",
         "phone": "+84988000107",
         "email": "doctor_107@famidoc.invalid",
         "fullName": "Lê Thánh Tông",
@@ -4308,7 +4428,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "40e930b6-9b5e-4c41-8ce8-abd2b2247b63",
+        "id": "197a7e89-82af-4aed-847f-c5f70d923454",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1106/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -4319,13 +4439,13 @@
       }
     },
     {
-      "id": "f9c82d79-72aa-45ef-b0ff-cc2c080d85af",
-      "userId": "b79be982-e066-4b03-958d-2006922ca29a",
-      "facilityId": "2df430ba-6710-4d71-b478-4608e1156f81",
+      "id": "968ead12-274b-4291-b8c5-bc524cd4b2dd",
+      "userId": "474bff15-242d-4741-ba7f-af3b76b5dc34",
+      "facilityId": "25bbacf8-3348-4d7a-ac8d-0b1cf0b661ed",
       "facilityName": "Bệnh viện Nhi Đồng 1",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "b79be982-e066-4b03-958d-2006922ca29a",
+        "id": "474bff15-242d-4741-ba7f-af3b76b5dc34",
         "phone": "+84988000108",
         "email": "doctor_108@famidoc.invalid",
         "fullName": "Phạm Sư Mạnh",
@@ -4345,7 +4465,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "1bbc4014-c157-4a70-98fd-f8d246b4da39",
+        "id": "32676484-d750-4b46-9de0-e2541d9edb18",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1107/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -4356,13 +4476,13 @@
       }
     },
     {
-      "id": "4b72e023-8c42-4598-ac90-a4064c29bf5d",
-      "userId": "3546f24b-c3f2-49e0-ac97-2acb6fa7c5ba",
-      "facilityId": "ba40ee8a-986f-4f60-8a2a-664ed21712f9",
+      "id": "af7eb5fa-ba01-4c05-b8fe-53f11feb1e0d",
+      "userId": "a60d9d08-8679-4eb0-a101-a3b26cfbc8be",
+      "facilityId": "944031b1-b0a9-4020-965d-6b38fbd2aad7",
       "facilityName": "Bệnh viện Nhi Đồng 2",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "3546f24b-c3f2-49e0-ac97-2acb6fa7c5ba",
+        "id": "a60d9d08-8679-4eb0-a101-a3b26cfbc8be",
         "phone": "+84988000109",
         "email": "doctor_109@famidoc.invalid",
         "fullName": "Hoàng Văn Thụ",
@@ -4382,7 +4502,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "0989d727-5b08-4e21-994b-41463ca67faa",
+        "id": "8d8011d6-3e82-4ab9-8d37-a7ba9239b177",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1108/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -4393,13 +4513,13 @@
       }
     },
     {
-      "id": "18320799-89b6-413a-affa-71625fe3acc2",
-      "userId": "08315b72-9bc6-448f-82da-3539e036eede",
-      "facilityId": "19e1d90b-3fac-4fbb-a2a1-c62d1353f86c",
+      "id": "b034a8f1-767f-46cb-b4ad-733e78131e1f",
+      "userId": "f636002e-71b8-4d3c-b707-49492e39b0dd",
+      "facilityId": "86ed5a6c-642f-4f00-b199-971c6be5929a",
       "facilityName": "Bệnh viện Từ Dũ",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "08315b72-9bc6-448f-82da-3539e036eede",
+        "id": "f636002e-71b8-4d3c-b707-49492e39b0dd",
         "phone": "+84988000110",
         "email": "doctor_110@famidoc.invalid",
         "fullName": "Vũ Tông Phan",
@@ -4419,7 +4539,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "6dfbcbaf-86f4-4d3c-86c3-2bdeb5075444",
+        "id": "29bfe25f-3044-41da-b278-3ab67d729168",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1109/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -4430,13 +4550,13 @@
       }
     },
     {
-      "id": "08895b06-4a03-431e-8558-c7013a567fd7",
-      "userId": "17f648e1-6cb7-4182-88da-a3cc2ea1223d",
-      "facilityId": "070ca05e-a6ee-49e5-943a-d18c9ca05a0c",
+      "id": "d0798436-ceba-4445-a02a-b01c8293b8e5",
+      "userId": "e325085d-14d9-4796-b270-d82ac320dad8",
+      "facilityId": "1a481340-ef4c-4b57-a06a-3a837c0f63ce",
       "facilityName": "Bệnh viện Nhân Dân Gia Định",
       "city": "TP. Hồ Chí Minh",
       "user": {
-        "id": "17f648e1-6cb7-4182-88da-a3cc2ea1223d",
+        "id": "e325085d-14d9-4796-b270-d82ac320dad8",
         "phone": "+84988000111",
         "email": "doctor_111@famidoc.invalid",
         "fullName": "Đặng Trần Côn",
@@ -4456,7 +4576,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "88b46d1d-95fe-4807-b264-1f5f829e59f5",
+        "id": "c5f042f0-774d-4b39-8c13-0ed1fa748132",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1110/HCM-CCHN",
         "issueDate": "2018-05-15",
@@ -4467,13 +4587,13 @@
       }
     },
     {
-      "id": "6c5aeb4c-418e-4501-861d-8bc81ffaa1dd",
-      "userId": "49defb17-9a71-431c-b2b4-282cf7770c3d",
-      "facilityId": "bb53e10c-2e2b-4f8a-8e08-d1feca0d649e",
+      "id": "6b042778-93d3-4df8-b12c-8c50d1a7a3e5",
+      "userId": "86214ebf-70fe-4fa9-af22-f5d9834ee902",
+      "facilityId": "5543790a-e9b5-4daf-aeb9-64fa3f438594",
       "facilityName": "Bệnh viện Bạch Mai",
       "city": "Hà Nội",
       "user": {
-        "id": "49defb17-9a71-431c-b2b4-282cf7770c3d",
+        "id": "86214ebf-70fe-4fa9-af22-f5d9834ee902",
         "phone": "+84988000112",
         "email": "doctor_112@famidoc.invalid",
         "fullName": "Bùi Xương Trạch",
@@ -4493,7 +4613,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "186189a3-ca47-4410-8f93-3b6b48775e1a",
+        "id": "cfe1686a-73e1-4ce9-8da7-efa2af0f17ca",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1111/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -4504,13 +4624,13 @@
       }
     },
     {
-      "id": "bceb4832-9d81-430a-a9a1-e56abc57dba1",
-      "userId": "ce0ecd19-ce46-498f-b036-ea79bf1e6963",
-      "facilityId": "0bc05b13-7f7a-4bce-a9a0-11d91b645755",
+      "id": "cc675938-7288-4edd-811a-a13455ee9af9",
+      "userId": "5a5a1abf-36c1-4770-87f6-84a885b28e79",
+      "facilityId": "08ec92c2-64d4-4ed0-bce3-e8cac6659b3d",
       "facilityName": "Bệnh viện Hữu Nghị Việt Đức",
       "city": "Hà Nội",
       "user": {
-        "id": "ce0ecd19-ce46-498f-b036-ea79bf1e6963",
+        "id": "5a5a1abf-36c1-4770-87f6-84a885b28e79",
         "phone": "+84988000113",
         "email": "doctor_113@famidoc.invalid",
         "fullName": "Ngô Thì Nhậm",
@@ -4530,7 +4650,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "627f21a6-032a-4a82-b032-e566d75adef8",
+        "id": "30ed63ff-0972-45a3-8da6-d2e835d82b86",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1112/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -4541,13 +4661,13 @@
       }
     },
     {
-      "id": "46adc172-1213-484e-ba12-fafc40e44884",
-      "userId": "a896f2ab-863a-4d0e-91f4-f044d03631f5",
-      "facilityId": "82fd0deb-3f6c-4d51-9733-3e74c67c6f79",
+      "id": "cf7ddc8e-536c-47d8-b865-e84fb31c0526",
+      "userId": "d2393b27-58ec-4fbf-a1e3-574340a95842",
+      "facilityId": "28bfb310-b569-41f0-85f1-81d57465e744",
       "facilityName": "Bệnh viện Nhi Trung ương",
       "city": "Hà Nội",
       "user": {
-        "id": "a896f2ab-863a-4d0e-91f4-f044d03631f5",
+        "id": "d2393b27-58ec-4fbf-a1e3-574340a95842",
         "phone": "+84988000114",
         "email": "doctor_114@famidoc.invalid",
         "fullName": "Đỗ Kính",
@@ -4567,7 +4687,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "7877d3df-d06b-4f9c-a638-f3f109c0054a",
+        "id": "1727c40e-0ce8-4f66-86a3-59bef95bfc66",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1113/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -4578,13 +4698,13 @@
       }
     },
     {
-      "id": "3755fc4b-174e-428d-9f69-cff3eecda6e6",
-      "userId": "e1fee7fd-623f-4a2b-81e2-d8a3eb0151ba",
-      "facilityId": "a0eee457-19d3-4aee-921d-a675886dc3bd",
+      "id": "17ec55d9-04a1-416f-8c7f-19fb07dfd751",
+      "userId": "7b51ced8-1d08-482e-ad47-a066f8b985db",
+      "facilityId": "c07502e6-8a69-49ad-8409-2c9e05b3de88",
       "facilityName": "Bệnh viện Phụ sản Hà Nội",
       "city": "Hà Nội",
       "user": {
-        "id": "e1fee7fd-623f-4a2b-81e2-d8a3eb0151ba",
+        "id": "7b51ced8-1d08-482e-ad47-a066f8b985db",
         "phone": "+84988000115",
         "email": "doctor_115@famidoc.invalid",
         "fullName": "Dương Khuê",
@@ -4604,7 +4724,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "77bb18b2-da04-45ff-a76d-4bff566e2a7a",
+        "id": "5f2b0f98-7bf7-4b56-aec6-f290a09be5c5",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1114/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -4615,13 +4735,13 @@
       }
     },
     {
-      "id": "3f3ea133-ec18-40c2-a81d-1d7c0bb9d634",
-      "userId": "8a861536-104c-4076-9072-fdd0da19c333",
-      "facilityId": "325750af-1c2b-4b3f-aafc-7d17fc699f50",
+      "id": "6cbd2c68-2b98-43c2-b906-fc78cd732417",
+      "userId": "97e52329-c271-481a-9c8c-f3eef1d81863",
+      "facilityId": "d0c08a4a-d701-42a9-998d-56fff6e32c69",
       "facilityName": "Bệnh viện Phụ sản Trung ương",
       "city": "Hà Nội",
       "user": {
-        "id": "8a861536-104c-4076-9072-fdd0da19c333",
+        "id": "97e52329-c271-481a-9c8c-f3eef1d81863",
         "phone": "+84988000116",
         "email": "doctor_116@famidoc.invalid",
         "fullName": "Lý Nam Đế",
@@ -4641,7 +4761,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "e48c8767-75ac-4d0d-9e62-3945c5105d23",
+        "id": "1d9779fd-f1dc-44c3-a78c-38b72223c2fc",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1115/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -4652,13 +4772,13 @@
       }
     },
     {
-      "id": "19628fc5-da7e-46e2-8dcd-c9801ebe6ce8",
-      "userId": "89d0575a-dc17-4be4-9451-0aa9d5aadea6",
-      "facilityId": "39a36b8d-a846-41d3-941c-8092a633dbc0",
+      "id": "1edbe044-83a8-4a89-8d15-a4963ac45f58",
+      "userId": "4b93400b-1c8e-4370-8c46-ba2ced5d5498",
+      "facilityId": "4f7d9943-9e4f-4c3f-918d-3be688d8dc1f",
       "facilityName": "Bệnh viện Đa khoa Quốc tế Vinmec Times City",
       "city": "Hà Nội",
       "user": {
-        "id": "89d0575a-dc17-4be4-9451-0aa9d5aadea6",
+        "id": "4b93400b-1c8e-4370-8c46-ba2ced5d5498",
         "phone": "+84988000117",
         "email": "doctor_117@famidoc.invalid",
         "fullName": "Hồ Quý Ly",
@@ -4678,7 +4798,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "58cd6abe-4091-4b2c-951e-6ed4ef41c1ad",
+        "id": "861edeb2-cba0-4bb4-b413-9616b83f1475",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1116/HN-CCHN",
         "issueDate": "2018-05-15",
@@ -4689,13 +4809,13 @@
       }
     },
     {
-      "id": "82e3b5d0-adc0-47a9-8e70-0e2119dcfae3",
-      "userId": "2739f411-1348-4177-ad84-3716dcbe545d",
-      "facilityId": "6c9a3026-941e-462d-8459-fe21b984733d",
+      "id": "43be954c-4b5c-4af5-bdb6-cbf916570b6c",
+      "userId": "75b247f3-2d6f-4bb3-ba62-7e48471d3936",
+      "facilityId": "bd820cdd-bc4a-4284-b7c2-b1bf4acb2a07",
       "facilityName": "Bệnh viện Đa khoa Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "2739f411-1348-4177-ad84-3716dcbe545d",
+        "id": "75b247f3-2d6f-4bb3-ba62-7e48471d3936",
         "phone": "+84988000118",
         "email": "doctor_118@famidoc.invalid",
         "fullName": "Võ Nguyên Giáp",
@@ -4715,7 +4835,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "48ffadd2-7214-4dc0-ae54-3ea6fc4b77f5",
+        "id": "27155be0-084b-4cdd-b00e-36878ce9496a",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1117/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -4726,13 +4846,13 @@
       }
     },
     {
-      "id": "ed93fc84-3039-45f6-9ff6-08fd7a4d4ee2",
-      "userId": "69873224-ef0e-4017-b35a-14d8a7f10a99",
-      "facilityId": "96a3d44c-5ffd-4a80-820b-af7e3292a35b",
+      "id": "4bf5a561-3ba4-48d9-8359-89dad771435b",
+      "userId": "5582dd45-a2b4-49f5-a2e1-cc54ed13a190",
+      "facilityId": "9f1e690e-76b0-439c-9f2e-d7ee85dd5770",
       "facilityName": "Bệnh viện Phụ sản - Nhi Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "69873224-ef0e-4017-b35a-14d8a7f10a99",
+        "id": "5582dd45-a2b4-49f5-a2e1-cc54ed13a190",
         "phone": "+84988000119",
         "email": "doctor_119@famidoc.invalid",
         "fullName": "Phan Huy Chú",
@@ -4752,7 +4872,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "0046ee5c-a071-449e-8107-df9ed0a0ae18",
+        "id": "383c3940-319e-44f1-81cd-8c0e08a69c2f",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1118/ĐN-CCHN",
         "issueDate": "2018-05-15",
@@ -4763,13 +4883,13 @@
       }
     },
     {
-      "id": "7ddb78e0-65bf-43c8-89c7-88e18c047e6a",
-      "userId": "5b465f10-5a2a-4b4c-bade-dd6b3384e4e2",
-      "facilityId": "1d2d1b72-5c31-49d5-9c6d-af17af969a5e",
+      "id": "ec69f1b6-b738-4a32-9470-0c28b433ed72",
+      "userId": "f97a671f-0926-4f93-b629-9362ca37c8e3",
+      "facilityId": "5df2b856-a29c-4f74-b9bf-cce587f52dbe",
       "facilityName": "Bệnh viện Hoàn Mỹ Đà Nẵng",
       "city": "Đà Nẵng",
       "user": {
-        "id": "5b465f10-5a2a-4b4c-bade-dd6b3384e4e2",
+        "id": "f97a671f-0926-4f93-b629-9362ca37c8e3",
         "phone": "+84988000120",
         "email": "doctor_120@famidoc.invalid",
         "fullName": "Trịnh Kiểm",
@@ -4789,7 +4909,7 @@
       "maxPanelCapacity": 30,
       "onboardingStatus": "ACTIVE",
       "credential": {
-        "id": "d70c6b7c-ffd3-4e29-89a2-3a10cdeb03e4",
+        "id": "d157462b-0dc4-4ed3-aa58-d63a9bc27358",
         "credentialType": "PRACTICE_LICENSE_CCHN",
         "certificateNumber": "CCHN-1119/ĐN-CCHN",
         "issueDate": "2018-05-15",

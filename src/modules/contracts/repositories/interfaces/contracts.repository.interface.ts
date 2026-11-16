@@ -141,6 +141,14 @@ export interface ContractsSession {
   findPatientsWithClinicalProfile?(
     patientIds: string[],
   ): Promise<any[]>;
+  /**
+   * Hợp đồng cung ứng nhân lực B2B đang ACTIVE và còn hiệu lực tại `atDate`
+   * (`startDate <= atDate < endDate`) của một cơ sở y tế.
+   */
+  findActiveStaffingContract(
+    facilityId: string,
+    atDate: Date,
+  ): Promise<B2bStaffingContract | null>;
   findConflictingStaffingContract(
     facilityId: string,
     startDate: Date,

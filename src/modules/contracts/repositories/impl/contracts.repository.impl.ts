@@ -281,14 +281,26 @@ class PrismaContractsSession implements ContractsSession {
   findDoctorById(id: string) {
     return this.tx.doctor.findUnique({
       where: { id },
-      include: { user: true },
+      include: {
+        user: true,
+        credentials: {
+          where: { credentialType: 'PRACTICE_LICENSE_CCHN' },
+          orderBy: { issueDate: 'desc' },
+        },
+      },
     });
   }
 
   findDoctorByUserId(userId: string) {
     return this.tx.doctor.findUnique({
       where: { userId },
-      include: { user: true },
+      include: {
+        user: true,
+        credentials: {
+          where: { credentialType: 'PRACTICE_LICENSE_CCHN' },
+          orderBy: { issueDate: 'desc' },
+        },
+      },
     });
   }
 
@@ -307,6 +319,21 @@ class PrismaContractsSession implements ContractsSession {
   }
 
   async findFirstActiveAdminUser() {
+    // Ưu tiên tài khoản ADMIN thật (ACTIVE, không phải demo / email .invalid) để tránh lấy nhầm dữ liệu seed
+    const realAdmin = await this.tx.user.findFirst({
+      where: {
+        role: 'ADMIN',
+        status: 'ACTIVE',
+        NOT: [{ email: { endsWith: '.invalid' } }, { fullName: { startsWith: 'DEMO' } }],
+      },
+      select: { id: true, email: true, fullName: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (realAdmin) {
+      return realAdmin;
+    }
+    // Fallback: môi trường seed dev/staging chỉ có tài khoản demo — vẫn trả về admin đầu tiên
+    // (việc chặn hay cho phép dữ liệu demo do guard strict-mode quyết định).
     return this.tx.user.findFirst({
       where: { role: 'ADMIN' },
       select: { id: true, email: true, fullName: true },
@@ -514,6 +541,17 @@ class PrismaContractsSession implements ContractsSession {
         documents: true,
       },
       orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  findActiveStaffingContract(facilityId: string, atDate: Date) {
+    return this.tx.b2bStaffingContract.findFirst({
+      where: {
+        facilityId,
+        status: 'ACTIVE',
+        startDate: { lte: atDate },
+        endDate: { gt: atDate },
+      },
     });
   }
 
