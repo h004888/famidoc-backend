@@ -45,6 +45,7 @@ import {
 import {
   CreateMedicalContractDto,
   CreateFourPartyContractDto,
+  CancelDraftContractDto,
 } from '../dtos/create-medical-contract.dto';
 import { AssignDoctorToPackageDto } from '../dtos/assign-doctor.dto';
 import { ListMedicalContractsQueryDto } from '../dtos/list-medical-contracts-query.dto';
@@ -97,6 +98,34 @@ export class ContractsController {
     @Body() dto: CreateMedicalContractDto,
   ) {
     return this.initiateFourPartyContract(req, dto);
+  }
+
+  @Post('medical/:id/cancel-draft')
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_REP', 'ADMIN')
+  @ApiOperation({
+    summary:
+      'Hủy bản nháp hợp đồng y tế 4 bên chưa thanh toán (tránh bản nháp trùng lặp)',
+    description:
+      'Đại diện hộ gia đình (hoặc Admin) hủy hợp đồng đang PENDING_APPROVAL/PENDING_PAYMENT chưa có hoá đơn PAID: chuyển hợp đồng sang TERMINATED và hủy các yêu cầu thanh toán VietQR PENDING kèm phong bì Documenso nếu còn mở.',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng y tế' })
+  @ApiBody({ type: CancelDraftContractDto, required: false })
+  @ApiResponse({
+    status: 201,
+    description: 'Hủy bản nháp hợp đồng thành công.',
+  })
+  @ApiResponse({ status: 403, description: 'Không có quyền hủy hợp đồng này.' })
+  @ApiResponse({
+    status: 409,
+    description: 'Hợp đồng đã ACTIVE/TERMINATED hoặc đã có giao dịch PAID.',
+  })
+  cancelDraftMedicalContract(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: CancelDraftContractDto,
+  ) {
+    return this.service.cancelDraftMedicalContract(req.user, id, dto?.reason);
   }
 
   @Put(['four-party/:id/sign', 'medical/:id/sign', 'medical/:id/signatures'])

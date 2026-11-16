@@ -71,6 +71,11 @@ export interface IContractsService {
     dto: SignContractChangeDto,
     ip: string,
   ): Promise<ContractSignature>;
+  cancelDraftMedicalContract(
+    actor: AuthenticatedUser,
+    id: string,
+    reason?: string,
+  ): Promise<{ id: string; contractStatus: 'TERMINATED' }>;
   createStaffingContract(
     actor: AuthenticatedUser,
     dto: CreateStaffingContractDto,

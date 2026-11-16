@@ -73,6 +73,26 @@ export class CreateMedicalContractDto {
   @IsString()
   @MaxLength(2000)
   additionalTerms?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'ID hợp đồng nháp chưa thanh toán cần hủy nguyên tử trước khi tạo hợp đồng mới (thay đổi gói hoặc số thành viên)',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
+  @IsUUID('4')
+  @IsOptional()
+  replaceContractId?: string;
 }
 
 export class CreateFourPartyContractDto extends CreateMedicalContractDto {}
+
+export class CancelDraftContractDto {
+  @ApiPropertyOptional({
+    description: 'Lý do hủy bản nháp hợp đồng (tùy chọn)',
+    example: 'Đổi gói chăm sóc khác',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  reason?: string;
+}

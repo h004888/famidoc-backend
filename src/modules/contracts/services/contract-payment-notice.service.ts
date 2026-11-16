@@ -94,7 +94,7 @@ export class ContractPaymentNoticeService {
       const amountVnd =
         snapshot.pricing?.totalPriceVnd ?? Number(contract.totalAmount);
       const amountLabel = `${new Intl.NumberFormat('vi-VN').format(amountVnd)} đ`;
-      const paymentUrl = `${appUrl.replace(/\/+$/, '')}/family/subscription/tracking?contractId=${contract.id}`;
+      const paymentUrl = `${appUrl.replace(/\/+$/, '')}/booking/tracking?contractId=${contract.id}`;
       const representativeName = representative.fullName ?? 'Quý khách';
       const doctorName = contract.doctor?.user?.fullName;
       const termLabel = `${this.formatDate(contract.startDate)} - ${this.formatDate(contract.endDate)}`;

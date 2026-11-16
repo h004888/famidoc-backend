@@ -96,6 +96,8 @@ export interface ContractsSession {
   ): Promise<TerminationRequest>;
   hasEncounterInProgress(contractId: string): Promise<boolean>;
   cancelUnpaidRights(contractId: string): Promise<void>;
+  hasPaidInvoice(contractId: string): Promise<boolean>;
+  cancelPendingInvoices(contractId: string): Promise<void>;
   findContractSignatures(contractId: string): Promise<ContractSignature[]>;
   saveUpgradeSignature(
     data: Prisma.ContractSignatureUncheckedCreateInput,
