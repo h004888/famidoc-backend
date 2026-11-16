@@ -71,6 +71,13 @@ describe('ContractsServiceImpl - Staffing Contracts', () => {
   beforeEach(async () => {
     sessionMock = {
       findFacilityById: jest.fn().mockResolvedValue(mockFacility),
+      findActiveStaffingContract: jest.fn().mockImplementation((facilityId: string) =>
+        Promise.resolve(
+          facilityId === mockFacility.id
+            ? { id: 'staffing-1', facilityId, status: 'ACTIVE' }
+            : null,
+        )
+      ),
       findFacilityByUserId: jest.fn().mockResolvedValue(mockFacility),
       findConflictingStaffingContract: jest.fn().mockResolvedValue(null),
       createStaffingContract: jest.fn().mockResolvedValue(mockStaffingContract),

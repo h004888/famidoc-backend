@@ -122,6 +122,13 @@ describe('Unpaid contract cancellation & replacement', () => {
     sessionMock = {
       findPackage: jest.fn().mockResolvedValue(mockPackage),
       findFacilityById: jest.fn().mockResolvedValue(mockFacility),
+      findActiveStaffingContract: jest.fn().mockImplementation((facilityId: string) =>
+        Promise.resolve(
+          facilityId === mockFacility.id
+            ? { id: 'staffing-1', facilityId, status: 'ACTIVE' }
+            : null,
+        )
+      ),
       findDoctorById: jest.fn().mockResolvedValue(mockDoctor),
       findFamilyById: jest.fn().mockResolvedValue(mockFamily),
       findFamilyByRepresentativeUserId: jest.fn().mockResolvedValue(null),

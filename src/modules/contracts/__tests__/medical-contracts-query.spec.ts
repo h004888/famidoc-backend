@@ -392,4 +392,117 @@ describe('Medical Contracts Query - List & Detail by Role (Task 5)', () => {
       expect(result.id).toBe('contract-uuid-1');
     });
   });
+
+  describe('findMedicalContractById - tự động đồng bộ Documenso', () => {
+    const buildService = (contract: any) => {
+      const syncSession = {
+        findMedicalContractById: jest.fn().mockResolvedValue(contract),
+      };
+      const syncRepository = {
+        transaction: jest.fn().mockImplementation((cb: (s: any) => any) =>
+          cb(syncSession),
+        ),
+      };
+      const documensoSync = {
+        syncContractIfNeeded: jest.fn().mockResolvedValue({
+          synced: true,
+          contractId: contract.id,
+          contractStatus: 'PENDING_APPROVAL',
+          signedRoles: ['FAMILY_REP', 'HEALTHCARE_FACILITY'],
+          signedPdfUrl: null,
+        }),
+      };
+      const syncService = new ContractsServiceImpl(
+        syncRepository as any,
+        undefined,
+        undefined,
+        undefined,
+        documensoSync as any,
+      );
+      return { syncService, syncRepository, documensoSync };
+    };
+
+    it('đồng bộ chữ ký mới rồi đọc lại hợp đồng trước khi trả DTO', async () => {
+      const contract = {
+        ...mockContractDetail,
+        documensoEnvelopeId: 'envelope-1',
+      };
+      const { syncService, syncRepository, documensoSync } =
+        buildService(contract);
+
+      const result = await syncService.findMedicalContractById(
+        adminUser,
+        'contract-uuid-1',
+      );
+
+      expect(documensoSync.syncContractIfNeeded).toHaveBeenCalledWith(
+        'contract-uuid-1',
+        { force: false, ipAddress: undefined },
+      );
+      // transaction #1 (đọc + kiểm tra quyền) và transaction #2 (đọc lại)
+      expect(syncRepository.transaction).toHaveBeenCalledTimes(2);
+      expect(result.id).toBe('contract-uuid-1');
+    });
+
+    it('forceSync=true truyền force: true xuống dịch vụ đồng bộ', async () => {
+      const contract = {
+        ...mockContractDetail,
+        documensoEnvelopeId: 'envelope-1',
+      };
+      const { syncService, documensoSync } = buildService(contract);
+
+      await syncService.findMedicalContractById(
+        adminUser,
+        'contract-uuid-1',
+        { forceSync: true },
+        '127.0.0.1',
+      );
+
+      expect(documensoSync.syncContractIfNeeded).toHaveBeenCalledWith(
+        'contract-uuid-1',
+        { force: true, ipAddress: '127.0.0.1' },
+      );
+    });
+
+    it('hợp đồng không ở PENDING_APPROVAL thì không gọi Documenso', async () => {
+      const contract = {
+        ...mockContractDetail,
+        contractStatus: 'PENDING_PAYMENT',
+        documensoEnvelopeId: 'envelope-1',
+      };
+      const { syncService, syncRepository, documensoSync } =
+        buildService(contract);
+
+      await syncService.findMedicalContractById(adminUser, 'contract-uuid-1');
+
+      expect(documensoSync.syncContractIfNeeded).not.toHaveBeenCalled();
+      expect(syncRepository.transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('bỏ qua êm ái khi chưa cấu hình DocumensoSyncService', async () => {
+      const contract = {
+        ...mockContractDetail,
+        documensoEnvelopeId: 'envelope-1',
+      };
+      const syncSession = {
+        findMedicalContractById: jest.fn().mockResolvedValue(contract),
+      };
+      const syncRepository = {
+        transaction: jest.fn().mockImplementation((cb: (s: any) => any) =>
+          cb(syncSession),
+        ),
+      };
+      const serviceWithoutSync = new ContractsServiceImpl(
+        syncRepository as any,
+      );
+
+      const result = await serviceWithoutSync.findMedicalContractById(
+        adminUser,
+        'contract-uuid-1',
+      );
+
+      expect(result.id).toBe('contract-uuid-1');
+      expect(syncRepository.transaction).toHaveBeenCalledTimes(1);
+    });
+  });
 });

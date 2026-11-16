@@ -218,8 +218,25 @@ export class ContractsController {
   @Roles('FAMILY_REP', 'HEALTHCARE_FACILITY', 'DOCTOR', 'ADMIN')
   @ApiOperation({
     summary: 'Tải hoặc xem tệp PDF hợp đồng đã ký qua proxy Documenso (bảo mật API key)',
+    description:
+      'Chỉ trả tệp PDF đã được Documenso đóng dấu khi hợp đồng có documensoItemId và đã hoàn tất đủ 4/4 chữ ký (FAMILY_REP, HEALTHCARE_FACILITY, ASSIGNED_DOCTOR, ADMIN) hoặc đã ở trạng thái PENDING_PAYMENT/ACTIVE.',
   })
   @ApiParam({ name: 'id', description: 'UUID của hợp đồng y tế' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Trả luồng dữ liệu application/pdf của hợp đồng đã ký đủ 4 bên.',
+  })
+  @ApiResponse({
+    status: 404,
+    description:
+      'Không tìm thấy hợp đồng hoặc hợp đồng chưa có tệp trên Documenso.',
+  })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Hợp đồng chưa hoàn tất đủ 4/4 chữ ký nên chưa thể xuất bản PDF đã ký.',
+  })
   async downloadSignedPdf(
     @Req() req: AuthenticatedRequest,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
@@ -319,8 +336,16 @@ export class ContractsController {
   findMedicalContractById(
     @Req() req: AuthenticatedRequest,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Query('forceSync') forceSync?: string,
   ) {
-    return this.service.findMedicalContractById(req.user, id);
+    return this.service.findMedicalContractById(
+      req.user,
+      id,
+      {
+        forceSync: forceSync === '1' || forceSync === 'true',
+      },
+      req.ip ?? 'unknown',
+    );
   }
 
   @Get('medical/:id/care-summary')

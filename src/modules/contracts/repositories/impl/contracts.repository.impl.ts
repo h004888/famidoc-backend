@@ -517,6 +517,17 @@ class PrismaContractsSession implements ContractsSession {
     });
   }
 
+  findActiveStaffingContract(facilityId: string, atDate: Date) {
+    return this.tx.b2bStaffingContract.findFirst({
+      where: {
+        facilityId,
+        status: 'ACTIVE',
+        startDate: { lte: atDate },
+        endDate: { gt: atDate },
+      },
+    });
+  }
+
   findConflictingStaffingContract(
     facilityId: string,
     startDate: Date,

@@ -150,6 +150,13 @@ describe('Four-Party Contract & Doctor Assignment (UC-16, UC-23, SD-16, SD-23)',
     sessionMock = {
       findPackage: jest.fn().mockResolvedValue(mockPackage),
       findFacilityById: jest.fn().mockResolvedValue(mockFacility),
+      findActiveStaffingContract: jest.fn().mockImplementation((facilityId: string) =>
+        Promise.resolve(
+          facilityId === mockFacility.id
+            ? { id: 'staffing-1', facilityId, status: 'ACTIVE' }
+            : null,
+        )
+      ),
       findDoctorById: jest.fn().mockImplementation((id: string) => {
         if (id === 'doc-1') return Promise.resolve(mockDoctor);
         if (id === 'doc-2') return Promise.resolve(mockDoctor2);
