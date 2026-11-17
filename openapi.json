@@ -698,6 +698,16 @@
             }
           },
           {
+            "name": "city",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo tỉnh/thành phố của cơ sở y tế",
+            "schema": {
+              "example": "Hà Nội",
+              "type": "string"
+            }
+          },
+          {
             "name": "minExperienceYears",
             "required": false,
             "in": "query",
@@ -892,7 +902,7 @@
                       "example": "Chi tiết hồ sơ bác sĩ."
                     },
                     "data": {
-                      "$ref": "#/components/schemas/PublicDoctorItemDto"
+                      "$ref": "#/components/schemas/PublicDoctorDetailDto"
                     },
                     "meta": {
                       "type": "object",
@@ -927,6 +937,158 @@
           }
         },
         "summary": "Xem chi tiết bác sĩ gia đình công khai theo ID (UC-08)",
+        "tags": [
+          "Public Portal"
+        ]
+      }
+    },
+    "/api/v1/public/doctors/{id}/reviews": {
+      "get": {
+        "description": "Cho phép xem danh sách nhận xét, phản hồi thực tế từ các hộ gia đình đã đăng ký bác sĩ phụ trách với hỗ trợ phân trang và lọc theo số sao.",
+        "operationId": "PublicController_getDoctorReviews",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của bác sĩ",
+            "schema": {
+              "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Số thứ tự trang hiển thị (bắt đầu từ 1)",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số lượng đánh giá trên mỗi trang (tối đa 50)",
+            "schema": {
+              "default": 5,
+              "example": 5,
+              "type": "number"
+            }
+          },
+          {
+            "name": "rating",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo số sao đánh giá (1 - 5)",
+            "schema": {
+              "minimum": 1,
+              "maximum": 5,
+              "example": 5,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách đánh giá của bác sĩ kèm phân trang.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Danh sách đánh giá của bác sĩ kèm phân trang."
+                    },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicDoctorReviewItemDto"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "pagination": {
+                          "type": "object",
+                          "properties": {
+                            "page": {
+                              "type": "number",
+                              "example": 1
+                            },
+                            "pageSize": {
+                              "type": "number",
+                              "example": 20
+                            },
+                            "totalRecords": {
+                              "type": "number",
+                              "example": 100
+                            },
+                            "totalPages": {
+                              "type": "number",
+                              "example": 5
+                            },
+                            "hasNextPage": {
+                              "type": "boolean",
+                              "example": true
+                            },
+                            "hasPreviousPage": {
+                              "type": "boolean",
+                              "example": false
+                            },
+                            "nextCursor": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "previousCursor": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-10T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "ID bác sĩ không đúng định dạng UUID v4."
+          },
+          "404": {
+            "description": "Không tìm thấy bác sĩ hoặc bác sĩ chưa được kích hoạt."
+          }
+        },
+        "summary": "Lấy danh sách đánh giá của bác sĩ có phân trang (UC-08)",
         "tags": [
           "Public Portal"
         ]
@@ -2521,7 +2683,7 @@
         },
         "responses": {
           "201": {
-            "description": "Tạo yêu cầu thanh toán VietQR thành công, trả về chuỗi qrDataUrl và transferContent"
+            "description": "Tạo yêu cầu thanh toán VietQR thành công, trả về qrUrl và transferContent"
           },
           "400": {
             "description": "Dữ liệu không hợp lệ hoặc trạng thái hợp đồng không được phép thanh toán"
@@ -2554,7 +2716,7 @@
         },
         "responses": {
           "201": {
-            "description": "Tạo yêu cầu thanh toán VietQR thành công, trả về chuỗi qrDataUrl và transferContent"
+            "description": "Tạo yêu cầu thanh toán VietQR thành công, trả về qrUrl và transferContent"
           },
           "400": {
             "description": "Dữ liệu không hợp lệ hoặc trạng thái hợp đồng không được phép thanh toán"
@@ -3938,16 +4100,6 @@
             }
           },
           {
-            "name": "facilityId",
-            "required": false,
-            "in": "query",
-            "description": "UUID của cơ sở y tế cần lọc báo cáo doanh thu",
-            "schema": {
-              "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-              "type": "string"
-            }
-          },
-          {
             "name": "environment",
             "required": false,
             "in": "query",
@@ -3960,6 +4112,16 @@
                 "TEST",
                 "LIVE"
               ]
+            }
+          },
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "description": "UUID của cơ sở y tế cần lọc báo cáo doanh thu",
+            "schema": {
+              "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+              "type": "string"
             }
           }
         ],
@@ -4010,6 +4172,132 @@
           }
         ],
         "summary": "Thực thi quyết toán doanh thu định kỳ hàng tháng cho cơ sở y tế",
+        "tags": [
+          "Finance"
+        ]
+      }
+    },
+    "/api/v1/finance/reconciliation/sepay": {
+      "post": {
+        "operationId": "FinanceController_runSePayReconciliation",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunSePayReconciliationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Hoàn thành một lượt đối soát"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Đối soát giao dịch với SePay API v2 và tự bù webhook bị bỏ lỡ",
+        "tags": [
+          "Finance"
+        ]
+      },
+      "get": {
+        "operationId": "FinanceController_listSePayReconciliations",
+        "parameters": [
+          {
+            "name": "environment",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "LIVE",
+              "type": "string",
+              "enum": [
+                "TEST",
+                "LIVE"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Object"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Xem lịch sử các lượt đối soát SePay",
+        "tags": [
+          "Finance"
+        ]
+      }
+    },
+    "/api/v1/finance/reconciliation/sepay/status": {
+      "get": {
+        "operationId": "FinanceController_getSePayReconciliationStatus",
+        "parameters": [
+          {
+            "name": "environment",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "LIVE",
+              "type": "string",
+              "enum": [
+                "TEST",
+                "LIVE"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/Object"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Xem trạng thái và số giao dịch chưa đối soát",
         "tags": [
           "Finance"
         ]
@@ -5517,6 +5805,11 @@
             "example": true,
             "description": "Trạng thái tiếp nhận hộ gia đình mới (dưới hạn mức tối đa 30 hộ)"
           },
+          "avatarUrl": {
+            "type": "object",
+            "example": "https://images.unsplash.com/photo-1622253692010-333f2da6031d",
+            "nullable": true
+          },
           "facility": {
             "nullable": true,
             "type": "object",
@@ -5537,6 +5830,309 @@
           "ratingAvg",
           "totalReviews",
           "isAvailable"
+        ]
+      },
+      "DoctorStatsDto": {
+        "type": "object",
+        "properties": {
+          "experienceYears": {
+            "type": "number",
+            "description": "Số năm kinh nghiệm hành nghề lâm sàng",
+            "example": 24
+          },
+          "ratingAvg": {
+            "type": "number",
+            "description": "Điểm đánh giá trung bình từ hộ gia đình (thang điểm 5.0)",
+            "example": 4.96
+          },
+          "totalReviews": {
+            "type": "number",
+            "description": "Tổng số lượt đánh giá công khai",
+            "example": 384
+          },
+          "consultationCount": {
+            "type": "number",
+            "description": "Tổng số ca khám / tư vấn đã hoàn thành",
+            "example": 2400
+          }
+        },
+        "required": [
+          "experienceYears",
+          "ratingAvg",
+          "totalReviews",
+          "consultationCount"
+        ]
+      },
+      "DoctorCarePackageItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Mã định danh duy nhất (UUID) của gói chăm sóc",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "packageCode": {
+            "type": "string",
+            "description": "Mã ký hiệu gói dịch vụ",
+            "example": "PKG-FAMILY-01"
+          },
+          "packageName": {
+            "type": "string",
+            "description": "Tên thương mại của gói chăm sóc sức khỏe",
+            "example": "Gói Đồng Hành"
+          },
+          "durationMonths": {
+            "type": "number",
+            "description": "Thời hạn gói tính theo tháng",
+            "example": 3
+          },
+          "basePrice": {
+            "type": "number",
+            "description": "Đơn giá niêm yết của gói (VND)",
+            "example": 2850000
+          },
+          "formattedPrice": {
+            "type": "string",
+            "description": "Đơn giá đã được định dạng chuỗi hiển thị",
+            "example": "2.850.000đ"
+          },
+          "monthlyPrice": {
+            "type": "string",
+            "description": "Đơn giá chia trung bình mỗi tháng",
+            "example": "950.000đ/tháng"
+          },
+          "periodicVisitsQuota": {
+            "type": "number",
+            "description": "Hạn mức lượt bác sĩ đến khám trực tiếp tại nhà",
+            "example": 3
+          },
+          "telehealthQuota": {
+            "type": "number",
+            "description": "Hạn mức lượt tư vấn trực tuyến Telehealth 24/7",
+            "example": 4
+          },
+          "highlight": {
+            "type": "string",
+            "description": "Điểm nhấn hoặc đối tượng áp dụng tiêu biểu",
+            "example": "Phù hợp gia đình có trẻ nhỏ & người lớn tuổi (3-6 người)"
+          },
+          "features": {
+            "description": "Danh sách các quyền lợi chính kèm theo gói",
+            "example": [
+              "3 lượt bác sĩ trực tiếp thăm khám tại nhà",
+              "4 lượt tư vấn video Telehealth 24/7",
+              "Bác sĩ phụ trách chính & lập phác đồ điều trị gia đình",
+              "Hồ sơ bệnh án điện tử (EHR) lưu trữ trọn đời"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "popular": {
+            "type": "boolean",
+            "description": "Đánh dấu gói được nhiều gia đình lựa chọn nhất",
+            "example": true
+          }
+        },
+        "required": [
+          "id",
+          "packageCode",
+          "packageName",
+          "durationMonths",
+          "basePrice",
+          "periodicVisitsQuota",
+          "telehealthQuota"
+        ]
+      },
+      "PublicDoctorDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "UUID duy nhất của bác sĩ gia đình",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "doctorName": {
+            "type": "string",
+            "description": "Họ và tên đầy đủ của bác sĩ",
+            "example": "Nguyễn Văn Hoài"
+          },
+          "academicTitle": {
+            "type": "object",
+            "description": "Học hàm, học vị chuyên môn",
+            "example": "PGS. TS. Bác sĩ"
+          },
+          "specialty": {
+            "type": "string",
+            "description": "Chuyên khoa phụ trách chính",
+            "example": "Bác sĩ Gia đình & Nội Tổng Quát"
+          },
+          "specialtyKey": {
+            "type": "string",
+            "description": "Mã định danh chuyên khoa rút gọn (slug/key)",
+            "example": "general"
+          },
+          "hospital": {
+            "type": "string",
+            "description": "Cơ sở y tế hoặc bệnh viện trực thuộc",
+            "example": "Bệnh viện Đại học Y Dược TP.HCM"
+          },
+          "location": {
+            "type": "string",
+            "description": "Tỉnh / thành phố nơi bác sĩ hoạt động",
+            "example": "TP. Hồ Chí Minh"
+          },
+          "isVerified": {
+            "type": "boolean",
+            "description": "Trạng thái đã thẩm định chứng chỉ hành nghề và hồ sơ y tế",
+            "example": true
+          },
+          "isAvailable": {
+            "type": "boolean",
+            "description": "Khả năng tiếp nhận thêm hộ gia đình mới vào danh sách phụ trách",
+            "example": true
+          },
+          "avatarUrl": {
+            "type": "object",
+            "description": "Đường dẫn ảnh đại diện chuyên nghiệp của bác sĩ",
+            "example": "/images/medsev/home-one/doctor/1.jpg"
+          },
+          "ratingAvg": {
+            "type": "number",
+            "description": "Điểm đánh giá trung bình (tương thích ngược)",
+            "example": 4.8
+          },
+          "totalReviews": {
+            "type": "number",
+            "description": "Tổng số lượt đánh giá (tương thích ngược)",
+            "example": 20
+          },
+          "experienceYears": {
+            "type": "number",
+            "description": "Số năm kinh nghiệm lâm sàng (tương thích ngược)",
+            "example": 7
+          },
+          "facility": {
+            "type": "object",
+            "description": "Thông tin cơ sở y tế trực thuộc (tương thích ngược)"
+          },
+          "stats": {
+            "description": "Số liệu thống kê năng lực và uy tín bác sĩ",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DoctorStatsDto"
+              }
+            ]
+          },
+          "services": {
+            "description": "Các hình thức dịch vụ khám chữa bệnh tiếp nhận",
+            "example": [
+              "home",
+              "telehealth",
+              "clinic"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "education": {
+            "description": "Quá trình đào tạo, học vị và chứng chỉ chuyên môn",
+            "example": [
+              "Tiến sĩ Y khoa (Y học Gia đình & Nội khoa) - Đại học Paris Descartes (2008)",
+              "Thạc sĩ Y khoa chuyên ngành Nội khoa - Đại học Y Dược TP.HCM (2002)",
+              "Bác sĩ Đa khoa xuất sắc - Đại học Y Dược TP.HCM (1998)"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "bio": {
+            "type": "object",
+            "description": "Tiểu sử tóm tắt quá trình công tác và thế mạnh chuyên sâu",
+            "example": "Nguyên Phó Trưởng khoa Khám bệnh - Bệnh viện Đại học Y Dược TP.HCM. Hơn 24 năm kinh nghiệm thực hành lâm sàng..."
+          },
+          "schedule": {
+            "type": "object",
+            "description": "Khung giờ và lịch trực tiếp nhận tư vấn/thăm khám",
+            "example": "Thứ 2 - Thứ 7: 08:00 - 18:00 (Nhận khám tại nhà các buổi chiều và tư vấn trực tuyến 24/7)"
+          },
+          "carePackages": {
+            "description": "Danh sách các gói chăm sóc sức khỏe gia đình khả dụng",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DoctorCarePackageItemDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "doctorName",
+          "specialty",
+          "specialtyKey",
+          "hospital",
+          "location",
+          "isVerified",
+          "isAvailable",
+          "stats",
+          "services",
+          "education",
+          "carePackages"
+        ]
+      },
+      "PublicDoctorReviewItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Mã định danh duy nhất (UUID) của đánh giá",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "patientName": {
+            "type": "string",
+            "description": "Họ tên hoặc danh xưng của người đại diện hộ gia đình đánh giá",
+            "example": "Chị Mai Lan"
+          },
+          "ratingStars": {
+            "type": "number",
+            "description": "Số sao đánh giá (1 đến 5 sao)",
+            "example": 5,
+            "minimum": 1,
+            "maximum": 5
+          },
+          "comment": {
+            "type": "object",
+            "description": "Nội dung nhận xét phản hồi từ gia đình",
+            "example": "Bác sĩ Hoài rất tận tình, giải thích chi tiết phác đồ chăm sóc cho mẹ già và bé nhỏ."
+          },
+          "packageName": {
+            "type": "object",
+            "description": "Tên gói chăm sóc sức khỏe gia đình đang sử dụng",
+            "example": "Gói Đồng Hành"
+          },
+          "district": {
+            "type": "object",
+            "description": "Khu vực / Quận huyện của hộ gia đình",
+            "example": "Quận 7"
+          },
+          "avatarUrl": {
+            "type": "object",
+            "description": "Ảnh đại diện người đánh giá",
+            "example": "/images/medsev/avatar/female-1.jpg"
+          },
+          "createdAt": {
+            "type": "object",
+            "description": "Thời điểm gửi đánh giá",
+            "example": "2026-11-01T08:30:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "patientName",
+          "ratingStars",
+          "createdAt"
         ]
       },
       "SubmitConsultationRequestDto": {
@@ -6217,6 +6813,11 @@
             "type": "string",
             "example": "Password@123",
             "description": "Mật khẩu tài khoản (tối thiểu 8 ký tự)"
+          },
+          "rememberMe": {
+            "type": "boolean",
+            "example": true,
+            "description": "Ghi nhớ đăng nhập (true: 7 ngày, false: session 1 giờ)"
           }
         },
         "required": [
@@ -7035,17 +7636,10 @@
         "properties": {
           "videoConsultations": {
             "type": "number",
-            "description": "Số lượt tư vấn video điều chỉnh",
+            "description": "Số lượt video thỏa thuận, bắt buộc với gói có hạn mức theo hợp đồng",
             "example": 20,
             "minimum": 1,
             "maximum": 100000
-          },
-          "extraHomeVisits": {
-            "type": "number",
-            "description": "Số lượt khám tại nhà bổ sung điều chỉnh",
-            "example": 6,
-            "minimum": 0,
-            "maximum": 100
           },
           "packageId": {
             "type": "string",
@@ -7110,7 +7704,10 @@
             "description": "Lý do gửi yêu cầu chấm dứt hợp đồng y tế",
             "example": "Gia đình chuyển địa điểm sinh sống sang khu vực khác"
           }
-        }
+        },
+        "required": [
+          "reason"
+        ]
       },
       "DecideTerminationDto": {
         "type": "object",
@@ -7132,12 +7729,12 @@
           },
           "reason": {
             "type": "string",
-            "description": "Lý do từ chối hoặc giải trình",
-            "example": "Đã hoàn tất kiểm tra và đồng thuận chấm dứt"
+            "description": "Lý do từ chối, bắt buộc khi action là REJECT",
+            "example": "Hợp đồng còn nghĩa vụ chưa hoàn tất"
           },
           "termsHash": {
             "type": "string",
-            "description": "Mã băm điều khoản (SHA-256)",
+            "description": "Mã băm điều khoản (SHA-256), bắt buộc khi đồng thuận hoặc duyệt",
             "example": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
           }
         },
@@ -7163,11 +7760,6 @@
             "minimum": 1,
             "maximum": 12
           },
-          "facilityId": {
-            "type": "string",
-            "description": "UUID của cơ sở y tế cần lọc báo cáo doanh thu",
-            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
-          },
           "environment": {
             "type": "string",
             "enum": [
@@ -7189,6 +7781,11 @@
             "default": "PREPARE",
             "example": "PREPARE"
           },
+          "facilityId": {
+            "type": "string",
+            "description": "Lọc theo UUID cơ sở y tế khi lập bảng (PREPARE)",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
           "settlementId": {
             "type": "string",
             "description": "UUID của kỳ quyết toán (bắt buộc khi action khác PREPARE)",
@@ -7206,13 +7803,13 @@
           },
           "paidAt": {
             "type": "string",
-            "description": "Thời điểm chuyển tiền thành công theo chuẩn ISO8601",
+            "description": "Thời điểm chuyển tiền theo ISO 8601, có giờ, phút, giây và múi giờ",
             "example": "2026-11-10T08:00:00.000Z"
           },
           "evidenceKey": {
             "type": "string",
             "description": "Khóa tài liệu chứng từ ủy nhiệm chi ngân hàng lưu trữ",
-            "example": "settlements/unc_nov2026.pdf"
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6/settlements/unc_nov2026.pdf"
           },
           "failureReason": {
             "type": "string",
@@ -7223,6 +7820,34 @@
         "required": [
           "action"
         ]
+      },
+      "RunSePayReconciliationDto": {
+        "type": "object",
+        "properties": {
+          "environment": {
+            "type": "string",
+            "enum": [
+              "TEST",
+              "LIVE"
+            ],
+            "description": "Môi trường SePay cần đối soát",
+            "default": "LIVE"
+          },
+          "from": {
+            "type": "string",
+            "description": "Bắt đầu khoảng đối soát theo ISO 8601. Bỏ cả from/to để chạy tăng dần từ cursor.",
+            "example": "2026-10-01T00:00:00+07:00"
+          },
+          "to": {
+            "type": "string",
+            "description": "Kết thúc khoảng đối soát theo ISO 8601; bắt buộc đi cùng from, tối đa 31 ngày.",
+            "example": "2026-10-31T23:59:59+07:00"
+          }
+        }
+      },
+      "Object": {
+        "type": "object",
+        "properties": {}
       },
       "SubmitDoctorReviewDto": {
         "type": "object",
@@ -7314,7 +7939,7 @@
           },
           "notes": {
             "type": "string",
-            "description": "Ghi chú / kết luận xử lý khiếu nại",
+            "description": "Bắt buộc với FACILITY_RESPONSE và RESOLVE. Các bước mở hoặc đóng hồ sơ không cần ghi chú.",
             "example": "Đã nhắc nhở bác sĩ và sắp xếp lịch khám bù cho gia đình trong tuần này."
           },
           "outcome": {
@@ -7330,8 +7955,7 @@
           }
         },
         "required": [
-          "action",
-          "notes"
+          "action"
         ]
       },
       "UpdateProfileDto": {

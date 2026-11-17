@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { DoctorsServiceImpl } from '../services/impl/doctors.service.impl';
 import type { AuthenticatedUser } from '../../../core/auth/authenticated-request';
-import { FacilityVerificationStatus } from '@prisma/client';
+import { FacilityVerificationStatus, UserStatus } from '@prisma/client';
 
 describe('Facilities Onboarding Service (2-Stage Verification)', () => {
   let service: DoctorsServiceImpl;
@@ -160,7 +160,7 @@ describe('Facilities Onboarding Service (2-Stage Verification)', () => {
       expect(result).toBeDefined();
       expect(prismaService.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'fac-user-uuid-1' },
+          where: { id: 'fac-user-uuid-1', status: 'PENDING' },
           data: expect.objectContaining({
             status: 'ACTIVE',
           }),
@@ -307,6 +307,7 @@ describe('Facilities Onboarding Service (2-Stage Verification)', () => {
   describe('Stage 2 - Step 4: verifyFacilityLegal (Admin Duyệt Lần 2 - Hậu kiểm pháp lý)', () => {
     const readyFacility = {
       ...mockFacility,
+      user: { ...mockFacility.user, status: UserStatus.ACTIVE },
       licenseNumber: '01293/BYT-GPHĐ',
       taxCode: '0102030405',
       bankName: 'Vietcombank',

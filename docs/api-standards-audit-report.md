@@ -1,6 +1,6 @@
 # Báo Cáo Đánh Giá Toàn Diện Chuẩn Hóa API Famidoc Backend
 
-*Thời gian quét: 2026-11-11T06:12:25.148Z*  
+*Thời gian quét: 2026-11-13T10:30:35.927Z*
 *Quy chuẩn đối chiếu: `src/core/types/api-response.interface.ts` (Unified Envelope & RFC 9457 Problem Details)*
 
 ## 1. Cơ Sở Đánh Giá và Kiến Trúc Chuẩn Hóa
@@ -20,12 +20,12 @@ Hệ thống API Famidoc Backend được thiết kế tuân thủ mô hình 2 t
 | Tiêu chí đánh giá | Số lượng | Tỷ lệ (%) | Phân loại & Ý nghĩa |
 |---|---|---|---|
 | **Tổng số Controller đã quét** | `17` | 100% | Toàn bộ các controller production trong `src/` |
-| **Tổng số API Endpoints** | `89` | 100% | Các route HTTP (@Get, @Post, @Put, @Patch, @Delete) |
-| 🟢 **Full Compliant (Chuẩn toàn diện)** | `87` | `97.8%` | Hoàn thiện cả 3 tầng: Input DTO + Runtime Envelope + Swagger Decorator `@ApiStandardResponse` |
+| **Tổng số API Endpoints** | `93` | 100% | Các route HTTP (@Get, @Post, @Put, @Patch, @Delete) |
+| 🟢 **Full Compliant (Chuẩn toàn diện)** | `91` | `97.8%` | Hoàn thiện cả 3 tầng: Input DTO + Runtime Envelope + Swagger Decorator `@ApiStandardResponse` |
 | 🟡 **Runtime OK, Swagger Legacy Doc** | `0` | `0.0%` | Runtime tự động chuẩn hóa 100% qua Interceptor/Filter; tuy nhiên Swagger còn dùng `@ApiResponse` cũ |
 | 🔵 **Valid Bypass (Ngoại lệ hợp lệ)** | `2` | `2.2%` | Khai báo `@BypassTransform` hợp lệ theo yêu cầu kỹ thuật |
 | 🔴 **Needs Attention (Cần bổ sung DTO)** | `0` | `0.0%` | Endpoint thiếu lớp DTO xác thực payload |
-| 📦 **Đầu vào có DTO chuẩn xác thực** | `89` | `100.0%` | 100% endpoint nhận body đều có DTO kiểm duyệt hợp lệ |
+| 📦 **Đầu vào có DTO chuẩn xác thực** | `93` | `100.0%` | 100% endpoint nhận body đều có DTO kiểm duyệt hợp lệ |
 
 ## 3. Thống Kê Theo Phân Hệ (Modules)
 
@@ -38,11 +38,11 @@ Hệ thống API Famidoc Backend được thiết kế tuân thủ mô hình 2 t
 | **complaints** | 3 | 3 | 0 | 0 | 0 | 100% |
 | **contracts** | 22 | 22 | 0 | 0 | 0 | 100% |
 | **doctors** | 7 | 7 | 0 | 0 | 0 | 100% |
-| **finance** | 2 | 2 | 0 | 0 | 0 | 100% |
+| **finance** | 5 | 5 | 0 | 0 | 0 | 100% |
 | **notifications** | 3 | 3 | 0 | 0 | 0 | 100% |
 | **patients** | 8 | 8 | 0 | 0 | 0 | 100% |
 | **payments** | 9 | 7 | 0 | 2 | 0 | 100% |
-| **public** | 11 | 11 | 0 | 0 | 0 | 100% |
+| **public** | 12 | 12 | 0 | 0 | 0 | 100% |
 | **reviews** | 1 | 1 | 0 | 0 | 0 | 100% |
 | **users** | 3 | 3 | 0 | 0 | 0 | 100% |
 
@@ -104,6 +104,9 @@ Hệ thống API Famidoc Backend được thiết kế tuân thủ mô hình 2 t
 | **doctors** | `POST` | `/['api/v1/facilities/doctors', 'api/v1/facilities']/:id/doctors` | `provisionDoctorAccount` | `@Req req: AuthenticatedRequest`<br>`@Body dto: ProvisionDoctorDto` | `ApiSuccessResponse<T>` | ✅ `Auto-Enveloped (Swagger Pipeline)` | `HTTP 409` | 🟢 **Full Compliant** |
 | **finance** | `GET` | `/api/v1/finance/analytics` | `getRevenueAnalytics` | `@Req req: AuthenticatedRequest`<br>`@Query query: RevenueAnalyticsQueryDto` | `ApiSuccessResponse<T>` | ✅ `Auto-Enveloped (Swagger Pipeline)` | `HTTP 403` | 🟢 **Full Compliant** |
 | **finance** | `POST` | `/api/v1/finance/settlements/monthly` | `executeMonthlySettlement` | `@Req req: AuthenticatedRequest`<br>`@Body dto: MonthlySettlementDto` | `ApiSuccessResponse<T>` | ✅ `Auto-Enveloped (Swagger Pipeline)` | `HTTP 403` | 🟢 **Full Compliant** |
+| **finance** | `POST` | `/api/v1/finance/reconciliation/sepay` | `runSePayReconciliation` | `@Req req: AuthenticatedRequest`<br>`@Body dto: RunSePayReconciliationDto` | `ApiSuccessResponse<T>` | ✅ `Auto-Enveloped (Swagger Pipeline)` | *Filter RFC 9457* | 🟢 **Full Compliant** |
+| **finance** | `GET` | `/api/v1/finance/reconciliation/sepay` | `listSePayReconciliations` | `@Query query: SePayReconciliationQueryDto` | `ApiSuccessResponse<T>` | ✅ `Auto-Enveloped (Swagger Pipeline)` | *Filter RFC 9457* | 🟢 **Full Compliant** |
+| **finance** | `GET` | `/api/v1/finance/reconciliation/sepay/status` | `getSePayReconciliationStatus` | `@Query query: SePayReconciliationQueryDto` | `ApiSuccessResponse<T>` | ✅ `Auto-Enveloped (Swagger Pipeline)` | *Filter RFC 9457* | 🟢 **Full Compliant** |
 | **notifications** | `POST` | `/['api/v1/notifications', 'api/v1/me/notifications']/reminders/run` | `runExpiryReminders` | *None* | `ApiSuccessResponse<T>` | ✅ `Auto-Enveloped (Swagger Pipeline)` | *Filter RFC 9457* | 🟢 **Full Compliant** |
 | **notifications** | `GET` | `/['api/v1/notifications', 'api/v1/me/notifications']` | `getUserNotifications` | `@Req req: AuthenticatedRequest`<br>`@Query query: ListNotificationsDto` | `ApiSuccessResponse<T>` | ✅ `Auto-Enveloped (Swagger Pipeline)` | *Filter RFC 9457* | 🟢 **Full Compliant** |
 | **notifications** | `PATCH` | `/['api/v1/notifications', 'api/v1/me/notifications']/:id/read` | `markNotificationAsRead` | `@Req req: AuthenticatedRequest`<br>`@Param id: string` | `ApiSuccessResponse<T>` | ✅ `Auto-Enveloped (Swagger Pipeline)` | `HTTP 404` | 🟢 **Full Compliant** |
@@ -132,7 +135,8 @@ Hệ thống API Famidoc Backend được thiết kế tuân thủ mô hình 2 t
 | **public** | `GET` | `/api/v1/public/directory` | `lookupHealthcareFacilities` | `@Query query: LookupHealthcareFacilitiesDto` | `ApiSuccessResponse<T>` | ✅ `Auto-Enveloped (Swagger Pipeline)` | *Filter RFC 9457* | 🟢 **Full Compliant** |
 | **public** | `GET` | `/api/v1/public/facilities/:id` | `getPublicFacilityDetail` | `@Param id: string` | `ApiSuccessResponse<T>` | ✅ `Auto-Enveloped (Swagger Pipeline)` | `HTTP 404` | 🟢 **Full Compliant** |
 | **public** | `GET` | `/api/v1/public/doctors` | `lookupDoctorDirectory` | `@Query query: LookupDoctorDirectoryDto` | `ApiSuccessResponse<T>` | ✅ `@ApiStandardResponse` (PublicDoctorItemDto [Paginated]) | *Filter RFC 9457* | 🟢 **Full Compliant** |
-| **public** | `GET` | `/api/v1/public/doctors/:id` | `getPublicDoctorDetail` | `@Param id: string` | `ApiSuccessResponse<T>` | ✅ `@ApiStandardResponse` (PublicDoctorItemDto) | `HTTP 400`, `HTTP 404` | 🟢 **Full Compliant** |
+| **public** | `GET` | `/api/v1/public/doctors/:id` | `getPublicDoctorDetail` | `@Param id: string` | `ApiSuccessResponse<T>` | ✅ `@ApiStandardResponse` (PublicDoctorDetailDto) | `HTTP 400`, `HTTP 404` | 🟢 **Full Compliant** |
+| **public** | `GET` | `/api/v1/public/doctors/:id/reviews` | `getDoctorReviews` | `@Param id: string`<br>`@Query query: LookupDoctorReviewsQueryDto` | `ApiSuccessResponse<T>` | ✅ `@ApiStandardResponse` (PublicDoctorReviewItemDto [Paginated]) | `HTTP 400`, `HTTP 404` | 🟢 **Full Compliant** |
 | **public** | `POST` | `/api/v1/public/consultation-requests` | `submitConsultationRequest` | `@Body dto: SubmitConsultationRequestDto`<br>`@Req req: Request` | `ApiSuccessResponse<T>` | ✅ `Auto-Enveloped (Swagger Pipeline)` | `HTTP 400` | 🟢 **Full Compliant** |
 | **public** | `POST` | `/api/v1/public/inquiries` | `submitConsultationRequest` | `@Body dto: SubmitConsultationRequestDto`<br>`@Req req: Request` | `ApiSuccessResponse<T>` | ✅ `Auto-Enveloped (Swagger Pipeline)` | `HTTP 400` | 🟢 **Full Compliant** |
 | **reviews** | `POST` | `/api/v1/reviews/doctors` | `submitDoctorReview` | `@Req req: AuthenticatedRequest`<br>`@Body dto: SubmitDoctorReviewDto` | `ApiSuccessResponse<T>` | ✅ `Auto-Enveloped (Swagger Pipeline)` | `HTTP 400` | 🟢 **Full Compliant** |

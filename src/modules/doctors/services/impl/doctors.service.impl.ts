@@ -6,10 +6,12 @@ import {
   Injectable,
   NotFoundException,
   Optional,
+  ServiceUnavailableException,
 } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { hashSync } from 'bcryptjs';
 import { PrismaService } from '../../../../core/database/prisma.service';
+import { StorageService } from '../../../../core/services/storage.service';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
 import type { IDoctorsService } from '../interfaces/doctors.service.interface';
 import type { ProvisionDoctorDto } from '../../dtos/provision-doctor.dto';
@@ -33,6 +35,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
     @Optional()
     @Inject('MAILER_SERVICE')
     private readonly mailerService?: any,
+    private readonly storage?: StorageService,
   ) {}
 
   async provisionDoctorAccount(
@@ -822,19 +825,19 @@ export class DoctorsServiceImpl implements IDoctorsService {
       throw new NotFoundException('Không tìm thấy thông tin cơ sở y tế');
     }
 
-    if (facility.user.status === 'ACTIVE') {
+    if (facility.user.status !== 'PENDING') {
       throw new BadRequestException(
-        'Tài khoản cơ sở y tế này đã được kích hoạt trước đó',
+        'Chỉ xử lý cấp tài khoản đối với hồ sơ đăng ký đang chờ duyệt.',
       );
     }
 
-    const defaultInitialPassword = 'FamiDoc@Facility2026';
-    const passwordHash = hashSync(defaultInitialPassword, 10);
+    const defaultInitialPassword = dto.approved ? `Fd!${randomBytes(18).toString('base64url')}9` : '';
+    const passwordHash = dto.approved ? hashSync(defaultInitialPassword, 10) : undefined;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       if (dto.approved) {
         await tx.user.update({
-          where: { id: facility.userId },
+          where: { id: facility.userId, status: 'PENDING' },
           data: {
             passwordHash,
             status: 'ACTIVE',
@@ -875,7 +878,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
         }
       } else {
         await tx.user.update({
-          where: { id: facility.userId },
+          where: { id: facility.userId, status: 'PENDING' },
           data: { status: 'SUSPENDED' },
         });
 
@@ -892,6 +895,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
             resourceId: facilityId,
             clientIp: ip || '127.0.0.1',
             timestamp: new Date(),
+            details: { reason: dto.rejectionReason ?? null },
           },
         });
 
@@ -921,6 +925,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
     actor: AuthenticatedUser,
     dto: SubmitFacilityLegalProfileDto,
     ip: string,
+    file?: Express.Multer.File,
   ): Promise<FacilityResponseDto> {
     if (actor.role !== 'HEALTHCARE_FACILITY' && actor.role !== 'ADMIN') {
       throw new ForbiddenException(
@@ -928,7 +933,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
       );
     }
 
-    let facility = await this.prisma.healthcareFacility.findUnique({
+    const facility = await this.prisma.healthcareFacility.findUnique({
       where: { userId: actor.id },
       include: { user: true },
     });
@@ -971,9 +976,31 @@ export class DoctorsServiceImpl implements IDoctorsService {
       );
     }
 
+    let documentKey: string | undefined;
+    if (file) {
+      const bytes = file.buffer;
+      const pdf = bytes.subarray(0, 5).toString() === '%PDF-';
+      const png = bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'));
+      const jpeg = bytes.subarray(0, 3).equals(Buffer.from('ffd8ff', 'hex'));
+      if (!pdf && !png && !jpeg) {
+        throw new BadRequestException('Chỉ chấp nhận bản scan PDF, PNG hoặc JPEG.');
+      }
+      if (!this.storage) throw new ServiceUnavailableException('Kho lưu trữ chưa sẵn sàng.');
+      const type = pdf ? 'application/pdf' : png ? 'image/png' : 'image/jpeg';
+      const extension = pdf ? 'pdf' : png ? 'png' : 'jpg';
+      try {
+        documentKey = await this.storage.uploadFile(
+          { ...file, mimetype: type, originalname: `license.${extension}` },
+          `facility-legal/${facility.id}`,
+        );
+      } catch {
+        throw new ServiceUnavailableException('Không thể lưu bản scan hồ sơ pháp lý.');
+      }
+    }
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const fac = await tx.healthcareFacility.update({
-        where: { id: facility.id },
+        where: { id: facility.id, verificationStatus: { not: 'ACTIVE' } },
         data: {
           licenseNumber: dto.licenseNumber.trim(),
           taxCode: dto.taxCode.trim(),
@@ -983,6 +1010,11 @@ export class DoctorsServiceImpl implements IDoctorsService {
           bankAccountHolder: dto.bankAccountHolder.trim(),
           facilityName: dto.facilityName?.trim() || facility.facilityName,
           address: dto.address?.trim() || facility.address,
+          legalDocumentsUrl: documentKey ? null : dto.legalDocumentsUrl,
+          legalDocumentKey: dto.legalDocumentsUrl && !documentKey ? null : documentKey,
+          licenseIssuer: dto.licenseIssuer?.trim(),
+          licenseDate: dto.licenseDate ? new Date(dto.licenseDate) : undefined,
+          legalRejectionReason: null,
           verificationStatus: 'PENDING',
           updatedAt: new Date(),
         },
@@ -1019,7 +1051,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
       return fac;
     });
 
-    return this.formatFacility(updated, dto.legalDocumentsUrl);
+    return this.formatFacility(updated);
   }
 
   async verifyFacilityLegal(
@@ -1058,11 +1090,14 @@ export class DoctorsServiceImpl implements IDoctorsService {
         'Cơ sở y tế đã ở trạng thái ACTIVE, không cần thẩm định lại',
       );
     }
+    if (facility.user?.status !== 'ACTIVE' || facility.legalRejectionReason) {
+      throw new ConflictException('CSYT cần có tài khoản đang hoạt động và hồ sơ mới chờ hậu kiểm.');
+    }
 
     const updated = await this.prisma.$transaction(async (tx) => {
       if (dto.approved) {
         const fac = await tx.healthcareFacility.update({
-          where: { id: facilityId },
+          where: { id: facilityId, updatedAt: facility.updatedAt },
           data: {
             verificationStatus: 'ACTIVE',
             updatedAt: new Date(),
@@ -1106,6 +1141,12 @@ export class DoctorsServiceImpl implements IDoctorsService {
 
         return fac;
       } else {
+        const reason = dto.rejectionReason || 'Thông tin giấy phép hoặc mã số thuế không hợp lệ';
+        const fac = await tx.healthcareFacility.update({
+          where: { id: facilityId, updatedAt: facility.updatedAt },
+          data: { legalRejectionReason: reason, updatedAt: new Date() },
+          include: { user: true },
+        });
         await tx.auditLog.create({
           data: {
             actorUserId: actor.id,
@@ -1114,6 +1155,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
             resourceId: facilityId,
             clientIp: ip || '127.0.0.1',
             timestamp: new Date(),
+            details: { reason },
           },
         });
 
@@ -1127,10 +1169,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
           },
         });
 
-        return tx.healthcareFacility.findUnique({
-          where: { id: facilityId },
-          include: { user: true },
-        });
+        return fac;
       }
     });
 
@@ -1156,6 +1195,16 @@ export class DoctorsServiceImpl implements IDoctorsService {
     }
 
     return this.formatFacility(facility);
+  }
+
+  async getFacilityLegalDocument(facilityId: string) {
+    const facility = await this.prisma.healthcareFacility.findUnique({
+      where: { id: facilityId },
+      select: { legalDocumentKey: true },
+    });
+    if (!facility?.legalDocumentKey) throw new NotFoundException('CSYT chưa có bản scan hồ sơ.');
+    if (!this.storage) throw new ServiceUnavailableException('Kho lưu trữ chưa sẵn sàng.');
+    return this.storage.downloadFile(facility.legalDocumentKey);
   }
 
   async listFacilitiesForAdmin(
@@ -1214,7 +1263,6 @@ export class DoctorsServiceImpl implements IDoctorsService {
 
   private formatFacility(
     facility: any,
-    legalDocumentsUrl?: string | null,
   ): FacilityResponseDto {
     return {
       id: facility.id,
@@ -1228,7 +1276,11 @@ export class DoctorsServiceImpl implements IDoctorsService {
       bankAccountNumber: facility.bankAccountNumber,
       bankAccountHolder: facility.bankAccountHolder,
       verificationStatus: facility.verificationStatus,
-      legalDocumentsUrl: legalDocumentsUrl ?? null,
+      legalDocumentsUrl: facility.legalDocumentsUrl ?? null,
+      hasLegalDocument: Boolean(facility.legalDocumentKey),
+      licenseIssuer: facility.licenseIssuer ?? null,
+      licenseDate: facility.licenseDate ?? null,
+      legalRejectionReason: facility.legalRejectionReason ?? null,
       createdAt: facility.createdAt,
       updatedAt: facility.updatedAt,
       ...(facility.user

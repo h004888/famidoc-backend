@@ -217,6 +217,12 @@ describe('ContractsServiceImpl - Staffing Contracts', () => {
       signatureHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
     };
 
+    it('rejects activation without a signed document URL', async () => {
+      await expect(service.signStaffingContract(adminUser, 'stf-uuid-1', {}, '127.0.0.1'))
+        .rejects.toThrow(BadRequestException);
+      expect(sessionMock.updateStaffingContractStatus).not.toHaveBeenCalled();
+    });
+
     it('should allow ADMIN to sign and activate staffing contract', async () => {
       const result = await service.signStaffingContract(
         adminUser,

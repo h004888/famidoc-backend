@@ -2,6 +2,10 @@ import type { AuthenticatedUser } from '../../../../core/auth/authenticated-requ
 import type { ListTransactionsDto } from '../../dtos/list-transactions.dto';
 import type { SePayWebhookDto } from '../../dtos/sepay-webhook.dto';
 import type {
+  ReconciledPaymentResult,
+  SePayApiTransaction,
+} from '../../sepay/sepay-api.types';
+import type {
   ActivationResult,
   PaymentRequest,
   PaymentTransactionResult,
@@ -20,6 +24,10 @@ export interface IPaymentsService {
   cancelRequest(id: string, actor?: AuthenticatedUser): Promise<PaymentRequest>;
   listTransactions(query: ListTransactionsDto): Promise<unknown>;
   handleVietQRWebhook(dto: SePayWebhookDto): Promise<PaymentTransactionResult>;
+  handleSePayApiTransaction(
+    transaction: SePayApiTransaction,
+    reconciliationRunId: string,
+  ): Promise<ReconciledPaymentResult>;
   tryActivate(
     contractId: string,
     addendumId?: string,

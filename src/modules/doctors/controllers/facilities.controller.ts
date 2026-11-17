@@ -8,10 +8,13 @@ import {
   Post,
   Put,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -89,6 +92,7 @@ export class FacilitiesController {
   }
 
   @Put('me/legal-profile')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('HEALTHCARE_FACILITY')
   @ApiBearerAuth('JWT-auth')
@@ -113,11 +117,13 @@ export class FacilitiesController {
   submitMyLegalProfile(
     @Req() req: AuthenticatedRequest,
     @Body() dto: SubmitFacilityLegalProfileDto,
+    @UploadedFile() file?: Express.Multer.File,
   ): Promise<FacilityResponseDto> {
     return this.service.submitFacilityLegalProfile(
       req.user,
       dto,
       req.ip ?? 'unknown',
+      file,
     );
   }
 }

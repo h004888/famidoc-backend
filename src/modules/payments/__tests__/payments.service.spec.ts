@@ -9,6 +9,7 @@ import { CarePackagesServiceImpl } from '../../care-packages/services/impl/care-
 import { QuotaPeriod } from '../../care-packages/entities/care-package.entity';
 import { InMemoryCarePackagesRepository } from '../../care-packages/repositories/impl/in-memory-care-packages.repository';
 import type { SePayWebhookDto } from '../dtos/sepay-webhook.dto';
+import type { SePayApiTransaction } from '../sepay/sepay-api.types';
 import {
   BillingContractStatus,
   PaymentRequestStatus,
@@ -130,6 +131,29 @@ describe('PaymentsServiceImpl (simulation)', () => {
       transferType: 'in',
       transferAmount: payment.amountVnd,
       referenceCode: 'TEST_REF_1',
+      ...overrides,
+    };
+  }
+
+  function apiTransaction(
+    payment: PaymentRequest,
+    overrides: Partial<SePayApiTransaction> = {},
+  ): SePayApiTransaction {
+    return {
+      id: randomUUID(),
+      transaction_date: now.toISOString(),
+      account_number: payment.expectedAccountNumber,
+      amount_in: payment.amountVnd,
+      amount_out: 0,
+      accumulated: payment.amountVnd,
+      transaction_content: payment.transferContent ?? payment.paymentCode,
+      reference_number: 'TEST_REF_1',
+      code: payment.paymentCode,
+      bank_brand_name: payment.expectedGateway,
+      bank_account_id: randomUUID(),
+      va_id: null,
+      webhook_success: 1,
+      transfer_type: 'in',
       ...overrides,
     };
   }
@@ -616,6 +640,38 @@ describe('PaymentsServiceImpl (simulation)', () => {
     const result = await service.getPaymentStatus(payment.id);
     expect(result.transferContent).toBe(
       `NGUYEN HOAI NAM - ${payment.paymentCode}`,
+    );
+  });
+
+  it('links the API v2 UUID to a transaction already received by webhook', async () => {
+    const payment = await pendingPayment();
+    await service.handleVietQRWebhook(payload(payment));
+    const remote = apiTransaction(payment);
+    const result = await service.handleSePayApiTransaction(
+      remote,
+      randomUUID(),
+    );
+    expect(result).toMatchObject({ duplicate: true, linked: true });
+    expect(result.transaction.sepayApiTransactionId).toBe(remote.id);
+    expect(result.transaction.reconciledAt).not.toBeNull();
+    expect((await service.listTransactions({ page: 1, limit: 20 })).total).toBe(
+      1,
+    );
+  });
+
+  it('backfills a missed webhook from API v2 and deduplicates a late webhook', async () => {
+    const payment = await pendingPayment();
+    const remote = apiTransaction(payment);
+    const backfilled = await service.handleSePayApiTransaction(
+      remote,
+      randomUUID(),
+    );
+    expect(backfilled).toMatchObject({ duplicate: false, linked: false });
+    expect(backfilled.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    const lateWebhook = await service.handleVietQRWebhook(payload(payment));
+    expect(lateWebhook.duplicate).toBe(true);
+    expect((await service.listTransactions({ page: 1, limit: 20 })).total).toBe(
+      1,
     );
   });
 });

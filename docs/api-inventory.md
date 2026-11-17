@@ -1,7 +1,7 @@
 # Danh Mục Toàn Bộ API Backend (FamiDoc API Inventory)
 
-> **Tổng số Endpoint:** 110 APIs
-> **Số phân hệ (Tags):** 18 phân hệ
+> **Tổng số Endpoint:** 124 APIs
+> **Số phân hệ (Tags):** 20 phân hệ
 > **Swagger UI:** `/docs` hoặc `/api/docs`
 > **OpenAPI JSON Spec:** `openapi.json` (`/docs-json`)
 
@@ -154,12 +154,15 @@
 | `PUT` | `/api/v1/contracts/{id}/addendums/{addendumId}/sign` | Ký xác nhận phụ lục hợp đồng |
 | `PUT` | `/api/v1/contracts/{id}/sign-upgrade` | Ký xác nhận hợp đồng nâng cấp gói chăm sóc |
 
-### Finance (2 APIs)
+### Finance (5 APIs)
 
 | Method | Endpoint | Mô tả / Nghiệp vụ |
 | :--- | :--- | :--- |
 | `GET` | `/api/v1/finance/analytics` | Báo cáo phân tích doanh thu và tỷ lệ phân chia |
 | `POST` | `/api/v1/finance/settlements/monthly` | Thực thi quyết toán doanh thu định kỳ hàng tháng cho cơ sở y tế |
+| `POST` | `/api/v1/finance/reconciliation/sepay` | Đối soát giao dịch với SePay API v2 và tự bù webhook bị bỏ lỡ |
+| `GET` | `/api/v1/finance/reconciliation/sepay` | Xem lịch sử các lượt đối soát SePay |
+| `GET` | `/api/v1/finance/reconciliation/sepay/status` | Xem trạng thái và số giao dịch chưa đối soát |
 
 ### Reviews (1 APIs)
 
