@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import {
   Prisma,
+  type ContractDocumensoSigner,
   type SignerRole,
   type ContractSignature,
 } from '@prisma/client';
@@ -60,7 +61,11 @@ import type { CareNeedsSummaryDto, PatientCareSummaryDto } from '../../dtos/care
 import { ContractDocumentRendererService } from '../contract-document-renderer.service';
 import { ContractPaymentNoticeService } from '../contract-payment-notice.service';
 import { ContractPdfRendererService } from '../contract-pdf-renderer.service';
-import { DocumensoClientService } from '../documenso-client.service';
+import {
+  DocumensoClientService,
+  type DocumensoEnvelopeCreatedResult,
+  type DocumensoRecipientInput,
+} from '../documenso-client.service';
 import { DocumensoSyncService } from '../documenso-sync.service';
 import {
   isSignedPdfReady,
@@ -299,19 +304,7 @@ export class ContractsServiceImpl implements IContractsService {
         additionalTerms: dto.additionalTerms,
       };
 
-      // Guard chặn dữ liệu thử nghiệm (DEMO / .invalid) ở thông tin 4 bên:
-      // khi bật chế độ nghiêm ngặt thì từ chối khởi tạo TRƯỚC khi render PDF
-      // và gọi Documenso để không phát hành hợp đồng pháp lý chứa dữ liệu mẫu.
-      if (isStrictRealPartyMode()) {
-        const validation = validateRealPartyContractData(
-          buildDocumensoContractFieldValues(contractInput),
-        );
-        if (!validation.valid) {
-          throw new BadRequestException(
-            `Thông tin các bên hợp đồng chứa dữ liệu thử nghiệm chưa hợp lệ: ${validation.issues.join('; ')}`,
-          );
-        }
-      }
+      this.assertRealPartyDataIfStrict(contractInput);
 
       return {
         targetFamilyId,
@@ -333,9 +326,7 @@ export class ContractsServiceImpl implements IContractsService {
     const persistContract = async (
       session: ContractsSession,
       prepared: Awaited<ReturnType<typeof validateAndPrepare>>,
-      documensoEnvelope: Awaited<
-        ReturnType<DocumensoClientService['createFourPartyEnvelope']>
-      > | null,
+      documensoEnvelope: DocumensoEnvelopeCreatedResult | null,
     ): Promise<ContractSummary> => {
       // Hủy nguyên tử hợp đồng cũ ngay trước khi tạo mới để không sinh bản nháp trùng.
       if (dto.replaceContractId) {
@@ -375,16 +366,11 @@ export class ContractsServiceImpl implements IContractsService {
         documensoItemId: documensoEnvelope?.envelopeItemId ?? null,
       });
 
-      if (documensoEnvelope && session.saveDocumensoSigners) {
-        await session.saveDocumensoSigners(
-          documensoEnvelope.signers.map((signer) => ({
-            contractId: item.id,
-            signerRole: signer.role,
-            documensoRecipientId: signer.recipientId,
-            documensoToken: signer.token,
-            documensoSigningUrl: signer.signingUrl,
-            status: 'PENDING',
-          })),
+      if (documensoEnvelope) {
+        await this.saveDocumensoSignersForContract(
+          session,
+          item.id,
+          documensoEnvelope.signers,
         );
       }
 
@@ -423,63 +409,19 @@ export class ContractsServiceImpl implements IContractsService {
     }
 
     const prepared = await this.repository.transaction(validateAndPrepare);
-    const contractHtml = buildDocumensoContractHtml(prepared.contractInput);
-
-    const pdfRenderer = this.pdfRenderer || new ContractPdfRendererService();
-    const pdfBuffer = await pdfRenderer.renderPdf(contractHtml);
-
-    const facMeta = prepared.facility as {
-      email?: string;
-      representativeName?: string;
-      user?: { email?: string; fullName?: string };
-    };
-    const documensoEnvelope =
-      await this.documensoClient.createFourPartyEnvelope({
-        contractId: prepared.contractNumber,
-        contractNumber: prepared.contractNumber,
-        pdfBuffer,
-        recipients: [
-          {
-            role: 'FAMILY_REP',
-            email:
-              prepared.family.representativeUser?.email ||
-              `family-${prepared.targetFamilyId.slice(0, 8)}@famidoc.local`,
-            name:
-              prepared.family.representativeUser?.fullName ||
-              'Đại diện Hộ gia đình',
-            externalId: prepared.family.representativeUserId,
-          },
-          {
-            role: 'HEALTHCARE_FACILITY',
-            email:
-              facMeta.email ||
-              facMeta.user?.email ||
-              `facility-${prepared.facility.id.slice(0, 8)}@famidoc.local`,
-            name:
-              facMeta.representativeName ||
-              facMeta.user?.fullName ||
-              prepared.facility.facilityName,
-            externalId: prepared.facility.userId,
-          },
-          {
-            role: 'ASSIGNED_DOCTOR',
-            email:
-              prepared.doctor?.user?.email ||
-              `doctor-${(prepared.doctor?.id || prepared.facility.id).slice(0, 8)}@famidoc.local`,
-            name:
-              prepared.doctor?.doctorName ||
-              prepared.doctor?.user?.fullName ||
-              'Bác sĩ Gia đình phụ trách',
-            externalId: prepared.doctor?.userId,
-          },
-          {
-            role: 'ADMIN',
-            email: prepared.admin?.email || 'admin@famidoc.online',
-            name: prepared.admin?.fullName || 'Ban Quản trị FamiDoc',
-            externalId: prepared.admin?.id,
-          },
-        ],
-      });
+    const recipients = this.buildDocumensoRecipients({
+      family: prepared.family,
+      facility: prepared.facility,
+      doctor: prepared.doctor,
+      admin: prepared.admin,
+      familyId: prepared.targetFamilyId,
+      facilityId: prepared.facility.id,
+    });
+    const documensoEnvelope = await this.provisionDocumensoEnvelope(
+      prepared.contractNumber,
+      prepared.contractInput,
+      recipients,
+    );
 
     let created: ContractSummary;
     try {
@@ -487,11 +429,7 @@ export class ContractsServiceImpl implements IContractsService {
         persistContract(session, prepared, documensoEnvelope),
       );
     } catch (error) {
-      if (documensoEnvelope?.envelopeId) {
-        await this.documensoClient.deleteEnvelope?.(
-          documensoEnvelope.envelopeId,
-        );
-      }
+      await this.deleteEnvelopeSafely(documensoEnvelope.envelopeId);
       throw error;
     }
     await this.deleteEnvelopeSafely(replacedEnvelopeId);
@@ -641,7 +579,7 @@ export class ContractsServiceImpl implements IContractsService {
   }
 
   private async deleteEnvelopeSafely(envelopeId?: string | null) {
-    if (!envelopeId || !this.documensoClient) return;
+    if (!envelopeId || !this.documensoClient?.deleteEnvelope) return;
     try {
       await this.documensoClient.deleteEnvelope(envelopeId);
     } catch (error) {
@@ -1545,18 +1483,20 @@ export class ContractsServiceImpl implements IContractsService {
     });
   }
   // Chỉ mở kỳ mới khi hợp đồng cũ đã hết hạn hoặc được duyệt chấm dứt.
-  createPackageUpgradeContract(
+  async createPackageUpgradeContract(
     actor: AuthenticatedUser,
     id: string,
     dto: CreatePackageUpgradeDto,
-  ) {
-    return this.repository.transaction(async (session) => {
+  ): Promise<ContractSummary> {
+    const today = todayInVietnam();
+    const shouldProvisionDocumenso = this.isDocumensoConfigured();
+
+    const firstPass = await this.repository.transaction(async (session) => {
       const old = await this.requirePartyContract(session, id, actor);
       if (!['FAMILY_REP', 'ADMIN'].includes(actor.role))
         throw new ForbiddenException(
           'Only the family or Admin can request a replacement contract',
         );
-      const today = todayInVietnam();
       if (
         !['EXPIRED', 'TERMINATED'].includes(old.contractStatus) &&
         old.endDate > today
@@ -1568,10 +1508,7 @@ export class ContractsServiceImpl implements IContractsService {
         throw new ConflictException(
           'An unsigned/unpaid contract cannot be used for renewal or upgrade',
         );
-      if (old.contractStatus === 'ACTIVE') {
-        await session.updateContractStatus(old.id, 'EXPIRED');
-        if (old.doctorId) await session.refreshDoctorPanel(old.doctorId);
-      }
+
       const existing = await session.findOpenUpgrade(id);
       if (existing) {
         const familyCount = await session.countFamilyMembers(old.familyId);
@@ -1592,8 +1529,20 @@ export class ContractsServiceImpl implements IContractsService {
           throw new ConflictException(
             'A replacement contract with different video terms is already pending',
           );
-        return this.toContractSummary(existing);
+        return {
+          kind: 'DONE' as const,
+          summary: {
+            ...this.toContractSummary(existing),
+            documensoEnvelopeId:
+              (existing as { documensoEnvelopeId?: string | null })
+                .documensoEnvelopeId ?? null,
+            documensoItemId:
+              (existing as { documensoItemId?: string | null })
+                .documensoItemId ?? null,
+          },
+        };
       }
+
       if (await session.hasOtherActiveContract(old.familyId, old.id))
         throw new ConflictException(
           'The family already has another active contract',
@@ -1663,9 +1612,55 @@ export class ContractsServiceImpl implements IContractsService {
         pricing: quote.pricing,
         benefits: quote.benefits,
       };
+      const contractNumber =
+        'MC' + randomUUID().replaceAll('-', '').toUpperCase();
+
+      if (!old.isDemo && shouldProvisionDocumenso) {
+        const parties = await this.loadContractParties(session, old);
+        const contractInput: BuildDocumensoContractHtmlInput = {
+          contractNumber,
+          durationMonths: pkg.durationMonths,
+          pkg,
+          pricing: {
+            basePriceVnd: quote.pricing.basePriceVnd,
+            additionalMemberTotalVnd: quote.pricing.additionalMembersTotalVnd,
+            additionalMemberUnitPriceVnd: moneyToNumber(
+              pkg.additionalMemberMonthlyPrice,
+            ),
+            totalPriceVnd: quote.pricing.totalPriceVnd,
+          },
+          memberCount,
+          family: parties.family,
+          facility: parties.facility,
+          doctor: parties.doctor,
+          admin: parties.admin,
+        };
+        this.assertRealPartyDataIfStrict(contractInput);
+        const recipients = this.buildDocumensoRecipients({
+          ...parties,
+          familyId: old.familyId,
+          facilityId: old.facilityId,
+        });
+        return {
+          kind: 'PROVISION' as const,
+          old,
+          pkg,
+          quote,
+          snapshot,
+          memberCount,
+          contractNumber,
+          contractInput,
+          recipients,
+        };
+      }
+
+      if (old.contractStatus === 'ACTIVE') {
+        await session.updateContractStatus(old.id, 'EXPIRED');
+        if (old.doctorId) await session.refreshDoctorPanel(old.doctorId);
+      }
       // Hợp đồng mới bắt đầu kỳ mới. Không cộng tiền, ngày hay lượt chưa dùng của hợp đồng cũ.
       const item = await session.createUpgrade({
-        contractNumber: 'MC' + randomUUID().replaceAll('-', '').toUpperCase(),
+        contractNumber,
         familyId: old.familyId,
         facilityId: old.facilityId,
         doctorId: old.doctorId,
@@ -1687,8 +1682,122 @@ export class ContractsServiceImpl implements IContractsService {
         'CREATE_PACKAGE_UPGRADE_CONTRACT',
         item.id,
       );
-      return this.toContractSummary(item);
+      return { kind: 'DONE' as const, summary: this.toContractSummary(item) };
     });
+
+    if (firstPass.kind === 'DONE') {
+      return firstPass.summary;
+    }
+
+    const documensoEnvelope = await this.provisionDocumensoEnvelope(
+      firstPass.contractNumber,
+      firstPass.contractInput,
+      firstPass.recipients,
+    );
+
+    try {
+      return await this.repository.transaction(async (session) => {
+        const old = await this.requirePartyContract(session, id, actor);
+        if (
+          !['EXPIRED', 'TERMINATED'].includes(old.contractStatus) &&
+          old.endDate > today
+        ) {
+          throw new ConflictException(
+            'The old contract must expire or complete approved early termination first',
+          );
+        }
+        if (!['ACTIVE', 'EXPIRED', 'TERMINATED'].includes(old.contractStatus)) {
+          throw new ConflictException(
+            'An unsigned/unpaid contract cannot be used for renewal or upgrade',
+          );
+        }
+        if (old.isDemo) {
+          throw new ConflictException(
+            'Cannot attach Documenso envelope to demo contract',
+          );
+        }
+        const existing = await session.findOpenUpgrade(id);
+        if (existing) {
+          throw new ConflictException(
+            'A different replacement contract is already pending',
+          );
+        }
+        if (await session.hasOtherActiveContract(old.familyId, old.id)) {
+          throw new ConflictException(
+            'The family already has another active contract',
+          );
+        }
+        const pkg = await session.findPackage(dto.packageId);
+        if (!pkg || pkg.status !== 'ACTIVE' || pkg.deletedAt) {
+          throw new NotFoundException('Active package not found');
+        }
+        const memberCount = await session.countFamilyMembers(old.familyId);
+        if (memberCount < 1) {
+          throw new BadRequestException(
+            'The family has no active member profiles',
+          );
+        }
+        if (memberCount !== firstPass.memberCount) {
+          throw new ConflictException(
+            'Family member count changed while creating replacement contract',
+          );
+        }
+        if (old.contractStatus === 'ACTIVE') {
+          await session.updateContractStatus(old.id, 'EXPIRED');
+          if (old.doctorId) await session.refreshDoctorPanel(old.doctorId);
+        }
+
+        const item = await session.createUpgrade({
+          contractNumber: firstPass.contractNumber,
+          familyId: old.familyId,
+          facilityId: old.facilityId,
+          doctorId: old.doctorId,
+          packageId: firstPass.pkg.id,
+          totalAmount: firstPass.quote.pricing.totalPriceVnd,
+          remainingHomeVisits: firstPass.pkg.periodicVisitsQuota,
+          remainingTelehealth:
+            firstPass.quote.benefits.quotas.videoConsultations,
+          startDate: today,
+          endDate: addContractMonths(today, firstPass.pkg.durationMonths),
+          contractStatus: 'PENDING_APPROVAL',
+          billingSnapshot:
+            firstPass.snapshot as unknown as Prisma.InputJsonValue,
+          memberCount: firstPass.memberCount,
+          isDemo: old.isDemo,
+          upgradedFromId: old.id,
+          documensoEnvelopeId: documensoEnvelope.envelopeId,
+          documensoItemId: documensoEnvelope.envelopeItemId,
+        });
+
+        await this.saveDocumensoSignersForContract(
+          session,
+          item.id,
+          documensoEnvelope.signers,
+        );
+
+        await session.recordChange(
+          actor.id,
+          item,
+          'CREATE_PACKAGE_UPGRADE_CONTRACT',
+          item.id,
+        );
+
+        const familySigner = documensoEnvelope.signers.find(
+          (s) => s.role === 'FAMILY_REP',
+        );
+
+        return {
+          ...this.toContractSummary(item),
+          documensoEnvelopeId: documensoEnvelope.envelopeId,
+          documensoItemId: documensoEnvelope.envelopeItemId,
+          signingToken: familySigner?.token ?? null,
+          signingUrl: familySigner?.signingUrl ?? null,
+        };
+      });
+    } catch (error) {
+      await this.deleteEnvelopeSafely(documensoEnvelope.envelopeId);
+      throw error;
+    }
   }
   getContractChangeTerms(
     actor: AuthenticatedUser,
@@ -2099,53 +2208,498 @@ export class ContractsServiceImpl implements IContractsService {
     }
   }
 
+  private isDocumensoConfigured(): boolean {
+    if (!this.documensoClient) return false;
+    return typeof this.documensoClient.isConfigured === 'function'
+      ? this.documensoClient.isConfigured()
+      : true;
+  }
+
+  private assertRealPartyDataIfStrict(
+    contractInput: BuildDocumensoContractHtmlInput,
+  ) {
+    // Guard chặn dữ liệu thử nghiệm (DEMO / .invalid) ở thông tin 4 bên:
+    // khi bật chế độ nghiêm ngặt thì từ chối khởi tạo TRƯỚC khi render PDF
+    // và gọi Documenso để không phát hành hợp đồng pháp lý chứa dữ liệu mẫu.
+    if (!isStrictRealPartyMode()) return;
+    const validation = validateRealPartyContractData(
+      buildDocumensoContractFieldValues(contractInput),
+    );
+    if (!validation.valid) {
+      throw new BadRequestException(
+        `Thông tin các bên hợp đồng chứa dữ liệu thử nghiệm chưa hợp lệ: ${validation.issues.join('; ')}`,
+      );
+    }
+  }
+
+  private async loadContractParties(
+    session: ContractsSession,
+    contract: ChangeContract,
+  ) {
+    const family =
+      (contract.familyUnit as { representativeUser?: unknown })
+        ?.representativeUser
+        ? contract.familyUnit
+        : (await session.findFamilyById?.(contract.familyId)) ??
+          contract.familyUnit;
+    const facility =
+      (contract.facility as { user?: unknown })?.user
+        ? contract.facility
+        : (await session.findFacilityById?.(contract.facilityId)) ??
+          contract.facility;
+    const doctor = !contract.doctorId
+      ? null
+      : (await session.findDoctorById?.(contract.doctorId)) ??
+        contract.doctor ??
+        null;
+    const admin = (await session.findFirstActiveAdminUser?.()) ?? null;
+    return { family, facility, doctor, admin };
+  }
+
+  private buildDocumensoRecipients(params: {
+    family: any;
+    facility: any;
+    doctor: any;
+    admin: { id?: string; email?: string | null; fullName?: string | null } | null;
+    familyId: string;
+    facilityId: string;
+  }): DocumensoRecipientInput[] {
+    const { family, facility, doctor, admin, familyId, facilityId } = params;
+    const facMeta = facility as {
+      email?: string;
+      representativeName?: string;
+      user?: { email?: string; fullName?: string };
+    };
+    return [
+      {
+        role: 'FAMILY_REP',
+        email:
+          family?.representativeUser?.email ||
+          `family-${familyId.slice(0, 8)}@famidoc.local`,
+        name:
+          family?.representativeUser?.fullName || 'Đại diện Hộ gia đình',
+        externalId: family?.representativeUserId,
+      },
+      {
+        role: 'HEALTHCARE_FACILITY',
+        email:
+          facMeta?.email ||
+          facMeta?.user?.email ||
+          `facility-${facilityId.slice(0, 8)}@famidoc.local`,
+        name:
+          facMeta?.representativeName ||
+          facMeta?.user?.fullName ||
+          facility?.facilityName ||
+          'Cơ sở Y tế phối hợp',
+        externalId: facility?.userId,
+      },
+      {
+        role: 'ASSIGNED_DOCTOR',
+        email:
+          doctor?.user?.email ||
+          `doctor-${(doctor?.id || facilityId).slice(0, 8)}@famidoc.local`,
+        name:
+          doctor?.doctorName ||
+          doctor?.user?.fullName ||
+          'Bác sĩ Gia đình phụ trách',
+        externalId: doctor?.userId,
+      },
+      {
+        role: 'ADMIN',
+        email: admin?.email || 'admin@famidoc.online',
+        name: admin?.fullName || 'Ban Quản trị FamiDoc',
+        externalId: admin?.id,
+      },
+    ];
+  }
+
+  private buildContractInputFromContract(
+    contract: ChangeContract,
+    parties: { family: any; facility: any; doctor: any; admin: any },
+  ): BuildDocumensoContractHtmlInput {
+    const pkg = contract.servicePackage;
+    const snapshot = (contract.billingSnapshot ?? {}) as {
+      pricing?: {
+        basePriceVnd?: number;
+        additionalMembersTotalVnd?: number;
+        additionalMemberTotalVnd?: number;
+        totalPriceVnd?: number;
+      };
+    };
+    const totalPriceVnd =
+      snapshot.pricing?.totalPriceVnd ?? moneyToNumber(contract.totalAmount);
+    const basePriceVnd =
+      snapshot.pricing?.basePriceVnd ?? moneyToNumber(pkg.basePrice);
+    const additionalMemberTotalVnd =
+      snapshot.pricing?.additionalMembersTotalVnd ??
+      snapshot.pricing?.additionalMemberTotalVnd ??
+      Math.max(0, totalPriceVnd - basePriceVnd);
+
+    return {
+      contractNumber: contract.contractNumber,
+      durationMonths: pkg.durationMonths,
+      pkg,
+      pricing: {
+        basePriceVnd,
+        additionalMemberTotalVnd,
+        additionalMemberUnitPriceVnd: moneyToNumber(
+          pkg.additionalMemberMonthlyPrice,
+        ),
+        totalPriceVnd,
+      },
+      memberCount: contract.memberCount,
+      family: parties.family,
+      facility: parties.facility,
+      doctor: parties.doctor,
+      admin: parties.admin,
+      additionalTerms:
+        (contract as { additionalTerms?: string | null }).additionalTerms ??
+        null,
+    };
+  }
+
+  private async provisionDocumensoEnvelope(
+    contractNumber: string,
+    contractInput: BuildDocumensoContractHtmlInput,
+    recipients: DocumensoRecipientInput[],
+  ): Promise<DocumensoEnvelopeCreatedResult> {
+    const contractHtml = buildDocumensoContractHtml(contractInput);
+    const pdfRenderer = this.pdfRenderer || new ContractPdfRendererService();
+    const pdfBuffer = await pdfRenderer.renderPdf(contractHtml);
+    return this.documensoClient!.createFourPartyEnvelope({
+      contractId: contractNumber,
+      contractNumber,
+      pdfBuffer,
+      recipients,
+    });
+  }
+
+  private async saveDocumensoSignersForContract(
+    session: ContractsSession,
+    contractId: string,
+    signers: DocumensoEnvelopeCreatedResult['signers'],
+  ) {
+    if (!session.saveDocumensoSigners || !signers.length) return;
+    await session.saveDocumensoSigners(
+      signers.map((signer) => ({
+        contractId,
+        signerRole: signer.role,
+        documensoRecipientId: signer.recipientId,
+        documensoToken: signer.token,
+        documensoSigningUrl: signer.signingUrl,
+        status: 'PENDING',
+      })),
+    );
+  }
+
+  private buildSigningSessionResponse(params: {
+    contract: ChangeContract;
+    role: SignerRole;
+    signedRoles: SignerRole[];
+    canSign: boolean;
+    signingToken: string | null;
+    signingUrl: string | null;
+  }) {
+    const { contract, role, signedRoles, canSign, signingToken, signingUrl } =
+      params;
+    const alreadySigned = signedRoles.includes(role);
+    const itemId = (contract as { documensoItemId?: string | null })
+      .documensoItemId;
+
+    return {
+      contractId: contract.id,
+      contractNumber: contract.contractNumber,
+      contractStatus: contract.contractStatus,
+      signerRole: role,
+      alreadySigned,
+      canSign,
+      signingToken,
+      signingUrl,
+      signedRoles,
+      signedPdfUrl: resolveSignedPdfUrl(contract.id, {
+        documensoItemId: itemId,
+        contractStatus: contract.contractStatus,
+        signedRoles,
+      }),
+    };
+  }
+
   async getSigningSession(actor: AuthenticatedUser, id: string) {
-    return this.repository.transaction(async (session) => {
+    const initial = await this.repository.transaction(async (session) => {
       const contract = await this.requirePartyContract(session, id, actor);
       const role = getContractSignerRole(contract, actor);
       const signatures = await session.findContractSignatures(id);
       const signedRoles = signatures.map((s) => s.signerRole);
+      const signers = (await session.findDocumensoSigners?.(id)) ?? [];
+
+      const envelopeId =
+        (contract as { documensoEnvelopeId?: string | null })
+          .documensoEnvelopeId ?? null;
       const alreadySigned = signedRoles.includes(role);
       const familySigned = signedRoles.includes('FAMILY_REP');
+      const existingSigner = signers.find((s) => s.signerRole === role);
 
-      if (role !== 'FAMILY_REP' && !familySigned) {
-        throw new ConflictException(
-          'Hợp đồng đang chờ Đại diện hộ gia đình (Bên A) ký xác nhận trên Documenso trước khi các bên còn lại ký.',
+      const needsLazyProvision =
+        !contract.isDemo &&
+        contract.contractStatus === 'PENDING_APPROVAL' &&
+        !envelopeId &&
+        this.isDocumensoConfigured();
+
+      if (needsLazyProvision) {
+        const parties = await this.loadContractParties(session, contract);
+        const contractInput = this.buildContractInputFromContract(
+          contract,
+          parties,
         );
+        this.assertRealPartyDataIfStrict(contractInput);
+        const recipients = this.buildDocumensoRecipients({
+          ...parties,
+          familyId: contract.familyId,
+          facilityId: contract.facilityId,
+        });
+        return {
+          mode: 'LAZY_PROVISION' as const,
+          contract,
+          role,
+          signedRoles,
+          signers,
+          contractInput,
+          recipients,
+        };
       }
 
-      const signers = (await session.findDocumensoSigners?.(id)) ?? [];
-      const signer = signers.find((s) => s.signerRole === role);
+      const needsBackfill =
+        !contract.isDemo &&
+        contract.contractStatus === 'PENDING_APPROVAL' &&
+        !alreadySigned &&
+        !(role !== 'FAMILY_REP' && !familySigned) &&
+        Boolean(envelopeId) &&
+        !existingSigner &&
+        this.isDocumensoConfigured() &&
+        typeof this.documensoClient?.getEnvelope === 'function';
 
-      if (!signer) {
+      if (needsBackfill) {
+        const parties = await this.loadContractParties(session, contract);
+        const recipients = this.buildDocumensoRecipients({
+          ...parties,
+          familyId: contract.familyId,
+          facilityId: contract.facilityId,
+        });
+        return {
+          mode: 'BACKFILL' as const,
+          contract,
+          role,
+          signedRoles,
+          signers,
+          envelopeId: envelopeId!,
+          recipients,
+        };
+      }
+
+      return {
+        mode: 'DIRECT' as const,
+        contract,
+        role,
+        signedRoles,
+        signers,
+      };
+    });
+
+    let resolved: {
+      contract: ChangeContract;
+      signedRoles: SignerRole[];
+      signers: ContractDocumensoSigner[];
+    };
+
+    if (initial.mode === 'LAZY_PROVISION') {
+      const documensoEnvelope = await this.provisionDocumensoEnvelope(
+        initial.contract.contractNumber,
+        initial.contractInput,
+        initial.recipients,
+      );
+
+      let wonRace = false;
+      try {
+        resolved = await this.repository.transaction(async (session) => {
+          const locked = await this.requirePartyContract(session, id, actor);
+          const lockedEnvelopeId = (
+            locked as { documensoEnvelopeId?: string | null }
+          ).documensoEnvelopeId;
+          if (
+            !lockedEnvelopeId &&
+            locked.contractStatus === 'PENDING_APPROVAL' &&
+            !locked.isDemo
+          ) {
+            const updated = await session.updateContractDocumensoEnvelope?.(
+              id,
+              documensoEnvelope.envelopeId,
+              documensoEnvelope.envelopeItemId,
+            );
+            if (updated === true) {
+              wonRace = true;
+              await this.saveDocumensoSignersForContract(
+                session,
+                id,
+                documensoEnvelope.signers,
+              );
+              await session.clearLegacyNonDocumensoSignatures?.(id);
+            }
+          }
+
+          const refreshedContract = wonRace
+            ? ({
+                ...locked,
+                documensoEnvelopeId: documensoEnvelope.envelopeId,
+                documensoItemId: documensoEnvelope.envelopeItemId,
+              } as ChangeContract)
+            : locked;
+          const signatures = await session.findContractSignatures(id);
+          const signers = (await session.findDocumensoSigners?.(id)) ?? [];
+          return {
+            contract: refreshedContract,
+            signedRoles: signatures.map((s) => s.signerRole),
+            signers,
+          };
+        });
+      } catch (error) {
+        await this.deleteEnvelopeSafely(documensoEnvelope.envelopeId);
+        throw error;
+      }
+
+      if (!wonRace) {
+        await this.deleteEnvelopeSafely(documensoEnvelope.envelopeId);
+      }
+    } else if (initial.mode === 'BACKFILL') {
+      const remoteEnvelope = await this.documensoClient!.getEnvelope(
+        initial.envelopeId,
+      );
+
+      const rolesByEmail = new Map<string, SignerRole[]>();
+      for (const recipient of initial.recipients) {
+        const normalized = recipient.email.trim().toLowerCase();
+        if (!normalized) continue;
+        const list = rolesByEmail.get(normalized) ?? [];
+        list.push(recipient.role);
+        rolesByEmail.set(normalized, list);
+      }
+
+      const existingRoles = new Set(initial.signers.map((s) => s.signerRole));
+      const baseUrl =
+        typeof this.documensoClient!.getBaseUrl === 'function'
+          ? this.documensoClient!.getBaseUrl()
+          : (
+              process.env.DOCUMENSO_API_URL?.trim() ||
+              'https://sign.famidoc.online'
+            ).replace(/\/+$/, '');
+
+      const matchedRows: Array<{
+        contractId: string;
+        signerRole: SignerRole;
+        documensoRecipientId: number;
+        documensoToken: string;
+        documensoSigningUrl: string;
+        status: string;
+        completedAt?: Date | null;
+      }> = [];
+
+      for (const remoteRec of remoteEnvelope.recipients ?? []) {
+        const emailKey = (remoteRec.email ?? '').trim().toLowerCase();
+        if (!emailKey) continue;
+        const roles = rolesByEmail.get(emailKey);
+        if (!roles || roles.length !== 1) continue;
+        const matchedRole = roles[0];
+        if (existingRoles.has(matchedRole)) continue;
+        const token = remoteRec.token?.trim();
+        if (!token) continue;
+        const rawTimestamp = remoteRec.signedAt || remoteRec.completedAt;
+        let completedAt: Date | null = null;
+        if (rawTimestamp) {
+          const parsed = new Date(rawTimestamp);
+          if (!Number.isNaN(parsed.getTime())) {
+            completedAt = parsed;
+          }
+        }
+        matchedRows.push({
+          contractId: initial.contract.id,
+          signerRole: matchedRole,
+          documensoRecipientId: remoteRec.id,
+          documensoToken: token,
+          documensoSigningUrl:
+            remoteRec.signingUrl || `${baseUrl}/sign/${token}`,
+          status: remoteRec.signingStatus || 'PENDING',
+          completedAt,
+        });
+      }
+
+      const matchedCaller = matchedRows.some(
+        (row) => row.signerRole === initial.role,
+      );
+      if (!matchedCaller) {
         throw new NotFoundException(
           'Hợp đồng này chưa có phiên ký Documenso cho vai trò hiện tại',
         );
       }
 
-      const canSign =
-        !alreadySigned &&
-        ['PENDING_APPROVAL', 'PENDING_PAYMENT'].includes(contract.contractStatus);
-
-      const itemId = (contract as { documensoItemId?: string | null })
-        .documensoItemId;
-
-      return {
-        contractId: contract.id,
-        contractNumber: contract.contractNumber,
-        contractStatus: contract.contractStatus,
-        signerRole: role,
-        alreadySigned,
-        canSign,
-        signingToken: canSign ? signer.documensoToken : null,
-        signingUrl: canSign ? signer.documensoSigningUrl : null,
-        signedRoles,
-        signedPdfUrl: resolveSignedPdfUrl(contract.id, {
-          documensoItemId: itemId,
-          contractStatus: contract.contractStatus,
-          signedRoles,
-        }),
+      resolved = await this.repository.transaction(async (session) => {
+        const locked = await this.requirePartyContract(session, id, actor);
+        if (locked.contractStatus === 'PENDING_APPROVAL' && !locked.isDemo) {
+          await session.saveDocumensoSigners?.(matchedRows);
+        }
+        const signatures = await session.findContractSignatures(id);
+        const signers = (await session.findDocumensoSigners?.(id)) ?? [];
+        return {
+          contract: locked,
+          signedRoles: signatures.map((s) => s.signerRole),
+          signers,
+        };
+      });
+    } else {
+      resolved = {
+        contract: initial.contract,
+        signedRoles: initial.signedRoles,
+        signers: initial.signers,
       };
+    }
+
+    const { contract, signedRoles, signers } = resolved;
+    const alreadySigned = signedRoles.includes(initial.role);
+    const familySigned = signedRoles.includes('FAMILY_REP');
+
+    if (
+      contract.isDemo ||
+      alreadySigned ||
+      contract.contractStatus !== 'PENDING_APPROVAL'
+    ) {
+      return this.buildSigningSessionResponse({
+        contract,
+        role: initial.role,
+        signedRoles,
+        canSign: false,
+        signingToken: null,
+        signingUrl: null,
+      });
+    }
+
+    if (initial.role !== 'FAMILY_REP' && !familySigned) {
+      throw new ConflictException(
+        'Hợp đồng đang chờ Đại diện hộ gia đình (Bên A) ký xác nhận trên Documenso trước khi các bên còn lại ký.',
+      );
+    }
+
+    const signer = signers.find((s) => s.signerRole === initial.role);
+    if (!signer) {
+      throw new NotFoundException(
+        'Hợp đồng này chưa có phiên ký Documenso cho vai trò hiện tại',
+      );
+    }
+
+    return this.buildSigningSessionResponse({
+      contract,
+      role: initial.role,
+      signedRoles,
+      canSign: true,
+      signingToken: signer.documensoToken,
+      signingUrl: signer.documensoSigningUrl,
     });
   }
 

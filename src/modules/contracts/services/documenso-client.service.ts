@@ -216,13 +216,7 @@ export class DocumensoClientService {
     // Bước 2: Lấy chi tiết envelope để có envelopeItemId & recipients
     let envelopeData: DocumensoRemoteEnvelope;
     try {
-      const envelopeRes = await this.jsonFetch<
-        DocumensoRemoteEnvelope | { data?: DocumensoRemoteEnvelope }
-      >('GET', `${baseUrl}/api/v2/envelope/${envelopeId}`);
-      envelopeData =
-        'data' in envelopeRes && envelopeRes.data
-          ? envelopeRes.data
-          : (envelopeRes as DocumensoRemoteEnvelope);
+      envelopeData = await this.getEnvelope(envelopeId);
     } catch (error) {
       await this.rollbackEnvelope(baseUrl, envelopeId);
       throw error;
@@ -309,12 +303,15 @@ export class DocumensoClientService {
         success?: boolean;
         id?: string;
         recipients?: DocumensoRemoteRecipient[];
+        data?: { recipients?: DocumensoRemoteRecipient[] };
       }>('POST', `${baseUrl}/api/v2/envelope/distribute`, {
         envelopeId,
         meta: { distributionMethod: 'NONE' },
       });
-      if (Array.isArray(distRes?.recipients) && distRes.recipients.length > 0) {
-        distributedRecipients = distRes.recipients;
+      const responseRecipients =
+        distRes?.recipients ?? distRes?.data?.recipients;
+      if (Array.isArray(responseRecipients)) {
+        distributedRecipients = responseRecipients;
       }
     } catch {
       await this.rollbackEnvelope(baseUrl, envelopeId);
@@ -324,10 +321,10 @@ export class DocumensoClientService {
     }
 
     const signers: DocumensoSignerBinding[] = distributedRecipients
-      .filter((r) => roleByRecipientId.has(r.id))
+      .filter((r) => roleByRecipientId.has(r.id) && Boolean(r.token?.trim()))
       .map((r) => {
         const role = roleByRecipientId.get(r.id)!;
-        const token = r.token || '';
+        const token = r.token.trim();
         return {
           role,
           recipientId: r.id,
@@ -337,6 +334,13 @@ export class DocumensoClientService {
           completedAt: r.signedAt ?? r.completedAt ?? null,
         };
       });
+
+    if (signers.length < recipients.length) {
+      await this.rollbackEnvelope(baseUrl, envelopeId);
+      throw new ServiceUnavailableException(
+        `Documenso chỉ kích hoạt được ${signers.length}/${recipients.length} người ký — Envelope đã bị xóa.`,
+      );
+    }
 
     return {
       envelopeId,
@@ -357,7 +361,10 @@ export class DocumensoClientService {
       DocumensoRemoteEnvelope | { data?: DocumensoRemoteEnvelope }
     >('GET', `${this.getBaseUrl()}/api/v2/envelope/${envelopeId}`);
 
-    return 'data' in result && result.data
+    return result &&
+      typeof result === 'object' &&
+      'data' in result &&
+      result.data
       ? result.data
       : (result as DocumensoRemoteEnvelope);
   }

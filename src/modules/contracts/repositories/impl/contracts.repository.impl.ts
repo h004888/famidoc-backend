@@ -31,7 +31,7 @@ export class ContractsRepositoryImpl implements IContractsRepository {
     );
   }
 }
-class PrismaContractsSession implements ContractsSession {
+export class PrismaContractsSession implements ContractsSession {
   constructor(private readonly tx: Prisma.TransactionClient) {}
   async findContractForUpdate(id: string) {
     // Mọi thay đổi của cùng hợp đồng đi lần lượt, tránh hai phụ lục cùng tính theo dữ liệu cũ.
@@ -349,16 +349,47 @@ class PrismaContractsSession implements ContractsSession {
       documensoToken: string;
       documensoSigningUrl: string;
       status: string;
+      completedAt?: Date | null;
     }>,
   ) {
     if (!signers.length) return;
-    await this.tx.contractDocumensoSigner.createMany({ data: signers });
+    await this.tx.contractDocumensoSigner.createMany({
+      data: signers,
+      skipDuplicates: true,
+    });
   }
 
   findDocumensoSigners(contractId: string) {
     return this.tx.contractDocumensoSigner.findMany({
       where: { contractId },
       orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async updateContractDocumensoEnvelope(
+    contractId: string,
+    documensoEnvelopeId: string,
+    documensoItemId: string,
+  ): Promise<boolean> {
+    const res = await this.tx.medicalContract.updateMany({
+      where: {
+        id: contractId,
+        documensoEnvelopeId: null,
+        contractStatus: 'PENDING_APPROVAL',
+        isDemo: false,
+      },
+      data: { documensoEnvelopeId, documensoItemId },
+    });
+    return res.count > 0;
+  }
+
+  async clearLegacyNonDocumensoSignatures(contractId: string) {
+    await this.tx.contractSignature.deleteMany({
+      where: {
+        contractId,
+        addendumId: null,
+        documensoRecipientId: null,
+      },
     });
   }
 

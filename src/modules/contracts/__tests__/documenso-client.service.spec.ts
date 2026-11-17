@@ -260,4 +260,267 @@ describe('DocumensoClientService', () => {
 
     await expect(service.deleteEnvelope('envelope_cleanup_2')).resolves.toBeUndefined();
   });
+
+  it('createFourPartyEnvelope(): giải nén distRes.data.recipients khi distribute trả về lồng trong data', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ id: 'envelope_nested_1' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            data: {
+              id: 'envelope_nested_1',
+              status: 'DRAFT',
+              envelopeItems: [{ id: 'item_nested_1' }],
+              recipients: [
+                { id: 201, email: 'a@famidoc.online', name: 'Bên A', token: 'old_a', signingStatus: 'NOT_SIGNED' },
+                { id: 202, email: 'b@famidoc.online', name: 'Bên B', token: 'old_b', signingStatus: 'NOT_SIGNED' },
+                { id: 203, email: 'c@famidoc.online', name: 'Bên C', token: 'old_c', signingStatus: 'NOT_SIGNED' },
+                { id: 204, email: 'd@famidoc.online', name: 'Bên D', token: 'old_d', signingStatus: 'NOT_SIGNED' },
+              ],
+            },
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            data: {
+              recipients: [
+                { id: 201, email: 'a@famidoc.online', token: 'new_a', signingUrl: 'https://sign.famidoc.online/sign/new_a' },
+                { id: 202, email: 'b@famidoc.online', token: 'new_b', signingUrl: 'https://sign.famidoc.online/sign/new_b' },
+                { id: 203, email: 'c@famidoc.online', token: 'new_c', signingUrl: 'https://sign.famidoc.online/sign/new_c' },
+                { id: 204, email: 'd@famidoc.online', token: 'new_d', signingUrl: 'https://sign.famidoc.online/sign/new_d' },
+              ],
+            },
+          }),
+      });
+
+    global.fetch = fetchMock;
+
+    const result = await service.createFourPartyEnvelope({
+      contractId: 'ctr-nested-1',
+      contractNumber: 'FD-NESTED-1',
+      pdfBuffer: Buffer.from('%PDF-1.4'),
+      recipients: makeRecipients(),
+    });
+
+    expect(result.signers).toHaveLength(4);
+    expect(result.signers.find((s) => s.role === 'FAMILY_REP')?.token).toBe('new_a');
+    expect(result.signers.find((s) => s.role === 'ADMIN')?.token).toBe('new_d');
+  });
+
+  it('createFourPartyEnvelope(): rollback và ném ServiceUnavailableException khi distribute trả thiếu người ký (< recipients.length)', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ id: 'envelope_partial_1' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            id: 'envelope_partial_1',
+            envelopeItems: [{ id: 'item_p1' }],
+            recipients: [
+              { id: 301, email: 'a@famidoc.online', token: 't1' },
+              { id: 302, email: 'b@famidoc.online', token: 't2' },
+              { id: 303, email: 'c@famidoc.online', token: 't3' },
+              { id: 304, email: 'd@famidoc.online', token: 't4' },
+            ],
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }] }),
+      })
+      // Distribute chỉ trả về 2/4 người ký
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            data: {
+              recipients: [
+                { id: 301, email: 'a@famidoc.online', token: 't1' },
+                { id: 302, email: 'b@famidoc.online', token: 't2' },
+              ],
+            },
+          }),
+      })
+      // Rollback delete
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ success: true }),
+      });
+
+    global.fetch = fetchMock;
+
+    await expect(
+      service.createFourPartyEnvelope({
+        contractId: 'ctr-partial',
+        contractNumber: 'FD-PARTIAL',
+        pdfBuffer: Buffer.from('%PDF-1.4'),
+        recipients: makeRecipients(),
+      }),
+    ).rejects.toThrow(ServiceUnavailableException);
+
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock.mock.calls[4][0]).toContain('/api/v2/envelope/delete');
+    expect(JSON.parse(fetchMock.mock.calls[4][1].body as string)).toEqual({
+      envelopeId: 'envelope_partial_1',
+    });
+  });
+
+  it('createFourPartyEnvelope(): không fallback về recipients bước 2 khi distribute trả recipients: [] và rollback', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ id: 'envelope_empty_dist' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            id: 'envelope_empty_dist',
+            envelopeItems: [{ id: 'item_ed' }],
+            recipients: [
+              { id: 401, email: 'a@famidoc.online', token: 't1' },
+              { id: 402, email: 'b@famidoc.online', token: 't2' },
+              { id: 403, email: 'c@famidoc.online', token: 't3' },
+              { id: 404, email: 'd@famidoc.online', token: 't4' },
+            ],
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ recipients: [] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ success: true }),
+      });
+
+    global.fetch = fetchMock;
+
+    await expect(
+      service.createFourPartyEnvelope({
+        contractId: 'ctr-empty-dist',
+        contractNumber: 'FD-EMPTY-DIST',
+        pdfBuffer: Buffer.from('%PDF-1.4'),
+        recipients: makeRecipients(),
+      }),
+    ).rejects.toThrow(ServiceUnavailableException);
+
+    expect(fetchMock.mock.calls[4][0]).toContain('/api/v2/envelope/delete');
+  });
+
+  it('createFourPartyEnvelope(): rollback khi distribute trả về recipient có token rỗng', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ id: 'envelope_empty_tok' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            id: 'envelope_empty_tok',
+            envelopeItems: [{ id: 'item_et' }],
+            recipients: [
+              { id: 501, email: 'a@famidoc.online', token: 't1' },
+              { id: 502, email: 'b@famidoc.online', token: 't2' },
+              { id: 503, email: 'c@famidoc.online', token: 't3' },
+              { id: 504, email: 'd@famidoc.online', token: 't4' },
+            ],
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ data: [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }] }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            recipients: [
+              { id: 501, email: 'a@famidoc.online', token: 'tok-1' },
+              { id: 502, email: 'b@famidoc.online', token: '   ' },
+              { id: 503, email: 'c@famidoc.online', token: 'tok-3' },
+              { id: 504, email: 'd@famidoc.online', token: 'tok-4' },
+            ],
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ success: true }),
+      });
+
+    global.fetch = fetchMock;
+
+    await expect(
+      service.createFourPartyEnvelope({
+        contractId: 'ctr-empty-tok',
+        contractNumber: 'FD-EMPTY-TOK',
+        pdfBuffer: Buffer.from('%PDF-1.4'),
+        recipients: makeRecipients(),
+      }),
+    ).rejects.toThrow(ServiceUnavailableException);
+
+    expect(fetchMock.mock.calls[4][0]).toContain('/api/v2/envelope/delete');
+  });
+
+  it('getEnvelope(): xử lý an toàn khi response là null/primitive hoặc lồng trong data', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => '',
+    });
+    await expect(service.getEnvelope('env-empty')).resolves.toEqual({});
+
+    global.fetch = jest.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          data: { id: 'env-wrapped', status: 'COMPLETED', recipients: [], envelopeItems: [] },
+        }),
+    });
+    const env = await service.getEnvelope('env-wrapped');
+    expect(env.id).toBe('env-wrapped');
+    expect(env.status).toBe('COMPLETED');
+  });
 });

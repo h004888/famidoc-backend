@@ -192,9 +192,16 @@ export interface ContractsSession {
       documensoToken: string;
       documensoSigningUrl: string;
       status: string;
+      completedAt?: Date | null;
     }>,
   ): Promise<void>;
   findDocumensoSigners?(contractId: string): Promise<ContractDocumensoSigner[]>;
+  updateContractDocumensoEnvelope?(
+    contractId: string,
+    documensoEnvelopeId: string,
+    documensoItemId: string,
+  ): Promise<boolean | void>;
+  clearLegacyNonDocumensoSignatures?(contractId: string): Promise<void>;
   findFamilyGateStatus?(familyId: string): Promise<{
     activeContract: {
       id: string;
