@@ -19,6 +19,7 @@ import { CarePackagesModule } from './modules/care-packages/care-packages.module
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PlatformContentModule } from './modules/platform-content/platform-content.module';
 import { EncountersModule } from './modules/encounters/encounters.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   // Các module nghiệp vụ dùng chung Prisma và cơ chế xác thực của backend.
@@ -39,6 +40,7 @@ import { EncountersModule } from './modules/encounters/encounters.module';
     PatientsModule,
     PlatformContentModule,
     EncountersModule,
+    AdminModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

@@ -165,10 +165,12 @@ Admin, POST `/api/v1/finance/settlements/monthly`:
 
 Trả bảng PENDING, transferExecuted=false. Lưu riêng từng hóa đơn để không cộng lại khi gọi trùng. Ví dụ phần doanh thu được phân bổ cho kỳ là 1.000.000đ: phí gộp nền tảng 150.000đ, CSYT 850.000đ. Đây không mặc định là toàn bộ giá trị hóa đơn của gói nhiều tháng.
 
-Chỉ sau khi **đã chuyển khoản và đối chiếu ngoài hệ thống**, Admin xác nhận:
+CSYT kiểm tra bảng của mình qua `PATCH /api/v1/finance/settlements/{id}/review`. Gửi `environment`, `reviewVersion` lấy từ bảng và `action: "CONFIRM"` nếu số liệu đúng. Nếu có sai lệch, gửi `action: "REPORT_DISCREPANCY"` kèm `reason`. Sau khi kiểm tra, Admin gửi lại bảng bằng `REOPEN_REVIEW` tại API quyết toán tháng với `settlementId`, `environment` và phiên bản hiện tại.
+
+Sau khi CSYT xác nhận và **đã chuyển khoản, đối chiếu ngoài hệ thống**, Admin tải chứng từ lên `POST /api/v1/finance/settlements/{id}/evidence?environment=TEST` với trường multipart `file` (PDF, PNG hoặc JPEG, tối đa 5 MB). Dùng `evidenceKey` trả về để xác nhận:
 
 ```json
-{"environment":"TEST","action":"CONFIRM_TRANSFER","settlementId":"ID_BẢNG_QUYẾT_TOÁN","bankTransferOrderId":"MÃ_GIAO_DỊCH_ĐÃ_ĐỐI_CHIẾU","amountPaidVnd":850000,"paidAt":"THỜI_ĐIỂM_ISO_8601","evidenceKey":"USER_ID_ADMIN/settlements/chung-tu.pdf"}
+{"environment":"TEST","action":"CONFIRM_TRANSFER","settlementId":"ID_BẢNG_QUYẾT_TOÁN","reviewVersion":2,"bankTransferOrderId":"MÃ_GIAO_DỊCH_ĐÃ_ĐỐI_CHIẾU","amountPaidVnd":850000,"paidAt":"THỜI_ĐIỂM_ISO_8601","evidenceKey":"KHÓA_TỪ_API_UPLOAD"}
 ```
 
 Nếu thất bại: `{"environment":"TEST","action":"MARK_FAILED","settlementId":"ID","failureReason":"Nội dung lỗi đã kiểm tra"}`. Không đánh dấu SETTLED khi chỉ mới lập bảng hoặc chưa thực hiện chuyển khoản. Hóa đơn đến muộn sau khi kỳ đã chốt trả 409 để được rà soát điều chỉnh, không âm thầm sửa bảng đã xác nhận.
@@ -263,7 +265,7 @@ POST /payments/vietqr chỉ nhận contractId/addendumId. Số tiền phải kh�
 
 GET /api/v1/finance/analytics?year=2026&month=10&environment=TEST bằng tài khoản Admin/CSYT. Tiền trong báo cáo là phần ngày phục vụ của tháng, không phải toàn bộ tiền gói vừa thu. satisfaction trả số đánh giá, sao trung bình và affectsPayout=false.
 
-POST /api/v1/finance/settlements/monthly với action=PREPARE chỉ nhận tháng đã kết thúc. Một hóa đơn gói quý/năm có nhiều dòng phân bổ ở các tháng; gọi lại cùng kỳ không cộng lại. Sau chuyển khoản thật mới CONFIRM_TRANSFER. Phí 15% là phí gộp; platformFeeVatVnd/platformFeeNetVnd chưa xác định thì trả null, cần chốt kế toán trước khai thuế. Không tự trừ thêm thuế vào 85% của CSYT.
+POST /api/v1/finance/settlements/monthly với action=PREPARE chỉ nhận tháng đã kết thúc. Một hóa đơn gói quý/năm có nhiều dòng phân bổ ở các tháng; gọi lại cùng kỳ không cộng lại. CONFIRM_TRANSFER yêu cầu CSYT đã xác nhận bảng và Admin có chứng từ chuyển khoản. Phí 15% là phí gộp; platformFeeVatVnd/platformFeeNetVnd chưa xác định thì trả null, cần chốt kế toán trước khai thuế. Không tự trừ thêm thuế vào 85% của CSYT.
 
 POST /api/v1/notifications/reminders/run bằng Admin kiểm tra nhắc hạn. Gọi hai lần chỉ có một thông báo cho mỗi hợp đồng/người nhận.
 

@@ -813,10 +813,10 @@ export class ContractsServiceImpl implements IContractsService {
         );
       }
 
-      const signedPdfUrl =
-        dto.signedPdfUrl ||
-        contract.signedPdfUrl ||
-        `https://cdn.famidoc.vn/contracts/staffing/${contract.contractCode}-signed.pdf`;
+      const signedPdfUrl = dto.signedPdfUrl;
+      if (!signedPdfUrl) {
+        throw new BadRequestException('Cần đính kèm link HTTPS của bản hợp đồng B2B đã ký.');
+      }
 
       const updated = await session.updateStaffingContractStatus(
         id,

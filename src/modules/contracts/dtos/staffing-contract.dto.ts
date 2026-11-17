@@ -9,6 +9,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  IsUrl,
   Max,
   MaxLength,
   Min,
@@ -86,7 +87,8 @@ export class SignStaffingContractDto {
     example: 'https://cdn.famidoc.vn/contracts/staffing/signed-contract.pdf',
   })
   @IsOptional()
-  @IsString()
+  @IsUrl({ protocols: ['https'], require_protocol: true })
+  @MaxLength(2048)
   signedPdfUrl?: string;
 
   @ApiPropertyOptional({

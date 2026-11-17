@@ -33,7 +33,10 @@ export interface IDoctorsService {
     actor: AuthenticatedUser,
     dto: SubmitFacilityLegalProfileDto,
     ip: string,
+    file?: Express.Multer.File,
   ): Promise<FacilityResponseDto>;
+
+  getFacilityLegalDocument(facilityId: string): Promise<{ bytes: Buffer; contentType: string }>;
 
   verifyFacilityLegal(
     actor: AuthenticatedUser,

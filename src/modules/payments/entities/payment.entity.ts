@@ -109,6 +109,11 @@ export interface PaymentTransaction {
   receivedAt: string;
   outcome: TransactionOutcome;
   reason: TransactionReason | null;
+  sepayWebhookTransactionId?: string | null;
+  sepayApiTransactionId?: string | null;
+  ingestionSource?: 'WEBHOOK' | 'SEPAY_API';
+  reconciledAt?: string | null;
+  reconciliationRunId?: string | null;
   rawPayload?: Record<string, unknown>;
 }
 

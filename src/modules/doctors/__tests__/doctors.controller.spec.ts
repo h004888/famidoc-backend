@@ -89,6 +89,7 @@ describe('Doctors & Facilities Controllers', () => {
       approveFacilityAccount: jest.fn(),
       submitFacilityLegalProfile: jest.fn(),
       verifyFacilityLegal: jest.fn(),
+      getFacilityLegalDocument: jest.fn(),
       getMyFacility: jest.fn(),
       listFacilitiesForAdmin: jest.fn(),
       getFacilityDetailForAdmin: jest.fn(),

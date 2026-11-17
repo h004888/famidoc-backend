@@ -59,7 +59,7 @@ export class JwtAuthGuard implements CanActivate {
     });
     if (!user)
       throw new UnauthorizedException('User account no longer exists');
-    if (user.status === 'SUSPENDED')
+    if (user.status === 'SUSPENDED' || user.status === 'LOCKED')
       throw new ForbiddenException('Account has been suspended');
     const allowOnboarding = this.reflector?.getAllAndOverride<boolean>(
       ALLOW_ONBOARDING_KEY,

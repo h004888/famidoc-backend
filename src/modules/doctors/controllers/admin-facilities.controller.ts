@@ -8,6 +8,7 @@ import {
   Patch,
   Query,
   Req,
+  StreamableFile,
   UseGuards,
   UsePipes,
   ValidationPipe,
@@ -24,6 +25,7 @@ import {
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../../../core/auth/roles.guard';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
+import { BypassTransform } from '../../../core/decorators/bypass-transform.decorator';
 import { ApproveFacilityAccountDto } from '../dtos/approve-facility-account.dto';
 import { VerifyFacilityLegalDto } from '../dtos/verify-facility-legal.dto';
 import { FacilityResponseDto } from '../dtos/facility-response.dto';
@@ -89,6 +91,18 @@ export class AdminFacilitiesController {
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ) {
     return this.service.getFacilityDetailForAdmin(req.user, id);
+  }
+
+  @Get(':id/legal-document')
+  @BypassTransform()
+  @ApiOperation({ summary: 'Tải bản scan hồ sơ pháp lý của CSYT' })
+  async getLegalDocument(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+    const { bytes, contentType } = await this.service.getFacilityLegalDocument(id);
+    const extension = contentType === 'image/png' ? 'png' : contentType === 'image/jpeg' ? 'jpg' : 'pdf';
+    return new StreamableFile(bytes, {
+      type: contentType,
+      disposition: `attachment; filename="facility-license.${extension}"`,
+    });
   }
 
   @Patch(':id/approve-account')

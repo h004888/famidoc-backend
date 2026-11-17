@@ -95,6 +95,11 @@ function transactionEntity(row: TransactionRow): PaymentTransaction {
     receivedAt: row.createdAt.toISOString(),
     outcome: row.outcome as TransactionOutcome,
     reason: row.reason as TransactionReason | null,
+    sepayWebhookTransactionId: row.sepayWebhookTransactionId,
+    sepayApiTransactionId: row.sepayApiTransactionId,
+    ingestionSource: row.ingestionSource as 'WEBHOOK' | 'SEPAY_API',
+    reconciledAt: row.reconciledAt?.toISOString() ?? null,
+    reconciliationRunId: row.reconciliationRunId,
   };
 }
 @Injectable()
@@ -193,13 +198,13 @@ class PrismaPaymentsSession implements PaymentsSession {
         doctorId: row.doctorId,
         doctorVerified: Boolean(
           row.doctor &&
-            row.doctor.onboardingStatus === 'ACTIVE' &&
-            row.doctor.user.status === 'ACTIVE' &&
-            row.facility.verificationStatus === 'ACTIVE' &&
-            row.facility.user.status === 'ACTIVE' &&
-            row.familyUnit.status === 'ACTIVE' &&
-            row.doctor.facilityId === row.facilityId &&
-            !!staffing,
+          row.doctor.onboardingStatus === 'ACTIVE' &&
+          row.doctor.user.status === 'ACTIVE' &&
+          row.facility.verificationStatus === 'ACTIVE' &&
+          row.facility.user.status === 'ACTIVE' &&
+          row.familyUnit.status === 'ACTIVE' &&
+          row.doctor.facilityId === row.facilityId &&
+          !!staffing,
         ),
         panelCapacityAvailable: Boolean(
           row.doctor && activeCount < row.doctor.maxPanelCapacity,
@@ -342,7 +347,9 @@ class PrismaPaymentsSession implements PaymentsSession {
       if (old.endDate <= new Date())
         throw new ConflictException('Signed contract term has expired');
       if (!old.doctorId) {
-        throw new ConflictException('Contract does not have an assigned doctor');
+        throw new ConflictException(
+          'Contract does not have an assigned doctor',
+        );
       }
       await this.tx.doctor.update({
         where: { id: old.doctorId },
@@ -442,9 +449,43 @@ class PrismaPaymentsSession implements PaymentsSession {
     });
     return row ? transactionEntity(row) : null;
   }
+  async findTransactionByWebhookId(id: string) {
+    const row = await this.tx.paymentTransaction.findFirst({
+      where: {
+        environment: this.environment,
+        OR: [{ sepayWebhookTransactionId: id }, { gatewayTransactionId: id }],
+      },
+    });
+    return row ? transactionEntity(row) : null;
+  }
+  async findTransactionByApiId(id: string) {
+    const row = await this.tx.paymentTransaction.findUnique({
+      where: {
+        environment_sepayApiTransactionId: {
+          environment: this.environment,
+          sepayApiTransactionId: id,
+        },
+      },
+    });
+    return row ? transactionEntity(row) : null;
+  }
   async findTransactionByReference(bankReferenceKey: string) {
     const row = await this.tx.paymentTransaction.findFirst({
       where: { bankReferenceKey, environment: this.environment },
+      orderBy: { createdAt: 'asc' },
+    });
+    return row ? transactionEntity(row) : null;
+  }
+  async findTransactionByBankIdentity(
+    accountNumber: string,
+    referenceCode: string,
+  ) {
+    const row = await this.tx.paymentTransaction.findFirst({
+      where: {
+        environment: this.environment,
+        accountNumber,
+        referenceCode,
+      },
       orderBy: { createdAt: 'asc' },
     });
     return row ? transactionEntity(row) : null;
@@ -479,7 +520,33 @@ class PrismaPaymentsSession implements PaymentsSession {
         referenceCode: item.referenceCode,
         outcome: item.outcome,
         reason: item.reason,
+        sepayWebhookTransactionId: item.sepayWebhookTransactionId,
+        sepayApiTransactionId: item.sepayApiTransactionId,
+        ingestionSource: item.ingestionSource ?? 'WEBHOOK',
+        reconciledAt: item.reconciledAt,
+        reconciliationRunId: item.reconciliationRunId,
       },
     });
+  }
+  async linkReconciledTransaction(
+    id: string,
+    data: {
+      sepayWebhookTransactionId?: string;
+      sepayApiTransactionId?: string;
+      reconciliationRunId?: string;
+      reconciledAt?: string;
+    },
+  ) {
+    return transactionEntity(
+      await this.tx.paymentTransaction.update({
+        where: { id },
+        data: {
+          sepayWebhookTransactionId: data.sepayWebhookTransactionId,
+          sepayApiTransactionId: data.sepayApiTransactionId,
+          reconciliationRunId: data.reconciliationRunId,
+          reconciledAt: data.reconciledAt,
+        },
+      }),
+    );
   }
 }

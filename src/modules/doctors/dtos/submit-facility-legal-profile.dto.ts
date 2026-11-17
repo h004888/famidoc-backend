@@ -1,8 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsNotEmpty,
+  IsDateString,
   IsOptional,
   IsString,
+  IsUrl,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -86,6 +88,18 @@ export class SubmitFacilityLegalProfileDto {
     example: 'https://cdn.famidoc.vn/facilities/legal/gphd-ansinh-signed.pdf',
   })
   @IsOptional()
-  @IsString()
+  @IsUrl({ protocols: ['https'], require_protocol: true })
+  @MaxLength(2048)
   legalDocumentsUrl?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  licenseIssuer?: string;
+
+  @ApiPropertyOptional({ example: '2026-11-17' })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  licenseDate?: string;
 }
