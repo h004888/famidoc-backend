@@ -189,23 +189,23 @@ Mặc định kỳ trước theo giờ Việt Nam, environment=LIVE. Muốn xem 
 
 `POST /api/v1/finance/settlements/monthly`
 
-PREPARE lập/cập nhật bảng PENDING và lưu FacilitySettlementItem, chưa chuyển tiền. MARK_FAILED lưu lỗi. CONFIRM_TRANSFER kiểm tra số tiền, mã giao dịch, thời điểm và object key chứng từ của Admin rồi mới SETTLED. Đây là đối soát thủ công; chưa có hàm tự gửi tiền tới ngân hàng. Bảng đã chốt không ghi đè; hóa đơn không được vào hai kỳ.
+`PREPARE` lập hoặc cập nhật bảng `PENDING` và lưu `FacilitySettlementItem`. `MARK_FAILED` lưu lỗi chi trả. `REOPEN_REVIEW` gửi lại bảng đang có sai lệch cho CSYT. Sau khi CSYT xác nhận, Admin dùng `CONFIRM_TRANSFER` để ghi nhận giao dịch đã chuyển. Hệ thống kiểm tra số tiền, mã giao dịch, thời điểm và chứng từ trước khi đánh dấu `SETTLED`. Hệ thống giữ nguyên bảng đã chốt và chỉ ghi nhận mỗi hóa đơn vào một kỳ.
 
 | Bước | Hàm thực tế | Nơi tìm trong project |
 |---:|---|---|
-| 1 | `FinanceController.executeMonthlySettlement` | `src/modules/finance/controllers/finance.controller.ts:44` |
-| 2 | `FinanceServiceImpl.executeMonthlySettlement` | `src/modules/finance/services/impl/finance.service.impl.ts:84` |
-| 3 | `FinanceServiceImpl.resolveReportingPeriod` | `src/modules/finance/services/impl/finance.service.impl.ts:261` |
-| 4 | `FinanceRepositoryImpl.transaction` | `src/modules/finance/repositories/impl/finance.repository.impl.ts:16` |
-| 5 | `PrismaFinanceSession.findEligibleInvoices` | `src/modules/finance/repositories/impl/finance.repository.impl.ts:30` |
-| 6 | `PrismaFinanceSession.findPeriodSettlement` | `src/modules/finance/repositories/impl/finance.repository.impl.ts:85` |
-| 7 | `PrismaFinanceSession.createSettlement` | `src/modules/finance/repositories/impl/finance.repository.impl.ts:102` |
+| 1 | `FinanceController.executeMonthlySettlement` | `src/modules/finance/controllers/finance.controller.ts:84` |
+| 2 | `FinanceServiceImpl.executeMonthlySettlement` | `src/modules/finance/services/impl/finance.service.impl.ts:179` |
+| 3 | `FinanceServiceImpl.resolveReportingPeriod` | `src/modules/finance/services/impl/finance.service.impl.ts:407` |
+| 4 | `FinanceRepositoryImpl.transaction` | `src/modules/finance/repositories/impl/finance.repository.impl.ts:17` |
+| 5 | `PrismaFinanceSession.findEligibleInvoices` | `src/modules/finance/repositories/impl/finance.repository.impl.ts:64` |
+| 6 | `PrismaFinanceSession.findPeriodSettlement` | `src/modules/finance/repositories/impl/finance.repository.impl.ts:145` |
+| 7 | `PrismaFinanceSession.createSettlement` | `src/modules/finance/repositories/impl/finance.repository.impl.ts:162` |
 | 8 | `calculateRevenueShares` | `src/modules/finance/pricing/revenue-sharing.ts:2` |
-| 9 | `PrismaFinanceSession.createSettlementItems` | `src/modules/finance/repositories/impl/finance.repository.impl.ts:105` |
-| 10 | `PrismaFinanceSession.updateSettlement` | `src/modules/finance/repositories/impl/finance.repository.impl.ts:110` |
-| 11 | `FinanceServiceImpl.recordTransferResult` | `src/modules/finance/services/impl/finance.service.impl.ts:187` |
-| 12 | `PrismaFinanceSession.findSettlement` | `src/modules/finance/repositories/impl/finance.repository.impl.ts:80` |
-| 13 | `PrismaFinanceSession.recordFinanceEvent` | `src/modules/finance/repositories/impl/finance.repository.impl.ts:116` |
+| 9 | `PrismaFinanceSession.createSettlementItems` | `src/modules/finance/repositories/impl/finance.repository.impl.ts:165` |
+| 10 | `PrismaFinanceSession.updateSettlement` | `src/modules/finance/repositories/impl/finance.repository.impl.ts:170` |
+| 11 | `FinanceServiceImpl.updateSettlementStatus` | `src/modules/finance/services/impl/finance.service.impl.ts:301` |
+| 12 | `PrismaFinanceSession.findSettlement` | `src/modules/finance/repositories/impl/finance.repository.impl.ts:140` |
+| 13 | `PrismaFinanceSession.recordFinanceEvent` | `src/modules/finance/repositories/impl/finance.repository.impl.ts:176` |
 
 ### 49. submitDoctorReview — UC-36
 

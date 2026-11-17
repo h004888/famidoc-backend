@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { DoctorsServiceImpl } from '../services/impl/doctors.service.impl';
 import { PrismaService } from '../../../core/database/prisma.service';
+import { StorageService } from '../../../core/services/storage.service';
 import type { AuthenticatedUser } from '../../../core/auth/authenticated-request';
 import { DoctorCredentialType, DoctorOnboardingStatus } from '@prisma/client';
 
@@ -125,6 +126,13 @@ describe('DoctorsServiceImpl', () => {
         {
           provide: 'MAILER_SERVICE',
           useValue: mailerService,
+        },
+        {
+          provide: StorageService,
+          useValue: {
+            uploadFile: jest.fn(),
+            downloadFile: jest.fn(),
+          },
         },
       ],
     }).compile();
