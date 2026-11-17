@@ -13,12 +13,14 @@ ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 COPY package*.json ./
 COPY prisma ./prisma/
 
-RUN npm ci
+RUN npm ci --fetch-retries=4
 
 COPY . .
 
 RUN npx prisma generate
 RUN npm run build
+# Dọn gói dev từ bộ dependencies đã cài, không tải lại từ mạng.
+RUN npm prune --omit=dev --offline --ignore-scripts
 
 # Stage 2: Runner
 FROM node:24-bookworm-slim AS runner
@@ -38,13 +40,8 @@ ENV PORT=4000
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Cài đặt production dependencies (bcryptjs là pure JS)
-RUN npm ci --omit=dev
-
-# Mang theo engine da generate, khong tai binary khi khoi dong container.
-COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+# Mang theo dependencies production và Prisma Client đã generate.
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY scripts/docker-entrypoint.sh /app/scripts/docker-entrypoint.sh
 RUN chmod +x /app/scripts/docker-entrypoint.sh
