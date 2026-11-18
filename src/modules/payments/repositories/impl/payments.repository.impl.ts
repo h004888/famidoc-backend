@@ -490,6 +490,22 @@ class PrismaPaymentsSession implements PaymentsSession {
     });
     return row ? transactionEntity(row) : null;
   }
+  // Giao dịch soát xét gần nhất gắn với một yêu cầu thanh toán: tiền đã vào nhưng chưa đủ
+  // điều kiện đối soát tự động (LATE_PAYMENT, WRONG_ACCOUNT...), dùng để bề mặt hóa cho gia đình.
+  async findLatestTransactionByRequestId(
+    paymentRequestId: string,
+  ): Promise<PaymentTransaction | null> {
+    const row = await this.tx.paymentTransaction.findFirst({
+      where: {
+        environment: this.environment,
+        invoiceId: paymentRequestId,
+        outcome: 'REVIEW_REQUIRED',
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 1,
+    });
+    return row ? transactionEntity(row) : null;
+  }
   async listTransactions() {
     return (
       await this.tx.paymentTransaction.findMany({
