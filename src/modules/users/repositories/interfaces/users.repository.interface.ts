@@ -9,6 +9,7 @@ export const profileSelect = {
   avatarUrl: true,
   role: true,
   status: true,
+  mustChangePassword: true,
   createdAt: true,
   updatedAt: true,
 } as const;

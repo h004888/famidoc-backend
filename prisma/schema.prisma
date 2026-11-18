@@ -230,9 +230,9 @@ model User {
   fullName            String     @map("full_name") @db.VarChar(100)
   avatarUrl           String?    @map("avatar_url") @db.VarChar(255)
   status              UserStatus @default(PENDING)
+  mustChangePassword  Boolean    @default(false) @map("must_change_password")
   failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
   lockedUntil         DateTime?  @map("locked_until") @db.Timestamptz()
-  mustChangePassword  Boolean    @default(false) @map("must_change_password")
   createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt           DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
@@ -502,7 +502,7 @@ model B2bStaffingContract {
   signedPdfKey                 String?           @map("signed_pdf_key") @db.Text
   contractTerms                String?           @map("contract_terms") @db.Text
   revisionReason               String?           @map("revision_reason") @db.Text
-  documensoEnvelopeId          String?           @map("documenso_envelope_id") @db.VarChar(100)
+  documensoEnvelopeId          String?           @unique @map("documenso_envelope_id") @db.VarChar(100)
   documensoItemId              String?           @map("documenso_item_id") @db.VarChar(100)
   facilityDocumensoRecipientId Int?              @map("facility_documenso_recipient_id")
   facilitySigningUrl           String?           @map("facility_signing_url") @db.Text

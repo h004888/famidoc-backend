@@ -502,6 +502,7 @@ export class AuthServiceImpl implements IAuthService {
           role: user.role,
           status: user.status,
           avatarUrl: user.avatarUrl,
+          mustChangePassword: Boolean(user.mustChangePassword),
         },
       };
     } catch (err: any) {

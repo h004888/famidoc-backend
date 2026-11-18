@@ -37,8 +37,12 @@ import {
 } from '../dtos/contract-change.dto';
 import {
   CreateStaffingContractDto,
+  UpdateStaffingContractDto,
   SignStaffingContractDto,
   RejectStaffingContractDto,
+  RequestStaffingTerminationDto,
+  TerminateStaffingContractDto,
+  StaffingTerminationImpactDto,
   ListStaffingContractsDto,
   StaffingContractResponseDto,
 } from '../dtos/staffing-contract.dto';
@@ -409,16 +413,16 @@ export class ContractsController {
 
   @Post('staffing')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HEALTHCARE_FACILITY')
+  @Roles('ADMIN')
   @ApiOperation({
     summary: 'Thiết lập hợp đồng cung ứng nhân lực y tế B2B (STT 13 - UC-15)',
     description:
-      'Thiết lập hợp đồng khung cung ứng nhân lực y tế giữa Nền tảng và Cơ sở y tế đối tác, xác lập tỷ lệ phân chia doanh thu và thời hạn hiệu lực.',
+      'Quản trị viên khởi tạo hợp đồng khung cung ứng nhân lực y tế với Cơ sở y tế đã ACTIVE, tự động kết xuất PDF và khởi tạo Envelope Documenso ký tuần tự 2 bên.',
   })
   @ApiBody({ type: CreateStaffingContractDto })
   @ApiResponse({
     status: 201,
-    description: 'Tạo hợp đồng nhân lực B2B thành công, chờ ký xác nhận.',
+    description: 'Tạo hợp đồng nhân lực B2B thành công, chờ CSYT xem xét và ký số.',
     type: StaffingContractResponseDto,
   })
   createStaffingContract(
@@ -432,20 +436,40 @@ export class ContractsController {
     );
   }
 
+  @Patch('staffing/:id')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary: 'Chỉnh sửa trực tiếp hợp đồng B2B và gửi lại CSYT xem xét ký lại',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng cung ứng nhân lực' })
+  @ApiBody({ type: UpdateStaffingContractDto })
+  @ApiResponse({ status: 200, type: StaffingContractResponseDto })
+  updateStaffingContract(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: UpdateStaffingContractDto,
+  ) {
+    return this.service.updateStaffingContract(
+      req.user,
+      id,
+      dto,
+      req.ip ?? 'unknown',
+    );
+  }
+
   @Put('staffing/:id/sign')
   @Post('staffing/:id/sign')
   @UseGuards(RolesGuard)
   @Roles('ADMIN', 'HEALTHCARE_FACILITY')
   @ApiOperation({
-    summary: 'Ký số điện tử hợp đồng cung ứng nhân lực B2B (STT 14 - UC-15)',
-    description:
-      'Đại diện Nền tảng (Admin) hoặc Đại diện Cơ sở y tế thực hiện ký số điện tử để kích hoạt hợp đồng cung ứng nhân lực sang trạng thái ACTIVE.',
+    summary: 'Ký số điện tử hợp đồng cung ứng nhân lực B2B (tuần tự CSYT -> Admin)',
   })
   @ApiParam({ name: 'id', description: 'UUID của hợp đồng cung ứng nhân lực' })
   @ApiBody({ type: SignStaffingContractDto })
   @ApiResponse({
     status: 200,
-    description: 'Ký số thành công, hợp đồng đã được kích hoạt có hiệu lực.',
+    description: 'Ký số thành công.',
     type: StaffingContractResponseDto,
   })
   signStaffingContract(
@@ -461,21 +485,40 @@ export class ContractsController {
     );
   }
 
+  @Patch('staffing/:id/request-revision')
+  @UseGuards(RolesGuard)
+  @Roles('HEALTHCARE_FACILITY')
+  @ApiOperation({
+    summary: 'CSYT yêu cầu chỉnh sửa hợp đồng B2B (chuyển sang REVISION_REQUESTED)',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng cung ứng nhân lực' })
+  @ApiBody({ type: RejectStaffingContractDto })
+  @ApiResponse({ status: 200, type: StaffingContractResponseDto })
+  requestStaffingRevision(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: RejectStaffingContractDto,
+  ) {
+    return this.service.requestStaffingRevision(
+      req.user,
+      id,
+      dto,
+      req.ip ?? 'unknown',
+    );
+  }
+
   @Patch('staffing/:id/reject')
   @UseGuards(RolesGuard)
-  @Roles('ADMIN', 'HEALTHCARE_FACILITY')
+  @Roles('HEALTHCARE_FACILITY')
   @ApiOperation({
     summary:
-      'Từ chối dự thảo hợp đồng cung ứng nhân lực B2B (Yêu cầu đàm phán / sửa đổi)',
-    description:
-      'Đại diện CSYT (hoặc Quản trị viên) từ chối dự thảo hợp đồng cung ứng nhân lực B2B kèm lý do phản hồi/yêu cầu sửa đổi điều khoản. Trạng thái chuyển sang TERMINATED và hệ thống phát thông báo đến các bên liên quan.',
+      'Alias yêu cầu chỉnh sửa hợp đồng cung ứng nhân lực B2B (chuyển REVISION_REQUESTED)',
   })
   @ApiParam({ name: 'id', description: 'UUID của hợp đồng cung ứng nhân lực' })
   @ApiBody({ type: RejectStaffingContractDto })
   @ApiResponse({
     status: 200,
-    description:
-      'Từ chối dự thảo hợp đồng thành công, trạng thái chuyển sang TERMINATED.',
+    description: 'Đã chuyển trạng thái hợp đồng sang REVISION_REQUESTED và gửi lý do cho Admin.',
     type: StaffingContractResponseDto,
   })
   rejectStaffingContract(
@@ -484,6 +527,120 @@ export class ContractsController {
     @Body() dto: RejectStaffingContractDto,
   ) {
     return this.service.rejectStaffingContract(
+      req.user,
+      id,
+      dto,
+      req.ip ?? 'unknown',
+    );
+  }
+
+  @Get('staffing/:id/signing-session')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'HEALTHCARE_FACILITY')
+  @ApiOperation({
+    summary: 'Lấy phiên ký Documenso nhúng cho hợp đồng B2B (ký tuần tự CSYT -> Admin)',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng cung ứng nhân lực' })
+  getStaffingSigningSession(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.service.getStaffingSigningSession(req.user, id);
+  }
+
+  @Post('staffing/:id/sync-documenso')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'HEALTHCARE_FACILITY')
+  @ApiOperation({
+    summary: 'Đồng bộ trạng thái chữ ký Documenso của hợp đồng B2B',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng cung ứng nhân lực' })
+  syncStaffingDocumensoEnvelope(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.service.syncStaffingDocumensoEnvelope(
+      req.user,
+      id,
+      req.ip ?? 'documenso-sync',
+    );
+  }
+
+  @Get('staffing/:id/signed-pdf')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'HEALTHCARE_FACILITY')
+  @ApiOperation({
+    summary: 'Tải hoặc xem PDF hợp đồng B2B đã ký đủ 2 bên qua proxy Documenso',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng cung ứng nhân lực' })
+  async downloadStaffingSignedPdf(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename } = await this.service.downloadStaffingSignedPdf(
+      req.user,
+      id,
+    );
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.send(buffer);
+  }
+
+  @Get('staffing/:id/termination-impact')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN', 'HEALTHCARE_FACILITY')
+  @ApiOperation({
+    summary:
+      'Kiểm tra danh sách phụ thuộc đang hoạt động trước khi chấm dứt hợp đồng B2B',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng cung ứng nhân lực' })
+  @ApiResponse({ status: 200, type: StaffingTerminationImpactDto })
+  getStaffingTerminationImpact(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.service.getStaffingTerminationImpact(req.user, id);
+  }
+
+  @Post('staffing/:id/termination-request')
+  @UseGuards(RolesGuard)
+  @Roles('HEALTHCARE_FACILITY')
+  @ApiOperation({
+    summary: 'CSYT gửi yêu cầu đề nghị chấm dứt hợp đồng B2B đang ACTIVE',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng cung ứng nhân lực' })
+  @ApiBody({ type: RequestStaffingTerminationDto })
+  @ApiResponse({ status: 200, type: StaffingContractResponseDto })
+  requestStaffingTermination(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: RequestStaffingTerminationDto,
+  ) {
+    return this.service.requestStaffingTermination(
+      req.user,
+      id,
+      dto,
+      req.ip ?? 'unknown',
+    );
+  }
+
+  @Patch('staffing/:id/terminate')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  @ApiOperation({
+    summary:
+      'Admin hủy dự thảo hoặc chấm dứt hợp đồng B2B có kiểm tra ràng buộc vận hành',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng cung ứng nhân lực' })
+  @ApiBody({ type: TerminateStaffingContractDto })
+  @ApiResponse({ status: 200, type: StaffingContractResponseDto })
+  terminateStaffingContract(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: TerminateStaffingContractDto,
+  ) {
+    return this.service.terminateStaffingContract(
       req.user,
       id,
       dto,
