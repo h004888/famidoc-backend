@@ -115,6 +115,10 @@ export interface PaymentTransaction {
   ingestionSource?: 'WEBHOOK' | 'SEPAY_API';
   reconciledAt?: string | null;
   reconciliationRunId?: string | null;
+  transferContent?: string | null;
+  contractNumber?: string | null;
+  payerName?: string | null;
+  payerPhoneLast4?: string | null;
   rawPayload?: Record<string, unknown>;
 }
 

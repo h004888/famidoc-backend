@@ -39,8 +39,12 @@ function isTransaction(value: unknown): value is SePayApiTransaction {
     Number.isSafeInteger(item.amount_in) &&
     Number.isSafeInteger(item.amount_out) &&
     typeof item.transaction_content === 'string' &&
-    typeof item.reference_number === 'string' &&
-    (item.code === null || typeof item.code === 'string') &&
+    (item.reference_number === null ||
+      item.reference_number === undefined ||
+      typeof item.reference_number === 'string') &&
+    (item.code === null ||
+      item.code === undefined ||
+      typeof item.code === 'string') &&
     typeof item.bank_brand_name === 'string' &&
     typeof item.bank_account_id === 'string' &&
     ['in', 'out'].includes(String(item.transfer_type))
