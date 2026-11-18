@@ -1,9 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import {
   IsNotEmpty,
   IsDateString,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -66,13 +68,47 @@ export class SubmitFacilityLegalProfileDto {
   @MaxLength(100)
   bankName!: string;
 
+  @ApiPropertyOptional({
+    description: 'Mã BIN ngân hàng theo chuẩn NAPAS / VietQR (VD: 970436)',
+    example: '970436',
+  })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim() || undefined : value,
+  )
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  @Matches(/^[0-9]{4,20}$/, {
+    message: 'Mã BIN ngân hàng phải gồm 4 đến 20 chữ số',
+  })
+  bankBin?: string;
+
+  @ApiPropertyOptional({
+    description: 'Mã viết tắt ngân hàng theo chuẩn NAPAS / VietQR (VD: VCB)',
+    example: 'VCB',
+  })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.trim().toUpperCase() || undefined : value,
+  )
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  @Matches(/^[A-Z0-9_-]{2,20}$/i, {
+    message: 'Mã ngân hàng chỉ gồm chữ cái, số hoặc dấu gạch ngang/dưới (2-20 ký tự)',
+  })
+  bankCode?: string;
+
   @ApiProperty({
-    description: 'Số tài khoản ngân hàng thụ hưởng của cơ sở y tế',
+    description: 'Số tài khoản ngân hàng thụ hưởng của cơ sở y tế (tối đa 19 ký tự chữ/số)',
     example: '0011002233445',
   })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsNotEmpty({ message: 'Số tài khoản ngân hàng không được để trống' })
   @IsString()
   @MaxLength(50)
+  @Matches(/^[A-Za-z0-9]{1,19}$/, {
+    message: 'Số tài khoản ngân hàng chỉ gồm chữ hoặc số, tối đa 19 ký tự',
+  })
   bankAccountNumber!: string;
 
   @ApiProperty({

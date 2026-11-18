@@ -13,6 +13,7 @@ jest.mock('@aws-sdk/client-s3', () => {
     })),
     PutObjectCommand: jest.fn().mockImplementation((args) => args),
     HeadObjectCommand: jest.fn().mockImplementation((args) => args),
+    DeleteObjectCommand: jest.fn().mockImplementation((args) => args),
   };
 });
 
@@ -83,5 +84,27 @@ describe('StorageService', () => {
     const s3Key = await service.uploadFile(mockFile, 'avatars');
 
     expect(s3Key).toMatch(/^avatars\/\d+-\d+\.png$/);
+  });
+
+  it('xóa tệp theo key và không ném lỗi khi tệp không tồn tại hoặc S3 tạm lỗi', async () => {
+    await expect(
+      service.deleteFile('patient-documents/p-1/doc.pdf'),
+    ).resolves.toBeUndefined();
+    expect(mockSend).toHaveBeenCalledWith(
+      { Bucket: 'photos', Key: 'patient-documents/p-1/doc.pdf' },
+      expect.any(Object),
+    );
+
+    mockSend.mockRejectedValueOnce(
+      new S3ServiceException({
+        name: 'NotFound',
+        $fault: 'client',
+        $metadata: { httpStatusCode: 404 },
+      }),
+    );
+    await expect(service.deleteFile('missing.pdf')).resolves.toBeUndefined();
+
+    mockSend.mockRejectedValueOnce(new Error('Network error'));
+    await expect(service.deleteFile('broken.pdf')).resolves.toBeUndefined();
   });
 });

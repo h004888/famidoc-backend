@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../../core/database/prisma.service';
@@ -35,9 +36,175 @@ import {
 } from '../../dtos/public-doctor-reviews.dto';
 import { SubmitConsultationRequestDto } from '../../dtos/submit-consultation-request.dto';
 import { ConsultationRequestResponseDto } from '../../dtos/consultation-request-response.dto';
+import {
+  PublicBankItemDto,
+  PublicBanksResponseDto,
+} from '../../dtos/public-banks-response.dto';
+
+const VIETQR_BANKS_API_URL = 'https://api.vietqr.io/v2/banks';
+const VIETQR_BANKS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const VIETQR_BANKS_TIMEOUT_MS = 5000;
+
+const FALLBACK_VIETQR_BANKS: PublicBankItemDto[] = [
+  {
+    id: 43,
+    name: 'Ngân hàng TMCP Ngoại thương Việt Nam',
+    code: 'VCB',
+    bin: '970436',
+    shortName: 'Vietcombank',
+    logo: 'https://api.vietqr.io/img/VCB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 17,
+    name: 'Ngân hàng TMCP Công thương Việt Nam',
+    code: 'ICB',
+    bin: '970415',
+    shortName: 'VietinBank',
+    logo: 'https://api.vietqr.io/img/ICB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 4,
+    name: 'Ngân hàng TMCP Đầu tư và Phát triển Việt Nam',
+    code: 'BIDV',
+    bin: '970418',
+    shortName: 'BIDV',
+    logo: 'https://api.vietqr.io/img/BIDV.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 42,
+    name: 'Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam',
+    code: 'VBA',
+    bin: '970405',
+    shortName: 'Agribank',
+    logo: 'https://api.vietqr.io/img/VBA.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 38,
+    name: 'Ngân hàng TMCP Kỹ thương Việt Nam',
+    code: 'TCB',
+    bin: '970407',
+    shortName: 'Techcombank',
+    logo: 'https://api.vietqr.io/img/TCB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 21,
+    name: 'Ngân hàng TMCP Quân đội',
+    code: 'MB',
+    bin: '970422',
+    shortName: 'MBBank',
+    logo: 'https://api.vietqr.io/img/MB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 2,
+    name: 'Ngân hàng TMCP Á Châu',
+    code: 'ACB',
+    bin: '970416',
+    shortName: 'ACB',
+    logo: 'https://api.vietqr.io/img/ACB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 47,
+    name: 'Ngân hàng TMCP Việt Nam Thịnh Vượng',
+    code: 'VPB',
+    bin: '970432',
+    shortName: 'VPBank',
+    logo: 'https://api.vietqr.io/img/VPB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 39,
+    name: 'Ngân hàng TMCP Tiên Phong',
+    code: 'TPB',
+    bin: '970423',
+    shortName: 'TPBank',
+    logo: 'https://api.vietqr.io/img/TPB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 36,
+    name: 'Ngân hàng TMCP Sài Gòn Thương Tín',
+    code: 'STB',
+    bin: '970403',
+    shortName: 'Sacombank',
+    logo: 'https://api.vietqr.io/img/STB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 12,
+    name: 'Ngân hàng TMCP Phát triển Thành phố Hồ Chí Minh',
+    code: 'HDB',
+    bin: '970437',
+    shortName: 'HDBank',
+    logo: 'https://api.vietqr.io/img/HDB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 45,
+    name: 'Ngân hàng TMCP Quốc tế Việt Nam',
+    code: 'VIB',
+    bin: '970441',
+    shortName: 'VIB',
+    logo: 'https://api.vietqr.io/img/VIB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 35,
+    name: 'Ngân hàng TMCP Sài Gòn - Hà Nội',
+    code: 'SHB',
+    bin: '970443',
+    shortName: 'SHB',
+    logo: 'https://api.vietqr.io/img/SHB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 22,
+    name: 'Ngân hàng TMCP Hàng Hải Việt Nam',
+    code: 'MSB',
+    bin: '970426',
+    shortName: 'MSB',
+    logo: 'https://api.vietqr.io/img/MSB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 26,
+    name: 'Ngân hàng TMCP Phương Đông',
+    code: 'OCB',
+    bin: '970448',
+    shortName: 'OCB',
+    logo: 'https://api.vietqr.io/img/OCB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+];
 
 @Injectable()
 export class PublicServiceImpl implements IPublicService {
+  private readonly logger = new Logger(PublicServiceImpl.name);
+  private bankCache: { items: PublicBankItemDto[]; fetchedAtMs: number } | null =
+    null;
+  private bankFetchInFlight: Promise<PublicBankItemDto[]> | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
   ) {}
@@ -1128,5 +1295,111 @@ export class PublicServiceImpl implements IPublicService {
         totalPages: Math.ceil(total / limit) || 1,
       },
     };
+  }
+
+  async getSupportedBanks(): Promise<PublicBanksResponseDto> {
+    const now = Date.now();
+    if (
+      this.bankCache &&
+      now - this.bankCache.fetchedAtMs < VIETQR_BANKS_CACHE_TTL_MS
+    ) {
+      return {
+        source: 'cache',
+        updatedAt: new Date(this.bankCache.fetchedAtMs).toISOString(),
+        items: this.bankCache.items,
+      };
+    }
+
+    try {
+      const items = await this.fetchAndCacheBanks();
+      return {
+        source: 'vietqr',
+        updatedAt: new Date(this.bankCache?.fetchedAtMs ?? now).toISOString(),
+        items,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Không thể tải danh sách ngân hàng từ VietQR API: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      if (this.bankCache) {
+        return {
+          source: 'cache',
+          updatedAt: new Date(this.bankCache.fetchedAtMs).toISOString(),
+          items: this.bankCache.items,
+        };
+      }
+      return {
+        source: 'fallback',
+        updatedAt: new Date(now).toISOString(),
+        items: FALLBACK_VIETQR_BANKS,
+      };
+    }
+  }
+
+  private async fetchAndCacheBanks(): Promise<PublicBankItemDto[]> {
+    if (!this.bankFetchInFlight) {
+      this.bankFetchInFlight = this.requestBanksFromVietQr().finally(() => {
+        this.bankFetchInFlight = null;
+      });
+    }
+    return this.bankFetchInFlight;
+  }
+
+  private async requestBanksFromVietQr(): Promise<PublicBankItemDto[]> {
+    const response = await fetch(VIETQR_BANKS_API_URL, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(VIETQR_BANKS_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const payload = (await response.json()) as {
+      code?: string;
+      data?: Array<Record<string, unknown>>;
+    };
+    const rawItems = Array.isArray(payload?.data) ? payload.data : [];
+    const normalized = rawItems
+      .map((raw, index): PublicBankItemDto | null => {
+        const bin = String(raw.bin ?? '').trim();
+        const code = String(raw.code ?? '').trim();
+        const name = String(raw.name ?? '').trim();
+        if (!bin || !code || !name) return null;
+        const shortName = String(
+          raw.shortName ?? raw.short_name ?? code,
+        ).trim();
+        const logo = String(raw.logo ?? '').trim();
+        return {
+          id: Number(raw.id) || index + 1,
+          name,
+          code,
+          bin,
+          shortName: shortName || code,
+          logo,
+          transferSupported: Number(
+            raw.transferSupported ?? raw.isTransfer ?? 1,
+          ),
+          lookupSupported: Number(raw.lookupSupported ?? 0),
+        };
+      })
+      .filter((item): item is PublicBankItemDto => item !== null)
+      .sort((a, b) => {
+        if (a.transferSupported !== b.transferSupported) {
+          return b.transferSupported - a.transferSupported;
+        }
+        return a.shortName.localeCompare(b.shortName, 'vi');
+      });
+
+    if (normalized.length === 0) {
+      throw new Error('VietQR trả về danh sách ngân hàng rỗng');
+    }
+
+    this.bankCache = {
+      items: normalized,
+      fetchedAtMs: Date.now(),
+    };
+    return normalized;
   }
 }

@@ -1317,7 +1317,7 @@ export class ContractsServiceImpl implements IContractsService {
         lock: true,
       });
 
-      if (new Date(contract.endDate) < new Date()) {
+      if (todayInVietnam(new Date(contract.endDate)) < todayInVietnam()) {
         throw new BadRequestException(
           'Không thể ký hợp đồng đã quá hạn kết thúc',
         );
@@ -1373,8 +1373,8 @@ export class ContractsServiceImpl implements IContractsService {
         );
       }
 
-      const signedPdfUrl = dto.signedPdfUrl || contract.signedPdfUrl;
-      if (!signedPdfUrl) {
+      const signedPdfUrl = dto.signedPdfUrl || contract.signedPdfUrl || null;
+      if (contract.documensoEnvelopeId && !signedPdfUrl) {
         throw new BadRequestException(
           'Cần hoàn tất ký Documenso hoặc đính kèm link HTTPS của bản hợp đồng B2B đã ký.',
         );
@@ -1384,9 +1384,13 @@ export class ContractsServiceImpl implements IContractsService {
         ? await session.updateStaffingContract(id, {
             adminSignedAt: new Date(),
             status: 'ACTIVE',
-            signedPdfUrl,
+            ...(signedPdfUrl ? { signedPdfUrl } : {}),
           })
-        : await session.updateStaffingContractStatus(id, 'ACTIVE', signedPdfUrl);
+        : await session.updateStaffingContractStatus(
+            id,
+            'ACTIVE',
+            signedPdfUrl ?? undefined,
+          );
 
       await session.recordStaffingAudit(
         actor.id,
@@ -1605,6 +1609,8 @@ export class ContractsServiceImpl implements IContractsService {
       facilitySigned,
       adminSigned,
       signedPdfUrl: contract.signedPdfUrl,
+      documensoItemId: contract.documensoItemId ?? null,
+      hasDocumensoPdf: Boolean(contract.documensoItemId),
     };
   }
 
@@ -2205,8 +2211,6 @@ export class ContractsServiceImpl implements IContractsService {
             ageGroup,
             gender: rawPatient.gender || 'OTHER',
             relationshipToHead: rawPatient.relationshipToHead || 'MEMBER',
-            citizenId: rawPatient.citizenId,
-            healthInsuranceNumber: rawPatient.healthInsuranceNumber,
             allergies,
             documents,
           };

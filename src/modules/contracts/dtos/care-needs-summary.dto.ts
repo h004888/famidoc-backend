@@ -63,12 +63,6 @@ export class PatientCareSummaryDto {
   @ApiProperty({ example: 'CON' })
   relationshipToHead!: string;
 
-  @ApiPropertyOptional({ example: '001200000001' })
-  citizenId?: string | null;
-
-  @ApiPropertyOptional({ example: 'DN4010123456789' })
-  healthInsuranceNumber?: string | null;
-
   @ApiProperty({ type: [PatientAllergySummaryDto] })
   allergies!: PatientAllergySummaryDto[];
 

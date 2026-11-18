@@ -5,6 +5,7 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { DoctorsServiceImpl } from '../services/impl/doctors.service.impl';
+import { CreateFacilityDto } from '../dtos/create-facility.dto';
 import { SubmitFacilityLegalProfileDto } from '../dtos/submit-facility-legal-profile.dto';
 import type { AuthenticatedUser } from '../../../core/auth/authenticated-request';
 import { FacilityVerificationStatus, UserStatus } from '@prisma/client';
@@ -36,6 +37,8 @@ describe('Facilities Onboarding Service (Admin-Led Provisioning & Legal Verifica
     address: '123 Giải Phóng, Hà Nội',
     hotline: '0987654321',
     bankName: 'CHƯA_CẬP_NHẬT',
+    bankBin: null,
+    bankCode: null,
     bankAccountNumber: 'CHƯA_CẬP_NHẬT',
     bankAccountHolder: 'CHƯA_CẬP_NHẬT',
     legalDocumentKey: null,
@@ -92,6 +95,9 @@ describe('Facilities Onboarding Service (Admin-Led Provisioning & Legal Verifica
           ...mockFacility,
           verificationStatus: FacilityVerificationStatus.ACTIVE,
         }),
+      },
+      b2bStaffingContract: {
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       auditLog: {
         create: jest.fn().mockResolvedValue({ id: 1n }),
@@ -172,6 +178,53 @@ describe('Facilities Onboarding Service (Admin-Led Provisioning & Legal Verifica
       await expect(
         service.createFacilityByAdmin(adminUser, createDto, '127.0.0.1'),
       ).rejects.toThrow(ConflictException);
+    });
+
+    it('normalizes +84 and 84 Vietnamese mobile phones and rejects invalid patterns like 0|... or 8484...', async () => {
+      const pipe = new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      });
+
+      const plus84Dto = await pipe.transform(
+        { ...createDto, phone: '+84 987 654 321' },
+        { type: 'body', metatype: CreateFacilityDto },
+      );
+      expect(plus84Dto.phone).toBe('0987654321');
+
+      const prefix84Dto = await pipe.transform(
+        { ...createDto, phone: '84912345678' },
+        { type: 'body', metatype: CreateFacilityDto },
+      );
+      expect(prefix84Dto.phone).toBe('0912345678');
+
+      await expect(
+        pipe.transform(
+          { ...createDto, phone: '0|12345678' },
+          { type: 'body', metatype: CreateFacilityDto },
+        ),
+      ).rejects.toMatchObject({ status: 400 });
+
+      await expect(
+        pipe.transform(
+          { ...createDto, phone: '8484987654321' },
+          { type: 'body', metatype: CreateFacilityDto },
+        ),
+      ).rejects.toMatchObject({ status: 400 });
+
+      await service.createFacilityByAdmin(
+        adminUser,
+        { ...createDto, phone: '+84987654321' },
+        '127.0.0.1',
+      );
+      expect(prismaService.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            phone: '0987654321',
+          }),
+        }),
+      );
     });
   });
 
@@ -262,11 +315,79 @@ describe('Facilities Onboarding Service (Admin-Led Provisioning & Legal Verifica
             licenseNumber: '01293/BYT-GPHĐ',
             licenseIssuer: 'Bộ Y tế - Cục Quản lý Khám chữa bệnh',
             address: '123 Giải Phóng, Phường Đồng Tâm, Quận Hai Bà Trưng, Hà Nội',
+            bankName: 'Vietcombank',
+            bankBin: null,
+            bankCode: null,
             legalDocumentKey: 'facility-legal/fac-uuid-1/operating-license.pdf',
             businessLicenseKey: 'facility-legal/fac-uuid-1/business-license.pdf',
             legalDocumentsUrl: null,
             legalRejectionReason: null,
             verificationStatus: 'PENDING',
+          }),
+        }),
+      );
+    });
+
+    it('persists bankBin and bankCode when provided and rejects invalid bankBin or >19 char account number', async () => {
+      const pipe = new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      });
+
+      const validWithBank = {
+        ...legalDto,
+        bankName: 'Vietcombank - Ngân hàng TMCP Ngoại thương Việt Nam',
+        bankBin: '970436',
+        bankCode: 'vcb',
+      };
+      const transformed = await pipe.transform(validWithBank, {
+        type: 'body',
+        metatype: SubmitFacilityLegalProfileDto,
+      });
+      expect(transformed.bankBin).toBe('970436');
+      expect(transformed.bankCode).toBe('VCB');
+
+      await expect(
+        pipe.transform(
+          { ...validWithBank, bankBin: 'invalid-bin' },
+          { type: 'body', metatype: SubmitFacilityLegalProfileDto },
+        ),
+      ).rejects.toMatchObject({ status: 400 });
+
+      await expect(
+        pipe.transform(
+          { ...validWithBank, bankAccountNumber: '12345678901234567890' },
+          { type: 'body', metatype: SubmitFacilityLegalProfileDto },
+        ),
+      ).rejects.toMatchObject({ status: 400 });
+
+      storageService.uploadFile
+        .mockResolvedValueOnce('facility-legal/fac-uuid-1/operating-license.pdf')
+        .mockResolvedValueOnce('facility-legal/fac-uuid-1/business-license.pdf');
+
+      prismaService.healthcareFacility.update.mockResolvedValueOnce({
+        ...mockFacility,
+        bankName: transformed.bankName,
+        bankBin: '970436',
+        bankCode: 'VCB',
+        bankAccountNumber: transformed.bankAccountNumber,
+      });
+
+      const res = await service.submitFacilityLegalProfile(
+        facilityUser,
+        transformed,
+        '127.0.0.1',
+        bothFiles,
+      );
+
+      expect(res.bankBin).toBe('970436');
+      expect(res.bankCode).toBe('VCB');
+      expect(prismaService.healthcareFacility.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            bankBin: '970436',
+            bankCode: 'VCB',
           }),
         }),
       );
@@ -321,6 +442,42 @@ describe('Facilities Onboarding Service (Admin-Led Provisioning & Legal Verifica
           bothFiles,
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('accepts today licenseDate in Vietnam timezone during 00:00–06:59 UTC+7 and rejects ADMIN role', async () => {
+      await expect(
+        service.submitFacilityLegalProfile(
+          adminUser,
+          legalDto,
+          '127.0.0.1',
+          bothFiles,
+        ),
+      ).rejects.toThrow(ForbiddenException);
+
+      jest.useFakeTimers();
+      try {
+        // 2026-11-17T18:30:00.000Z === 2026-11-18 01:30:00 UTC+7
+        jest.setSystemTime(new Date('2026-11-17T18:30:00.000Z'));
+
+        const res = await service.submitFacilityLegalProfile(
+          facilityUser,
+          { ...legalDto, licenseDate: '2026-11-18' },
+          '127.0.0.1',
+          bothFiles,
+        );
+        expect(res).toBeDefined();
+
+        await expect(
+          service.submitFacilityLegalProfile(
+            facilityUser,
+            { ...legalDto, licenseDate: '2026-11-19' },
+            '127.0.0.1',
+            bothFiles,
+          ),
+        ).rejects.toThrow(BadRequestException);
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('rejects invalid magic bytes even if filename ends with .pdf', async () => {
@@ -529,6 +686,39 @@ describe('Facilities Onboarding Service (Admin-Led Provisioning & Legal Verifica
           id: 'other-facility-user',
         }),
       ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('Step 5: getMyFacility staffing flags', () => {
+    it('returns hasActiveStaffingContract=false and hasHistoricalStaffingContract=false when no B2B contract exists', async () => {
+      prismaService.b2bStaffingContract.findFirst.mockResolvedValue(null);
+
+      const res = await service.getMyFacility(facilityUser);
+
+      expect(res.hasActiveStaffingContract).toBe(false);
+      expect(res.hasHistoricalStaffingContract).toBe(false);
+    });
+
+    it('returns hasActiveStaffingContract=true when an ACTIVE B2B contract exists', async () => {
+      prismaService.b2bStaffingContract.findFirst
+        .mockResolvedValueOnce({ id: 'b2b-active' })
+        .mockResolvedValueOnce({ id: 'b2b-active' });
+
+      const res = await service.getMyFacility(facilityUser);
+
+      expect(res.hasActiveStaffingContract).toBe(true);
+      expect(res.hasHistoricalStaffingContract).toBe(true);
+    });
+
+    it('returns hasActiveStaffingContract=false and hasHistoricalStaffingContract=true when only historical contract exists', async () => {
+      prismaService.b2bStaffingContract.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'b2b-terminated' });
+
+      const res = await service.getMyFacility(facilityUser);
+
+      expect(res.hasActiveStaffingContract).toBe(false);
+      expect(res.hasHistoricalStaffingContract).toBe(true);
     });
   });
 });

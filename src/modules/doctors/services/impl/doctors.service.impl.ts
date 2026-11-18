@@ -10,10 +10,14 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomBytes, randomUUID } from 'crypto';
-import { hashSync } from 'bcryptjs';
+import { hash, hashSync } from 'bcryptjs';
 import { PrismaService } from '../../../../core/database/prisma.service';
 import { StorageService } from '../../../../core/services/storage.service';
 import { validateUploadedDocumentFile } from '../../../../core/validation/document-file.validator';
+import {
+  todayInVietnam,
+  toVietnamCalendarDate,
+} from '../../../../core/business/business-helpers';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
 import { DoctorCredentialType } from '@prisma/client';
 import type {
@@ -40,6 +44,29 @@ import {
 } from '../../../contracts/pricing/doctor-quota.helper';
 import { inferDoctorClinicalTier } from '../../utils/doctor-clinical-tier.util';
 import type { ListDoctorsQueryDto } from '../../dtos/list-doctors-query.dto';
+import {
+  MAX_BULK_IMPORT_CONFIRM_BATCH,
+  MAX_BULK_IMPORT_READ_ROWS,
+  type BulkDoctorExistingRowDto,
+  type BulkDoctorInvalidRowDto,
+  type BulkDoctorNormalizedRowDto,
+  type BulkImportCreatedDoctorDto,
+  type BulkImportDoctorsPreviewResponseDto,
+  type BulkImportFailedRowDto,
+  type ConfirmBulkImportDoctorsDto,
+  type ConfirmBulkImportDoctorsResponseDto,
+} from '../../dtos/bulk-import-doctors.dto';
+import {
+  buildDoctorImportTemplateWorkbookBuffer,
+  DEFAULT_DOCTOR_SPECIALTY,
+  normalizeEmailValue,
+  parseDoctorsExcelBuffer,
+} from '../../utils/doctor-excel-import.util';
+import {
+  getVietnamesePhoneVariants,
+  normalizeVietnameseMobilePhone,
+  VN_MOBILE_PHONE_REGEX,
+} from '../../utils/vietnamese-phone.util';
 
 @Injectable()
 export class DoctorsServiceImpl implements IDoctorsService {
@@ -53,11 +80,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
     private readonly storage?: StorageService,
   ) {}
 
-  async provisionDoctorAccount(
-    actor: AuthenticatedUser,
-    dto: ProvisionDoctorDto,
-    ip: string,
-  ): Promise<DoctorResponseDto> {
+  private async assertActiveFacilityWithB2bContract(actor: AuthenticatedUser) {
     if (actor.role !== 'HEALTHCARE_FACILITY') {
       throw new ForbiddenException(
         'Chỉ Cơ sở y tế đối tác mới có quyền khởi tạo tài khoản Bác sĩ trực thuộc đơn vị mình',
@@ -72,13 +95,14 @@ export class DoctorsServiceImpl implements IDoctorsService {
         'Tài khoản của bạn chưa liên kết với cơ sở y tế hợp lệ hoặc cơ sở y tế chưa được kích hoạt hoạt động',
       );
     }
-    const targetFacilityId = facility.id;
 
+    const today = todayInVietnam();
     const activeContract = await this.prisma.b2bStaffingContract.findFirst({
       where: {
-        facilityId: targetFacilityId,
+        facilityId: facility.id,
         status: 'ACTIVE',
-        endDate: { gte: new Date() },
+        startDate: { lte: today },
+        endDate: { gte: today },
       },
     });
 
@@ -88,9 +112,116 @@ export class DoctorsServiceImpl implements IDoctorsService {
       );
     }
 
+    return facility;
+  }
+
+  private async sendDoctorProvisioningEmail(params: {
+    email: string;
+    doctorName: string;
+    facilityName: string;
+    initialPassword: string;
+  }): Promise<{ mailSent: boolean; mailWarning?: string }> {
+    if (!this.mailerService?.sendMail) {
+      return { mailSent: false, mailWarning: 'Dịch vụ gửi mail chưa được cấu hình' };
+    }
+
+    try {
+      await this.mailerService.sendMail({
+        to: params.email,
+        subject: 'Thư mời kích hoạt tài khoản Bác sĩ gia đình - FamiDoc',
+        text: `Kính gửi Bác sĩ ${params.doctorName},\n\nTài khoản của bạn tại hệ thống FamiDoc đã được tạo bởi ${params.facilityName}.\n\nThông tin đăng nhập:\n- Email: ${params.email}\n- Mật khẩu khởi tạo: ${params.initialPassword}\n\nVui lòng đăng nhập để nộp hồ sơ chuyên môn kèm đủ 3 tài liệu bắt buộc (Chứng chỉ hành nghề, Bằng tốt nghiệp chuyên môn, Chứng chỉ Y học gia đình) và đổi mật khẩu để tăng cường bảo mật.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+      });
+      return { mailSent: true };
+    } catch (err) {
+      this.logger.warn(
+        `Gửi email mời bác sĩ ${params.email} thất bại: ${(err as Error)?.message ?? err}`,
+      );
+      return {
+        mailSent: false,
+        mailWarning: 'Tài khoản đã được tạo nhưng gửi email thông tin đăng nhập thất bại',
+      };
+    }
+  }
+
+  private async createDoctorRecordsInTransaction(params: {
+    actorUserId: string;
+    facilityId: string;
+    ip: string;
+    email: string;
+    phone: string;
+    doctorName: string;
+    specialty: string;
+    academicTitle?: string;
+    experienceYears: number;
+    bio?: string;
+    passwordHash: string;
+  }) {
+    return this.prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email: params.email,
+          phone: params.phone,
+          fullName: params.doctorName,
+          passwordHash: params.passwordHash,
+          role: 'DOCTOR',
+          status: 'PENDING',
+          mustChangePassword: true,
+        },
+      });
+
+      const doctor = await tx.doctor.create({
+        data: {
+          userId: newUser.id,
+          facilityId: params.facilityId,
+          doctorName: params.doctorName,
+          specialty: params.specialty || DEFAULT_DOCTOR_SPECIALTY,
+          academicTitle: params.academicTitle || null,
+          experienceYears: params.experienceYears,
+          bio: params.bio || null,
+          onboardingStatus: 'PENDING_SUBMISSION',
+        },
+        include: {
+          facility: true,
+          credentials: true,
+          user: { select: { email: true, phone: true } },
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: params.actorUserId,
+          action: 'DOCTOR_ACCOUNT_PROVISIONED',
+          resourceName: 'Doctor',
+          resourceId: doctor.id,
+          clientIp: params.ip || '127.0.0.1',
+          timestamp: new Date(),
+        },
+      });
+
+      return doctor;
+    });
+  }
+
+  async provisionDoctorAccount(
+    actor: AuthenticatedUser,
+    dto: ProvisionDoctorDto,
+    ip: string,
+  ): Promise<DoctorResponseDto> {
+    const facility = await this.assertActiveFacilityWithB2bContract(actor);
+    const email = normalizeEmailValue(dto.email);
+    const phone = normalizeVietnameseMobilePhone(dto.phone);
+    if (!VN_MOBILE_PHONE_REGEX.test(phone)) {
+      throw new BadRequestException(
+        'Số điện thoại không đúng định dạng di động Việt Nam',
+      );
+    }
+
     const existingUser = await this.prisma.user.findFirst({
       where: {
-        OR: [{ email: dto.email }, { phone: dto.phone }],
+        OR: [
+          { email: { equals: email, mode: 'insensitive' } },
+          { phone: { in: getVietnamesePhoneVariants(phone) } },
+        ],
       },
     });
 
@@ -102,65 +233,440 @@ export class DoctorsServiceImpl implements IDoctorsService {
 
     const initialPassword = this.generateRandomInitialPassword();
     const initialPasswordHash = hashSync(initialPassword, 10);
-    const experienceYears = dto.experienceYears ?? 0;
+    const doctorName = dto.doctorName.trim();
 
-    const result = await this.prisma.$transaction(async (tx) => {
-      const newUser = await tx.user.create({
-        data: {
-          email: dto.email.trim().toLowerCase(),
-          phone: dto.phone.trim(),
-          fullName: dto.doctorName.trim(),
-          passwordHash: initialPasswordHash,
-          role: 'DOCTOR',
-          status: 'PENDING',
-          mustChangePassword: true,
-        },
-      });
-
-      const doctor = await tx.doctor.create({
-        data: {
-          userId: newUser.id,
-          facilityId: targetFacilityId,
-          doctorName: dto.doctorName.trim(),
-          specialty: dto.specialty?.trim() || 'Y học gia đình',
-          academicTitle: dto.academicTitle?.trim() || null,
-          experienceYears,
-          bio: dto.bio?.trim() || null,
-          onboardingStatus: 'PENDING_SUBMISSION',
-        },
-        include: {
-          facility: true,
-          credentials: true,
-        },
-      });
-
-      await tx.auditLog.create({
-        data: {
-          actorUserId: actor.id,
-          action: 'DOCTOR_ACCOUNT_PROVISIONED',
-          resourceName: 'Doctor',
-          resourceId: doctor.id,
-          clientIp: ip || '127.0.0.1',
-          timestamp: new Date(),
-        },
-      });
-
-      return doctor;
+    const result = await this.createDoctorRecordsInTransaction({
+      actorUserId: actor.id,
+      facilityId: facility.id,
+      ip,
+      email,
+      phone,
+      doctorName,
+      specialty: dto.specialty?.trim() || DEFAULT_DOCTOR_SPECIALTY,
+      academicTitle: dto.academicTitle?.trim() || undefined,
+      experienceYears: dto.experienceYears ?? 0,
+      bio: dto.bio?.trim() || undefined,
+      passwordHash: initialPasswordHash,
     });
 
-    if (this.mailerService?.sendMail) {
-      try {
-        await this.mailerService.sendMail({
-          to: dto.email.trim().toLowerCase(),
-          subject: 'Thư mời kích hoạt tài khoản Bác sĩ gia đình - FamiDoc',
-          text: `Kính gửi Bác sĩ ${dto.doctorName},\n\nTài khoản của bạn tại hệ thống FamiDoc đã được tạo bởi ${facility.facilityName}.\n\nThông tin đăng nhập:\n- Email: ${dto.email.trim().toLowerCase()}\n- Mật khẩu khởi tạo: ${initialPassword}\n\nVui lòng đăng nhập để nộp hồ sơ chuyên môn kèm đủ 3 tài liệu bắt buộc (Chứng chỉ hành nghề, Bằng tốt nghiệp chuyên môn, Chứng chỉ Y học gia đình) và đổi mật khẩu để tăng cường bảo mật.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+    const mailResult = await this.sendDoctorProvisioningEmail({
+      email,
+      doctorName,
+      facilityName: facility.facilityName,
+      initialPassword,
+    });
+
+    const formatted = this.formatDoctor(result, undefined, mailResult);
+    return {
+      ...formatted,
+      email: formatted.email ?? email,
+      phone: formatted.phone ?? phone,
+    };
+  }
+
+  async generateDoctorImportTemplate(
+    actor: AuthenticatedUser,
+  ): Promise<Buffer> {
+    await this.assertActiveFacilityWithB2bContract(actor);
+    return buildDoctorImportTemplateWorkbookBuffer();
+  }
+
+  async previewDoctorsExcelImport(
+    actor: AuthenticatedUser,
+    file?: Express.Multer.File,
+  ): Promise<BulkImportDoctorsPreviewResponseDto> {
+    const facility = await this.assertActiveFacilityWithB2bContract(actor);
+    if (!file) {
+      throw new BadRequestException(
+        'Vui lòng tải lên tệp Excel (.xlsx) để kiểm tra danh sách bác sĩ',
+      );
+    }
+
+    const parsed = await parseDoctorsExcelBuffer(
+      file.buffer,
+      file.originalname,
+    );
+
+    const validRows: BulkDoctorNormalizedRowDto[] = [];
+    const existingRows: BulkDoctorExistingRowDto[] = [];
+    const invalidRows: BulkDoctorInvalidRowDto[] = [];
+
+    const candidateRows: BulkDoctorNormalizedRowDto[] = [];
+    const seenEmails = new Map<string, number>();
+    const seenPhones = new Map<string, number>();
+
+    for (const item of parsed.rows) {
+      if (!item.isValid) {
+        invalidRows.push(item.invalidRow);
+        continue;
+      }
+
+      const row = item.row;
+      const internalErrors: string[] = [];
+      const dupEmailRow = seenEmails.get(row.email);
+      if (dupEmailRow !== undefined) {
+        internalErrors.push(
+          `Email bị trùng với dòng ${dupEmailRow} trong cùng file Excel`,
+        );
+      }
+      const dupPhoneRow = seenPhones.get(row.phone);
+      if (dupPhoneRow !== undefined) {
+        internalErrors.push(
+          `Số điện thoại bị trùng với dòng ${dupPhoneRow} trong cùng file Excel`,
+        );
+      }
+
+      if (internalErrors.length > 0) {
+        invalidRows.push({
+          rowNumber: row.rowNumber,
+          raw: {
+            doctorName: row.doctorName,
+            email: row.email,
+            phone: row.phone,
+            specialty: row.specialty,
+            academicTitle: row.academicTitle,
+            experienceYears: row.experienceYears,
+            bio: row.bio,
+          },
+          errors: internalErrors,
         });
-      } catch {
-        // Continue even if mail fails
+        continue;
+      }
+
+      seenEmails.set(row.email, row.rowNumber);
+      seenPhones.set(row.phone, row.rowNumber);
+      candidateRows.push(row);
+    }
+
+    if (candidateRows.length > 0) {
+      const candidateEmails = candidateRows.map((r) => r.email);
+      const candidatePhones = Array.from(
+        new Set(candidateRows.flatMap((r) => getVietnamesePhoneVariants(r.phone))),
+      );
+
+      const existingUsers = await this.prisma.user.findMany({
+        where: {
+          OR: [
+            ...candidateEmails.map((em) => ({
+              email: { equals: em, mode: 'insensitive' as const },
+            })),
+            { phone: { in: candidatePhones } },
+          ],
+        },
+        select: {
+          id: true,
+          email: true,
+          phone: true,
+          fullName: true,
+          role: true,
+          doctor: {
+            select: {
+              id: true,
+              facilityId: true,
+              doctorName: true,
+              onboardingStatus: true,
+            },
+          },
+        },
+      });
+
+      const byEmail = new Map<string, (typeof existingUsers)[number]>();
+      const byPhone = new Map<string, (typeof existingUsers)[number]>();
+      for (const user of existingUsers) {
+        if (user.email) byEmail.set(normalizeEmailValue(user.email), user);
+        if (user.phone) {
+          byPhone.set(normalizeVietnameseMobilePhone(user.phone), user);
+        }
+      }
+
+      for (const row of candidateRows) {
+        const emailOwner = byEmail.get(row.email);
+        const phoneOwner = byPhone.get(row.phone);
+
+        if (
+          emailOwner &&
+          phoneOwner &&
+          emailOwner.id === phoneOwner.id &&
+          emailOwner.doctor?.facilityId === facility.id
+        ) {
+          existingRows.push({
+            rowNumber: row.rowNumber,
+            doctorName: row.doctorName,
+            email: row.email,
+            phone: row.phone,
+            existingDoctorId: emailOwner.doctor.id,
+            existingDoctorName: emailOwner.doctor.doctorName,
+            existingOnboardingStatus: emailOwner.doctor.onboardingStatus,
+            reason:
+              'Bác sĩ đã tồn tại tại cơ sở y tế này (tự động bỏ qua an toàn)',
+          });
+          continue;
+        }
+
+        if (emailOwner || phoneOwner) {
+          const conflictErrors: string[] = [];
+          if (emailOwner && phoneOwner && emailOwner.id !== phoneOwner.id) {
+            conflictErrors.push(
+              'Email và số điện thoại đang trùng với hai tài khoản khác nhau trên hệ thống',
+            );
+          } else if (emailOwner) {
+            conflictErrors.push(
+              emailOwner.doctor?.facilityId === facility.id
+                ? `Email đã thuộc về bác sĩ ${emailOwner.doctor.doctorName} tại CSYT nhưng số điện thoại không khớp`
+                : 'Email đã tồn tại trên hệ thống',
+            );
+          } else if (phoneOwner) {
+            conflictErrors.push(
+              phoneOwner.doctor?.facilityId === facility.id
+                ? `Số điện thoại đã thuộc về bác sĩ ${phoneOwner.doctor.doctorName} tại CSYT nhưng email không khớp`
+                : 'Số điện thoại đã tồn tại trên hệ thống',
+            );
+          }
+
+          invalidRows.push({
+            rowNumber: row.rowNumber,
+            raw: {
+              doctorName: row.doctorName,
+              email: row.email,
+              phone: row.phone,
+              specialty: row.specialty,
+              academicTitle: row.academicTitle,
+              experienceYears: row.experienceYears,
+              bio: row.bio,
+            },
+            errors: conflictErrors,
+          });
+          continue;
+        }
+
+        validRows.push(row);
       }
     }
 
-    return this.formatDoctor(result);
+    invalidRows.sort((a, b) => a.rowNumber - b.rowNumber);
+
+    return {
+      summary: {
+        totalReadRows: parsed.totalReadRows,
+        validCount: validRows.length,
+        existingSkippedCount: existingRows.length,
+        invalidCount: invalidRows.length,
+        maxReadRows: MAX_BULK_IMPORT_READ_ROWS,
+        maxConfirmBatch: MAX_BULK_IMPORT_CONFIRM_BATCH,
+      },
+      validRows,
+      existingRows,
+      invalidRows,
+    };
+  }
+
+  async confirmDoctorsBulkImport(
+    actor: AuthenticatedUser,
+    dto: ConfirmBulkImportDoctorsDto,
+    ip: string,
+  ): Promise<ConfirmBulkImportDoctorsResponseDto> {
+    const facility = await this.assertActiveFacilityWithB2bContract(actor);
+
+    const items = dto?.doctors ?? [];
+    if (items.length === 0) {
+      throw new BadRequestException(
+        'Vui lòng chọn ít nhất 1 bác sĩ để khởi tạo tài khoản',
+      );
+    }
+    if (items.length > MAX_BULK_IMPORT_CONFIRM_BATCH) {
+      throw new BadRequestException(
+        `Mỗi lượt xác nhận chỉ được khởi tạo tối đa ${MAX_BULK_IMPORT_CONFIRM_BATCH} bác sĩ mới`,
+      );
+    }
+
+    const failedRows: BulkImportFailedRowDto[] = [];
+    const seenEmails = new Set<string>();
+    const seenPhones = new Set<string>();
+
+    const dedupedItems: Array<{
+      rowNumber?: number;
+      email: string;
+      phone: string;
+      doctorName: string;
+      specialty: string;
+      academicTitle?: string;
+      experienceYears: number;
+      bio?: string;
+    }> = [];
+
+    for (const item of items) {
+      const email = normalizeEmailValue(item.email);
+      const phone = normalizeVietnameseMobilePhone(item.phone);
+      const doctorName = item.doctorName.trim();
+
+      if (seenEmails.has(email) || seenPhones.has(phone)) {
+        failedRows.push({
+          rowNumber: item.rowNumber,
+          doctorName,
+          email,
+          phone,
+          reason: 'Email hoặc số điện thoại bị trùng lặp trong danh sách xác nhận',
+        });
+        continue;
+      }
+      seenEmails.add(email);
+      seenPhones.add(phone);
+
+      dedupedItems.push({
+        rowNumber: item.rowNumber,
+        email,
+        phone,
+        doctorName,
+        specialty: item.specialty?.trim() || DEFAULT_DOCTOR_SPECIALTY,
+        academicTitle: item.academicTitle?.trim() || undefined,
+        experienceYears: item.experienceYears ?? 0,
+        bio: item.bio?.trim() || undefined,
+      });
+    }
+
+    const readyToCreate: typeof dedupedItems = [];
+    if (dedupedItems.length > 0) {
+      const candidateEmails = dedupedItems.map((i) => i.email);
+      const candidatePhones = Array.from(
+        new Set(dedupedItems.flatMap((i) => getVietnamesePhoneVariants(i.phone))),
+      );
+      const existingUsers = await this.prisma.user.findMany({
+        where: {
+          OR: [
+            ...candidateEmails.map((em) => ({
+              email: { equals: em, mode: 'insensitive' as const },
+            })),
+            { phone: { in: candidatePhones } },
+          ],
+        },
+        select: { email: true, phone: true },
+      });
+
+      const existingEmailSet = new Set(
+        existingUsers
+          .map((u) => (u.email ? normalizeEmailValue(u.email) : ''))
+          .filter(Boolean),
+      );
+      const existingPhoneSet = new Set(
+        existingUsers
+          .map((u) => (u.phone ? normalizeVietnameseMobilePhone(u.phone) : ''))
+          .filter(Boolean),
+      );
+
+      for (const item of dedupedItems) {
+        if (
+          existingEmailSet.has(item.email) ||
+          existingPhoneSet.has(item.phone)
+        ) {
+          failedRows.push({
+            rowNumber: item.rowNumber,
+            doctorName: item.doctorName,
+            email: item.email,
+            phone: item.phone,
+            reason:
+              'Email hoặc số điện thoại đã tồn tại trên hệ thống trước lúc xác nhận',
+          });
+          continue;
+        }
+        readyToCreate.push(item);
+      }
+    }
+
+    const preparedItems = await Promise.all(
+      readyToCreate.map(async (item) => {
+        const initialPassword = this.generateRandomInitialPassword();
+        const passwordHash = await hash(initialPassword, 10);
+        return { ...item, initialPassword, passwordHash };
+      }),
+    );
+
+    const createdPendingMail: Array<{
+      rowNumber?: number;
+      doctor: DoctorResponseDto;
+      email: string;
+      doctorName: string;
+      initialPassword: string;
+    }> = [];
+
+    for (const item of preparedItems) {
+      try {
+        const doctor = await this.createDoctorRecordsInTransaction({
+          actorUserId: actor.id,
+          facilityId: facility.id,
+          ip,
+          email: item.email,
+          phone: item.phone,
+          doctorName: item.doctorName,
+          specialty: item.specialty,
+          academicTitle: item.academicTitle,
+          experienceYears: item.experienceYears,
+          bio: item.bio,
+          passwordHash: item.passwordHash,
+        });
+        createdPendingMail.push({
+          rowNumber: item.rowNumber,
+          doctor: {
+            ...this.formatDoctor(doctor),
+            email: doctor.user?.email ?? item.email,
+            phone: doctor.user?.phone ?? item.phone,
+          },
+          email: item.email,
+          doctorName: item.doctorName,
+          initialPassword: item.initialPassword,
+        });
+      } catch (err: any) {
+        const isUniqueViolation = err?.code === 'P2002';
+        failedRows.push({
+          rowNumber: item.rowNumber,
+          doctorName: item.doctorName,
+          email: item.email,
+          phone: item.phone,
+          reason: isUniqueViolation
+            ? 'Email hoặc số điện thoại vừa được tạo bởi một thao tác khác'
+            : err?.message || 'Không thể khởi tạo tài khoản bác sĩ',
+        });
+      }
+    }
+
+    const createdDoctors: BulkImportCreatedDoctorDto[] = [];
+    const MAIL_CONCURRENCY = 5;
+    for (let i = 0; i < createdPendingMail.length; i += MAIL_CONCURRENCY) {
+      const chunk = createdPendingMail.slice(i, i + MAIL_CONCURRENCY);
+      const chunkResults = await Promise.all(
+        chunk.map(async (entry) => {
+          const mailResult = await this.sendDoctorProvisioningEmail({
+            email: entry.email,
+            doctorName: entry.doctorName,
+            facilityName: facility.facilityName,
+            initialPassword: entry.initialPassword,
+          });
+          return {
+            rowNumber: entry.rowNumber,
+            doctor: entry.doctor,
+            mailSent: mailResult.mailSent,
+            ...(mailResult.mailWarning
+              ? { mailWarning: mailResult.mailWarning }
+              : {}),
+          };
+        }),
+      );
+      createdDoctors.push(...chunkResults);
+    }
+
+    const mailSentCount = createdDoctors.filter((d) => d.mailSent).length;
+    const mailFailedCount = createdDoctors.length - mailSentCount;
+
+    return {
+      summary: {
+        requestedCount: items.length,
+        createdCount: createdDoctors.length,
+        failedCount: failedRows.length,
+        mailSentCount,
+        mailFailedCount,
+      },
+      createdDoctors,
+      failedRows,
+    };
   }
 
   private resolveCredentialLabel(type: DoctorCredentialType): string {
@@ -211,11 +717,11 @@ export class DoctorsServiceImpl implements IDoctorsService {
       doctorId === 'me'
         ? await this.prisma.doctor.findFirst({
             where: { userId: actor.id },
-            include: { facility: true, credentials: true },
+            include: { facility: true, credentials: true, user: { select: { email: true, phone: true } } },
           })
         : await this.prisma.doctor.findUnique({
             where: { id: doctorId },
-            include: { facility: true, credentials: true },
+            include: { facility: true, credentials: true, user: { select: { email: true, phone: true } } },
           });
 
     if (!doctor) {
@@ -235,12 +741,23 @@ export class DoctorsServiceImpl implements IDoctorsService {
         'Bác sĩ đã hoàn tất onboarding và đang hoạt động (ACTIVE), không thể nộp lại hồ sơ',
       );
     }
+    if (doctor.onboardingStatus === 'FACILITY_VERIFIED') {
+      throw new BadRequestException(
+        'Hồ sơ bác sĩ đã được Cơ sở y tế duyệt Cấp 1 và đang chờ Quản trị viên thẩm định Cấp 2, không thể tự ý nộp đè.',
+      );
+    }
+    if (doctor.onboardingStatus === 'SUSPENDED') {
+      throw new BadRequestException(
+        'Tài khoản bác sĩ đang bị tạm đình chỉ (SUSPENDED), không thể nộp hồ sơ.',
+      );
+    }
 
     const requiredTypes: DoctorCredentialType[] = [
       DoctorCredentialType.PRACTICE_LICENSE_CCHN,
       DoctorCredentialType.DEGREE,
       DoctorCredentialType.FAMILY_MEDICINE_CERT,
     ];
+    const todayVn = todayInVietnam();
     const seenTypes = new Set<DoctorCredentialType>();
     for (const c of dto.credentials) {
       if (seenTypes.has(c.credentialType)) {
@@ -250,13 +767,13 @@ export class DoctorsServiceImpl implements IDoctorsService {
       }
       seenTypes.add(c.credentialType);
 
-      const issueDate = new Date(c.issueDate);
-      if (isNaN(issueDate.getTime())) {
+      const issueDate = toVietnamCalendarDate(c.issueDate);
+      if (!issueDate) {
         throw new BadRequestException(
           `Ngày cấp chứng chỉ ${c.certificateNumber} không hợp lệ`,
         );
       }
-      if (issueDate > new Date()) {
+      if (issueDate > todayVn) {
         throw new BadRequestException(
           `Ngày cấp chứng chỉ ${c.certificateNumber} không được ở tương lai`,
         );
@@ -382,6 +899,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
         include: {
           facility: true,
           credentials: true,
+          user: { select: { email: true, phone: true } },
         },
       });
 
@@ -471,7 +989,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
   ): Promise<DoctorResponseDto> {
     const doctor = await this.prisma.doctor.findUnique({
       where: { id: doctorId },
-      include: { facility: true, credentials: true },
+      include: { facility: true, credentials: true, user: { select: { email: true, phone: true } } },
     });
 
     if (!doctor) {
@@ -499,13 +1017,29 @@ export class DoctorsServiceImpl implements IDoctorsService {
       );
     }
 
-    if (
-      dto.approved &&
-      (!doctor.credentials || doctor.credentials.length === 0)
-    ) {
+    if (doctor.onboardingStatus !== 'PENDING_FACILITY_REVIEW') {
       throw new BadRequestException(
-        'Bác sĩ chưa nộp văn bằng chứng chỉ chuyên môn để thẩm định',
+        'Hồ sơ bác sĩ chưa ở trạng thái chờ Cơ sở y tế thẩm định Cấp 1 (PENDING_FACILITY_REVIEW).',
       );
+    }
+
+    if (dto.approved) {
+      const submittedTypes = new Set(
+        (doctor.credentials ?? []).map((c: any) => c.credentialType),
+      );
+      const requiredTypes: DoctorCredentialType[] = [
+        DoctorCredentialType.PRACTICE_LICENSE_CCHN,
+        DoctorCredentialType.DEGREE,
+        DoctorCredentialType.FAMILY_MEDICINE_CERT,
+      ];
+      const missingTypes = requiredTypes.filter((t) => !submittedTypes.has(t));
+      if (missingTypes.length > 0) {
+        throw new BadRequestException(
+          `Bác sĩ chưa nộp đủ 3 loại văn bằng chứng chỉ bắt buộc để thẩm định (${missingTypes
+            .map((t) => this.resolveCredentialLabel(t))
+            .join(', ')}).`,
+        );
+      }
     }
 
     if (!dto.approved && (!dto.rejectionReason || !dto.rejectionReason.trim())) {
@@ -533,7 +1067,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
             rejectionReason: null,
             updatedAt: new Date(),
           },
-          include: { facility: true, credentials: true },
+          include: { facility: true, credentials: true, user: { select: { email: true, phone: true } } },
         });
 
         await tx.auditLog.create({
@@ -582,7 +1116,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
             rejectionReason,
             updatedAt: new Date(),
           },
-          include: { facility: true, credentials: true },
+          include: { facility: true, credentials: true, user: { select: { email: true, phone: true } } },
         });
 
         await tx.auditLog.create({
@@ -627,7 +1161,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
 
     const doctor = await this.prisma.doctor.findUnique({
       where: { id: doctorId },
-      include: { facility: true, credentials: true },
+      include: { facility: true, credentials: true, user: { select: { email: true, phone: true } } },
     });
 
     if (!doctor) {
@@ -645,6 +1179,10 @@ export class DoctorsServiceImpl implements IDoctorsService {
         'Vui lòng cung cấp lý do từ chối phê duyệt (rejectionReason)',
       );
     }
+
+    const rejectionReason = !dto.approved
+      ? dto.rejectionReason?.trim() || 'Quản trị viên từ chối phê duyệt cấp 2'
+      : undefined;
 
     const updated = await this.prisma.$transaction(async (tx) => {
       if (dto.approved) {
@@ -670,7 +1208,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
             rejectionReason: null,
             updatedAt: new Date(),
           },
-          include: { facility: true, credentials: true },
+          include: { facility: true, credentials: true, user: { select: { email: true, phone: true } } },
         });
 
         await tx.auditLog.create({
@@ -707,45 +1245,8 @@ export class DoctorsServiceImpl implements IDoctorsService {
           });
         }
 
-        if (this.mailerService?.sendMail) {
-          const docUser = await tx.user.findUnique({
-            where: { id: doctor.userId },
-          });
-          if (docUser?.email) {
-            try {
-              await this.mailerService.sendMail({
-                to: docUser.email,
-                subject:
-                  'Hồ sơ bác sĩ của bạn đã được phê duyệt thành công - FamiDoc',
-                text: `Kính gửi Bác sĩ ${doctor.doctorName},\n\nHồ sơ văn bằng và chứng chỉ hành nghề của bạn đã được Quản trị viên FamiDoc phê duyệt cấp 2. Tài khoản của bạn đã chuyển sang trạng thái ACTIVE và sẵn sàng tiếp nhận bệnh nhân.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
-              });
-            } catch {
-              // Silently ignore mail errors in dev
-            }
-          }
-
-          if (doctor.facility?.userId) {
-            const facUser = await tx.user.findUnique({
-              where: { id: doctor.facility.userId },
-            });
-            if (facUser?.email && facUser.email !== docUser?.email) {
-              try {
-                await this.mailerService.sendMail({
-                  to: facUser.email,
-                  subject: `Bác sĩ ${doctor.doctorName} đã hoàn tất thẩm định 2 cấp - FamiDoc`,
-                  text: `Kính gửi ${doctor.facility.facilityName},\n\nBác sĩ ${doctor.doctorName} đã vượt qua thẩm định Cấp 2 của Quản trị viên FamiDoc và chính thức hoạt động (ACTIVE) trên hệ thống.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
-                });
-              } catch {
-                // Silently ignore mail errors in dev
-              }
-            }
-          }
-        }
-
         return doc;
       } else {
-        const rejectionReason =
-          dto.rejectionReason?.trim() || 'Quản trị viên từ chối phê duyệt cấp 2';
         await tx.doctorCredential.updateMany({
           where: { doctorId },
           data: {
@@ -762,7 +1263,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
             rejectionReason,
             updatedAt: new Date(),
           },
-          include: { facility: true, credentials: true },
+          include: { facility: true, credentials: true, user: { select: { email: true, phone: true } } },
         });
 
         await tx.auditLog.create({
@@ -802,6 +1303,77 @@ export class DoctorsServiceImpl implements IDoctorsService {
       }
     });
 
+    if (this.mailerService?.sendMail) {
+      const docUser = await this.prisma.user.findUnique({
+        where: { id: doctor.userId },
+      });
+      const facUser = doctor.facility?.userId
+        ? await this.prisma.user.findUnique({
+            where: { id: doctor.facility.userId },
+          })
+        : null;
+
+      if (dto.approved) {
+        if (docUser?.email) {
+          try {
+            await this.mailerService.sendMail({
+              to: docUser.email,
+              subject:
+                'Hồ sơ bác sĩ của bạn đã được phê duyệt thành công - FamiDoc',
+              text: `Kính gửi Bác sĩ ${doctor.doctorName},\n\nHồ sơ văn bằng và chứng chỉ hành nghề của bạn đã được Quản trị viên FamiDoc phê duyệt cấp 2. Tài khoản của bạn đã chuyển sang trạng thái ACTIVE và sẵn sàng tiếp nhận bệnh nhân.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+            });
+          } catch (err) {
+            this.logger.warn(
+              `Gửi email duyệt Cấp 2 tới bác sĩ ${docUser.email} thất bại: ${(err as Error)?.message ?? err}`,
+            );
+          }
+        }
+
+        if (facUser?.email && facUser.email !== docUser?.email) {
+          try {
+            await this.mailerService.sendMail({
+              to: facUser.email,
+              subject: `Bác sĩ ${doctor.doctorName} đã hoàn tất thẩm định 2 cấp - FamiDoc`,
+              text: `Kính gửi ${doctor.facility.facilityName},\n\nBác sĩ ${doctor.doctorName} đã vượt qua thẩm định Cấp 2 của Quản trị viên FamiDoc và chính thức hoạt động (ACTIVE) trên hệ thống.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+            });
+          } catch (err) {
+            this.logger.warn(
+              `Gửi email duyệt Cấp 2 tới CSYT ${facUser.email} thất bại: ${(err as Error)?.message ?? err}`,
+            );
+          }
+        }
+      } else {
+        if (docUser?.email) {
+          try {
+            await this.mailerService.sendMail({
+              to: docUser.email,
+              subject:
+                'Hồ sơ chuyên môn bác sĩ cần bổ sung (Thẩm định Cấp 2) - FamiDoc',
+              text: `Kính gửi Bác sĩ ${doctor.doctorName},\n\nHồ sơ văn bằng và chứng chỉ hành nghề của bạn chưa đạt yêu cầu ở bước hậu kiểm Cấp 2.\nLý do: ${rejectionReason}\n\nVui lòng đăng nhập vào cổng Bác sĩ FamiDoc để cập nhật lại hồ sơ và gửi thẩm định lại.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+            });
+          } catch (err) {
+            this.logger.warn(
+              `Gửi email từ chối Cấp 2 tới bác sĩ ${docUser.email} thất bại: ${(err as Error)?.message ?? err}`,
+            );
+          }
+        }
+
+        if (facUser?.email && facUser.email !== docUser?.email) {
+          try {
+            await this.mailerService.sendMail({
+              to: facUser.email,
+              subject: `Hồ sơ bác sĩ ${doctor.doctorName} bị từ chối ở Thẩm định Cấp 2 - FamiDoc`,
+              text: `Kính gửi ${doctor.facility.facilityName},\n\nHồ sơ bác sĩ ${doctor.doctorName} chưa đạt phê duyệt Cấp 2 của Quản trị viên FamiDoc.\nLý do: ${rejectionReason}\n\nBác sĩ cần bổ sung lại hồ sơ để Cơ sở y tế thẩm định Cấp 1 lại trước khi trình duyệt Cấp 2.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+            });
+          } catch (err) {
+            this.logger.warn(
+              `Gửi email từ chối Cấp 2 tới CSYT ${facUser.email} thất bại: ${(err as Error)?.message ?? err}`,
+            );
+          }
+        }
+      }
+    }
+
     return this.formatDoctor(updated);
   }
 
@@ -812,7 +1384,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
     if (doctorId === 'me') {
       const doc = await this.prisma.doctor.findUnique({
         where: { userId: actor.id },
-        include: { facility: true, credentials: true },
+        include: { facility: true, credentials: true, user: { select: { email: true, phone: true } } },
       });
       if (!doc) {
         throw new NotFoundException(
@@ -824,7 +1396,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
 
     const doctor = await this.prisma.doctor.findUnique({
       where: { id: doctorId },
-      include: { facility: true, credentials: true },
+      include: { facility: true, credentials: true, user: { select: { email: true, phone: true } } },
     });
 
     if (!doctor) {
@@ -894,7 +1466,11 @@ export class DoctorsServiceImpl implements IDoctorsService {
         where,
         skip,
         take: limit,
-        include: { facility: true, credentials: true },
+        include: {
+          facility: true,
+          credentials: true,
+          user: { select: { email: true, phone: true } },
+        },
         orderBy: { createdAt: 'desc' },
       }),
     ]);
@@ -935,7 +1511,11 @@ export class DoctorsServiceImpl implements IDoctorsService {
     return this.listDoctors(actor, query);
   }
 
-  private formatDoctor(doctor: any, activeAndHeldCountOverride?: number): DoctorResponseDto {
+  private formatDoctor(
+    doctor: any,
+    activeAndHeldCountOverride?: number,
+    mailResult?: { mailSent: boolean; mailWarning?: string },
+  ): DoctorResponseDto {
     const activeAndHeld =
       activeAndHeldCountOverride ?? doctor.activePanelCount ?? 0;
     const quota = computeQuotaMetrics(doctor.maxPanelCapacity, activeAndHeld);
@@ -947,6 +1527,8 @@ export class DoctorsServiceImpl implements IDoctorsService {
       id: doctor.id,
       userId: doctor.userId,
       facilityId: doctor.facilityId,
+      ...(doctor.user?.email ? { email: doctor.user.email } : {}),
+      ...(doctor.user?.phone ? { phone: doctor.user.phone } : {}),
       doctorName: doctor.doctorName,
       specialty: doctor.specialty,
       academicTitle: doctor.academicTitle,
@@ -992,6 +1574,14 @@ export class DoctorsServiceImpl implements IDoctorsService {
             })),
           }
         : {}),
+      ...(mailResult
+        ? {
+            mailSent: mailResult.mailSent,
+            ...(mailResult.mailWarning
+              ? { mailWarning: mailResult.mailWarning }
+              : {}),
+          }
+        : {}),
     };
   }
 
@@ -1014,15 +1604,20 @@ export class DoctorsServiceImpl implements IDoctorsService {
       );
     }
 
-    const email = dto.email.trim().toLowerCase();
-    const phone = dto.phone.trim();
+    const email = normalizeEmailValue(dto.email);
+    const phone = normalizeVietnameseMobilePhone(dto.phone);
+    if (!VN_MOBILE_PHONE_REGEX.test(phone)) {
+      throw new BadRequestException(
+        'Số điện thoại không đúng định dạng di động Việt Nam',
+      );
+    }
     const facilityName = dto.facilityName.trim();
     const representativeName = dto.representativeName.trim();
     const address = dto.address?.trim() || 'Chưa cập nhật địa chỉ';
 
     const existingUser = await this.prisma.user.findFirst({
       where: {
-        OR: [{ email }, { phone }],
+        OR: [{ email }, { phone: { in: getVietnamesePhoneVariants(phone) } }],
       },
     });
 
@@ -1141,9 +1736,9 @@ export class DoctorsServiceImpl implements IDoctorsService {
     ip: string,
     filesOrSingle?: Express.Multer.File | UploadedFacilityLegalFiles,
   ): Promise<FacilityResponseDto> {
-    if (actor.role !== 'HEALTHCARE_FACILITY' && actor.role !== 'ADMIN') {
+    if (actor.role !== 'HEALTHCARE_FACILITY') {
       throw new ForbiddenException(
-        'Chỉ Cơ sở y tế hoặc Quản trị viên mới có quyền cập nhật hồ sơ pháp lý',
+        'Chỉ Cơ sở y tế mới có quyền cập nhật hồ sơ pháp lý',
       );
     }
 
@@ -1164,11 +1759,11 @@ export class DoctorsServiceImpl implements IDoctorsService {
       );
     }
 
-    const parsedLicenseDate = new Date(dto.licenseDate);
-    if (Number.isNaN(parsedLicenseDate.getTime())) {
+    const parsedLicenseDate = toVietnamCalendarDate(dto.licenseDate);
+    if (!parsedLicenseDate) {
       throw new BadRequestException('Ngày cấp giấy phép hoạt động không hợp lệ');
     }
-    if (parsedLicenseDate > new Date()) {
+    if (parsedLicenseDate > todayInVietnam()) {
       throw new BadRequestException(
         'Ngày cấp giấy phép hoạt động không được ở tương lai',
       );
@@ -1286,6 +1881,8 @@ export class DoctorsServiceImpl implements IDoctorsService {
           taxCode: dto.taxCode.trim(),
           hotline: dto.hotline.trim(),
           bankName: dto.bankName.trim(),
+          bankBin: dto.bankBin?.trim() || null,
+          bankCode: dto.bankCode?.trim().toUpperCase() || null,
           bankAccountNumber: dto.bankAccountNumber.trim(),
           bankAccountHolder: dto.bankAccountHolder.trim(),
           facilityName: dto.facilityName?.trim() || facility.facilityName,
@@ -1505,7 +2102,30 @@ export class DoctorsServiceImpl implements IDoctorsService {
       );
     }
 
-    return this.formatFacility(facility);
+    const today = todayInVietnam();
+    const [activeStaffing, historicalStaffing] = await Promise.all([
+      this.prisma.b2bStaffingContract?.findFirst({
+        where: {
+          facilityId: facility.id,
+          status: 'ACTIVE',
+          startDate: { lte: today },
+          endDate: { gte: today },
+        },
+        select: { id: true },
+      }) ?? Promise.resolve(null),
+      this.prisma.b2bStaffingContract?.findFirst({
+        where: {
+          facilityId: facility.id,
+          status: { in: ['ACTIVE', 'EXPIRED', 'TERMINATED'] },
+        },
+        select: { id: true },
+      }) ?? Promise.resolve(null),
+    ]);
+
+    return this.formatFacility(facility, {
+      hasActiveStaffingContract: Boolean(activeStaffing),
+      hasHistoricalStaffingContract: Boolean(activeStaffing || historicalStaffing),
+    });
   }
 
   async getFacilityLegalDocument(
@@ -1622,6 +2242,10 @@ export class DoctorsServiceImpl implements IDoctorsService {
 
   private formatFacility(
     facility: any,
+    staffingFlags?: {
+      hasActiveStaffingContract: boolean;
+      hasHistoricalStaffingContract: boolean;
+    },
   ): FacilityResponseDto {
     return {
       id: facility.id,
@@ -1632,6 +2256,8 @@ export class DoctorsServiceImpl implements IDoctorsService {
       address: facility.address,
       hotline: facility.hotline,
       bankName: facility.bankName,
+      bankBin: facility.bankBin ?? null,
+      bankCode: facility.bankCode ?? null,
       bankAccountNumber: facility.bankAccountNumber,
       bankAccountHolder: facility.bankAccountHolder,
       verificationStatus: facility.verificationStatus,
@@ -1642,6 +2268,13 @@ export class DoctorsServiceImpl implements IDoctorsService {
       licenseIssuer: facility.licenseIssuer ?? null,
       licenseDate: facility.licenseDate ?? null,
       legalRejectionReason: facility.legalRejectionReason ?? null,
+      ...(staffingFlags
+        ? {
+            hasActiveStaffingContract: staffingFlags.hasActiveStaffingContract,
+            hasHistoricalStaffingContract:
+              staffingFlags.hasHistoricalStaffingContract,
+          }
+        : {}),
       createdAt: facility.createdAt,
       updatedAt: facility.updatedAt,
       ...(facility.user

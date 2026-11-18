@@ -16,6 +16,7 @@ import {
 } from '../../dtos/public-doctor-reviews.dto';
 import { SubmitConsultationRequestDto } from '../../dtos/submit-consultation-request.dto';
 import { ConsultationRequestResponseDto } from '../../dtos/consultation-request-response.dto';
+import { PublicBanksResponseDto } from '../../dtos/public-banks-response.dto';
 
 export const PUBLIC_SERVICE_TOKEN = Symbol('IPublicService');
 
@@ -43,4 +44,5 @@ export interface IPublicService {
     clientIp?: string,
     userAgent?: string,
   ): Promise<ConsultationRequestResponseDto>;
+  getSupportedBanks(): Promise<PublicBanksResponseDto>;
 }

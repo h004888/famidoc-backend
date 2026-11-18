@@ -4,6 +4,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -93,5 +94,30 @@ export class StorageService {
 
     this.logger.log(`Tải file lên SeaweedFS S3 thành công: ${s3Key}`);
     return s3Key;
+  }
+
+  /**
+   * Xóa tệp trên SeaweedFS S3; bỏ qua an toàn nếu tệp không còn tồn tại.
+   */
+  async deleteFile(key: string): Promise<void> {
+    if (!key) return;
+    try {
+      await this.s3.send(
+        new DeleteObjectCommand({ Bucket: this.bucket, Key: key }),
+        { abortSignal: AbortSignal.timeout(5_000) },
+      );
+    } catch (error) {
+      if (
+        error instanceof S3ServiceException &&
+        error.$metadata?.httpStatusCode === 404
+      ) {
+        return;
+      }
+      this.logger.warn(
+        `Không thể xóa tệp trên SeaweedFS S3 (${key}): ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 }

@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsEmail,
   IsInt,
@@ -12,6 +12,10 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import {
+  normalizeVietnameseMobilePhone,
+  VN_MOBILE_PHONE_REGEX,
+} from '../utils/vietnamese-phone.util';
 
 export class ProvisionDoctorDto {
   @ApiProperty({
@@ -26,8 +30,11 @@ export class ProvisionDoctorDto {
     description: 'Số điện thoại của bác sĩ (định dạng Việt Nam)',
     example: '0912345678',
   })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? normalizeVietnameseMobilePhone(value) : value,
+  )
   @IsNotEmpty({ message: 'Số điện thoại không được để trống' })
-  @Matches(/(84|0[3|5|7|8|9])+([0-9]{8})\b/, {
+  @Matches(VN_MOBILE_PHONE_REGEX, {
     message: 'Số điện thoại không đúng định dạng di động Việt Nam',
   })
   phone!: string;

@@ -368,6 +368,59 @@ describe('ContractsServiceImpl - Staffing Contracts', () => {
       );
     });
 
+    it('allows ADMIN fallback Step 2 signing without signedPdfUrl when documensoEnvelopeId is null', async () => {
+      sessionMock.lockStaffingContractForUpdate!.mockResolvedValue({
+        ...mockStaffingContract,
+        documensoEnvelopeId: null,
+        documensoItemId: null,
+        status: 'PENDING_ADMIN_SIGNATURE' as const,
+        facilitySignedAt: new Date(),
+      } as any);
+
+      const result = await service.signStaffingContract(
+        adminUser,
+        'stf-uuid-1',
+        {},
+        '127.0.0.1',
+      );
+
+      expect(result.status).toBe('ACTIVE');
+      expect(result.signedPdfUrl).toBeNull();
+    });
+
+    it('evaluates endDate in Vietnam timezone so signing is allowed until 23:59 UTC+7 on endDate', async () => {
+      jest.useFakeTimers();
+      try {
+        // 2026-11-18T16:30:00.000Z === 2026-11-18 23:30:00 UTC+7
+        jest.setSystemTime(new Date('2026-11-18T16:30:00.000Z'));
+        sessionMock.lockStaffingContractForUpdate!.mockResolvedValue({
+          ...mockStaffingContract,
+          endDate: new Date('2026-11-18T00:00:00.000Z'),
+        } as any);
+
+        const okRes = await service.signStaffingContract(
+          facilityUser,
+          'stf-uuid-1',
+          {},
+          '127.0.0.1',
+        );
+        expect(okRes.status).toBe('PENDING_ADMIN_SIGNATURE');
+
+        // 2026-11-18T17:30:00.000Z === 2026-11-19 00:30:00 UTC+7 (past endDate)
+        jest.setSystemTime(new Date('2026-11-18T17:30:00.000Z'));
+        await expect(
+          service.signStaffingContract(
+            facilityUser,
+            'stf-uuid-1',
+            {},
+            '127.0.0.1',
+          ),
+        ).rejects.toThrow(BadRequestException);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('returns correct signing session per role and waitingReason before facility signs', async () => {
       const facilitySession = await service.getStaffingSigningSession(
         facilityUser,

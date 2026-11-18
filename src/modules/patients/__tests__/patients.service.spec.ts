@@ -1,4 +1,4 @@
-import { ForbiddenException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PatientsServiceImpl } from '../services/impl/patients.service.impl';
 import type { IPatientsRepository } from '../repositories/interfaces/patients.repository.interface';
 import { Gender, AllergenType, AllergySeverity, PatientDocumentType } from '@prisma/client';
@@ -7,10 +7,17 @@ import type { CreatePatientDto } from '../dtos/create-patient.dto';
 import type { UpdatePatientDto } from '../dtos/update-patient.dto';
 import type { CreateAllergyDto } from '../dtos/create-allergy.dto';
 import type { CreatePatientDocumentDto } from '../dtos/create-patient-document.dto';
+import type { StorageService } from '../../../core/services/storage.service';
 
 describe('PatientsServiceImpl', () => {
   let service: PatientsServiceImpl;
   let repository: jest.Mocked<IPatientsRepository>;
+  let storage: {
+    uploadFile: jest.Mock;
+    downloadFile: jest.Mock;
+    deleteFile: jest.Mock;
+    objectExists: jest.Mock;
+  };
 
   const mockFamilyRep: AuthenticatedUser = {
     id: 'user-rep-uuid-1',
@@ -31,10 +38,7 @@ describe('PatientsServiceImpl', () => {
     dateOfBirth: new Date('2015-05-20'),
     gender: Gender.MALE,
     relationshipToHead: 'CON',
-    citizenId: '001201500001',
-    healthInsuranceNumber: 'DN4010123456789',
     bloodType: 'O+',
-    registeredHospital: null,
     chronicDiseases: null,
     status: 'ACTIVE' as const,
     createdAt: new Date(),
@@ -48,10 +52,7 @@ describe('PatientsServiceImpl', () => {
     dateOfBirth: new Date('1990-01-01'),
     gender: Gender.FEMALE,
     relationshipToHead: 'SELF',
-    citizenId: null,
-    healthInsuranceNumber: null,
     bloodType: null,
-    registeredHospital: null,
     chronicDiseases: null,
     status: 'ACTIVE' as const,
     createdAt: new Date(),
@@ -71,9 +72,18 @@ describe('PatientsServiceImpl', () => {
       findAllergiesByPatientId: jest.fn(),
       addDocument: jest.fn(),
       findDocumentsByPatientId: jest.fn(),
+      findDocumentById: jest.fn(),
+      deleteDocument: jest.fn(),
     };
 
-    service = new PatientsServiceImpl(repository);
+    storage = {
+      uploadFile: jest.fn(),
+      downloadFile: jest.fn(),
+      deleteFile: jest.fn(),
+      objectExists: jest.fn(),
+    };
+
+    service = new PatientsServiceImpl(repository, storage as unknown as StorageService);
   });
 
   describe('createPatient', () => {
@@ -82,10 +92,7 @@ describe('PatientsServiceImpl', () => {
       dateOfBirth: '2015-05-20',
       gender: Gender.MALE,
       relationshipToRepresentative: 'CON',
-      identityNumber: '001201500001',
-      phoneNumber: '0987654321',
       bloodType: 'O+',
-      healthInsuranceNumber: 'DN4010123456789',
     };
 
     it('FAMILY_REP thêm thành viên mới vào hộ gia đình của mình thành công', async () => {
@@ -207,6 +214,25 @@ describe('PatientsServiceImpl', () => {
       );
       expect(repository.create).not.toHaveBeenCalled();
       expect(result).toEqual(mockPatient);
+    });
+
+    it('chặn ngày sinh trong tương lai hoặc tuổi vượt quá 120 năm bằng BadRequestException', async () => {
+      await expect(
+        service.createPatient(mockFamilyRep, { ...dto, dateOfBirth: '2999-01-01' }),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.createPatient(mockFamilyRep, { ...dto, dateOfBirth: '1850-01-01' }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(repository.create).not.toHaveBeenCalled();
+    });
+
+    it('chặn trùng SELF bằng ConflictException trên fallback path', async () => {
+      repository.findActiveDuplicateByFamilyId = jest.fn().mockResolvedValue('SELF');
+
+      await expect(service.createPatient(mockFamilyRep, dto)).rejects.toThrow(ConflictException);
+      expect(repository.create).not.toHaveBeenCalled();
     });
   });
 
@@ -378,7 +404,7 @@ describe('PatientsServiceImpl', () => {
     });
   });
 
-  describe('addDocument & listDocuments', () => {
+  describe('addDocument, listDocuments, getDocumentFile & deleteDocument', () => {
     const docDto: CreatePatientDocumentDto = {
       documentName: 'Phiếu xét nghiệm máu',
       documentType: PatientDocumentType.LAB_RESULT,
@@ -393,19 +419,109 @@ describe('PatientsServiceImpl', () => {
       documentName: 'Phiếu xét nghiệm máu',
       documentType: PatientDocumentType.LAB_RESULT,
       fileUrl: 'https://storage.famidoc.vn/docs/blood_test.pdf',
+      mimeType: 'application/pdf',
+      notes: null,
       fileSizeKb: 1024,
       recordedDate: new Date('2026-11-01'),
       uploadedAt: new Date(),
     };
 
-    it('FAMILY_REP đính kèm tài liệu y tế cho thành viên trong hộ thành công', async () => {
+    it('FAMILY_REP đính kèm tài liệu y tế dạng URL hợp lệ cho thành viên trong hộ thành công', async () => {
       repository.findById.mockResolvedValue(mockPatient);
       repository.addDocument.mockResolvedValue(mockDoc);
 
       const result = await service.addDocument(mockFamilyRep, 'patient-uuid-1', docDto);
 
-      expect(repository.addDocument).toHaveBeenCalledWith('patient-uuid-1', docDto);
-      expect(result).toEqual(mockDoc);
+      expect(repository.addDocument).toHaveBeenCalledWith(
+        'patient-uuid-1',
+        expect.objectContaining({
+          documentName: 'Phiếu xét nghiệm máu',
+          documentType: PatientDocumentType.LAB_RESULT,
+          fileUrl: 'https://storage.famidoc.vn/docs/blood_test.pdf',
+          fileSizeKb: 1024,
+        }),
+      );
+      expect(result).toMatchObject({
+        ...mockDoc,
+        downloadPath: docDto.fileUrl,
+        previewUrl: null,
+      });
+    });
+
+    it('FAMILY_REP upload file PDF đơn thuốc thật lên SeaweedFS S3 thành công', async () => {
+      repository.findById.mockResolvedValue(mockPatient);
+      storage.uploadFile.mockResolvedValue('patient-documents/patient-uuid-1/173000-1.pdf');
+      const createdInternalDoc = {
+        ...mockDoc,
+        id: 'doc-uuid-presc',
+        documentName: 'Đơn thuốc tim mạch T11',
+        documentType: PatientDocumentType.PRESCRIPTION,
+        fileUrl: 'patient-documents/patient-uuid-1/173000-1.pdf',
+        notes: 'BV ĐHYD - BS. Hùng',
+        fileSizeKb: 1,
+      };
+      repository.addDocument.mockResolvedValue(createdInternalDoc);
+
+      const fakePdfFile = {
+        originalname: 'don-thuoc.pdf',
+        mimetype: 'application/pdf',
+        size: 128,
+        buffer: Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj'),
+      } as Express.Multer.File;
+
+      const result = await service.addDocument(
+        mockFamilyRep,
+        'patient-uuid-1',
+        {
+          documentName: 'Đơn thuốc tim mạch T11',
+          documentType: PatientDocumentType.PRESCRIPTION,
+          recordedDate: '2026-11-18',
+          notes: 'BV ĐHYD - BS. Hùng',
+        },
+        fakePdfFile,
+      );
+
+      expect(storage.uploadFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mimetype: 'application/pdf',
+        }),
+        'patient-documents/patient-uuid-1',
+      );
+      expect(result.downloadPath).toBe(
+        '/api/v1/patients/patient-uuid-1/documents/doc-uuid-presc/file',
+      );
+    });
+
+    it('từ chối tệp giả mạo định dạng hoặc thiếu cả tệp lẫn URL hợp lệ (400)', async () => {
+      repository.findById.mockResolvedValue(mockPatient);
+
+      const spoofedFile = {
+        originalname: 'malware.pdf',
+        mimetype: 'application/pdf',
+        size: 10,
+        buffer: Buffer.from('MZ-not-a-pdf'),
+      } as Express.Multer.File;
+
+      await expect(
+        service.addDocument(
+          mockFamilyRep,
+          'patient-uuid-1',
+          {
+            documentName: 'Đơn thuốc',
+            documentType: PatientDocumentType.PRESCRIPTION,
+            recordedDate: '2026-11-18',
+          },
+          spoofedFile,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.addDocument(mockFamilyRep, 'patient-uuid-1', {
+          documentName: 'Đơn thuốc',
+          documentType: PatientDocumentType.PRESCRIPTION,
+          recordedDate: '2026-11-18',
+        }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('FAMILY_REP đính kèm tài liệu y tế cho người ngoài hộ bị ném ForbiddenException', async () => {
@@ -421,13 +537,191 @@ describe('PatientsServiceImpl', () => {
       const result = await service.listDocuments(mockFamilyRep, 'patient-uuid-1');
 
       expect(repository.findDocumentsByPatientId).toHaveBeenCalledWith('patient-uuid-1');
-      expect(result).toEqual([mockDoc]);
+      expect(result[0]).toMatchObject({
+        ...mockDoc,
+        downloadPath: mockDoc.fileUrl,
+      });
     });
 
     it('FAMILY_REP xem danh sách tài liệu y tế người ngoài hộ bị ném ForbiddenException', async () => {
       repository.findById.mockResolvedValue(mockOtherFamilyPatient);
 
       await expect(service.listDocuments(mockFamilyRep, 'patient-uuid-2')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('tải tệp tài liệu nội bộ hợp lệ và chặn truy cập trái quyền (403)', async () => {
+      const internalDoc = {
+        ...mockDoc,
+        id: 'doc-int-1',
+        fileUrl: 'patient-documents/patient-uuid-1/test.png',
+        mimeType: 'image/png',
+      };
+      repository.findById.mockResolvedValue(mockPatient);
+      (repository.findDocumentById as jest.Mock).mockResolvedValue(internalDoc);
+      storage.downloadFile.mockResolvedValue({
+        bytes: Buffer.from('png-bytes'),
+        contentType: 'image/png',
+      });
+
+      const fileRes = await service.getDocumentFile(mockFamilyRep, 'patient-uuid-1', 'doc-int-1');
+      expect(fileRes.contentType).toBe('image/png');
+      expect(storage.downloadFile).toHaveBeenCalledWith('patient-documents/patient-uuid-1/test.png');
+
+      repository.findById.mockResolvedValueOnce(mockOtherFamilyPatient);
+      await expect(
+        service.getDocumentFile(mockFamilyRep, 'patient-uuid-2', 'doc-int-1'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('xóa tài liệu nội bộ khỏi DB và SeaweedFS S3 cho đúng thành viên trong hộ', async () => {
+      const internalDoc = {
+        ...mockDoc,
+        id: 'doc-del-1',
+        fileUrl: 'patient-documents/patient-uuid-1/del.pdf',
+      };
+      repository.findById.mockResolvedValue(mockPatient);
+      (repository.findDocumentById as jest.Mock).mockResolvedValue(internalDoc);
+      (repository.deleteDocument as jest.Mock).mockResolvedValue(internalDoc);
+
+      const deleted = await service.deleteDocument(mockFamilyRep, 'patient-uuid-1', 'doc-del-1');
+      expect(repository.deleteDocument).toHaveBeenCalledWith('doc-del-1');
+      expect(storage.deleteFile).toHaveBeenCalledWith('patient-documents/patient-uuid-1/del.pdf');
+      expect(deleted.id).toBe('doc-del-1');
+
+      repository.findById.mockResolvedValueOnce(mockOtherFamilyPatient);
+      await expect(
+        service.deleteDocument(mockFamilyRep, 'patient-uuid-2', 'doc-del-1'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('deleteAllergy', () => {
+    it('xóa dị ứng thuộc thành viên trong hộ thành công', async () => {
+      const mockAllergy = {
+        id: 'allergy-1',
+        patientId: 'patient-uuid-1',
+        allergenType: AllergenType.DRUG,
+        allergenName: 'Penicillin',
+        severity: AllergySeverity.MODERATE,
+        clinicalManifestation: 'Mẩn đỏ',
+        createdAt: new Date(),
+      };
+      repository.findById.mockResolvedValue(mockPatient);
+      repository.findAllergyById = jest.fn().mockResolvedValue(mockAllergy);
+      repository.deleteAllergy = jest.fn().mockResolvedValue(mockAllergy);
+
+      const result = await service.deleteAllergy(mockFamilyRep, 'patient-uuid-1', 'allergy-1');
+
+      expect(repository.deleteAllergy).toHaveBeenCalledWith('allergy-1');
+      expect(result).toEqual(mockAllergy);
+    });
+
+    it('ném NotFoundException nếu dị ứng không thuộc patientId', async () => {
+      repository.findById.mockResolvedValue(mockPatient);
+      repository.findAllergyById = jest.fn().mockResolvedValue({
+        id: 'allergy-2',
+        patientId: 'other-patient',
+      });
+
+      await expect(
+        service.deleteAllergy(mockFamilyRep, 'patient-uuid-1', 'allergy-2'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('vitalSigns CRUD', () => {
+    const baseVital = {
+      id: 'vit-1',
+      emrId: null,
+      patientId: 'patient-uuid-1',
+      systolicBp: 145,
+      diastolicBp: 92,
+      heartRate: 78,
+      temperature: 36.8 as any,
+      spo2: 98,
+      respiratoryRate: 18,
+      bloodGlucose: 6.2 as any,
+      isAbnormalAlert: true,
+      recordedAt: new Date('2026-11-18T08:00:00.000Z'),
+    };
+
+    it('tạo chỉ số sinh tồn và tự tính isAbnormalAlert + serialize số thực', async () => {
+      repository.findById.mockResolvedValue(mockPatient);
+      repository.addVitalSign = jest.fn().mockResolvedValue(baseVital);
+
+      const result = await service.addVitalSign(mockFamilyRep, 'patient-uuid-1', {
+        systolicBp: 145,
+        diastolicBp: 92,
+        temperature: 36.8,
+        bloodGlucose: 6.2,
+      });
+
+      expect(repository.addVitalSign).toHaveBeenCalledWith(
+        'patient-uuid-1',
+        expect.objectContaining({ systolicBp: 145 }),
+        true,
+      );
+      expect(result.temperature).toBe(36.8);
+      expect(result.bloodGlucose).toBe(6.2);
+      expect(result.isAbnormalAlert).toBe(true);
+    });
+
+    it('lấy danh sách chỉ số sinh tồn với tham số days hợp lệ', async () => {
+      repository.findById.mockResolvedValue(mockPatient);
+      repository.findVitalSignsByPatientId = jest.fn().mockResolvedValue([baseVital]);
+
+      const result = await service.listVitalSigns(mockFamilyRep, 'patient-uuid-1', 14);
+
+      expect(repository.findVitalSignsByPatientId).toHaveBeenCalledWith(
+        'patient-uuid-1',
+        expect.any(Date),
+      );
+      expect(result).toHaveLength(1);
+    });
+
+    it('chặn sửa hoặc xóa chỉ số sinh tồn gắn với EMR bác sĩ (emrId !== null)', async () => {
+      repository.findById.mockResolvedValue(mockPatient);
+      repository.findVitalSignById = jest.fn().mockResolvedValue({
+        ...baseVital,
+        emrId: 'emr-doctor-1',
+      });
+      repository.updateVitalSign = jest.fn();
+      repository.deleteVitalSign = jest.fn();
+
+      await expect(
+        service.updateVitalSign(mockFamilyRep, 'patient-uuid-1', 'vit-1', { heartRate: 80 }),
+      ).rejects.toThrow(ForbiddenException);
+
+      await expect(
+        service.deleteVitalSign(mockFamilyRep, 'patient-uuid-1', 'vit-1'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('sửa và xóa chỉ số sinh tồn do gia đình nhập (emrId === null) thành công', async () => {
+      repository.findById.mockResolvedValue(mockPatient);
+      repository.findVitalSignById = jest.fn().mockResolvedValue(baseVital);
+      repository.updateVitalSign = jest.fn().mockResolvedValue({
+        ...baseVital,
+        systolicBp: 120,
+        diastolicBp: 78,
+        isAbnormalAlert: false,
+      });
+      repository.deleteVitalSign = jest.fn().mockResolvedValue(baseVital);
+
+      const updated = await service.updateVitalSign(mockFamilyRep, 'patient-uuid-1', 'vit-1', {
+        systolicBp: 120,
+        diastolicBp: 78,
+      });
+      expect(repository.updateVitalSign).toHaveBeenCalledWith(
+        'vit-1',
+        { systolicBp: 120, diastolicBp: 78 },
+        false,
+      );
+      expect(updated.isAbnormalAlert).toBe(false);
+
+      const deleted = await service.deleteVitalSign(mockFamilyRep, 'patient-uuid-1', 'vit-1');
+      expect(repository.deleteVitalSign).toHaveBeenCalledWith('vit-1');
+      expect(deleted.id).toBe('vit-1');
     });
   });
 });
