@@ -50,6 +50,7 @@ describe('SePayApiClient', () => {
       return new Response(
         JSON.stringify({
           status: 'success',
+          meta: { pagination: { has_more: false } },
           data: [transaction],
           meta: { pagination: { current_page: 1, has_more: false } },
         }),
@@ -78,5 +79,39 @@ describe('SePayApiClient', () => {
         perPage: 100,
       }),
     ).rejects.toBeInstanceOf(ServiceUnavailableException);
+  });
+
+  it('accepts transactions with null or empty reference_number', async () => {
+    global.fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          status: 'success',
+          meta: { pagination: { has_more: false } },
+          data: [
+            {
+              id: 'tx-null-ref',
+              transaction_date: '2026-11-18 10:00:00',
+              account_number: '0000123456789',
+              amount_in: 150000,
+              amount_out: 0,
+              transaction_content: 'FD8K4P9W2M TT FAMIDOC TEST',
+              reference_number: null,
+              code: null,
+              bank_brand_name: 'MBBank',
+              bank_account_id: 'acc-uuid-1',
+              transfer_type: 'in',
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )) as typeof fetch;
+    const client = new SePayApiClient(new SePayReconciliationConfig());
+    const page = await client.listTransactions('TEST' as never, {
+      bankAccountId: 'acc-uuid-1',
+      page: 1,
+      perPage: 50,
+    });
+    expect(page.transactions).toHaveLength(1);
+    expect(page.transactions[0].id).toBe('tx-null-ref');
   });
 });

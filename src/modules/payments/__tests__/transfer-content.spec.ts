@@ -6,31 +6,56 @@ import {
 import type { SePayWebhookDto } from '../dtos/sepay-webhook.dto';
 
 describe('Named transfer descriptions and six-digit payment codes', () => {
-  it('pads allocated numbers and stops instead of reusing a code after six digits run out', () => {
-    expect(createPaymentCode(1)).toBe('FD000001');
-    expect(createPaymentCode(999999)).toBe('FD999999');
-    expect(() => createPaymentCode(1000000)).toThrow(
-      'Six-digit payment codes exhausted',
-    );
-    expect(() => createPaymentCode(0)).toThrow();
+  it('generates non-sequential 8-char safe alphanumeric FD codes with at least one digit', () => {
+    const generated = new Set<string>();
+    for (let i = 0; i < 50; i += 1) {
+      const code = createPaymentCode();
+      expect(code).toMatch(/^FD(?=[2-9A-HJ-NP-Z]*[2-9])[2-9A-HJ-NP-Z]{8}$/);
+      expect(code).not.toMatch(/[0O1I]/);
+      generated.add(code);
+    }
+    expect(generated.size).toBe(50);
+  });
+  it('extracts new 8-char FD codes as well as legacy 6-digit and 24/32-hex codes', () => {
+    expect(
+      extractPaymentCodes({
+        content: 'FD8K4P9W2M TT FAMIDOC NGUYEN HOAI NAM',
+        code: 'FD8K4P9W2M',
+      } as SePayWebhookDto),
+    ).toEqual(['FD8K4P9W2M']);
+    expect(
+      extractPaymentCodes({
+        content: 'NGUYEN HOAI NAM - FD123456',
+        code: 'FD123456',
+      } as SePayWebhookDto),
+    ).toEqual(['FD123456']);
+    expect(
+      extractPaymentCodes({
+        content: 'FDABCDEFGH TT FAMIDOC TEST',
+        code: null,
+      } as SePayWebhookDto),
+    ).toEqual([]);
   });
   it('uses the account display name without Vietnamese accents', () => {
-    expect(buildTransferContent('Nguyễn Hoài Nam', 'FD123456')).toBe(
-      'NGUYEN HOAI NAM - FD123456',
+    expect(buildTransferContent('Nguyễn Hoài Nam', 'FD8K4P9W2M')).toBe(
+      'FD8K4P9W2M TT FAMIDOC NGUYEN HOAI NAM',
     );
-    expect(buildTransferContent('Đặng Đình Đức', 'FD123456')).toBe(
-      'DANG DINH DUC - FD123456',
+    expect(buildTransferContent('Đặng Đình Đức', 'FD8K4P9W2M')).toBe(
+      'FD8K4P9W2M TT FAMIDOC DANG DINH DUC',
+    );
+    expect(buildTransferContent(undefined, 'FD8K4P9W2M')).toBe(
+      'FD8K4P9W2M TT FAMIDOC',
     );
   });
   it('does not let a display name that looks like a payment code identify another invoice', () => {
-    const content = buildTransferContent('Nam FD000002', 'FD000001');
-    const payload = { content, code: 'FD000001' } as SePayWebhookDto;
-    expect(extractPaymentCodes(payload)).toEqual(['FD000001']);
+    const content = buildTransferContent('Nam FD000002', 'FD8K4P9W2M');
+    const payload = { content, code: 'FD8K4P9W2M' } as SePayWebhookDto;
+    expect(extractPaymentCodes(payload)).toEqual(['FD8K4P9W2M']);
   });
-  it('keeps the whole payment code at the end when the display name is long', () => {
-    const content = buildTransferContent('Tên dài '.repeat(30), 'FD123456');
-    expect(content.length).toBeLessThanOrEqual(47);
-    expect(content.endsWith(' - FD123456')).toBe(true);
+  it('keeps the whole payment code at the start when the display name is long', () => {
+    const content = buildTransferContent('Tên dài '.repeat(30), 'FD8K4P9W2M');
+    expect(content.length).toBeLessThanOrEqual(50);
+    expect(content.startsWith('FD8K4P9W2M TT FAMIDOC ')).toBe(true);
   });
   it('reads an old code in full instead of treating its six-digit prefix as a new invoice', () => {
     const oldCode = 'FD123456' + 'A'.repeat(18);
