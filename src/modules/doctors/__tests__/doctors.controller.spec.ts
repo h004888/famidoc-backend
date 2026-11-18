@@ -1,6 +1,9 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, PayloadTooLargeException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { FacilitiesDoctorsController } from '../controllers/facilities-doctors.controller';
+import {
+  ExcelUploadSizeFilter,
+  FacilitiesDoctorsController,
+} from '../controllers/facilities-doctors.controller';
 import { FacilitiesController } from '../controllers/facilities.controller';
 import { DoctorsController } from '../controllers/doctors.controller';
 import {
@@ -49,6 +52,9 @@ describe('Doctors & Facilities Controllers', () => {
     id: 'doc-uuid-1',
     userId: 'doc-user-1',
     facilityId: 'fac-uuid-1',
+    email: 'bs.an@famidoc.vn',
+    phone: '0912345678',
+    mailSent: true,
     doctorName: 'BS. CKI Nguyễn Văn An',
     specialty: 'Y học gia đình',
     academicTitle: 'BS.CKI',
@@ -66,6 +72,33 @@ describe('Doctors & Facilities Controllers', () => {
   beforeEach(async () => {
     service = {
       provisionDoctorAccount: jest.fn().mockResolvedValue(mockDoctorResponse),
+      generateDoctorImportTemplate: jest
+        .fn()
+        .mockResolvedValue(Buffer.from('PK\x03\x04template')),
+      previewDoctorsExcelImport: jest.fn().mockResolvedValue({
+        summary: {
+          totalReadRows: 1,
+          validCount: 1,
+          existingSkippedCount: 0,
+          invalidCount: 0,
+          maxReadRows: 100,
+          maxConfirmBatch: 30,
+        },
+        validRows: [],
+        existingRows: [],
+        invalidRows: [],
+      }),
+      confirmDoctorsBulkImport: jest.fn().mockResolvedValue({
+        summary: {
+          requestedCount: 1,
+          createdCount: 1,
+          failedCount: 0,
+          mailSentCount: 1,
+          mailFailedCount: 0,
+        },
+        createdDoctors: [],
+        failedRows: [],
+      }),
       submitDoctorCredentials: jest.fn().mockResolvedValue(mockDoctorResponse),
       getDoctorCredentialFile: jest.fn().mockResolvedValue({
         bytes: Buffer.from('%PDF-1.4'),
@@ -147,6 +180,9 @@ describe('Doctors & Facilities Controllers', () => {
       );
 
       expect(result).toBe(mockDoctorResponse);
+      expect(result.email).toBe('bs.an@famidoc.vn');
+      expect(result.phone).toBe('0912345678');
+      expect(result.mailSent).toBe(true);
       expect(service.provisionDoctorAccount).toHaveBeenCalledWith(
         mockFacilityReq.user,
         dto,
@@ -383,6 +419,82 @@ describe('Doctors & Facilities Controllers', () => {
           'unknown',
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('FacilitiesDoctorsController - Excel bulk import endpoints', () => {
+    it('delegates template download as StreamableFile', async () => {
+      const stream =
+        await facilitiesDoctorsController.downloadDoctorImportTemplate(
+          mockFacilityReq,
+        );
+      expect(service.generateDoctorImportTemplate).toHaveBeenCalledWith(
+        mockFacilityReq.user,
+      );
+      expect(stream).toBeDefined();
+    });
+
+    it('delegates preview upload to service.previewDoctorsExcelImport', async () => {
+      const mockFile = {
+        originalname: 'doctors.xlsx',
+        buffer: Buffer.from('PK\x03\x04'),
+      } as Express.Multer.File;
+      await facilitiesDoctorsController.previewDoctorsImport(
+        mockFacilityReq,
+        mockFile,
+      );
+      expect(service.previewDoctorsExcelImport).toHaveBeenCalledWith(
+        mockFacilityReq.user,
+        mockFile,
+      );
+    });
+
+    it('delegates confirm payload to service.confirmDoctorsBulkImport', async () => {
+      const payload = {
+        doctors: [
+          {
+            rowNumber: 2,
+            doctorName: 'BS. Nguyễn Văn An',
+            email: 'bs.an@hospital.vn',
+            phone: '0912345678',
+          },
+        ],
+      };
+      await facilitiesDoctorsController.confirmDoctorsImport(
+        mockFacilityReq,
+        payload,
+      );
+      expect(service.confirmDoctorsBulkImport).toHaveBeenCalledWith(
+        mockFacilityReq.user,
+        payload,
+        '127.0.0.1',
+      );
+    });
+
+    it('maps Multer PayloadTooLargeException to 400 Vietnamese message via ExcelUploadSizeFilter', () => {
+      const filter = new ExcelUploadSizeFilter();
+      const jsonMock = jest.fn();
+      const statusMock = jest.fn().mockReturnValue({ json: jsonMock });
+      const mockHost = {
+        switchToHttp: () => ({
+          getResponse: () => ({ status: statusMock }),
+          getRequest: () => ({
+            url: '/api/v1/facilities/doctors/import/preview',
+            headers: {},
+          }),
+        }),
+      } as any;
+
+      filter.catch(new PayloadTooLargeException('File too large'), mockHost);
+
+      expect(statusMock).toHaveBeenCalledWith(400);
+      expect(jsonMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          code: 400,
+          message: 'Dung lượng file Excel vượt quá giới hạn tối đa 2MB',
+        }),
+      );
     });
   });
 });

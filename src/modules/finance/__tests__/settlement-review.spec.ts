@@ -15,6 +15,12 @@ describe('Facility settlement review and transfer evidence', () => {
   let service: FinanceServiceImpl;
   let current: FacilitySettlement;
   const updateSettlement = jest.fn();
+  const createSettlement = jest.fn();
+  const createSettlementItems = jest.fn();
+  const findEligibleInvoices = jest.fn();
+  const findPeriodSettlement = jest.fn();
+  const findSettlements = jest.fn();
+  const getSatisfactionSummary = jest.fn();
   const recordFinanceEvent = jest.fn();
   const objectExists = jest.fn();
   const uploadFile = jest.fn();
@@ -44,6 +50,12 @@ describe('Facility settlement review and transfer evidence', () => {
     const session = {
       findFacilityForUser: async (userId: string) => ({ id: userId === facility.id ? 'own-facility' : 'other-facility' }),
       findSettlement: async (id: string) => id === current.id ? current : null,
+      findEligibleInvoices,
+      findPeriodSettlement,
+      createSettlement,
+      createSettlementItems,
+      findSettlements,
+      getSatisfactionSummary,
       updateSettlement,
       recordFinanceEvent,
     } as unknown as FinanceSession;
@@ -108,5 +120,65 @@ describe('Facility settlement review and transfer evidence', () => {
     objectExists.mockResolvedValueOnce(true);
     await expect(service.executeMonthlySettlement(admin, confirmation))
       .resolves.toMatchObject({ disbursementStatus: 'SETTLED', transferEvidenceKey: confirmation.evidenceKey });
+  });
+
+  it('snapshots bankBin and bankCode into bankDestination when preparing a monthly settlement', async () => {
+    findEligibleInvoices.mockResolvedValueOnce([
+      {
+        id: 'inv-1',
+        totalPayable: new Prisma.Decimal(1000000),
+        paidAt: new Date('2026-10-05T00:00:00Z'),
+        addendumId: null,
+        addendum: null,
+        settlementItems: [],
+        contract: {
+          facilityId: 'own-facility',
+          startDate: new Date('2026-10-01T00:00:00Z'),
+          endDate: new Date('2026-10-31T00:00:00Z'),
+          terminatedAt: null,
+          facility: {
+            id: 'own-facility',
+            bankName: 'Vietcombank - Ngân hàng TMCP Ngoại thương Việt Nam',
+            bankBin: '970436',
+            bankCode: 'VCB',
+            bankAccountNumber: '0011002233445',
+            bankAccountHolder: 'BV AN SINH',
+          },
+        },
+      },
+    ]);
+    findPeriodSettlement.mockResolvedValueOnce(null);
+    createSettlement.mockImplementationOnce(async (data) => ({
+      ...current,
+      ...data,
+    }));
+    createSettlementItems.mockResolvedValueOnce(undefined);
+    getSatisfactionSummary.mockResolvedValueOnce({
+      reviewCount: 0,
+      averageStars: null,
+      affectsPayout: false,
+      byDoctor: [],
+    });
+    findSettlements.mockResolvedValueOnce([]);
+
+    await service.executeMonthlySettlement(admin, {
+      action: 'PREPARE',
+      year: 2026,
+      month: 10,
+      environment: 'LIVE',
+    });
+
+    expect(createSettlement).toHaveBeenCalledWith(
+      expect.objectContaining({
+        facilityId: 'own-facility',
+        bankDestination: {
+          bankName: 'Vietcombank - Ngân hàng TMCP Ngoại thương Việt Nam',
+          bankBin: '970436',
+          bankCode: 'VCB',
+          accountNumber: '0011002233445',
+          accountHolder: 'BV AN SINH',
+        },
+      }),
+    );
   });
 });

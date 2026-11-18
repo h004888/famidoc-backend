@@ -47,6 +47,7 @@ import {
 } from '../dtos/public-doctor-reviews.dto';
 import { SubmitConsultationRequestDto } from '../dtos/submit-consultation-request.dto';
 import { ConsultationRequestResponseDto } from '../dtos/consultation-request-response.dto';
+import { PublicBanksResponseDto } from '../dtos/public-banks-response.dto';
 
 @ApiTags('Public Portal')
 @Controller('api/v1/public')
@@ -260,6 +261,22 @@ export class PublicController {
     @Query() query: LookupDoctorReviewsQueryDto,
   ): Promise<PublicDoctorReviewsResponseDto> {
     return this.publicService.getDoctorReviews(id, query);
+  }
+
+  @Get('banks')
+  @ApiOperation({
+    summary: 'Lấy danh sách ngân hàng hỗ trợ VietQR',
+    description:
+      'Proxy tới VietQR Banks API (https://api.vietqr.io/v2/banks) kèm cache 24 giờ và fallback khi API ngoài gián đoạn.',
+  })
+  @ResponseMessage('Lấy danh sách ngân hàng VietQR thành công')
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách ngân hàng chuẩn VietQR kèm mã BIN, mã viết tắt và logo.',
+    type: PublicBanksResponseDto,
+  })
+  async getSupportedBanks(): Promise<PublicBanksResponseDto> {
+    return this.publicService.getSupportedBanks();
   }
 
   @Post(['consultation-requests', 'inquiries'])

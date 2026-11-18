@@ -134,6 +134,8 @@ export interface IContractsService {
     facilitySigned: boolean;
     adminSigned: boolean;
     signedPdfUrl: string | null;
+    documensoItemId?: string | null;
+    hasDocumensoPdf?: boolean;
   }>;
   syncStaffingDocumensoEnvelope(
     actor: AuthenticatedUser,
@@ -146,6 +148,8 @@ export interface IContractsService {
     facilitySigned: boolean;
     adminSigned: boolean;
     signedPdfUrl: string | null;
+    documensoItemId?: string | null;
+    hasDocumensoPdf?: boolean;
   }>;
   downloadStaffingSignedPdf(
     actor: AuthenticatedUser,

@@ -586,4 +586,75 @@ describe('PublicServiceImpl', () => {
       ).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('getSupportedBanks', () => {
+    const originalFetch = global.fetch;
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+      jest.restoreAllMocks();
+    });
+
+    it('fetches from VietQR API, normalizes, caches for 24h, and serves from cache on repeat calls', async () => {
+      const fetchMock = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          code: '00',
+          data: [
+            {
+              id: 2,
+              name: 'Ngân hàng TMCP Á Châu',
+              code: 'ACB',
+              bin: '970416',
+              short_name: 'ACB',
+              logo: 'https://api.vietqr.io/img/ACB.png',
+              isTransfer: 1,
+              lookupSupported: 1,
+            },
+            {
+              id: 99,
+              name: 'Ngân hàng Không Chuyển Khoản',
+              code: 'NOCB',
+              bin: '999999',
+              shortName: 'NoTransfer',
+              logo: '',
+              transferSupported: 0,
+              lookupSupported: 0,
+            },
+          ],
+        }),
+      });
+      global.fetch = fetchMock as any;
+
+      const first = await service.getSupportedBanks();
+      expect(first.source).toBe('vietqr');
+      expect(first.items).toHaveLength(2);
+      expect(first.items[0]).toMatchObject({
+        code: 'ACB',
+        bin: '970416',
+        shortName: 'ACB',
+        transferSupported: 1,
+      });
+      expect(first.items[1].transferSupported).toBe(0);
+
+      const second = await service.getSupportedBanks();
+      expect(second.source).toBe('cache');
+      expect(second.items).toEqual(first.items);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to built-in major Vietnamese banks when upstream fails and no cache exists', async () => {
+      global.fetch = jest
+        .fn()
+        .mockRejectedValue(new Error('Network timeout')) as any;
+
+      const result = await service.getSupportedBanks();
+
+      expect(result.source).toBe('fallback');
+      expect(result.items.length).toBeGreaterThanOrEqual(10);
+      expect(result.items.some((b) => b.bin === '970436' && b.code === 'VCB')).toBe(
+        true,
+      );
+    });
+  });
 });

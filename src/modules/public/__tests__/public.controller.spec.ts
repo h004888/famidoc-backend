@@ -28,6 +28,7 @@ describe('PublicController', () => {
       getPublicDoctorDetail: jest.fn(),
       getDoctorReviews: jest.fn(),
       getPublicCareModel: jest.fn(),
+      getSupportedBanks: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -375,6 +376,35 @@ describe('PublicController', () => {
 
       expect(result).toBe(mockReviews);
       expect(spy).toHaveBeenCalledWith(doctorId, query);
+    });
+  });
+
+  describe('getSupportedBanks', () => {
+    it('should delegate to publicService.getSupportedBanks', async () => {
+      const mockBanks = {
+        source: 'vietqr' as const,
+        updatedAt: '2026-11-18T14:00:00.000Z',
+        items: [
+          {
+            id: 43,
+            name: 'Ngân hàng TMCP Ngoại thương Việt Nam',
+            code: 'VCB',
+            bin: '970436',
+            shortName: 'Vietcombank',
+            logo: 'https://api.vietqr.io/img/VCB.png',
+            transferSupported: 1,
+            lookupSupported: 1,
+          },
+        ],
+      };
+
+      const spy = jest.spyOn(service, 'getSupportedBanks');
+      spy.mockResolvedValue(mockBanks);
+
+      const result = await controller.getSupportedBanks();
+
+      expect(result).toBe(mockBanks);
+      expect(spy).toHaveBeenCalledTimes(1);
     });
   });
 });

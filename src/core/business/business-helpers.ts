@@ -38,6 +38,26 @@ export function todayInVietnam(now = new Date()): Date {
     Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
   );
 }
+export function toVietnamCalendarDate(raw: string): Date | null {
+  const trimmed = raw.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    const [year, month, day] = trimmed.split('-').map(Number);
+    const utcDate = new Date(Date.UTC(year, month - 1, day));
+    if (
+      utcDate.getUTCFullYear() !== year ||
+      utcDate.getUTCMonth() !== month - 1 ||
+      utcDate.getUTCDate() !== day
+    ) {
+      return null;
+    }
+    return utcDate;
+  }
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return todayInVietnam(parsed);
+}
 export function getVietnamMonthWindow(year: number, month: number) {
   return {
     start: new Date(Date.UTC(year, month - 1, 1) - 7 * 3600000),
