@@ -14,6 +14,7 @@ import {
   notifyContractParties,
   writeBusinessAudit,
 } from '../../../../core/business/business-helpers';
+import { buildActiveAndHeldWhere } from '../../pricing/doctor-quota.helper';
 import {
   CONTRACT_CHANGE_INCLUDE,
   CHANGE_ADDENDUM_INCLUDE,
@@ -109,7 +110,11 @@ export class PrismaContractsSession implements ContractsSession {
       data: {
         contractStatus: status,
         ...(status === 'TERMINATED'
-          ? { terminationReason: reason, terminatedAt: new Date() }
+          ? {
+              terminationReason: reason,
+              terminatedAt: new Date(),
+              holdExpiresAt: null,
+            }
           : {}),
       },
     });
@@ -287,6 +292,55 @@ export class PrismaContractsSession implements ContractsSession {
           where: { credentialType: 'PRACTICE_LICENSE_CCHN' },
           orderBy: { issueDate: 'desc' },
         },
+      },
+    });
+  }
+
+  async lockDoctorAndCountActiveAndHeld(
+    doctorId: string,
+    exceptContractId?: string,
+  ) {
+    await this.tx
+      .$queryRaw`SELECT id FROM doctors WHERE id=${doctorId}::uuid FOR UPDATE`;
+    const doctor = await this.findDoctorById(doctorId);
+    if (!doctor) return null;
+    const activeAndHeldCount = await this.tx.medicalContract.count({
+      where: buildActiveAndHeldWhere(doctorId, {
+        now: new Date(),
+        exceptContractId,
+      }),
+    });
+    return { doctor, activeAndHeldCount };
+  }
+
+  findMatchingSessionById(id: string) {
+    return this.tx.matchingSession.findUnique({
+      where: { id },
+    });
+  }
+
+  async markMatchingSessionConfirmed(id: string, contractId: string) {
+    await this.tx.matchingSession.update({
+      where: { id },
+      data: {
+        status: 'CONFIRMED',
+        contractId,
+      },
+    });
+  }
+
+  findMatchingQueueRequestById(id: string) {
+    return this.tx.matchingQueueRequest.findUnique({
+      where: { id },
+    });
+  }
+
+  async markMatchingQueueConfirmed(id: string, contractId: string) {
+    await this.tx.matchingQueueRequest.update({
+      where: { id },
+      data: {
+        status: 'CONFIRMED',
+        contractId,
       },
     });
   }

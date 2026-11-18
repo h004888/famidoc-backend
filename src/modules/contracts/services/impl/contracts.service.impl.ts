@@ -83,6 +83,7 @@ import {
   calculateMemberAddendum,
   readFrozenContractTerms,
 } from '../../pricing/contract-change-pricing';
+import { computeContractHoldExpiresAt } from '../../pricing/doctor-quota.helper';
 interface TerminationConsent {
   role: SignerRole;
   userId: string;
@@ -117,11 +118,55 @@ export class ContractsServiceImpl implements IContractsService {
       documentRenderer || new ContractDocumentRendererService();
   }
 
+  private async lockAndVerifyDoctorQuota(
+    session: ContractsSession,
+    doctorId: string,
+    exceptContractId?: string,
+  ): Promise<{ doctor: any; activeAndHeldCount: number; maxCap: number }> {
+    const locked = session.lockDoctorAndCountActiveAndHeld
+      ? await session.lockDoctorAndCountActiveAndHeld(doctorId, exceptContractId)
+      : null;
+    let doctor = locked?.doctor ?? null;
+    let activeAndHeldCount = locked?.activeAndHeldCount ?? 0;
+
+    if (!locked && !session.lockDoctorAndCountActiveAndHeld) {
+      doctor = await session.findDoctorById(doctorId);
+      activeAndHeldCount =
+        typeof doctor?.activePanelCount === 'number'
+          ? doctor.activePanelCount
+          : 0;
+    }
+
+    if (!doctor || doctor.onboardingStatus !== 'ACTIVE') {
+      throw new BadRequestException(
+        'Bác sĩ không hợp lệ hoặc chưa được kích hoạt hoạt động',
+      );
+    }
+
+    const maxCap =
+      typeof doctor.maxPanelCapacity === 'number' && doctor.maxPanelCapacity > 0
+        ? doctor.maxPanelCapacity
+        : 30;
+
+    if (activeAndHeldCount >= maxCap) {
+      throw new ConflictException(
+        `Bác sĩ đã đạt giới hạn tối đa số hộ gia đình phụ trách (${maxCap}/${maxCap}). Vui lòng chọn bác sĩ khác`,
+      );
+    }
+
+    return { doctor, activeAndHeldCount, maxCap };
+  }
+
   async createInitialMedicalContract(
     actor: AuthenticatedUser,
     dto: CreateMedicalContractDto,
   ): Promise<ContractSummary> {
     const patientIds = dto.patientIds ?? [];
+    if (dto.matchingSessionId && dto.queueRequestId) {
+      throw new BadRequestException(
+        'Không thể truyền đồng thời matchingSessionId và queueRequestId',
+      );
+    }
 
     const validateAndPrepare = async (session: ContractsSession) => {
       let targetFamilyId = dto.familyId;
@@ -149,14 +194,125 @@ export class ContractsServiceImpl implements IContractsService {
         );
       }
 
-      const pkg = await session.findPackage(dto.packageId);
+      let effectivePackageId = dto.packageId;
+      let effectiveDoctorId = dto.doctorId;
+
+      if (dto.matchingSessionId) {
+        const matchingSession =
+          await session.findMatchingSessionById?.(dto.matchingSessionId);
+        if (!matchingSession) {
+          throw new NotFoundException('Không tìm thấy phiên gợi ý bác sĩ');
+        }
+        if (
+          matchingSession.userId &&
+          actor.role !== 'ADMIN' &&
+          matchingSession.userId !== actor.id
+        ) {
+          throw new ForbiddenException(
+            'Bạn không có quyền sử dụng phiên gợi ý bác sĩ này',
+          );
+        }
+        if (matchingSession.status !== 'MATCHED') {
+          throw new ConflictException(
+            'Phiên gợi ý bác sĩ đã được xác nhận hoặc không còn hiệu lực',
+          );
+        }
+        if (
+          matchingSession.expiresAt &&
+          new Date(matchingSession.expiresAt) <= new Date()
+        ) {
+          throw new ConflictException('Phiên gợi ý bác sĩ đã hết hạn');
+        }
+        if (!matchingSession.matchedDoctorId) {
+          throw new ConflictException(
+            'Phiên gợi ý chưa có bác sĩ phù hợp để xác nhận',
+          );
+        }
+        if (dto.packageId && dto.packageId !== matchingSession.packageId) {
+          throw new BadRequestException(
+            'Gói dịch vụ không khớp với phiên gợi ý bác sĩ',
+          );
+        }
+        if (
+          dto.doctorId &&
+          dto.doctorId !== matchingSession.matchedDoctorId
+        ) {
+          throw new BadRequestException(
+            'Bác sĩ không khớp với kết quả phiên gợi ý bác sĩ',
+          );
+        }
+        effectivePackageId = matchingSession.packageId;
+        effectiveDoctorId = matchingSession.matchedDoctorId;
+      }
+
+      if (dto.queueRequestId) {
+        const queueRequest =
+          await session.findMatchingQueueRequestById?.(dto.queueRequestId);
+        if (!queueRequest) {
+          throw new NotFoundException('Không tìm thấy yêu cầu hàng chờ');
+        }
+        if (
+          actor.role !== 'ADMIN' &&
+          ((queueRequest.userId && queueRequest.userId !== actor.id) ||
+            (queueRequest.familyId && queueRequest.familyId !== targetFamilyId))
+        ) {
+          throw new ForbiddenException(
+            'Bạn không có quyền xác nhận yêu cầu hàng chờ này',
+          );
+        }
+        if (
+          queueRequest.status !== 'ASSIGNED' ||
+          !queueRequest.assignedDoctorId
+        ) {
+          throw new ConflictException(
+            'Yêu cầu hàng chờ chưa được Quản trị viên gán bác sĩ hoặc đã xử lý',
+          );
+        }
+        if (dto.packageId && dto.packageId !== queueRequest.packageId) {
+          throw new BadRequestException(
+            'Gói dịch vụ không khớp với yêu cầu hàng chờ',
+          );
+        }
+        if (dto.doctorId && dto.doctorId !== queueRequest.assignedDoctorId) {
+          throw new BadRequestException(
+            'Bác sĩ không khớp với bác sĩ đã được phân công trong hàng chờ',
+          );
+        }
+        effectivePackageId = queueRequest.packageId;
+        effectiveDoctorId = queueRequest.assignedDoctorId;
+      }
+
+      const pkg = await session.findPackage(effectivePackageId);
       if (!pkg || pkg.status !== 'ACTIVE' || pkg.deletedAt) {
         throw new BadRequestException(
           'Gói chăm sóc sức khỏe không hợp lệ hoặc không khả dụng',
         );
       }
 
-      const facility = await session.findFacilityById(dto.facilityId);
+      let doctor: any = null;
+      let resolvedFacilityId = dto.facilityId;
+      if (effectiveDoctorId) {
+        const checked = await this.lockAndVerifyDoctorQuota(
+          session,
+          effectiveDoctorId,
+          dto.replaceContractId,
+        );
+        doctor = checked.doctor;
+        if (dto.facilityId && dto.facilityId !== doctor.facilityId) {
+          throw new BadRequestException(
+            'Cơ sở y tế (facilityId) không khớp với cơ sở y tế của bác sĩ đã chọn',
+          );
+        }
+        resolvedFacilityId = doctor.facilityId;
+      }
+
+      if (!resolvedFacilityId) {
+        throw new BadRequestException(
+          'Vui lòng chỉ định bác sĩ hoặc cơ sở y tế phụ trách',
+        );
+      }
+
+      const facility = await session.findFacilityById(resolvedFacilityId);
       if (!facility || facility.verificationStatus !== 'ACTIVE') {
         throw new BadRequestException(
           'Cơ sở y tế không hợp lệ hoặc chưa được kích hoạt',
@@ -166,37 +322,13 @@ export class ContractsServiceImpl implements IContractsService {
       // Chặn sớm: thiếu hợp đồng cung ứng nhân lực B2B hiệu lực thì chắc chắn
       // không thể thanh toán/đối soát về sau, nên không được gửi phong bì ký.
       const activeStaffing = await session.findActiveStaffingContract(
-        dto.facilityId,
+        resolvedFacilityId,
         todayInVietnam(),
       );
       if (!activeStaffing) {
         throw new BadRequestException(
           'Cơ sở y tế chưa có hợp đồng cung ứng nhân lực B2B còn hiệu lực. Vui lòng chọn cơ sở y tế khác hoặc liên hệ Ban quản trị FamiDoc để hoàn tất hợp đồng hợp tác.',
         );
-      }
-
-      let doctor: any = null;
-      if (dto.doctorId) {
-        doctor = await session.findDoctorById(dto.doctorId);
-        if (
-          !doctor ||
-          doctor.onboardingStatus !== 'ACTIVE' ||
-          doctor.facilityId !== dto.facilityId
-        ) {
-          throw new BadRequestException(
-            'Bác sĩ không hợp lệ hoặc không thuộc cơ sở y tế này',
-          );
-        }
-
-        const maxCap = doctor.maxPanelCapacity || 30;
-        if (
-          typeof doctor.activePanelCount === 'number' &&
-          doctor.activePanelCount >= maxCap
-        ) {
-          throw new ConflictException(
-            `Bác sĩ đã đạt giới hạn tối đa số hộ gia đình phụ trách (${maxCap}/${maxCap}). Vui lòng chọn bác sĩ khác`,
-          );
-        }
       }
 
       const family = await session.findFamilyById(targetFamilyId);
@@ -308,6 +440,8 @@ export class ContractsServiceImpl implements IContractsService {
 
       return {
         targetFamilyId,
+        resolvedFacilityId,
+        effectiveDoctorId: effectiveDoctorId ?? null,
         pkg,
         facility,
         doctor,
@@ -345,12 +479,22 @@ export class ContractsServiceImpl implements IContractsService {
         );
       }
 
+      // Khóa lại dòng bác sĩ và kiểm tra slot một lần nữa trước khi ghi DB để chống race condition
+      // (đặc biệt khi Documenso I/O chạy giữa 2 transaction).
+      if (prepared.effectiveDoctorId) {
+        await this.lockAndVerifyDoctorQuota(
+          session,
+          prepared.effectiveDoctorId,
+        );
+      }
+
+      const holdExpiresAt = computeContractHoldExpiresAt();
       const createFn = session.createMedicalContract || session.createUpgrade;
       const item = await createFn.call(session, {
         contractNumber: prepared.contractNumber,
         familyId: prepared.targetFamilyId,
-        facilityId: dto.facilityId,
-        doctorId: dto.doctorId ?? null,
+        facilityId: prepared.resolvedFacilityId,
+        doctorId: prepared.effectiveDoctorId,
         packageId: prepared.pkg.id,
         totalAmount: prepared.quote.pricing.totalPriceVnd,
         remainingHomeVisits: prepared.pkg.periodicVisitsQuota,
@@ -358,6 +502,7 @@ export class ContractsServiceImpl implements IContractsService {
         startDate: prepared.today,
         endDate: addContractMonths(prepared.today, prepared.pkg.durationMonths),
         contractStatus: 'PENDING_APPROVAL',
+        holdExpiresAt,
         billingSnapshot: prepared.snapshot as unknown as Prisma.InputJsonValue,
         memberCount: prepared.memberCount,
         isDemo: false,
@@ -376,6 +521,17 @@ export class ContractsServiceImpl implements IContractsService {
 
       if (patientIds.length > 0) {
         await session.createContractMembers(item.id, patientIds);
+      }
+
+      if (dto.matchingSessionId) {
+        await session.markMatchingSessionConfirmed?.(
+          dto.matchingSessionId,
+          item.id,
+        );
+      }
+
+      if (dto.queueRequestId) {
+        await session.markMatchingQueueConfirmed?.(dto.queueRequestId, item.id);
       }
 
       await session.recordChange(
@@ -630,32 +786,21 @@ export class ContractsServiceImpl implements IContractsService {
         );
       }
 
-      const newDoctor = await session.findDoctorById(dto.doctorId);
-      if (!newDoctor || newDoctor.onboardingStatus !== 'ACTIVE') {
-        throw new BadRequestException(
-          'Bác sĩ không tồn tại hoặc chưa được kích hoạt hoạt động',
-        );
+      const prevDoctorId = contract.doctorId;
+      if (prevDoctorId === dto.doctorId) {
+        return this.toContractSummary(contract);
       }
+
+      const { doctor: newDoctor } = await this.lockAndVerifyDoctorQuota(
+        session,
+        dto.doctorId,
+        contractId,
+      );
 
       if (newDoctor.facilityId !== contract.facilityId) {
         throw new BadRequestException(
           'Bác sĩ không thuộc cơ sở y tế phụ trách hợp đồng này',
         );
-      }
-
-      const maxCapacity = newDoctor.maxPanelCapacity || 30;
-      if (
-        typeof newDoctor.activePanelCount === 'number' &&
-        newDoctor.activePanelCount >= maxCapacity
-      ) {
-        throw new ConflictException(
-          `Bác sĩ đã đạt giới hạn tối đa số hộ gia đình phụ trách (${maxCapacity}/${maxCapacity}). Vui lòng chọn bác sĩ khác`,
-        );
-      }
-
-      const prevDoctorId = contract.doctorId;
-      if (prevDoctorId === dto.doctorId) {
-        return this.toContractSummary(contract);
       }
 
       const updated = await session.updateContractDoctor(

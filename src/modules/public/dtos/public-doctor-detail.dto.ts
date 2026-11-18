@@ -1,4 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { DoctorClinicalTier } from '@prisma/client';
+import { PublicDoctorItemDto } from './public-doctors-response.dto';
 
 export class DoctorStatsDto {
   @ApiProperty({
@@ -361,6 +363,39 @@ export class PublicDoctorDetailDto {
     example: true,
   })
   isAvailable: boolean;
+
+  @ApiPropertyOptional({
+    enum: DoctorClinicalTier,
+    description: 'Phân hạng trình độ bác sĩ',
+    example: DoctorClinicalTier.SENIOR,
+  })
+  clinicalTier?: DoctorClinicalTier;
+
+  @ApiPropertyOptional({
+    description: 'Số slot hộ gia đình còn trống theo thời gian thực',
+    example: 12,
+  })
+  remainingSlots?: number;
+
+  @ApiPropertyOptional({
+    description: 'Trạng thái đã kín slot hộ gia đình hay chưa',
+    example: false,
+  })
+  isQuotaFull?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      'Danh sách bác sĩ trẻ (JUNIOR) còn slot gợi ý khi bác sĩ hiện tại đã kín chỗ',
+    type: [PublicDoctorItemDto],
+  })
+  juniorAlternatives?: PublicDoctorItemDto[];
+
+  @ApiPropertyOptional({
+    description:
+      'Danh sách các gói dịch vụ mức phí thấp hơn đi kèm gợi ý bác sĩ trẻ khi bác sĩ hiện tại đã kín chỗ',
+    type: [DoctorCarePackageItemDto],
+  })
+  lowerPricePackages?: DoctorCarePackageItemDto[];
 
   @ApiProperty({
     description: 'Thông tin sức chứa hộ gia đình của bác sĩ',

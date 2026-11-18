@@ -114,6 +114,14 @@ export interface ContractsSession {
   findFacilityById(id: string): Promise<HealthcareFacility | null>;
   findFacilityByUserId(userId: string): Promise<HealthcareFacility | null>;
   findDoctorById(id: string): Promise<any | null>;
+  lockDoctorAndCountActiveAndHeld?(
+    doctorId: string,
+    exceptContractId?: string,
+  ): Promise<{ doctor: any; activeAndHeldCount: number } | null>;
+  findMatchingSessionById?(id: string): Promise<any | null>;
+  markMatchingSessionConfirmed?(id: string, contractId: string): Promise<void>;
+  findMatchingQueueRequestById?(id: string): Promise<any | null>;
+  markMatchingQueueConfirmed?(id: string, contractId: string): Promise<void>;
   findDoctorByUserId(userId: string): Promise<any | null>;
   findFamilyById(id: string): Promise<any | null>;
   findFamilyByRepresentativeUserId(userId: string): Promise<any | null>;
