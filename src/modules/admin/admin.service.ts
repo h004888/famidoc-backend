@@ -143,14 +143,38 @@ export class AdminService {
     });
   }
 
-  async auditLogs({ resourceName, resourceId, page, limit }: AdminAuditQuery) {
-    const where = { resourceName, resourceId };
+  async auditLogs({ resourceName, resourceId, action, q, page, limit }: AdminAuditQuery) {
+    const where: Prisma.AuditLogWhereInput = {
+      ...(resourceName ? { resourceName } : {}),
+      ...(resourceId ? { resourceId } : {}),
+      ...(action ? { action } : {}),
+      ...(q
+        ? {
+            OR: [
+              { action: { contains: q, mode: 'insensitive' } },
+              { resourceName: { contains: q, mode: 'insensitive' } },
+              { resourceId: { contains: q, mode: 'insensitive' } },
+              { clientIp: { contains: q } },
+              { actorUser: { fullName: { contains: q, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
     const [records, total] = await Promise.all([
       this.db.auditLog.findMany({
-        where, orderBy: { id: 'desc' }, skip: (page - 1) * limit, take: limit,
+        where,
+        orderBy: { id: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
         select: {
-          id: true, timestamp: true, action: true, resourceName: true, resourceId: true,
-          clientIp: true, details: true, actorUser: { select: { fullName: true, role: true } },
+          id: true,
+          timestamp: true,
+          action: true,
+          resourceName: true,
+          resourceId: true,
+          clientIp: true,
+          details: true,
+          actorUser: { select: { fullName: true, role: true } },
         },
       }),
       this.db.auditLog.count({ where }),
@@ -158,9 +182,10 @@ export class AdminService {
     return { items: records.map((record) => ({ ...record, id: record.id.toString() })), total, page, limit };
   }
 
-  async complaints({ status, page, limit }: AdminComplaintsQuery, facilityUserId?: string) {
+  async complaints({ status, page, limit, complainantRole }: AdminComplaintsQuery, facilityUserId?: string) {
     const where: Prisma.ComplaintWhereInput = {
       status,
+      ...(complainantRole ? { complainantUser: { role: complainantRole } } : {}),
       ...(facilityUserId ? { contract: { facility: { userId: facilityUserId } } } : {}),
     };
     const [items, total] = await Promise.all([
@@ -170,23 +195,29 @@ export class AdminService {
     return { items, total, page, limit };
   }
 
-  async overview(period: AdminOverviewQuery['period']) {
+  async overview(period: AdminOverviewQuery['period'], environment: AdminOverviewQuery['environment'] = 'LIVE') {
     const { start, end, days } = windowInVietnam(period);
     const currentYear = new Date(Date.now() + 7 * 3600_000).getUTCFullYear();
-    const open = { status: { in: ['SUBMITTED', 'INVESTIGATING'] } } satisfies Prisma.ComplaintWhereInput;
+    const isDemo = environment === 'TEST';
+    const demoEmail = { endsWith: '@demo.famidoc.invalid' };
+    const user = { status: 'ACTIVE', ...(isDemo ? { email: demoEmail } : { NOT: { email: demoEmail } }) } satisfies Prisma.UserWhereInput;
+    const open = {
+      status: { in: ['SUBMITTED', 'INVESTIGATING'] },
+      contract: { isDemo },
+    } satisfies Prisma.ComplaintWhereInput;
     const [paid, activeContracts, doctors, facilities, openComplaints, queue, rows] = await Promise.all([
       this.db.invoice.aggregate({
-        where: { environment: 'LIVE', paymentStatus: 'PAID', paidAt: { gte: new Date(Date.UTC(currentYear, 0, 1) - 7 * 3600_000), lte: new Date() } },
+        where: { environment, paymentStatus: 'PAID', paidAt: { gte: new Date(Date.UTC(currentYear, 0, 1) - 7 * 3600_000), lte: new Date() } },
         _sum: { totalPayable: true },
       }),
-      this.db.medicalContract.count({ where: { contractStatus: 'ACTIVE', isDemo: false } }),
-      this.db.doctor.count({ where: { onboardingStatus: 'ACTIVE', user: { status: 'ACTIVE' } } }),
-      this.db.healthcareFacility.count({ where: { verificationStatus: 'ACTIVE', user: { status: 'ACTIVE' } } }),
+      this.db.medicalContract.count({ where: { contractStatus: 'ACTIVE', isDemo } }),
+      this.db.doctor.count({ where: { onboardingStatus: 'ACTIVE', user } }),
+      this.db.healthcareFacility.count({ where: { verificationStatus: 'ACTIVE', user } }),
       this.db.complaint.count({ where: open }),
       this.db.complaint.findMany({ where: open, select: complaintFields, orderBy: { createdAt: 'desc' }, take: 5 }),
       this.db.encounter.groupBy({
         by: ['scheduledDate', 'encounterType', 'encounterStatus'],
-        where: { scheduledDate: { gte: start, lt: end }, contract: { isDemo: false } },
+        where: { scheduledDate: { gte: start, lt: end }, contract: { isDemo } },
         _count: { _all: true },
       }),
     ]);

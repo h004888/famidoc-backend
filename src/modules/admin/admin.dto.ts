@@ -36,19 +36,48 @@ export class AdminAuditQuery extends ListCarePackagesDto {
   @IsString()
   @MaxLength(50)
   resourceName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(100)
+  action?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Transform(trim)
+  @IsString()
+  @MaxLength(150)
+  q?: string;
 }
 
-export class AdminComplaintsQuery extends ListCarePackagesDto {
+export class ComplaintsQuery extends ListCarePackagesDto {
   @ApiPropertyOptional({ enum: ComplaintStatus })
   @IsOptional()
   @IsEnum(ComplaintStatus)
   status?: ComplaintStatus;
 }
 
+const complaintSenderRoles = [UserRole.FAMILY_REP, UserRole.DOCTOR];
+
+export class AdminComplaintsQuery extends ComplaintsQuery {
+  @ApiPropertyOptional({ enum: complaintSenderRoles })
+  @IsOptional()
+  @IsIn(complaintSenderRoles)
+  complainantRole?: 'FAMILY_REP' | 'DOCTOR';
+}
+
 export class AdminOverviewQuery {
   @ApiPropertyOptional({ enum: ['weekly', 'monthly', 'yearly'] })
+  @IsOptional()
   @IsIn(['weekly', 'monthly', 'yearly'])
   period: 'weekly' | 'monthly' | 'yearly' = 'monthly';
+
+  @ApiPropertyOptional({ enum: ['LIVE', 'TEST'] })
+  @IsOptional()
+  @IsIn(['LIVE', 'TEST'])
+  environment: 'LIVE' | 'TEST' = 'LIVE';
 }
 
 export class AdminAccountStatusDto {

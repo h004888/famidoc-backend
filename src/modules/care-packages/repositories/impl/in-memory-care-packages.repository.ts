@@ -10,6 +10,9 @@ import {
 } from '../../entities/care-package.entity';
 import {
   CarePackagesRepository,
+  DEMO_CARE_PACKAGE_CODES,
+  DEMO_CARE_PACKAGE_IDS,
+  type CarePackagesListOptions,
   type CarePackagesPage,
 } from '../interfaces/care-packages.repository.interface';
 import { validateCarePackageTerms } from '../../validate-care-package-terms';
@@ -24,12 +27,20 @@ export class InMemoryCarePackagesRepository implements CarePackagesRepository {
     page: number,
     limit: number,
     status?: CarePackageStatus,
+    options?: CarePackagesListOptions,
   ): Promise<CarePackagesPage> {
     // Lọc trước khi phân trang để total phản ánh đúng số bản ghi thỏa điều kiện.
     const items = [...this.packages.values()]
       .filter((item) => status === undefined || item.status === status)
-      // Sắp theo mã gói, sau đó đưa phiên bản mới nhất của cùng mã lên trước.
-      .sort((a, b) => a.code.localeCompare(b.code) || b.version - a.version);
+      .filter((item) => !options?.excludeDemo || (
+        !DEMO_CARE_PACKAGE_IDS.includes(item.id) &&
+        !DEMO_CARE_PACKAGE_CODES.includes(item.code)
+      ))
+      .sort((a, b) =>
+        (options?.ascendingPrice ? a.priceVnd - b.priceVnd : 0) ||
+        a.code.localeCompare(b.code) ||
+        b.version - a.version,
+      );
 
     return Promise.resolve({
       // Cắt đúng trang và sao chép sâu để bên gọi không sửa ngược dữ liệu trong Map.
@@ -77,8 +88,8 @@ export class InMemoryCarePackagesRepository implements CarePackagesRepository {
   ): Promise<CarePackage> {
     const current = this.requirePackage(id);
     // Kiểm tra lại trạng thái mới nhất, phòng gói đã được công bố sau khi service đọc.
-    if (current.status !== CarePackageStatus.DRAFT) {
-      throw new ConflictException('Only draft packages can be edited');
+    if (current.status === CarePackageStatus.DEPRECATED) {
+      throw new ConflictException('Cannot edit a deprecated package');
     }
     const updated = {
       ...current,

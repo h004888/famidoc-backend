@@ -220,6 +220,26 @@ describe('PaymentsServiceImpl (simulation)', () => {
     ).toBe(1);
   });
 
+  it('keeps the Admin adjustment when a payer requests a new code after expiry', async () => {
+    const old = await pendingPayment();
+    const payer = { id: randomUUID(), role: 'FAMILY_REP' as const, familyUnitId: old.familyId };
+    const admin = { id: randomUUID(), role: 'ADMIN' as const, familyUnitId: null };
+    const input = {
+      contractId: old.contractId, amountVnd: 155000, transferDescription: 'THU PHI MOI', reason: 'Điều chỉnh tiền thu.',
+    };
+    expect(() => service.createAdminPaymentRequest(input, payer)).toThrow('Chỉ Admin');
+    const adjusted = await service.createAdminPaymentRequest(input, admin);
+    expect(adjusted.id).not.toBe(old.id);
+    expect((await service.getPaymentStatus(old.id)).status).toBe(PaymentRequestStatus.CANCELLED);
+    expect((await service.createAdminPaymentRequest(input, admin)).id).toBe(adjusted.id);
+    expect((await service.createVietQRPayment(old.contractId, undefined, payer)).id).toBe(adjusted.id);
+    now = new Date(now.getTime() + 16 * 60_000);
+    const next = await service.createVietQRPayment(old.contractId, undefined, payer);
+    expect(next.amountVnd).toBe(155000);
+    expect(next.paymentCode).not.toBe(adjusted.paymentCode);
+    expect(next.transferContent).toBe(`THU PHI MOI ${next.paymentCode}`);
+  });
+
   it('expires a request and allocates a different code for its next attempt', async () => {
     const old = await pendingPayment();
     now = new Date(now.getTime() + 16 * 60_000);
