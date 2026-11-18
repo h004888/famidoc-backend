@@ -9,18 +9,25 @@ import {
   Put,
   Query,
   Req,
+  Res,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import {
   ApiBearerAuth,
+  ApiConsumes,
   ApiOperation,
   ApiParam,
   ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { DEFAULT_MAX_DOCUMENT_BYTES } from '../../../core/validation/document-file.validator';
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../../../core/auth/roles.guard';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
@@ -142,17 +149,23 @@ export class PatientsController {
   }
 
   @Post(':id/documents')
-  @ApiOperation({ summary: 'Đính kèm tài liệu y tế ban đầu (xét nghiệm, kết quả chẩn đoán hình ảnh...)' })
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: DEFAULT_MAX_DOCUMENT_BYTES } }),
+  )
+  @ApiConsumes('multipart/form-data', 'application/json')
+  @ApiOperation({ summary: 'Tải lên tệp/ảnh hoặc liên kết tài liệu y tế (đơn thuốc, xét nghiệm, chẩn đoán hình ảnh...)' })
   @ApiParam({ name: 'id', description: 'UUID của bệnh nhân' })
   @ApiResponse({ status: 201, description: 'Đính kèm tài liệu y tế thành công' })
+  @ApiResponse({ status: 400, description: 'Tệp không hợp lệ hoặc thiếu thông tin' })
   @ApiResponse({ status: 403, description: 'Không có quyền đính kèm cho bệnh nhân ngoài gia đình' })
   @ApiResponse({ status: 404, description: 'Không tìm thấy hồ sơ bệnh nhân' })
   addDocument(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
     @Body() dto: CreatePatientDocumentDto,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.service.addDocument(req.user, id, dto);
+    return this.service.addDocument(req.user, id, dto, file);
   }
 
   @Get(':id/documents')
@@ -166,6 +179,44 @@ export class PatientsController {
     @Param('id') id: string,
   ) {
     return this.service.listDocuments(req.user, id);
+  }
+
+  @Get(':id/documents/:documentId/file')
+  @ApiOperation({ summary: 'Tải hoặc xem trực tiếp tệp/ảnh tài liệu y tế đã lưu trong kho nội bộ' })
+  @ApiParam({ name: 'id', description: 'UUID của bệnh nhân' })
+  @ApiParam({ name: 'documentId', description: 'UUID của tài liệu' })
+  @ApiResponse({ status: 200, description: 'Nội dung nhị phân của tệp tài liệu' })
+  @ApiResponse({ status: 403, description: 'Không có quyền truy cập tài liệu ngoài gia đình' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy tài liệu' })
+  async getDocumentFile(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+    @Res() res: Response,
+  ) {
+    const { bytes, contentType } = await this.service.getDocumentFile(
+      req.user,
+      id,
+      documentId,
+    );
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', 'inline');
+    res.send(bytes);
+  }
+
+  @Delete(':id/documents/:documentId')
+  @ApiOperation({ summary: 'Xóa tài liệu y tế của bệnh nhân' })
+  @ApiParam({ name: 'id', description: 'UUID của bệnh nhân' })
+  @ApiParam({ name: 'documentId', description: 'UUID của tài liệu' })
+  @ApiResponse({ status: 200, description: 'Đã xóa tài liệu y tế' })
+  @ApiResponse({ status: 403, description: 'Không có quyền xóa tài liệu ngoài gia đình' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy tài liệu' })
+  deleteDocument(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('documentId') documentId: string,
+  ) {
+    return this.service.deleteDocument(req.user, id, documentId);
   }
 
   @Delete(':id/allergies/:allergyId')

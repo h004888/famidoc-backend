@@ -55,6 +55,8 @@ describe('PatientsController', () => {
     documentName: 'Xét nghiệm máu',
     documentType: PatientDocumentType.LAB_RESULT,
     fileUrl: 'https://storage.famidoc.vn/docs/blood_test.pdf',
+    mimeType: 'application/pdf',
+    notes: null,
     fileSizeKb: 1024,
     recordedDate: new Date('2026-11-01'),
     uploadedAt: new Date(),
@@ -71,6 +73,8 @@ describe('PatientsController', () => {
       listAllergies: jest.fn(),
       addDocument: jest.fn(),
       listDocuments: jest.fn(),
+      getDocumentFile: jest.fn(),
+      deleteDocument: jest.fn(),
       deleteAllergy: jest.fn(),
       addVitalSign: jest.fn(),
       listVitalSigns: jest.fn(),
@@ -185,7 +189,7 @@ describe('PatientsController', () => {
   });
 
   describe('POST /api/v1/patients/:id/documents', () => {
-    it('đính kèm hồ sơ y tế thành công', async () => {
+    it('đính kèm hồ sơ y tế (multipart file hoặc URL) thành công', async () => {
       const dto: CreatePatientDocumentDto = {
         documentName: 'Xét nghiệm máu',
         documentType: PatientDocumentType.LAB_RESULT,
@@ -193,11 +197,22 @@ describe('PatientsController', () => {
         fileSizeKb: 1024,
         recordedDate: '2026-11-01',
       };
+      const fakeFile = { originalname: 'test.pdf' } as Express.Multer.File;
       service.addDocument.mockResolvedValue(mockDocument);
 
-      const result = await controller.addDocument(mockFamilyRepReq, 'patient-uuid-1', dto);
+      const result = await controller.addDocument(
+        mockFamilyRepReq,
+        'patient-uuid-1',
+        dto,
+        fakeFile,
+      );
 
-      expect(service.addDocument).toHaveBeenCalledWith(mockFamilyRepReq.user, 'patient-uuid-1', dto);
+      expect(service.addDocument).toHaveBeenCalledWith(
+        mockFamilyRepReq.user,
+        'patient-uuid-1',
+        dto,
+        fakeFile,
+      );
       expect(result).toEqual(mockDocument);
     });
   });
@@ -210,6 +225,54 @@ describe('PatientsController', () => {
 
       expect(service.listDocuments).toHaveBeenCalledWith(mockFamilyRepReq.user, 'patient-uuid-1');
       expect(result).toEqual([mockDocument]);
+    });
+  });
+
+  describe('GET /api/v1/patients/:id/documents/:documentId/file', () => {
+    it('stream tệp tài liệu với Content-Type đúng', async () => {
+      const bytes = Buffer.from('%PDF-1.4');
+      service.getDocumentFile.mockResolvedValue({
+        bytes,
+        contentType: 'application/pdf',
+      });
+      const mockRes = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+      } as unknown as import('express').Response;
+
+      await controller.getDocumentFile(
+        mockFamilyRepReq,
+        'patient-uuid-1',
+        'doc-uuid-1',
+        mockRes,
+      );
+
+      expect(service.getDocumentFile).toHaveBeenCalledWith(
+        mockFamilyRepReq.user,
+        'patient-uuid-1',
+        'doc-uuid-1',
+      );
+      expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
+      expect(mockRes.send).toHaveBeenCalledWith(bytes);
+    });
+  });
+
+  describe('DELETE /api/v1/patients/:id/documents/:documentId', () => {
+    it('xóa tài liệu y tế thành công', async () => {
+      service.deleteDocument.mockResolvedValue(mockDocument);
+
+      const result = await controller.deleteDocument(
+        mockFamilyRepReq,
+        'patient-uuid-1',
+        'doc-uuid-1',
+      );
+
+      expect(service.deleteDocument).toHaveBeenCalledWith(
+        mockFamilyRepReq.user,
+        'patient-uuid-1',
+        'doc-uuid-1',
+      );
+      expect(result).toEqual(mockDocument);
     });
   });
 

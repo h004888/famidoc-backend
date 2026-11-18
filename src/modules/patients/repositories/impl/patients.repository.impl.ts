@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../core/database/prisma.service';
 import type {
+  CreatePatientDocumentRecordInput,
   DuplicatePatientConflict,
   IPatientsRepository,
   PatientDetail,
@@ -9,7 +10,6 @@ import type {
 import type { CreatePatientDto } from '../../dtos/create-patient.dto';
 import type { UpdatePatientDto } from '../../dtos/update-patient.dto';
 import type { CreateAllergyDto } from '../../dtos/create-allergy.dto';
-import type { CreatePatientDocumentDto } from '../../dtos/create-patient-document.dto';
 import type { CreateVitalSignDto } from '../../dtos/create-vital-sign.dto';
 import type { UpdateVitalSignDto } from '../../dtos/update-vital-sign.dto';
 import type { FamilyUnit, Patient, PatientAllergy, PatientDocument, VitalSign } from '@prisma/client';
@@ -255,13 +255,15 @@ export class PatientsRepositoryImpl implements IPatientsRepository {
     });
   }
 
-  addDocument(patientId: string, data: CreatePatientDocumentDto): Promise<PatientDocument> {
+  addDocument(patientId: string, data: CreatePatientDocumentRecordInput): Promise<PatientDocument> {
     return this.prisma.patientDocument.create({
       data: {
         patientId,
         documentName: data.documentName,
         documentType: data.documentType,
         fileUrl: data.fileUrl,
+        mimeType: data.mimeType ?? null,
+        notes: data.notes ?? null,
         fileSizeKb: data.fileSizeKb,
         recordedDate: new Date(data.recordedDate),
       },
@@ -271,7 +273,19 @@ export class PatientsRepositoryImpl implements IPatientsRepository {
   findDocumentsByPatientId(patientId: string): Promise<PatientDocument[]> {
     return this.prisma.patientDocument.findMany({
       where: { patientId },
-      orderBy: { recordedDate: 'desc' },
+      orderBy: [{ recordedDate: 'desc' }, { uploadedAt: 'desc' }],
+    });
+  }
+
+  findDocumentById(documentId: string): Promise<PatientDocument | null> {
+    return this.prisma.patientDocument.findUnique({
+      where: { id: documentId },
+    });
+  }
+
+  deleteDocument(documentId: string): Promise<PatientDocument> {
+    return this.prisma.patientDocument.delete({
+      where: { id: documentId },
     });
   }
 
