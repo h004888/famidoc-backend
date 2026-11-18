@@ -1299,8 +1299,6 @@ export class ContractsServiceImpl implements IContractsService {
             ageGroup,
             gender: rawPatient.gender || 'OTHER',
             relationshipToHead: rawPatient.relationshipToHead || 'MEMBER',
-            citizenId: rawPatient.citizenId,
-            healthInsuranceNumber: rawPatient.healthInsuranceNumber,
             allergies,
             documents,
           };

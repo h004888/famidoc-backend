@@ -4,7 +4,12 @@ import type { CreatePatientDto } from '../../dtos/create-patient.dto';
 import type { UpdatePatientDto } from '../../dtos/update-patient.dto';
 import type { CreateAllergyDto } from '../../dtos/create-allergy.dto';
 import type { CreatePatientDocumentDto } from '../../dtos/create-patient-document.dto';
-import type { PatientDetail } from '../../repositories/interfaces/patients.repository.interface';
+import type { CreateVitalSignDto } from '../../dtos/create-vital-sign.dto';
+import type { UpdateVitalSignDto } from '../../dtos/update-vital-sign.dto';
+import type {
+  PatientDetail,
+  SerializedVitalSign,
+} from '../../repositories/interfaces/patients.repository.interface';
 
 export const PATIENTS_SERVICE_TOKEN = Symbol('PATIENTS_SERVICE');
 
@@ -16,6 +21,16 @@ export interface IPatientsService {
   detachPatient(user: AuthenticatedUser, id: string): Promise<Patient>;
   addAllergy(user: AuthenticatedUser, patientId: string, dto: CreateAllergyDto): Promise<PatientAllergy>;
   listAllergies(user: AuthenticatedUser, patientId: string): Promise<PatientAllergy[]>;
+  deleteAllergy(user: AuthenticatedUser, patientId: string, allergyId: string): Promise<PatientAllergy>;
   addDocument(user: AuthenticatedUser, patientId: string, dto: CreatePatientDocumentDto): Promise<PatientDocument>;
   listDocuments(user: AuthenticatedUser, patientId: string): Promise<PatientDocument[]>;
+  addVitalSign(user: AuthenticatedUser, patientId: string, dto: CreateVitalSignDto): Promise<SerializedVitalSign>;
+  listVitalSigns(user: AuthenticatedUser, patientId: string, days?: number): Promise<SerializedVitalSign[]>;
+  updateVitalSign(
+    user: AuthenticatedUser,
+    patientId: string,
+    vitalId: string,
+    dto: UpdateVitalSignDto,
+  ): Promise<SerializedVitalSign>;
+  deleteVitalSign(user: AuthenticatedUser, patientId: string, vitalId: string): Promise<SerializedVitalSign>;
 }

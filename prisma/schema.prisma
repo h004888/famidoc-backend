@@ -473,12 +473,9 @@ model Patient {
   fullName              String        @map("full_name") @db.VarChar(100)
   dateOfBirth           DateTime      @map("date_of_birth") @db.Date
   gender                Gender
-  relationshipToHead    String        @map("relationship_to_head") @db.VarChar(50)
-  citizenId             String?       @map("citizen_id") @db.VarChar(20)
-  healthInsuranceNumber String?       @map("health_insurance_number") @db.VarChar(30)
-  bloodType             String?       @map("blood_type") @db.VarChar(10)
-  registeredHospital    String?       @map("registered_hospital") @db.VarChar(150)
-  chronicDiseases       String?       @map("chronic_diseases") @db.Text
+  relationshipToHead String        @map("relationship_to_head") @db.VarChar(50)
+  bloodType          String?       @map("blood_type") @db.VarChar(10)
+  chronicDiseases    String?       @map("chronic_diseases") @db.Text
   status                PatientStatus @default(ACTIVE)
   createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt             DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
