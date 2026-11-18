@@ -714,7 +714,7 @@ model ContractDocumensoSigner {
   id                  String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   contractId          String     @map("contract_id") @db.Uuid
   signerRole          SignerRole @map("signer_role")
-  documensoRecipientId Int       @unique @map("documenso_recipient_id")
+  documensoRecipientId Int       @map("documenso_recipient_id")
   documensoToken      String     @map("documenso_token") @db.VarChar(128)
   documensoSigningUrl String     @map("documenso_signing_url") @db.Text
   status              String     @default("PENDING") @db.VarChar(32)
@@ -725,6 +725,7 @@ model ContractDocumensoSigner {
   contract MedicalContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
 
   @@unique([contractId, signerRole], map: "idx_contract_documenso_signers_contract_role")
+  @@index([documensoRecipientId], map: "idx_contract_documenso_signers_recipient_id")
   @@map("contract_documenso_signers")
 }
 
