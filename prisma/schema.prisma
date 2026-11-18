@@ -238,6 +238,7 @@ model User {
 
   // Relations
   notifications                     Notification[]
+  receivedPrescriptions             Prescription[]
   healthcareFacility                HealthcareFacility?
   doctor                            Doctor?
   familyUnit                        FamilyUnit?
@@ -863,17 +864,20 @@ model Prescription {
   id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   emrId            String             @map("emr_id") @db.Uuid
   prescriptionCode String             @unique @map("prescription_code") @db.VarChar(50)
-  doctorSignature  String             @map("doctor_signature") @db.Text
+  doctorSignature  String?            @map("doctor_signature") @db.Text
   prescribedDate   DateTime           @map("prescribed_date") @db.Date
-  validUntil       DateTime           @map("valid_until") @db.Date
+  validUntil       DateTime?          @map("valid_until") @db.Date
+  recipientUserId  String?            @map("recipient_user_id") @db.Uuid
   instructions     String?            @db.Text
   status           PrescriptionStatus @default(ISSUED)
   createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz()
 
   // Relations
   clinicalEmr ClinicalEmr          @relation(fields: [emrId], references: [id], onDelete: Restrict)
+  recipient   User?                @relation(fields: [recipientUserId], references: [id], onDelete: SetNull)
   details     PrescriptionDetail[]
 
+  @@index([recipientUserId, createdAt(sort: Desc)])
   @@map("prescriptions")
 }
 
@@ -881,6 +885,9 @@ model PrescriptionDetail {
   id             String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   prescriptionId String @map("prescription_id") @db.Uuid
   medicationName String @map("medication_name") @db.VarChar(150)
+  strength       String? @db.VarChar(50)
+  administrationRoute String? @map("administration_route") @db.VarChar(50)
+  lineNumber     Int @default(0) @map("line_number")
   dosage         String @db.VarChar(50)
   quantity       Int
   unit           String @db.VarChar(30)

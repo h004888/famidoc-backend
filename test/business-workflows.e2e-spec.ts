@@ -146,6 +146,147 @@ import {
     afterAll(async () => {
       await app?.close();
     });
+    it('shares a prescription only with the confirmed family recipient and prevents duplicates', async () => {
+      const patient = await db.patient.findFirstOrThrow({ where: { familyId: demoIds.otherFamily } });
+      const visit = await db.encounter.create({
+        data: {
+          contractId: active,
+          patientId: patient.id,
+          doctorId: demoIds.doctor,
+          category: 'AD_HOC_ON_DEMAND',
+          encounterType: 'FACILITY_VISIT',
+          encounterStatus: 'CONFIRMED',
+          scheduledDate: new Date('2026-10-15T00:00:00.000Z'),
+          scheduledTime: new Date('1970-01-01T08:00:00.000Z'),
+        },
+      });
+      const visits = await call('get', '/api/v1/prescriptions/encounters', 'doctor');
+      expect(visits.body.items).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: visit.id, recipient: expect.objectContaining({ id: demoIds.otherUser }) }),
+      ]));
+      const endpoint = `/api/v1/prescriptions/encounters/${visit.id}`;
+      const payload = {
+        recipientUserId: demoIds.otherUser,
+        recipientAuthorized: true,
+        exam: {
+          chiefComplaint: 'Lý do khám thử',
+          clinicalFindings: 'Kết quả thử',
+          icd10Code: 'Z00.0',
+          icd10Diagnosis: 'Khám tổng quát',
+          treatmentPlan: 'Kế hoạch thử',
+        },
+        details: [{
+          medicationName: 'Thuốc mẫu', strength: 'Hàm lượng mẫu', administrationRoute: 'Đường dùng mẫu',
+          dosage: 'Liều mẫu', frequency: 'Tần suất mẫu', quantity: 6, unit: 'Đơn vị', durationDays: 3,
+        }],
+        instructions: 'Lời dặn kiểm thử',
+      };
+      await call('post', endpoint, 'family2', payload, 403);
+      await call('post', endpoint, 'doctor', { ...payload, recipientAuthorized: false }, 400);
+      await call('post', endpoint, 'doctor', { ...payload, recipientUserId: demoIds.familyUser }, 409);
+      const created = await call('post', endpoint, 'doctor', payload, 201);
+      await call('post', endpoint, 'doctor', payload, 409);
+
+      const detail = '/api/v1/prescriptions/' + created.body.id;
+      await call('get', detail, 'family', undefined, 404);
+      const received = await call('get', detail, 'family2');
+      expect(received.body).toMatchObject({
+        id: created.body.id,
+        patient: { id: patient.id },
+        hasSignature: false,
+        instructions: payload.instructions,
+        details: [expect.objectContaining(payload.details[0])],
+      });
+      const history = await call('get', `/api/v1/prescriptions?patientId=${patient.id}`, 'family2');
+      expect(history.body.items).toEqual([expect.objectContaining({ id: created.body.id })]);
+      const notifications = await call('get', '/api/v1/notifications?type=PRESCRIPTION_SHARED', 'family2');
+      expect(notifications.body.items).toEqual([expect.objectContaining({ referenceId: created.body.id, isRead: false })]);
+      await call('patch', `/api/v1/notifications/${notifications.body.items[0].id}/read`, 'family2');
+      const remaining = await call('get', '/api/v1/notifications?unreadOnly=true&type=PRESCRIPTION_SHARED', 'family2');
+      expect(remaining.body.items).toEqual([]);
+    }, 30000);
+
+    it('keeps medical books scoped to the member, shows prior pages and confirms visits with or without a prescription', async () => {
+      const patientId = '50000000-0000-4000-8000-000000000005';
+      const otherMemberId = '50000000-0000-4000-8000-000000000006';
+      const base = '/api/v1/medical-books';
+      const roster = await call('get', `${base}/families`, 'doctor');
+      const family = roster.body.items.find((entry: { id: string }) => entry.id === demoIds.otherFamily);
+      expect(family.members).toEqual(expect.arrayContaining([expect.objectContaining({ id: patientId })]));
+      expect(family.members).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: otherMemberId })]));
+      const patientScope = `${base}/families/${demoIds.otherFamily}/patients/${patientId}`;
+      await call('get', `${patientScope}/visits`, 'family', undefined, 404);
+      const exam = {
+        chiefComplaint: 'Lý do thử', clinicalFindings: 'Kết quả thử',
+        icd10Code: 'Z00.0', icd10Diagnosis: 'Nội dung thử', treatmentPlan: 'Theo dõi thử',
+      };
+      const firstVisit = namScenarioIds.completedEncounter;
+      const firstPage = `${base}/visits/${firstVisit}`;
+      await call('get', firstPage, 'family2', undefined, 404);
+      const confirm = `${firstPage}/confirm`;
+      await call('post', confirm, 'family2', { patientId, confirmed: true, exam }, 403);
+      await call('post', confirm, 'doctor', { patientId: otherMemberId, confirmed: true, exam }, 404);
+      await call('post', confirm, 'doctor', { patientId, confirmed: false, exam }, 400);
+      await call('post', confirm, 'doctor', { patientId, confirmed: true, exam: { ...exam, chiefComplaint: '   ' } }, 400);
+      await call('post', confirm, 'doctor', { patientId, confirmed: true, exam }, 201);
+      await call('post', confirm, 'doctor', { patientId, confirmed: true, exam }, 409);
+      await call('get', firstPage, 'family', undefined, 404);
+      const familyPage = await call('get', firstPage, 'family2');
+      expect(familyPage.body).toMatchObject({ id: firstVisit, patient: { id: patientId }, isFinalized: true, prescription: null, exam });
+      expect(await db.auditLog.count({ where: { action: 'CONFIRM_VISIT_RECORD', actorUserId: demoIds.doctorUser } })).toBe(1);
+
+      const second = await db.encounter.create({ data: {
+        contractId: active, patientId, doctorId: demoIds.doctor,
+        category: 'AD_HOC_ON_DEMAND', encounterType: 'FACILITY_VISIT', encounterStatus: 'COMPLETED',
+        scheduledDate: new Date('2026-10-14T00:00:00Z'), scheduledTime: new Date('1970-01-01T08:00:00Z'),
+      } });
+      const secondPage = `${base}/visits/${second.id}`;
+      const prescription = {
+        recipientUserId: demoIds.otherUser, recipientAuthorized: true,
+        details: [{ medicationName: 'Thuốc mẫu', strength: 'Hàm lượng mẫu', administrationRoute: 'Đường dùng mẫu', dosage: 'Liều mẫu', frequency: 'Tần suất mẫu', quantity: 6, unit: 'Đơn vị', durationDays: 3 }],
+      };
+      await call('post', `${secondPage}/confirm`, 'doctor', { patientId, confirmed: true, exam, prescription: { ...prescription, details: [] } }, 400);
+      await call('post', `${secondPage}/confirm`, 'doctor', { patientId, confirmed: true, exam, prescription: { ...prescription, recipientUserId: demoIds.familyUser } }, 409);
+      expect(await db.clinicalEmr.count({ where: { encounterId: second.id } })).toBe(0);
+      await call('post', `${secondPage}/confirm`, 'doctor', { patientId, confirmed: true, exam, prescription }, 201);
+      const history = await call('get', `${patientScope}/visits`, 'family2');
+      expect(history.body.items.map((entry: { id: string }) => entry.id)).toEqual([firstVisit, second.id]);
+      expect((await call('get', secondPage, 'family2')).body.prescription.details).toEqual([expect.objectContaining(prescription.details[0])]);
+      const otherHistory = await call('get', `${base}/families/${demoIds.otherFamily}/patients/${otherMemberId}/visits`, 'family2');
+      expect(otherHistory.body.items).toEqual([]);
+    }, 30000);
+
+    it('accepts private medical book documents only from the owning family and downloads within scope', async () => {
+      const patientId = '50000000-0000-4000-8000-000000000005';
+      const anotherMember = '50000000-0000-4000-8000-000000000006';
+      const folder = `/api/v1/medical-books/families/${demoIds.otherFamily}/patients`;
+      const endpoint = `${folder}/${patientId}/documents`;
+      const upload = (who: string, buffer: Buffer, date = '2026-11-18') => request(app.getHttpServer())
+        .post(endpoint)
+        .set('Authorization', tokens[who])
+        .field('documentName', 'Phiếu thử')
+        .field('documentType', 'LAB_RESULT')
+        .field('recordedDate', date)
+        .attach('file', buffer, 'result.pdf');
+      await upload('doctor', legalScan).expect(403);
+      await upload('family', legalScan).expect(404);
+      await upload('family2', Buffer.from('Not PDF')).expect(400);
+      await upload('family2', legalScan, '2026-02-30').expect(400);
+      const uploaded = await upload('family2', legalScan).expect(201);
+      expect(uploaded.body).toMatchObject({ fileUrl: null, downloadAvailable: true, documentName: 'Phiếu thử' });
+      await call('get', endpoint, 'family', undefined, 404);
+      const documents = await call('get', endpoint, 'family2');
+      expect(documents.body).toEqual(expect.arrayContaining([expect.objectContaining({ id: uploaded.body.id, fileUrl: null })]));
+      const empty = await call('get', `${folder}/${anotherMember}/documents`, 'family2');
+      expect(empty.body).toEqual([]);
+      const download = `${endpoint}/${uploaded.body.id}/file`;
+      await call('get', download, 'family', undefined, 404);
+      const response = await call('get', download, 'family2');
+      expect(response.headers['content-type']).toMatch(/application\/pdf/);
+      expect(response.headers['cache-control']).toBe('private, no-store');
+      expect(response.body).toEqual(legalScan);
+    }, 30000);
+
     it('keeps all user/notification APIs private and returns the correct actor', async () => {
       const profile = await call('get', '/api/v1/users/profile');
       expect(profile.body.id).toBe(demoIds.otherUser);
