@@ -45,7 +45,10 @@ export class CarePackagesServiceImpl {
 
   // Quản trị được lọc theo trạng thái; quyền truy cập do guard ở controller kiểm tra.
   listAdmin(query: AdminListCarePackagesDto) {
-    return this.repository.list(query.page, query.limit, query.status);
+    return this.repository.list(query.page, query.limit, query.status, {
+      excludeDemo: true,
+      ascendingPrice: true,
+    });
   }
 
   async getPublic(id: string): Promise<CarePackage> {
@@ -114,11 +117,9 @@ export class CarePackagesServiceImpl {
 
   async update(id: string, dto: UpdateCarePackageDto): Promise<CarePackage> {
     const current = await this.getAdmin(id);
-    // Không sửa giá/quyền lợi bản đã công bố để giữ điều khoản của phiên bản cũ.
-    if (current.status !== CarePackageStatus.DRAFT) {
-      throw new ConflictException(
-        'Published terms are immutable; create a new version',
-      );
+    // Cho phép admin chỉnh sửa trực tiếp gói dịch vụ theo yêu cầu
+    if (current.status === CarePackageStatus.DEPRECATED) {
+      throw new ConflictException('Cannot edit a deprecated package');
     }
     // Chỉ lấy trường thực sự được gửi; undefined không được xóa giá trị đang lưu.
     // Giữ lại số 0 và chuỗi rỗng vì đây có thể là giá trị cập nhật hợp lệ.

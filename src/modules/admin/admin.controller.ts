@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../../core/auth/roles.guard';
 import type { AuthenticatedRequest } from '../../core/auth/authenticated-request';
-import { AdminAccountStatusDto, AdminAuditQuery, AdminComplaintsQuery, AdminOverviewQuery, AdminUsersQuery } from './admin.dto';
+import { AdminAccountStatusDto, AdminAuditQuery, AdminComplaintsQuery, AdminOverviewQuery, AdminUsersQuery, ComplaintsQuery } from './admin.dto';
 import { AdminService } from './admin.service';
 
 @ApiTags('Admin')
@@ -18,7 +18,7 @@ export class AdminController {
   @Get('overview')
   @ApiOperation({ summary: 'Tổng quan doanh thu, lượt khám và khiếu nại của nền tảng' })
   overview(@Query() query: AdminOverviewQuery) {
-    return this.service.overview(query.period);
+    return this.service.overview(query.period, query.environment);
   }
 
   @Get('users')
@@ -70,7 +70,7 @@ export class FacilityComplaintsController {
 
   @Get()
   @ApiOperation({ summary: 'Danh sách khiếu nại thuộc CSYT đang đăng nhập' })
-  complaints(@Req() req: AuthenticatedRequest, @Query() query: AdminComplaintsQuery) {
+  complaints(@Req() req: AuthenticatedRequest, @Query() query: ComplaintsQuery) {
     return this.service.complaints(query, req.user.id);
   }
 }

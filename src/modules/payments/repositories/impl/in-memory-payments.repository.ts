@@ -14,6 +14,7 @@ interface MemoryState {
   contracts: Map<string, BillingContract>;
   requests: Map<string, PaymentRequest>;
   transactions: Map<string, PaymentTransaction>;
+  paymentOverrides: Array<Parameters<PaymentsSession['recordPaymentOverride']>[0]>;
 }
 
 // Bản mô phỏng transaction, không phải database bền vững hoặc khóa giữa nhiều server.
@@ -24,6 +25,7 @@ export class InMemoryPaymentsRepository implements PaymentsRepository {
     contracts: new Map(),
     requests: new Map(),
     transactions: new Map(),
+    paymentOverrides: [],
   };
   private queue: Promise<void> = Promise.resolve();
 
@@ -99,6 +101,10 @@ class MemorySession implements PaymentsSession {
       throw new ConflictException('Payment code already exists');
     }
     this.state.requests.set(request.id, structuredClone(request));
+  }
+
+  async recordPaymentOverride(entry: Parameters<PaymentsSession['recordPaymentOverride']>[0]) {
+    this.state.paymentOverrides.push(structuredClone(entry));
   }
 
   async findTransaction(

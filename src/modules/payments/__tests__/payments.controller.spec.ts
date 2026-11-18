@@ -24,6 +24,7 @@ import { PaymentsClock } from '../payments.clock';
 import { PaymentsConfig } from '../payments.config';
 import { InMemoryPaymentsRepository } from '../repositories/impl/in-memory-payments.repository';
 import { PAYMENTS_REPOSITORY_TOKEN } from '../repositories/interfaces/payments.repository.interface';
+import { SePayWebhookEvents } from '../sepay/sepay-webhook-events';
 import { PaymentsServiceImpl } from '../services/impl/payments.service.impl';
 import { PAYMENTS_SERVICE_TOKEN } from '../services/interfaces/payments.service.interface';
 import { PaymentTestService } from './payment-test-fixture';
@@ -84,6 +85,7 @@ describe('PaymentsController (recheck-activation HTTP route)', () => {
         { provide: PaymentsServiceImpl, useValue: service },
         { provide: PaymentsConfig, useValue: config },
         { provide: PaymentsClock, useValue: clock },
+        { provide: SePayWebhookEvents, useValue: { list: jest.fn() } },
       ],
     })
       .overrideGuard(JwtAuthGuard)

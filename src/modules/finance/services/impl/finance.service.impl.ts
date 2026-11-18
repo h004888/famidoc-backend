@@ -319,6 +319,7 @@ export class FinanceServiceImpl implements IFinanceService {
           item.bankTransferOrderId === dto.bankTransferOrderId &&
           moneyToNumber(item.facilityPayoutAmount) === dto.amountPaidVnd &&
           item.transferEvidenceKey === dto.evidenceKey &&
+          (dto.transferMemo === undefined || item.transferMemo === dto.transferMemo) &&
           item.settledAt?.getTime() === Date.parse(dto.paidAt!)
         )
           return item;
@@ -383,6 +384,7 @@ export class FinanceServiceImpl implements IFinanceService {
       const updated = await session.updateSettlement(item.id, {
         disbursementStatus: 'SETTLED',
         bankTransferOrderId: dto.bankTransferOrderId,
+        transferMemo: dto.transferMemo,
         settledAt: paidAt,
         transferEvidenceKey: evidenceKey,
         confirmedByUserId: actor.id,

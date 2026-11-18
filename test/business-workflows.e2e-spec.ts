@@ -179,7 +179,9 @@ import {
       const overview = await call('get', '/api/v1/admin/overview?period=weekly', 'admin');
       expect(overview.body.series).toHaveLength(7);
       expect(overview.body.activeContracts).toBe(0);
-      expect(overview.body.facilities).toBeGreaterThan(0);
+      const demoOverview = await call('get', '/api/v1/admin/overview?period=weekly&environment=TEST', 'admin');
+      expect(demoOverview.body.facilities).toBeGreaterThan(0);
+      expect(demoOverview.body.activeContracts).toBeGreaterThan(0);
 
       const users = await call('get', '/api/v1/admin/users?role=FAMILY_REP&limit=1', 'admin');
       expect(users.body.total).toBeGreaterThan(1);
@@ -1126,15 +1128,49 @@ import {
         expect(url.searchParams.get('des')).toBe(payment.body.transferContent);
         expect(payment.body.transferContent).toMatch(/ - FD[0-9]{6}$/);
         expect(payment.body.paymentCode).toMatch(/^FD[0-9]{6}$/);
+        const adjustment = {
+          contractId: live.id,
+          amountVnd: 2840000,
+          transferDescription: 'THU PHI DIEU CHINH',
+          reason: 'Điều chỉnh cho bài kiểm thử local.',
+        };
+        await call('post', '/api/v1/payments/vietqr', 'family', adjustment, 400);
+        await call('post', '/api/v1/payments/admin/requests', 'family', adjustment, 403);
+        const adjusted = await call('post', '/api/v1/payments/admin/requests', 'admin', adjustment, 201);
+        expect(adjusted.body.paymentCode).not.toBe(payment.body.paymentCode);
+        expect(adjusted.body.transferContent).toBe(`THU PHI DIEU CHINH ${adjusted.body.paymentCode}`);
+        expect(new URL(adjusted.body.qrUrl).searchParams.get('amount')).toBe('2840000');
+        expect((await db.invoice.findUniqueOrThrow({ where: { id: payment.body.id } })).paymentStatus).toBe('CANCELLED');
+        const fromRegularFlow = await call('post', '/api/v1/payments/vietqr', 'admin', { contractId: live.id }, 201);
+        expect(fromRegularFlow.body.id).toBe(adjusted.body.id);
+        expect(await db.auditLog.findFirst({
+          where: { action: 'ADMIN_ADJUST_PAYMENT_REQUEST', resourceId: adjusted.body.id },
+        })).toMatchObject({ details: { previousAmountVnd: 2850000, amountVnd: 2840000, reason: adjustment.reason } });
+
         // Chỉ phát dữ liệu URL, tuyệt đối không tải QR hay gửi lệnh chuyển tiền trong test.
-        await pay(payment.body, {
+        const wrong = await pay(adjusted.body, {
+          gateway: 'Vietcombank',
+          accountNumber: '1234567890',
+          transferAmount: payment.body.amountVnd,
+        });
+        const matched = await pay(adjusted.body, {
           gateway: 'Vietcombank',
           accountNumber: '1234567890',
         });
+        await call('get', '/api/v1/payments/webhook-events', 'family', undefined, 403);
+        const log = await call('get', '/api/v1/payments/webhook-events?environment=LIVE', 'admin');
+        expect(log.body.items).toEqual(expect.arrayContaining([
+          expect.objectContaining({ providerTransactionId: String(wrong.payload.id), status: 'ERROR', httpStatus: 200, resultCode: 'AMOUNT_MISMATCH' }),
+          expect.objectContaining({ providerTransactionId: String(matched.payload.id), status: 'SUCCESS', httpStatus: 200, resultCode: 'MATCHED' }),
+        ]));
+        const denied = await call('get', '/api/v1/payments/webhook-events?environment=TEST&status=ERROR', 'admin');
+        expect(denied.body.items).toEqual(expect.arrayContaining([
+          expect.objectContaining({ status: 'ERROR', httpStatus: 401, resultCode: 'INVALID_API_KEY' }),
+        ]));
         expect(
           (
             await db.invoice.findUniqueOrThrow({
-              where: { id: payment.body.id },
+              where: { id: adjusted.body.id },
             })
           ).environment,
         ).toBe('LIVE');

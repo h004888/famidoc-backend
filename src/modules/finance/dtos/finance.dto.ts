@@ -182,6 +182,13 @@ export class MonthlySettlementDto extends ReportingPeriodDto {
   @Length(3, 100)
   bankTransferOrderId?: string;
 
+  @ApiPropertyOptional({ description: 'Nội dung đã điền khi chuyển tiền cho CSYT.' })
+  @FieldFor('action', ['CONFIRM_TRANSFER'], false)
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString()
+  @Length(1, 140)
+  transferMemo?: string;
+
   @ApiPropertyOptional({
     description: 'Số tiền thực tế đã giải ngân thanh toán (VNĐ)',
     example: 50000000,

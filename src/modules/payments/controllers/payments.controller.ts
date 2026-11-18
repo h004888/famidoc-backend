@@ -21,7 +21,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { CreatePaymentRequestDto } from '../dtos/create-payment-request.dto';
+import { AdminPaymentRequestDto, CreatePaymentRequestDto } from '../dtos/create-payment-request.dto';
 import { ListTransactionsDto } from '../dtos/list-transactions.dto';
 import { paymentsValidationPipe } from '../payments-validation.pipe';
 import {
@@ -31,6 +31,7 @@ import {
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../../../core/auth/roles.guard';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
+import { SePayWebhookEvents, SePayWebhookEventsQuery } from '../sepay/sepay-webhook-events';
 
 @ApiTags('Payments')
 @ApiBearerAuth('JWT-auth')
@@ -41,6 +42,7 @@ import type { AuthenticatedRequest } from '../../../core/auth/authenticated-requ
 export class PaymentsController {
   constructor(
     @Inject(PAYMENTS_SERVICE_TOKEN) private readonly service: IPaymentsService,
+    private readonly webhookEvents: SePayWebhookEvents,
   ) {}
 
   // Giữ route cũ để không phá client; route vietqr khớp bảng phân công API của Nam.
@@ -58,6 +60,13 @@ export class PaymentsController {
       dto.addendumId,
       req.user,
     );
+  }
+
+  @Post('admin/requests')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Cấp mã thu tiền với số tiền và mô tả do Admin điều chỉnh' })
+  createAdminPayment(@Body() dto: AdminPaymentRequestDto, @Req() req: AuthenticatedRequest) {
+    return this.service.createAdminPaymentRequest(dto, req.user, req.ip);
   }
 
   @Get([':paymentId/status', 'requests/:paymentId'])
@@ -105,5 +114,12 @@ export class PaymentsController {
   @ApiResponse({ status: 403, description: 'Chỉ ADMIN mới có quyền truy cập' })
   listTransactions(@Query() query: ListTransactionsDto) {
     return this.service.listTransactions(query);
+  }
+
+  @Get('webhook-events')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Nhật ký tiếp nhận webhook SePay, bao gồm lỗi từ chối và lỗi đối chiếu' })
+  listWebhookEvents(@Query() query: SePayWebhookEventsQuery) {
+    return this.webhookEvents.list(query);
   }
 }

@@ -918,6 +918,7 @@ model Invoice {
   invoiceCode     String        @unique @map("invoice_code") @db.VarChar(50)
   // Nội dung QR đã chốt, không đổi theo tên tài khoản sau khi phát hành hóa đơn.
   transferContent String?       @map("transfer_content") @db.VarChar(140)
+  adminTransferDescription String? @map("admin_transfer_description") @db.VarChar(100)
   contractId      String?       @map("contract_id") @db.Uuid
   addendumId      String?       @map("addendum_id") @db.Uuid
   encounterId     String?       @map("encounter_id") @db.Uuid
@@ -948,6 +949,21 @@ model Invoice {
   settlementItems FacilitySettlementItem[]
 
   @@map("invoices")
+}
+
+model SePayWebhookEvent {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  environment           String   @db.VarChar(10)
+  status                String   @db.VarChar(10)
+  httpStatus            Int      @map("http_status")
+  resultCode            String   @map("result_code") @db.VarChar(50)
+  providerTransactionId String?  @map("provider_transaction_id") @db.VarChar(100)
+  transactionId         String?  @map("transaction_id") @db.Uuid
+  receivedAt            DateTime @default(now()) @map("received_at") @db.Timestamptz()
+
+  @@index([environment, receivedAt(sort: Desc), id], map: "sepay_webhook_events_env_received_idx")
+  @@index([environment, status, receivedAt(sort: Desc), id], map: "sepay_webhook_events_env_status_received_idx")
+  @@map("sepay_webhook_events")
 }
 
 model PaymentTransaction {
@@ -1043,6 +1059,7 @@ model FacilitySettlement {
   facilityPayoutAmount Decimal            @map("facility_payout_amount") @db.Decimal(14, 2)
   disbursementStatus   DisbursementStatus @default(PENDING) @map("disbursement_status")
   bankTransferOrderId  String?            @map("bank_transfer_order_id") @db.VarChar(100)
+  transferMemo         String?            @map("transfer_memo") @db.VarChar(140)
   settledAt            DateTime?          @map("settled_at") @db.Timestamptz()
   createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz()
 

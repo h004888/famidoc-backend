@@ -57,6 +57,7 @@ export interface PaymentRequest {
   attempt: number; // Tăng mỗi lần cấp mã mới; không tái sử dụng mã hết hạn.
   paymentCode: string;
   transferContent?: string; // Nội dung QR đã chốt: tên tài khoản không dấu + mã thanh toán riêng.
+  adminTransferDescription?: string;
   amountVnd: number;
   currency: 'VND';
   qrUrl?: string | null;
