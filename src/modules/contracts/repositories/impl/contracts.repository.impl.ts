@@ -407,10 +407,25 @@ export class PrismaContractsSession implements ContractsSession {
     }>,
   ) {
     if (!signers.length) return;
-    await this.tx.contractDocumensoSigner.createMany({
-      data: signers,
-      skipDuplicates: true,
-    });
+    // Upsert theo (contractId, signerRole) để BACKFILL idempotent mà không nuốt lỗi DB khác.
+    for (const signer of signers) {
+      await this.tx.contractDocumensoSigner.upsert({
+        where: {
+          contractId_signerRole: {
+            contractId: signer.contractId,
+            signerRole: signer.signerRole,
+          },
+        },
+        update: {
+          documensoRecipientId: signer.documensoRecipientId,
+          documensoToken: signer.documensoToken,
+          documensoSigningUrl: signer.documensoSigningUrl,
+          status: signer.status,
+          completedAt: signer.completedAt ?? null,
+        },
+        create: signer,
+      });
+    }
   }
 
   findDocumensoSigners(contractId: string) {
@@ -443,6 +458,19 @@ export class PrismaContractsSession implements ContractsSession {
         contractId,
         addendumId: null,
         documensoRecipientId: null,
+      },
+    });
+  }
+
+  async clearDocumensoState(contractId: string) {
+    await this.tx.contractDocumensoSigner.deleteMany({
+      where: { contractId },
+    });
+    await this.tx.medicalContract.update({
+      where: { id: contractId },
+      data: {
+        documensoEnvelopeId: null,
+        documensoItemId: null,
       },
     });
   }

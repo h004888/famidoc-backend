@@ -76,9 +76,14 @@ export class ContractHoldCleanupService
             contractStatus: 'TERMINATED',
             terminationReason: 'Hết thời hạn giữ chỗ hợp đồng nháp (TTL)',
             terminatedAt: now,
+            documensoEnvelopeId: null,
+            documensoItemId: null,
           },
         });
         if (res.count === 0) return false;
+        await tx.contractDocumensoSigner?.deleteMany?.({
+          where: { contractId: draft.id },
+        });
         await tx.invoice.updateMany({
           where: { contractId: draft.id, paymentStatus: 'PENDING' },
           data: { paymentStatus: 'CANCELLED' },

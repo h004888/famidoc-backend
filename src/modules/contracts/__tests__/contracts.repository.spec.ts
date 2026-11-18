@@ -4,12 +4,14 @@ describe('PrismaContractsSession Documenso & legacy signature helpers', () => {
   function makeMockTx() {
     return {
       contractDocumensoSigner: {
-        createMany: jest.fn().mockResolvedValue({ count: 4 }),
+        upsert: jest.fn().mockResolvedValue({ id: 'signer-1' }),
+        deleteMany: jest.fn().mockResolvedValue({ count: 4 }),
       },
       contractSignature: {
         deleteMany: jest.fn().mockResolvedValue({ count: 2 }),
       },
       medicalContract: {
+        update: jest.fn().mockResolvedValue({ id: 'ctr-1' }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         count: jest.fn().mockResolvedValue(0),
       },
@@ -31,17 +33,17 @@ describe('PrismaContractsSession Documenso & legacy signature helpers', () => {
     };
   }
 
-  it('saveDocumensoSigners(): bỏ qua mảng rỗng và gọi createMany với skipDuplicates: true', async () => {
+  it('saveDocumensoSigners(): bỏ qua mảng rỗng, upsert theo contractId_signerRole và không nuốt lỗi DB', async () => {
     const tx = makeMockTx();
     const session = new PrismaContractsSession(tx as any);
 
     await session.saveDocumensoSigners([]);
-    expect(tx.contractDocumensoSigner.createMany).not.toHaveBeenCalled();
+    expect(tx.contractDocumensoSigner.upsert).not.toHaveBeenCalled();
 
     const rows = [
       {
         contractId: 'ctr-1',
-        signerRole: 'FAMILY_REP',
+        signerRole: 'FAMILY_REP' as const,
         documensoRecipientId: 101,
         documensoToken: 'tok-1',
         documensoSigningUrl: 'https://sign.famidoc.online/sign/tok-1',
@@ -51,9 +53,42 @@ describe('PrismaContractsSession Documenso & legacy signature helpers', () => {
     ];
     await session.saveDocumensoSigners(rows);
 
-    expect(tx.contractDocumensoSigner.createMany).toHaveBeenCalledWith({
-      data: rows,
-      skipDuplicates: true,
+    expect(tx.contractDocumensoSigner.upsert).toHaveBeenCalledWith({
+      where: {
+        contractId_signerRole: {
+          contractId: 'ctr-1',
+          signerRole: 'FAMILY_REP',
+        },
+      },
+      update: {
+        documensoRecipientId: 101,
+        documensoToken: 'tok-1',
+        documensoSigningUrl: 'https://sign.famidoc.online/sign/tok-1',
+        status: 'PENDING',
+        completedAt: null,
+      },
+      create: rows[0],
+    });
+
+    tx.contractDocumensoSigner.upsert.mockRejectedValueOnce(new Error('DB constraint error'));
+    await expect(session.saveDocumensoSigners(rows)).rejects.toThrow('DB constraint error');
+  });
+
+  it('clearDocumensoState(): xóa signer của hợp đồng và clear documensoEnvelopeId/documensoItemId', async () => {
+    const tx = makeMockTx();
+    const session = new PrismaContractsSession(tx as any);
+
+    await session.clearDocumensoState('ctr-1');
+
+    expect(tx.contractDocumensoSigner.deleteMany).toHaveBeenCalledWith({
+      where: { contractId: 'ctr-1' },
+    });
+    expect(tx.medicalContract.update).toHaveBeenCalledWith({
+      where: { id: 'ctr-1' },
+      data: {
+        documensoEnvelopeId: null,
+        documensoItemId: null,
+      },
     });
   });
 

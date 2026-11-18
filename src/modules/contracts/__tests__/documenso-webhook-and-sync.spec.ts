@@ -286,4 +286,51 @@ describe('DocumensoWebhookAndSync', () => {
       await expect(service.syncContractIfNeeded('contract-1')).resolves.toBeNull();
     });
   });
+
+  it('handleWebhook() & syncContractFromDocumenso(): bỏ qua an toàn khi hợp đồng đã TERMINATED hoặc EXPIRED', async () => {
+    const prisma: any = {
+      medicalContract: {
+        findFirst: jest.fn().mockResolvedValue({
+          id: 'contract-term',
+          contractStatus: 'TERMINATED',
+        }),
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'contract-exp',
+          contractStatus: 'EXPIRED',
+          documensoEnvelopeId: 'env-exp',
+          documensoItemId: 'item-exp',
+          signatures: [],
+        }),
+      },
+      $transaction: jest.fn(),
+    };
+    const client = new DocumensoClientService();
+    jest.spyOn(client, 'verifyWebhookSecret').mockReturnValue(true);
+    const getEnvelopeSpy = jest.spyOn(client, 'getEnvelope');
+    const svc = new DocumensoSyncService(prisma, client);
+
+    const webhookRes = await svc.handleWebhook(
+      'secret-123',
+      {
+        event: 'DOCUMENT_SIGNED',
+        payload: {
+          envelopeId: 'env-term',
+          recipients: [{ id: 101, signingStatus: 'SIGNED' }],
+        },
+      },
+      '127.0.0.1',
+    );
+    expect(webhookRes).toEqual({ ok: true, ignored: true });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+
+    const syncRes = await svc.syncContractFromDocumenso('contract-exp', '127.0.0.1');
+    expect(syncRes).toEqual({
+      synced: false,
+      contractId: 'contract-exp',
+      contractStatus: 'EXPIRED',
+      signedRoles: [],
+      signedPdfUrl: null,
+    });
+    expect(getEnvelopeSpy).not.toHaveBeenCalled();
+  });
 });

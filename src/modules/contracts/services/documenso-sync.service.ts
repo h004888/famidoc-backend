@@ -107,7 +107,7 @@ export class DocumensoSyncService {
 
     const contract = await this.prisma.medicalContract.findFirst({
       where: { documensoEnvelopeId: envelopeId },
-      select: { id: true },
+      select: { id: true, contractStatus: true },
     });
 
     const recipients = (payload.payload?.recipients ?? []).map((r) => ({
@@ -117,6 +117,9 @@ export class DocumensoSyncService {
     }));
 
     if (contract) {
+      if (['TERMINATED', 'EXPIRED'].includes(contract.contractStatus)) {
+        return { ok: true, ignored: true };
+      }
       await this.applySignedRecipients(contract.id, recipients, ipAddress);
       return { ok: true, contractId: contract.id };
     }
@@ -164,7 +167,10 @@ export class DocumensoSyncService {
       throw new NotFoundException('Không tìm thấy hợp đồng y tế');
     }
 
-    if (!contract.documensoEnvelopeId) {
+    if (
+      !contract.documensoEnvelopeId ||
+      ['TERMINATED', 'EXPIRED'].includes(contract.contractStatus)
+    ) {
       return {
         synced: false,
         contractId: contract.id,
@@ -265,6 +271,19 @@ export class DocumensoSyncService {
 
       if (!contract) {
         throw new NotFoundException('Không tìm thấy hợp đồng y tế');
+      }
+
+      if (['TERMINATED', 'EXPIRED'].includes(contract.contractStatus)) {
+        return {
+          shouldSendPaymentNotice: false,
+          result: {
+            synced: false,
+            contractId: contract.id,
+            contractStatus: contract.contractStatus,
+            signedRoles: contract.signatures.map((s) => s.signerRole),
+            signedPdfUrl: null,
+          } satisfies DocumensoSyncResult,
+        };
       }
 
       const signerByRecipientId = new Map(
