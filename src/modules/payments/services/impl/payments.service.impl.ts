@@ -11,6 +11,7 @@ import {
 import { randomUUID } from 'node:crypto';
 
 import type { ListTransactionsDto } from '../../dtos/list-transactions.dto';
+import type { AdminPaymentRequestDto } from '../../dtos/create-payment-request.dto';
 import type { SePayWebhookDto } from '../../dtos/sepay-webhook.dto';
 import type {
   ReconciledPaymentResult,
@@ -83,6 +84,23 @@ export class PaymentsServiceImpl implements IPaymentsService {
     addendumId?: string,
     actor?: AuthenticatedUser,
   ): Promise<PaymentRequest> {
+    return this.issuePayment(contractId, addendumId, actor);
+  }
+
+  createAdminPaymentRequest(dto: AdminPaymentRequestDto, actor: AuthenticatedUser, ip?: string) {
+    if (actor.role !== 'ADMIN') throw new ForbiddenException('Chỉ Admin được điều chỉnh yêu cầu thanh toán.');
+    if (extractPaymentCodes({ content: dto.transferDescription }).length) {
+      throw new BadRequestException('Nội dung không được chứa mã FD của hóa đơn. Hệ thống tự thêm mã mới.');
+    }
+    return this.issuePayment(dto.contractId, dto.addendumId, actor, { dto, actorId: actor.id, ip });
+  }
+
+  private issuePayment(
+    contractId: string,
+    addendumId: string | undefined,
+    actor: AuthenticatedUser | undefined,
+    adjustment?: { dto: AdminPaymentRequestDto; actorId: string; ip?: string },
+  ): Promise<PaymentRequest> {
     const destination = this.config.getDestination();
     return this.repository.transaction(async (session) => {
       const contract = await this.requireContract(
@@ -115,17 +133,24 @@ export class PaymentsServiceImpl implements IPaymentsService {
           item.status === PaymentRequestStatus.PENDING &&
           Date.parse(item.expiresAt) > now.getTime(),
       );
-      if (pending) return this.withQrCode(pending); // Bấm lại không sinh nhiều mã còn hiệu lực cho cùng hợp đồng.
+      if (pending && (!adjustment || (
+        pending.amountVnd === adjustment.dto.amountVnd &&
+        pending.adminTransferDescription === adjustment.dto.transferDescription
+      ))) return this.withQrCode(pending);
       // Những yêu cầu cũ quá hạn được đóng trước khi cấp mã mới, không tái sử dụng mã cũ.
       for (const item of requests) {
         if (item.status === PaymentRequestStatus.PENDING) {
-          item.status = PaymentRequestStatus.EXPIRED;
+          item.status = item === pending ? PaymentRequestStatus.CANCELLED : PaymentRequestStatus.EXPIRED;
           await session.saveRequest(item);
         }
       }
       // Giá chụp trong hợp đồng không thay đổi nếu danh mục công bố phiên bản gói mới.
-      const amount = contract.packageSnapshot.pricing.totalPriceVnd;
-      if (!Number.isSafeInteger(amount) || amount <= 0)
+      const previous = requests.at(-1) ?? null;
+      const previousOverride = previous?.adminTransferDescription ? previous : undefined;
+      const originalAmountVnd = contract.packageSnapshot.pricing.totalPriceVnd;
+      const amount = adjustment?.dto.amountVnd ?? previousOverride?.amountVnd ?? originalAmountVnd;
+      const description = adjustment?.dto.transferDescription ?? previousOverride?.adminTransferDescription;
+      if (!Number.isSafeInteger(amount) || amount <= 0 || amount > 9999999999)
         throw new BadRequestException('Invalid contract payment amount');
       const paymentCode = createPaymentCode(await session.nextPaymentNumber());
       const payment: PaymentRequest = {
@@ -136,10 +161,9 @@ export class PaymentsServiceImpl implements IPaymentsService {
         addendumId,
         attempt: (requests.at(-1)?.attempt ?? 0) + 1,
         paymentCode,
-        transferContent: buildTransferContent(
-          contract.payerDisplayName,
-          paymentCode,
-        ),
+        transferContent: description ? `${description} ${paymentCode}` :
+          buildTransferContent(contract.payerDisplayName, paymentCode),
+        adminTransferDescription: description,
         amountVnd: amount,
         currency: 'VND',
         expectedAccountNumber: destination.accountNumber,
@@ -153,6 +177,16 @@ export class PaymentsServiceImpl implements IPaymentsService {
         acceptedTransactionId: null,
       };
       await session.saveRequest(payment);
+      if (adjustment) {
+        await session.recordPaymentOverride({
+          actorId: adjustment.actorId,
+          clientIp: adjustment.ip?.slice(0, 45) ?? 'unknown',
+          request: payment,
+          previous,
+          originalAmountVnd,
+          reason: adjustment.dto.reason,
+        });
+      }
       return this.withQrCode(payment);
     });
   }

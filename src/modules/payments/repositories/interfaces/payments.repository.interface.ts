@@ -22,6 +22,14 @@ export interface PaymentsSession {
     addendumId?: string,
   ): Promise<PaymentRequest[]>;
   saveRequest(request: PaymentRequest): Promise<void>;
+  recordPaymentOverride(entry: {
+    actorId: string;
+    clientIp: string;
+    request: PaymentRequest;
+    previous: PaymentRequest | null;
+    originalAmountVnd: number;
+    reason: string;
+  }): Promise<void>;
   findTransaction(
     providerId: string,
     environment?: 'TEST' | 'LIVE',

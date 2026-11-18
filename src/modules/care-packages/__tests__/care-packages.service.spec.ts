@@ -6,6 +6,7 @@ import {
 import { CarePackagesServiceImpl } from '../services/impl/care-packages.service.impl';
 import { QuotaPeriod } from '../entities/care-package.entity';
 import { InMemoryCarePackagesRepository } from '../repositories/impl/in-memory-care-packages.repository';
+import { DEMO_CARE_PACKAGE_IDS } from '../repositories/interfaces/care-packages.repository.interface';
 import type { CreateCarePackageDto } from '../dtos/create-care-package.dto';
 
 // Dữ liệu chỉ dành cho test, không phải giá hay quyền lợi FamiDoc đã được phê duyệt.
@@ -125,13 +126,14 @@ describe('CarePackagesServiceImpl', () => {
     expect((await service.getAdmin(item.id)).quotas.homeVisits).toBe(0);
   });
 
-  it('publishes a draft and prevents editing published terms', async () => {
+  it('publishes a draft and allows editing terms directly without creating new versions', async () => {
     const item = await service.create(makeInput());
     const active = await service.publish(item.id);
     expect(await service.getPublic(item.id)).toEqual(active);
-    await expect(
-      service.update(item.id, { priceVnd: 200_000 }),
-    ).rejects.toBeInstanceOf(ConflictException);
+    const updated = await service.update(item.id, { priceVnd: 200_000 });
+    expect(updated.priceVnd).toBe(200_000);
+    expect(updated.id).toBe(item.id);
+    expect(updated.version).toBe(1);
     await expect(service.publish(item.id)).rejects.toBeInstanceOf(
       ConflictException,
     );
@@ -219,6 +221,29 @@ describe('CarePackagesServiceImpl', () => {
     expect((await service.listAdmin({ page: 100, limit: 1 })).items).toEqual(
       [],
     );
+  });
+
+  it('excludes demo packages and sorts the full admin catalog by price before pagination', async () => {
+    const prices = [700_000, 500_000, 100_000, 600_000, 400_000, 200_000, 300_000];
+    for (const [index, priceVnd] of prices.entries()) {
+      await service.create(makeInput({ code: `PACKAGE_${index}`, priceVnd }));
+    }
+    const demo = await service.create(
+      makeInput({ code: 'DEMO_LOCAL_TRAI_NGHIEM', priceVnd: 50_000 }),
+    );
+    await repository.insert({
+      ...demo,
+      id: DEMO_CARE_PACKAGE_IDS[0],
+      code: 'TRAI_NGHIEM',
+    });
+
+    const first = await service.listAdmin({ page: 1, limit: 6 });
+    const second = await service.listAdmin({ page: 2, limit: 6 });
+    expect(first.total).toBe(7);
+    expect(first.items.map((item) => item.priceVnd)).toEqual([
+      100_000, 200_000, 300_000, 400_000, 500_000, 600_000,
+    ]);
+    expect(second.items.map((item) => item.priceVnd)).toEqual([700_000]);
   });
 
   it('reports a missing package', async () => {

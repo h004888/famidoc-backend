@@ -66,6 +66,7 @@ function requestEntity(
     attempt: row.attempt,
     paymentCode: row.invoiceCode,
     transferContent: row.transferContent ?? row.invoiceCode,
+    adminTransferDescription: row.adminTransferDescription ?? undefined,
     amountVnd: moneyToNumber(row.totalPayable),
     currency: 'VND',
     expectedAccountNumber: row.expectedAccountNumber,
@@ -418,6 +419,7 @@ class PrismaPaymentsSession implements PaymentsSession {
         environment: item.environment,
         invoiceCode: item.paymentCode,
         transferContent: item.transferContent ?? item.paymentCode,
+        adminTransferDescription: item.adminTransferDescription,
         attempt: item.attempt,
         grossAmount: item.amountVnd,
         vatAmount: 0,
@@ -437,6 +439,26 @@ class PrismaPaymentsSession implements PaymentsSession {
         acceptedTransactionId: item.acceptedTransactionId,
       },
     });
+  }
+  async recordPaymentOverride(entry: Parameters<PaymentsSession['recordPaymentOverride']>[0]) {
+    await this.tx.auditLog.create({ data: {
+      actorUserId: entry.actorId,
+      clientIp: entry.clientIp,
+      action: 'ADMIN_ADJUST_PAYMENT_REQUEST',
+      resourceName: 'Invoice',
+      resourceId: entry.request.id,
+      details: {
+        contractId: entry.request.contractId,
+        addendumId: entry.request.addendumId ?? null,
+        environment: entry.request.environment,
+        originalAmountVnd: entry.originalAmountVnd,
+        previousRequestId: entry.previous?.id ?? null,
+        previousAmountVnd: entry.previous?.amountVnd ?? entry.originalAmountVnd,
+        amountVnd: entry.request.amountVnd,
+        transferContent: entry.request.transferContent ?? entry.request.paymentCode,
+        reason: entry.reason,
+      },
+    } });
   }
   async findTransaction(
     gatewayTransactionId: string,

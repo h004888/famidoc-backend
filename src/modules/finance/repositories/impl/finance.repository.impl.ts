@@ -134,6 +134,7 @@ class PrismaFinanceSession implements FinanceSession {
         year,
         month,
       },
+      include: { facility: { select: { id: true, facilityName: true } } },
       orderBy: { facilityId: 'asc' },
     });
   }

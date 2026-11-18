@@ -27,7 +27,7 @@ describe('Facility settlement review and transfer evidence', () => {
       reviewVersion: 1, reviewDisputeReason: null, reviewedAt: null,
       totalRealizedRevenue: new Prisma.Decimal(1000000),
       platformFeeAmount: new Prisma.Decimal(150000), facilityPayoutAmount: new Prisma.Decimal(850000),
-      bankTransferOrderId: null, settledAt: null, createdAt: new Date('2026-11-05T01:00:00Z'),
+      bankTransferOrderId: null, transferMemo: null, settledAt: null, createdAt: new Date('2026-11-05T01:00:00Z'),
       bankDestination: {}, failureReason: null, transferEvidenceKey: null, confirmedByUserId: null,
     };
     updateSettlement.mockImplementation(async (_id: string, data: Prisma.FacilitySettlementUncheckedUpdateInput) => {

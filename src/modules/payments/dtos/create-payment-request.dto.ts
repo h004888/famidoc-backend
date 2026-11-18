@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsUUID, IsOptional } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, Min } from 'class-validator';
 
 // Số tiền, mã chuyển khoản, tài khoản nhận và thời hạn đều do backend xác định.
 export class CreatePaymentRequestDto {
@@ -17,4 +18,26 @@ export class CreatePaymentRequestDto {
   @IsOptional()
   @IsUUID('4')
   addendumId?: string;
+}
+
+export class AdminPaymentRequestDto extends CreatePaymentRequestDto {
+  @ApiProperty({ minimum: 1, maximum: 9999999999 })
+  @IsInt()
+  @Min(1)
+  @Max(9999999999)
+  amountVnd!: number;
+
+  @ApiProperty({ description: 'Phần mô tả ngân hàng. Hệ thống thêm mã FD của hóa đơn.' })
+  @Transform(({ value }) => typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').toUpperCase() : value)
+  @IsString()
+  // VietQR nhận tối đa 94 ký tự, chừa 1 dấu cách và 8 ký tự cho mã FD.
+  @Length(1, 85)
+  @Matches(/^[A-Z0-9][A-Z0-9 ]*$/)
+  transferDescription!: string;
+
+  @ApiProperty({ description: 'Lý do điều chỉnh để ghi vào nhật ký Audit' })
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString()
+  @Length(5, 500)
+  reason!: string;
 }

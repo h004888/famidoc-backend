@@ -1,5 +1,6 @@
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
 import type { ListTransactionsDto } from '../../dtos/list-transactions.dto';
+import type { AdminPaymentRequestDto } from '../../dtos/create-payment-request.dto';
 import type { SePayWebhookDto } from '../../dtos/sepay-webhook.dto';
 import type {
   ReconciledPaymentResult,
@@ -18,6 +19,7 @@ export interface IPaymentsService {
     addendumId?: string,
     actor?: AuthenticatedUser,
   ): Promise<PaymentRequest>;
+  createAdminPaymentRequest(dto: AdminPaymentRequestDto, actor: AuthenticatedUser, ip?: string): Promise<PaymentRequest>;
   getPaymentStatus(
     id: string,
     actor?: AuthenticatedUser,
