@@ -33,6 +33,9 @@ export interface PaymentsSession {
     accountNumber: string,
     referenceCode: string,
   ): Promise<PaymentTransaction | null>;
+  findLatestTransactionByRequestId(
+    paymentRequestId: string,
+  ): Promise<PaymentTransaction | null>;
   listTransactions(): Promise<PaymentTransaction[]>;
   saveTransaction(transaction: PaymentTransaction): Promise<void>;
   linkReconciledTransaction(

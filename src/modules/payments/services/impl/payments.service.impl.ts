@@ -3,6 +3,7 @@ import type { AuthenticatedUser } from '../../../../core/auth/authenticated-requ
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -23,6 +24,7 @@ import {
   type ActivationResult,
   type BillingContract,
   type PaymentRequest,
+  type PaymentRequestStatusView,
   type PaymentTransaction,
   type PaymentTransactionResult,
 } from '../../entities/payment.entity';
@@ -158,7 +160,7 @@ export class PaymentsServiceImpl implements IPaymentsService {
   async getPaymentStatus(
     id: string,
     actor?: AuthenticatedUser,
-  ): Promise<PaymentRequest> {
+  ): Promise<PaymentRequestStatusView> {
     this.config.assertPaymentsEnabled();
     return this.repository.transaction(async (session) => {
       const item = await this.requireRequest(session, id);
@@ -171,7 +173,41 @@ export class PaymentsServiceImpl implements IPaymentsService {
         item.status = PaymentRequestStatus.EXPIRED;
         await session.saveRequest(item);
       }
-      return this.withQrCode(item);
+      const view: PaymentRequestStatusView = this.withQrCode(item);
+      // Bề mặt hóa trạng thái sau thanh toán để gia đình không bị "màn hình thành công giả".
+      if (item.status === PaymentRequestStatus.PAID) {
+        const contract = await session.findContract(
+          item.contractId,
+          item.addendumId,
+        );
+        if (contract) {
+          if (contract.status === BillingContractStatus.ACTIVE) {
+            view.activation = { activated: true, blockingReasons: [] };
+          } else {
+            view.activation = {
+              activated: false,
+              blockingReasons: (
+                await this.evaluateActivation(session, contract)
+              ).blockingReasons,
+            };
+          }
+        }
+      } else if (item.status === PaymentRequestStatus.PENDING) {
+        // Tiền có thể đã vào nhưng đang soát xét (LATE_PAYMENT, WRONG_ACCOUNT...):
+        // bề mặt hóa giao dịch gần nhất để gia đình biết mà không nhầm là "chưa ghi nhận".
+        const latest =
+          await session.findLatestTransactionByRequestId(item.id);
+        if (latest)
+          view.latestTransaction = {
+            id: latest.id,
+            outcome: latest.outcome,
+            reason: latest.reason,
+            referenceCode: latest.referenceCode || null,
+            amountVnd: latest.amountVnd,
+            receivedAt: latest.receivedAt,
+          };
+      }
+      return view;
     });
   }
 
@@ -509,6 +545,53 @@ export class PaymentsServiceImpl implements IPaymentsService {
     });
   }
 
+  // Kích hoạt bù an toàn: FAMILY_REP chỉ được yêu cầu cho hóa đơn đã PAID của chính hộ mình,
+  // ADMIN thì giữ quyền như cũ. Giao dịch chưa PAID không thể kích hoạt nên từ chối sớm.
+  async recheckActivation(
+    paymentId: string,
+    actor?: AuthenticatedUser,
+  ): Promise<ActivationResult> {
+    this.config.assertPaymentsEnabled();
+    return this.repository.transaction(async (session) => {
+      const payment = await this.requireRequest(session, paymentId);
+      if (actor && actor.role !== 'ADMIN') {
+        if (
+          actor.role !== 'FAMILY_REP' ||
+          actor.familyUnitId !== payment.familyId
+        )
+          throw new ForbiddenException(
+            'Only the payment owner family or an admin can recheck activation',
+          );
+        if (payment.status !== PaymentRequestStatus.PAID)
+          throw new ForbiddenException(
+            'Activation can only be rechecked after the payment is recorded',
+          );
+      }
+      return this.activateInTransaction(
+        session,
+        await this.requireContract(session, payment.contractId, payment.addendumId),
+      );
+    });
+  }
+
+  // Chỉ đánh giá điều kiện kích hoạt, không ghi dữ liệu: dùng cho cả tra cứu (getPaymentStatus)
+  // lẫn nhánh kiểm tra trước khi ghi hợp đồng ACTIVE trong activateInTransaction.
+  private async evaluateActivation(
+    session: PaymentsSession,
+    contract: BillingContract,
+  ): Promise<{ paid: boolean; blockingReasons: string[] }> {
+    const reasons = missingActivationRequirements(contract.requirements);
+    if (contract.status === BillingContractStatus.CANCELLED)
+      reasons.push('CONTRACT_CANCELLED');
+    const paid = (
+      await session.listRequests(contract.id, contract.addendumId)
+    ).some((item) => item.status === PaymentRequestStatus.PAID);
+    if (!paid) reasons.push('VERIFIED_PAYMENT_REQUIRED');
+    if (await this.otherActiveContractExists(session, contract))
+      reasons.push('FAMILY_ALREADY_HAS_ACTIVE_CONTRACT');
+    return { paid, blockingReasons: reasons };
+  }
+
   // Mỗi nhánh trả một lý do rõ ràng; không tự suy đoán khi thông tin thanh toán mơ hồ.
   private async reconciliationReason(
     session: PaymentsSession,
@@ -579,15 +662,10 @@ export class PaymentsServiceImpl implements IPaymentsService {
       };
     }
     // Kiểm tra lại sau khi tiền vào vì phân công/sức chứa có thể đã đổi từ lúc tạo mã.
-    const reasons = missingActivationRequirements(contract.requirements);
-    if (contract.status === BillingContractStatus.CANCELLED)
-      reasons.push('CONTRACT_CANCELLED');
-    const paid = (
-      await session.listRequests(contract.id, contract.addendumId)
-    ).some((item) => item.status === PaymentRequestStatus.PAID);
-    if (!paid) reasons.push('VERIFIED_PAYMENT_REQUIRED');
-    if (await this.otherActiveContractExists(session, contract))
-      reasons.push('FAMILY_ALREADY_HAS_ACTIVE_CONTRACT');
+    const { blockingReasons: reasons } = await this.evaluateActivation(
+      session,
+      contract,
+    );
     // Thiếu bất kỳ điều kiện nào thì giữ PENDING nhưng vẫn bảo toàn trạng thái PAID.
     if (reasons.length)
       return {
@@ -626,7 +704,9 @@ export class PaymentsServiceImpl implements IPaymentsService {
     url.searchParams.set('bank', payment.expectedGateway);
     url.searchParams.set('amount', String(payment.amountVnd));
     url.searchParams.set('des', payment.transferContent ?? payment.paymentCode);
-    url.searchParams.set('template', 'compact');
+    // qr_only giữ ~89% canvas cho vùng QR thật (compact chỉ còn 69% sau khi trừ logo/dải brand),
+    // giúp module QR dày hơn ~2 lần khi render xuống kích thước hiển thị.
+    url.searchParams.set('template', 'qr_only');
     return { ...payment, qrUrl: url.toString() };
   }
   private assertPaymentOwner(

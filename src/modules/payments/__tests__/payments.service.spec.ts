@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -601,7 +602,52 @@ describe('PaymentsServiceImpl (simulation)', () => {
     expect(url.searchParams.get('des')).toBe(
       `NGUYEN HOAI NAM - ${payment.paymentCode}`,
     );
+    expect(url.searchParams.get('template')).toBe('qr_only');
     expect(result.status).toBe(PaymentRequestStatus.PENDING);
+  });
+
+  it('surfaces activation state on a paid request: activated when the contract is active', async () => {
+    const payment = await pendingPayment();
+    await service.handleVietQRWebhook(payload(payment));
+    const status = await service.getPaymentStatus(payment.id);
+    expect(status.status).toBe(PaymentRequestStatus.PAID);
+    expect(status.activation).toEqual({
+      activated: true,
+      blockingReasons: [],
+    });
+  });
+
+  it('surfaces blocking reasons when a paid request is not yet activated', async () => {
+    // Mã cấp khi hợp đồng đã sẵn sàng, sau đó điều kiện thay đổi trước khi tiền vào.
+    const contract = await readyContract();
+    const payment = await service.createVietQRPayment(contract.id);
+    await service.updateDemoRequirements(contract.id, {
+      doctorVerified: false,
+    });
+    const result = await service.handleVietQRWebhook(payload(payment));
+    expect(result.activation?.activated).toBe(false);
+    const status = await service.getPaymentStatus(payment.id);
+    expect(status.status).toBe(PaymentRequestStatus.PAID);
+    expect(status.activation?.activated).toBe(false);
+    expect(status.activation?.blockingReasons).toContain(
+      'DOCTOR_VERIFICATION_REQUIRED',
+    );
+  });
+
+  it('surfaces the latest reviewed transaction on a pending request', async () => {
+    const payment = await pendingPayment();
+    await service.handleVietQRWebhook(
+      payload(payment, { transferAmount: payment.amountVnd + 1 }),
+    );
+    const status = await service.getPaymentStatus(payment.id);
+    expect(status.status).toBe(PaymentRequestStatus.PENDING);
+    expect(status.latestTransaction?.outcome).toBe(
+      TransactionOutcome.REVIEW_REQUIRED,
+    );
+    expect(status.latestTransaction?.reason).toBe(
+      TransactionReason.AMOUNT_MISMATCH,
+    );
+    expect(status.latestTransaction?.amountVnd).toBe(payment.amountVnd + 1);
   });
 
   it('continues matching an existing 32-character code when SePay extracts only its first 24 characters', async () => {
@@ -673,5 +719,71 @@ describe('PaymentsServiceImpl (simulation)', () => {
     expect((await service.listTransactions({ page: 1, limit: 20 })).total).toBe(
       1,
     );
+  });
+
+  describe('recheckActivation', () => {
+    it('allows the owner FAMILY_REP to recheck a PAID request and activates once requirements are met', async () => {
+      const payment = await pendingPayment();
+      await service.updateDemoRequirements(payment.contractId, {
+        doctorVerified: false,
+      });
+      await service.handleVietQRWebhook(payload(payment));
+      const owner = {
+        id: randomUUID(),
+        role: 'FAMILY_REP' as const,
+        familyUnitId: payment.familyId,
+      };
+      const blocked = await service.recheckActivation(payment.id, owner);
+      expect(blocked.activated).toBe(false);
+      expect(blocked.blockingReasons).toContain('DOCTOR_VERIFICATION_REQUIRED');
+
+      await repository.transaction(async (session) => {
+        const contract = (await session.findContract(payment.contractId))!;
+        contract.requirements.doctorVerified = true;
+        await session.saveContract(contract);
+      });
+      const activated = await service.recheckActivation(payment.id, owner);
+      expect(activated.activated).toBe(true);
+      expect(activated.blockingReasons).toEqual([]);
+      expect((await service.getContract(payment.contractId)).status).toBe(
+        BillingContractStatus.ACTIVE,
+      );
+    });
+
+    it('rejects FAMILY_REP from another family or on an unpaid request with ForbiddenException', async () => {
+      const payment = await pendingPayment();
+      const owner = {
+        id: randomUUID(),
+        role: 'FAMILY_REP' as const,
+        familyUnitId: payment.familyId,
+      };
+      await expect(
+        service.recheckActivation(payment.id, owner),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      await service.handleVietQRWebhook(payload(payment));
+      const otherFamily = {
+        id: randomUUID(),
+        role: 'FAMILY_REP' as const,
+        familyUnitId: randomUUID(),
+      };
+      await expect(
+        service.recheckActivation(payment.id, otherFamily),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('keeps ADMIN able to recheck activation for any family or status', async () => {
+      const payment = await pendingPayment();
+      const admin = {
+        id: randomUUID(),
+        role: 'ADMIN' as const,
+        familyUnitId: null,
+      };
+      const pendingResult = await service.recheckActivation(payment.id, admin);
+      expect(pendingResult.activated).toBe(false);
+      expect(pendingResult.blockingReasons).toContain(
+        'VERIFIED_PAYMENT_REQUIRED',
+      );
+    });
   });
 });

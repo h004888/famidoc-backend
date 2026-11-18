@@ -8,6 +8,7 @@ import type {
 import type {
   ActivationResult,
   PaymentRequest,
+  PaymentRequestStatusView,
   PaymentTransactionResult,
 } from '../../entities/payment.entity';
 export const PAYMENTS_SERVICE_TOKEN = Symbol('IPaymentsService');
@@ -20,7 +21,7 @@ export interface IPaymentsService {
   getPaymentStatus(
     id: string,
     actor?: AuthenticatedUser,
-  ): Promise<PaymentRequest>;
+  ): Promise<PaymentRequestStatusView>;
   cancelRequest(id: string, actor?: AuthenticatedUser): Promise<PaymentRequest>;
   listTransactions(query: ListTransactionsDto): Promise<unknown>;
   handleVietQRWebhook(dto: SePayWebhookDto): Promise<PaymentTransactionResult>;
@@ -31,5 +32,9 @@ export interface IPaymentsService {
   tryActivate(
     contractId: string,
     addendumId?: string,
+  ): Promise<ActivationResult>;
+  recheckActivation(
+    paymentId: string,
+    actor?: AuthenticatedUser,
   ): Promise<ActivationResult>;
 }

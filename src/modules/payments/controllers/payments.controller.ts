@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  HttpCode,
+  HttpStatus,
   Inject,
   Get,
   Param,
@@ -61,7 +63,7 @@ export class PaymentsController {
   @Get([':paymentId/status', 'requests/:paymentId'])
   @ApiOperation({ summary: 'Kiểm tra trạng thái thanh toán của hóa đơn/yêu cầu' })
   @ApiParam({ name: 'paymentId', description: 'UUID của yêu cầu thanh toán (invoice id)' })
-  @ApiResponse({ status: 200, description: 'Trạng thái thanh toán (PENDING, PAID, EXPIRED, CANCELLED)' })
+  @ApiResponse({ status: 200, description: 'Trạng thái thanh toán (PENDING, PAID, EXPIRED, CANCELLED), kèm activation khi PAID chưa kích hoạt và latestTransaction khi đang soát xét' })
   @ApiResponse({ status: 404, description: 'Không tìm thấy yêu cầu thanh toán' })
   getPaymentStatus(
     @Param('paymentId', new ParseUUIDPipe({ version: '4' })) paymentId: string,
@@ -83,17 +85,17 @@ export class PaymentsController {
   }
 
   @Post('requests/:id/recheck-activation')
-  @Roles('ADMIN')
-  @ApiOperation({ summary: 'Admin kích hoạt bù hợp đồng/phụ lục nếu webhook bị sót' })
+  @HttpCode(HttpStatus.OK)
+  @Roles('FAMILY_REP', 'ADMIN')
+  @ApiOperation({ summary: 'Kích hoạt bù hợp đồng/phụ lục nếu webhook bị sót; family chủ hộ tự kiểm tra được khi đã PAID' })
   @ApiParam({ name: 'id', description: 'UUID của yêu cầu thanh toán' })
-  @ApiResponse({ status: 200, description: 'Kích hoạt lại dịch vụ thành công' })
-  @ApiResponse({ status: 403, description: 'Chỉ ADMIN mới có quyền thực hiện' })
+  @ApiResponse({ status: 200, description: 'Trả về kết quả kích hoạt: activated và blockingReasons (nếu chưa đủ điều kiện)' })
+  @ApiResponse({ status: 403, description: 'Family chỉ được recheck hóa đơn PAID của chính hộ mình' })
   async recheckPaymentActivation(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Req() req: AuthenticatedRequest,
   ) {
-    const payment = await this.service.getPaymentStatus(id, req.user);
-    return this.service.tryActivate(payment.contractId, payment.addendumId);
+    return this.service.recheckActivation(id, req.user);
   }
 
   @Get('transactions')

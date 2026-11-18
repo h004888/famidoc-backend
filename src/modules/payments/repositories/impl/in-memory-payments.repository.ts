@@ -149,6 +149,19 @@ class MemorySession implements PaymentsSession {
     return structuredClone(item ?? null);
   }
 
+  async findLatestTransactionByRequestId(
+    paymentRequestId: string,
+  ): Promise<PaymentTransaction | null> {
+    const item = [...this.state.transactions.values()]
+      .filter(
+        (transaction) =>
+          transaction.paymentRequestId === paymentRequestId &&
+          transaction.outcome === 'REVIEW_REQUIRED',
+      )
+      .sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt))[0];
+    return structuredClone(item ?? null);
+  }
+
   async listTransactions(): Promise<PaymentTransaction[]> {
     return structuredClone([...this.state.transactions.values()]);
   }
