@@ -70,10 +70,12 @@ export class AdminComplaintsQuery extends ComplaintsQuery {
 
 export class AdminOverviewQuery {
   @ApiPropertyOptional({ enum: ['weekly', 'monthly', 'yearly'] })
+  @IsOptional()
   @IsIn(['weekly', 'monthly', 'yearly'])
   period: 'weekly' | 'monthly' | 'yearly' = 'monthly';
 
   @ApiPropertyOptional({ enum: ['LIVE', 'TEST'] })
+  @IsOptional()
   @IsIn(['LIVE', 'TEST'])
   environment: 'LIVE' | 'TEST' = 'LIVE';
 }
