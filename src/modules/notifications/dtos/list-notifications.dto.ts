@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBooleanString, IsInt, Max, Min, ValidateIf } from 'class-validator';
+import { IsBooleanString, IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 
 export class ListNotificationsDto {
   @ApiPropertyOptional({
@@ -35,4 +35,10 @@ export class ListNotificationsDto {
   @ValidateIf((_o, v) => v !== undefined)
   @IsBooleanString()
   unreadOnly?: string;
+
+  @ApiPropertyOptional({ description: 'Mã loại thông báo', example: 'PRESCRIPTION_SHARED' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  type?: string;
 }
