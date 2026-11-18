@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
   UsePipes,
@@ -16,6 +17,7 @@ import {
   ApiBearerAuth,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -30,6 +32,8 @@ import { CreatePatientDto } from '../dtos/create-patient.dto';
 import { UpdatePatientDto } from '../dtos/update-patient.dto';
 import { CreateAllergyDto } from '../dtos/create-allergy.dto';
 import { CreatePatientDocumentDto } from '../dtos/create-patient-document.dto';
+import { CreateVitalSignDto } from '../dtos/create-vital-sign.dto';
+import { UpdateVitalSignDto } from '../dtos/update-vital-sign.dto';
 
 @ApiTags('Patients')
 @ApiBearerAuth('JWT-auth')
@@ -162,5 +166,73 @@ export class PatientsController {
     @Param('id') id: string,
   ) {
     return this.service.listDocuments(req.user, id);
+  }
+
+  @Delete(':id/allergies/:allergyId')
+  @ApiOperation({ summary: 'Xóa một thông tin dị ứng của bệnh nhân' })
+  @ApiParam({ name: 'id', description: 'UUID của bệnh nhân' })
+  @ApiParam({ name: 'allergyId', description: 'UUID của bản ghi dị ứng' })
+  @ApiResponse({ status: 200, description: 'Đã xóa thông tin dị ứng' })
+  @ApiResponse({ status: 403, description: 'Không có quyền thao tác hồ sơ ngoài gia đình' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy bản ghi dị ứng' })
+  deleteAllergy(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('allergyId') allergyId: string,
+  ) {
+    return this.service.deleteAllergy(req.user, id, allergyId);
+  }
+
+  @Get(':id/vital-signs')
+  @ApiOperation({ summary: 'Lấy lịch sử chỉ số sinh tồn của bệnh nhân' })
+  @ApiParam({ name: 'id', description: 'UUID của bệnh nhân' })
+  @ApiQuery({ name: 'days', required: false, description: 'Số ngày gần nhất (1..90, mặc định 30)' })
+  @ApiResponse({ status: 200, description: 'Danh sách chỉ số sinh tồn' })
+  listVitalSigns(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Query('days') days?: string,
+  ) {
+    const parsedDays = days !== undefined ? Number(days) : undefined;
+    return this.service.listVitalSigns(req.user, id, parsedDays);
+  }
+
+  @Post(':id/vital-signs')
+  @ApiOperation({ summary: 'Gia đình ghi nhận chỉ số sinh tồn trong ngày cho thành viên' })
+  @ApiParam({ name: 'id', description: 'UUID của bệnh nhân' })
+  @ApiResponse({ status: 201, description: 'Lưu chỉ số sinh tồn thành công' })
+  addVitalSign(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: CreateVitalSignDto,
+  ) {
+    return this.service.addVitalSign(req.user, id, dto);
+  }
+
+  @Put(':id/vital-signs/:vitalId')
+  @ApiOperation({ summary: 'Chỉnh sửa chỉ số sinh tồn do gia đình tự ghi nhận' })
+  @ApiParam({ name: 'id', description: 'UUID của bệnh nhân' })
+  @ApiParam({ name: 'vitalId', description: 'UUID của bản ghi chỉ số sinh tồn' })
+  @ApiResponse({ status: 200, description: 'Cập nhật chỉ số sinh tồn thành công' })
+  updateVitalSign(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('vitalId') vitalId: string,
+    @Body() dto: UpdateVitalSignDto,
+  ) {
+    return this.service.updateVitalSign(req.user, id, vitalId, dto);
+  }
+
+  @Delete(':id/vital-signs/:vitalId')
+  @ApiOperation({ summary: 'Xóa chỉ số sinh tồn do gia đình tự ghi nhận' })
+  @ApiParam({ name: 'id', description: 'UUID của bệnh nhân' })
+  @ApiParam({ name: 'vitalId', description: 'UUID của bản ghi chỉ số sinh tồn' })
+  @ApiResponse({ status: 200, description: 'Đã xóa chỉ số sinh tồn' })
+  deleteVitalSign(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('vitalId') vitalId: string,
+  ) {
+    return this.service.deleteVitalSign(req.user, id, vitalId);
   }
 }

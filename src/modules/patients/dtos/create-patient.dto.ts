@@ -41,18 +41,6 @@ export class CreatePatientDto {
   @MaxLength(50)
   relationshipToRepresentative?: string;
 
-  @ApiPropertyOptional({ description: 'Số CCCD/Định danh cá nhân', example: '001201500001' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  identityNumber?: string;
-
-  @ApiPropertyOptional({ description: 'Số CCCD/Định danh cá nhân (alias của identityNumber)' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(20)
-  citizenId?: string;
-
   @ApiPropertyOptional({ description: 'Mối quan hệ nhân thân (alias của relationshipToRepresentative)' })
   @ValidateIf(
     (o: CreatePatientDto) =>
@@ -63,29 +51,11 @@ export class CreatePatientDto {
   @MaxLength(50)
   relationshipToHead?: string;
 
-  @ApiPropertyOptional({ description: 'Số điện thoại liên hệ cá nhân', example: '0987654321' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(15)
-  phoneNumber?: string;
-
   @ApiPropertyOptional({ description: 'Nhóm máu (A, B, AB, O...)', example: 'O+' })
   @IsOptional()
   @IsString()
   @MaxLength(10)
   bloodType?: string;
-
-  @ApiPropertyOptional({ description: 'Mã số thẻ bảo hiểm y tế', example: 'DN4010123456789' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(30)
-  healthInsuranceNumber?: string;
-
-  @ApiPropertyOptional({ description: 'Nơi ĐKKCB ban đầu (BHYT)', example: 'BV Đại học Y Dược TP.HCM' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(150)
-  registeredHospital?: string;
 
   @ApiPropertyOptional({ description: 'Bệnh nền đang theo dõi', example: 'Tăng huyết áp, Dạ dày' })
   @IsOptional()

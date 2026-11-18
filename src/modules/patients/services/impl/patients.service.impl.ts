@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -10,13 +11,25 @@ import type { CreatePatientDto } from '../../dtos/create-patient.dto';
 import type { UpdatePatientDto } from '../../dtos/update-patient.dto';
 import type { CreateAllergyDto } from '../../dtos/create-allergy.dto';
 import type { CreatePatientDocumentDto } from '../../dtos/create-patient-document.dto';
+import type { CreateVitalSignDto } from '../../dtos/create-vital-sign.dto';
+import type { UpdateVitalSignDto } from '../../dtos/update-vital-sign.dto';
 import {
   PATIENTS_REPOSITORY_TOKEN,
+  type DuplicatePatientConflict,
   type IPatientsRepository,
   type PatientDetail,
+  type SerializedVitalSign,
 } from '../../repositories/interfaces/patients.repository.interface';
 import type { IPatientsService } from '../interfaces/patients.service.interface';
-import type { Patient, PatientAllergy, PatientDocument } from '@prisma/client';
+import type { Patient, PatientAllergy, PatientDocument, VitalSign } from '@prisma/client';
+import {
+  computeVitalAbnormalAlert,
+  hasAnyVitalMetric,
+} from '../../utils/vital-sign.util';
+
+const DUPLICATE_CONFLICT_MESSAGES: Record<DuplicatePatientConflict, string> = {
+  SELF: 'Hộ gia đình đã có hồ sơ chủ hộ (SELF) đang hoạt động',
+};
 
 @Injectable()
 export class PatientsServiceImpl implements IPatientsService {
@@ -24,6 +37,28 @@ export class PatientsServiceImpl implements IPatientsService {
     @Inject(PATIENTS_REPOSITORY_TOKEN)
     private readonly repository: IPatientsRepository,
   ) {}
+
+  private validateDateOfBirth(rawDate: string): void {
+    const parsed = new Date(rawDate);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException('Ngày tháng năm sinh không hợp lệ');
+    }
+
+    const dobIso = parsed.toISOString().slice(0, 10);
+    const todayVn = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+    }).format(new Date());
+
+    if (dobIso > todayVn) {
+      throw new BadRequestException('Ngày sinh không thể là ngày trong tương lai');
+    }
+
+    const minYear = Number(todayVn.slice(0, 4)) - 120;
+    const minDobIso = `${String(minYear).padStart(4, '0')}${todayVn.slice(4)}`;
+    if (dobIso < minDobIso) {
+      throw new BadRequestException('Ngày sinh không hợp lệ (tuổi vượt quá 120 năm)');
+    }
+  }
 
   private async resolveFamilyId(
     user: AuthenticatedUser,
@@ -80,7 +115,32 @@ export class PatientsServiceImpl implements IPatientsService {
     throw new ForbiddenException('Access denied');
   }
 
+  private async assertNoFallbackDuplicate(
+    familyId: string,
+    dto: CreatePatientDto,
+  ): Promise<void> {
+    if (!this.repository.findActiveDuplicateByFamilyId) {
+      return;
+    }
+
+    const normalizedRelationship = (
+      dto.relationshipToRepresentative ||
+      dto.relationshipToHead ||
+      ''
+    )
+      .trim()
+      .toUpperCase();
+
+    const conflict = await this.repository.findActiveDuplicateByFamilyId(familyId, {
+      checkSelf: normalizedRelationship === 'SELF',
+    });
+    if (conflict) {
+      throw new ConflictException(DUPLICATE_CONFLICT_MESSAGES[conflict]);
+    }
+  }
+
   async createPatient(user: AuthenticatedUser, dto: CreatePatientDto): Promise<Patient> {
+    this.validateDateOfBirth(dto.dateOfBirth);
     const familyId = await this.resolveFamilyId(user, dto.familyId);
 
     if (this.repository.createWithActiveContractLock) {
@@ -106,6 +166,8 @@ export class PatientsServiceImpl implements IPatientsService {
         }
       }
 
+      await this.assertNoFallbackDuplicate(familyId, dto);
+
       if (this.repository.createAndAttachToContract) {
         return this.repository.createAndAttachToContract(
           familyId,
@@ -114,6 +176,8 @@ export class PatientsServiceImpl implements IPatientsService {
         );
       }
     }
+
+    await this.assertNoFallbackDuplicate(familyId, dto);
 
     return this.repository.create(familyId, dto);
   }
@@ -194,5 +258,141 @@ export class PatientsServiceImpl implements IPatientsService {
   ): Promise<PatientDocument[]> {
     await this.assertPatientAccess(user, patientId);
     return this.repository.findDocumentsByPatientId(patientId);
+  }
+
+  private serializeVitalSign(vital: VitalSign): SerializedVitalSign {
+    return {
+      ...vital,
+      temperature:
+        vital.temperature !== null && vital.temperature !== undefined
+          ? Number(vital.temperature)
+          : null,
+      bloodGlucose:
+        vital.bloodGlucose !== null && vital.bloodGlucose !== undefined
+          ? Number(vital.bloodGlucose)
+          : null,
+    };
+  }
+
+  async deleteAllergy(
+    user: AuthenticatedUser,
+    patientId: string,
+    allergyId: string,
+  ): Promise<PatientAllergy> {
+    await this.assertPatientAccess(user, patientId);
+    if (!this.repository.findAllergyById || !this.repository.deleteAllergy) {
+      throw new NotFoundException('Chức năng xóa dị ứng chưa khả dụng');
+    }
+    const existing = await this.repository.findAllergyById(allergyId);
+    if (!existing || existing.patientId !== patientId) {
+      throw new NotFoundException('Không tìm thấy thông tin dị ứng của bệnh nhân');
+    }
+    return this.repository.deleteAllergy(allergyId);
+  }
+
+  async addVitalSign(
+    user: AuthenticatedUser,
+    patientId: string,
+    dto: CreateVitalSignDto,
+  ): Promise<SerializedVitalSign> {
+    await this.assertPatientAccess(user, patientId);
+    if (!hasAnyVitalMetric(dto)) {
+      throw new BadRequestException('Vui lòng nhập ít nhất một chỉ số sinh tồn');
+    }
+    if (!this.repository.addVitalSign) {
+      throw new NotFoundException('Chức năng lưu chỉ số sinh tồn chưa khả dụng');
+    }
+    const isAbnormalAlert = computeVitalAbnormalAlert(dto);
+    const created = await this.repository.addVitalSign(patientId, dto, isAbnormalAlert);
+    return this.serializeVitalSign(created);
+  }
+
+  async listVitalSigns(
+    user: AuthenticatedUser,
+    patientId: string,
+    days = 30,
+  ): Promise<SerializedVitalSign[]> {
+    await this.assertPatientAccess(user, patientId);
+    if (!this.repository.findVitalSignsByPatientId) {
+      return [];
+    }
+    const clampedDays = Number.isFinite(days)
+      ? Math.min(90, Math.max(1, Math.trunc(days)))
+      : 30;
+    const sinceDate = new Date(Date.now() - clampedDays * 86_400_000);
+    const list = await this.repository.findVitalSignsByPatientId(patientId, sinceDate);
+    return list.map((item) => this.serializeVitalSign(item));
+  }
+
+  async updateVitalSign(
+    user: AuthenticatedUser,
+    patientId: string,
+    vitalId: string,
+    dto: UpdateVitalSignDto,
+  ): Promise<SerializedVitalSign> {
+    await this.assertPatientAccess(user, patientId);
+    if (!this.repository.findVitalSignById || !this.repository.updateVitalSign) {
+      throw new NotFoundException('Chức năng cập nhật chỉ số sinh tồn chưa khả dụng');
+    }
+    const existing = await this.repository.findVitalSignById(vitalId);
+    if (!existing || existing.patientId !== patientId) {
+      throw new NotFoundException('Không tìm thấy bản ghi chỉ số sinh tồn');
+    }
+    if (existing.emrId !== null) {
+      throw new ForbiddenException(
+        'Chỉ có thể chỉnh sửa chỉ số sinh tồn do gia đình tự ghi nhận',
+      );
+    }
+
+    const merged = {
+      systolicBp: dto.systolicBp !== undefined ? dto.systolicBp : existing.systolicBp,
+      diastolicBp: dto.diastolicBp !== undefined ? dto.diastolicBp : existing.diastolicBp,
+      heartRate: dto.heartRate !== undefined ? dto.heartRate : existing.heartRate,
+      temperature:
+        dto.temperature !== undefined
+          ? dto.temperature
+          : existing.temperature !== null
+            ? Number(existing.temperature)
+            : null,
+      spo2: dto.spo2 !== undefined ? dto.spo2 : existing.spo2,
+      respiratoryRate:
+        dto.respiratoryRate !== undefined ? dto.respiratoryRate : existing.respiratoryRate,
+      bloodGlucose:
+        dto.bloodGlucose !== undefined
+          ? dto.bloodGlucose
+          : existing.bloodGlucose !== null
+            ? Number(existing.bloodGlucose)
+            : null,
+    };
+
+    if (!hasAnyVitalMetric(merged)) {
+      throw new BadRequestException('Vui lòng giữ lại ít nhất một chỉ số sinh tồn');
+    }
+
+    const isAbnormalAlert = computeVitalAbnormalAlert(merged);
+    const updated = await this.repository.updateVitalSign(vitalId, dto, isAbnormalAlert);
+    return this.serializeVitalSign(updated);
+  }
+
+  async deleteVitalSign(
+    user: AuthenticatedUser,
+    patientId: string,
+    vitalId: string,
+  ): Promise<SerializedVitalSign> {
+    await this.assertPatientAccess(user, patientId);
+    if (!this.repository.findVitalSignById || !this.repository.deleteVitalSign) {
+      throw new NotFoundException('Chức năng xóa chỉ số sinh tồn chưa khả dụng');
+    }
+    const existing = await this.repository.findVitalSignById(vitalId);
+    if (!existing || existing.patientId !== patientId) {
+      throw new NotFoundException('Không tìm thấy bản ghi chỉ số sinh tồn');
+    }
+    if (existing.emrId !== null) {
+      throw new ForbiddenException(
+        'Không thể xóa chỉ số sinh tồn gắn với bệnh án của bác sĩ',
+      );
+    }
+    const deleted = await this.repository.deleteVitalSign(vitalId);
+    return this.serializeVitalSign(deleted);
   }
 }
