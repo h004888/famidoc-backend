@@ -405,6 +405,38 @@ describe('DoctorsServiceImpl', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('should throw BadRequestException if doctor is FACILITY_VERIFIED or SUSPENDED', async () => {
+      prismaService.doctor.findUnique.mockResolvedValueOnce({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.FACILITY_VERIFIED,
+      });
+
+      await expect(
+        service.submitDoctorCredentials(
+          doctorUser,
+          'doc-uuid-1',
+          credDto,
+          '127.0.0.1',
+          uploadedThreeFiles,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      prismaService.doctor.findUnique.mockResolvedValueOnce({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.SUSPENDED,
+      });
+
+      await expect(
+        service.submitDoctorCredentials(
+          doctorUser,
+          'doc-uuid-1',
+          credDto,
+          '127.0.0.1',
+          uploadedThreeFiles,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('should throw BadRequestException if credential issueDate is in the future', async () => {
       prismaService.doctor.findUnique.mockResolvedValue({
         ...mockDoctor,
@@ -435,15 +467,17 @@ describe('DoctorsServiceImpl', () => {
   });
 
   describe('approveDoctorCredentialsByFacility (STT 17 - UC-22)', () => {
+    const threeValidCreds = [
+      { id: 'cred-1', credentialType: DoctorCredentialType.PRACTICE_LICENSE_CCHN },
+      { id: 'cred-2', credentialType: DoctorCredentialType.DEGREE },
+      { id: 'cred-3', credentialType: DoctorCredentialType.FAMILY_MEDICINE_CERT },
+    ];
+
     it('should approve doctor credentials and update status to FACILITY_VERIFIED', async () => {
       prismaService.doctor.findUnique.mockResolvedValue({
         ...mockDoctor,
-        credentials: [
-          {
-            id: 'cred-1',
-            credentialType: DoctorCredentialType.PRACTICE_LICENSE_CCHN,
-          },
-        ],
+        onboardingStatus: DoctorOnboardingStatus.PENDING_FACILITY_REVIEW,
+        credentials: threeValidCreds,
       });
 
       prismaService.doctor.update.mockResolvedValue({
@@ -475,10 +509,26 @@ describe('DoctorsServiceImpl', () => {
       });
     });
 
-    it('should throw BadRequestException if approving doctor with no credentials uploaded', async () => {
-      prismaService.doctor.findUnique.mockResolvedValue({
+    it('should throw BadRequestException if approving doctor with incomplete or missing credentials', async () => {
+      prismaService.doctor.findUnique.mockResolvedValueOnce({
         ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.PENDING_FACILITY_REVIEW,
         credentials: [],
+      });
+
+      await expect(
+        service.approveDoctorCredentialsByFacility(
+          facilityUser,
+          'doc-uuid-1',
+          { approved: true },
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      prismaService.doctor.findUnique.mockResolvedValueOnce({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.PENDING_FACILITY_REVIEW,
+        credentials: [threeValidCreds[0]],
       });
 
       await expect(
@@ -491,8 +541,8 @@ describe('DoctorsServiceImpl', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should throw BadRequestException if doctor is already ACTIVE', async () => {
-      prismaService.doctor.findUnique.mockResolvedValue({
+    it('should throw BadRequestException if doctor is not PENDING_FACILITY_REVIEW or is already ACTIVE', async () => {
+      prismaService.doctor.findUnique.mockResolvedValueOnce({
         ...mockDoctor,
         onboardingStatus: DoctorOnboardingStatus.ACTIVE,
       });
@@ -505,12 +555,28 @@ describe('DoctorsServiceImpl', () => {
           '127.0.0.1',
         ),
       ).rejects.toThrow(BadRequestException);
+
+      prismaService.doctor.findUnique.mockResolvedValueOnce({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.FACILITY_VERIFIED,
+        credentials: threeValidCreds,
+      });
+
+      await expect(
+        service.approveDoctorCredentialsByFacility(
+          facilityUser,
+          'doc-uuid-1',
+          { approved: false, rejectionReason: 'Không hợp lệ' },
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should handle facility rejection and send notification to doctor', async () => {
       prismaService.doctor.findUnique.mockResolvedValue({
         ...mockDoctor,
-        credentials: [{ id: 'cred-1' }],
+        onboardingStatus: DoctorOnboardingStatus.PENDING_FACILITY_REVIEW,
+        credentials: threeValidCreds,
       });
       prismaService.doctor.update.mockResolvedValue({
         ...mockDoctor,
@@ -536,7 +602,8 @@ describe('DoctorsServiceImpl', () => {
     it('should throw BadRequestException if facility rejects without rejectionReason', async () => {
       prismaService.doctor.findUnique.mockResolvedValue({
         ...mockDoctor,
-        credentials: [{ id: 'cred-1' }],
+        onboardingStatus: DoctorOnboardingStatus.PENDING_FACILITY_REVIEW,
+        credentials: threeValidCreds,
       });
 
       await expect(
@@ -635,7 +702,13 @@ describe('DoctorsServiceImpl', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('should handle platform rejection and send notification to both doctor and facility', async () => {
+    it('should handle platform rejection and send notification and email to both doctor and facility', async () => {
+      prismaService.user.findUnique
+        .mockResolvedValueOnce({ id: mockDoctor.userId, email: 'doc@famidoc.vn' })
+        .mockResolvedValueOnce({
+          id: mockFacility.userId,
+          email: 'facility@hoanmy.vn',
+        });
       prismaService.doctor.findUnique.mockResolvedValue({
         ...mockDoctor,
         onboardingStatus: DoctorOnboardingStatus.FACILITY_VERIFIED,
@@ -667,6 +740,18 @@ describe('DoctorsServiceImpl', () => {
           type: 'DOCTOR_PLATFORM_REJECTED',
         }),
       });
+      expect(mailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'doc@famidoc.vn',
+          text: expect.stringContaining('Số CCHN không hợp lệ'),
+        }),
+      );
+      expect(mailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'facility@hoanmy.vn',
+          text: expect.stringContaining('Số CCHN không hợp lệ'),
+        }),
+      );
     });
 
     it('should throw BadRequestException if platform rejects without rejectionReason', async () => {

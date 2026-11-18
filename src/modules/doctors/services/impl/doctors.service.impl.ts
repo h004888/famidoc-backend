@@ -14,6 +14,7 @@ import { hashSync } from 'bcryptjs';
 import { PrismaService } from '../../../../core/database/prisma.service';
 import { StorageService } from '../../../../core/services/storage.service';
 import { validateUploadedDocumentFile } from '../../../../core/validation/document-file.validator';
+import { todayInVietnam } from '../../../../core/business/business-helpers';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
 import { DoctorCredentialType } from '@prisma/client';
 import type {
@@ -233,6 +234,16 @@ export class DoctorsServiceImpl implements IDoctorsService {
     if (doctor.onboardingStatus === 'ACTIVE') {
       throw new BadRequestException(
         'Bác sĩ đã hoàn tất onboarding và đang hoạt động (ACTIVE), không thể nộp lại hồ sơ',
+      );
+    }
+    if (doctor.onboardingStatus === 'FACILITY_VERIFIED') {
+      throw new BadRequestException(
+        'Hồ sơ bác sĩ đã được Cơ sở y tế duyệt Cấp 1 và đang chờ Quản trị viên thẩm định Cấp 2, không thể tự ý nộp đè.',
+      );
+    }
+    if (doctor.onboardingStatus === 'SUSPENDED') {
+      throw new BadRequestException(
+        'Tài khoản bác sĩ đang bị tạm đình chỉ (SUSPENDED), không thể nộp hồ sơ.',
       );
     }
 
@@ -499,13 +510,29 @@ export class DoctorsServiceImpl implements IDoctorsService {
       );
     }
 
-    if (
-      dto.approved &&
-      (!doctor.credentials || doctor.credentials.length === 0)
-    ) {
+    if (doctor.onboardingStatus !== 'PENDING_FACILITY_REVIEW') {
       throw new BadRequestException(
-        'Bác sĩ chưa nộp văn bằng chứng chỉ chuyên môn để thẩm định',
+        'Hồ sơ bác sĩ chưa ở trạng thái chờ Cơ sở y tế thẩm định Cấp 1 (PENDING_FACILITY_REVIEW).',
       );
+    }
+
+    if (dto.approved) {
+      const submittedTypes = new Set(
+        (doctor.credentials ?? []).map((c: any) => c.credentialType),
+      );
+      const requiredTypes: DoctorCredentialType[] = [
+        DoctorCredentialType.PRACTICE_LICENSE_CCHN,
+        DoctorCredentialType.DEGREE,
+        DoctorCredentialType.FAMILY_MEDICINE_CERT,
+      ];
+      const missingTypes = requiredTypes.filter((t) => !submittedTypes.has(t));
+      if (missingTypes.length > 0) {
+        throw new BadRequestException(
+          `Bác sĩ chưa nộp đủ 3 loại văn bằng chứng chỉ bắt buộc để thẩm định (${missingTypes
+            .map((t) => this.resolveCredentialLabel(t))
+            .join(', ')}).`,
+        );
+      }
     }
 
     if (!dto.approved && (!dto.rejectionReason || !dto.rejectionReason.trim())) {
@@ -796,6 +823,40 @@ export class DoctorsServiceImpl implements IDoctorsService {
               referenceId: doctor.id,
             },
           });
+        }
+
+        if (this.mailerService?.sendMail) {
+          const docUser = await tx.user.findUnique({
+            where: { id: doctor.userId },
+          });
+          if (docUser?.email) {
+            try {
+              await this.mailerService.sendMail({
+                to: docUser.email,
+                subject: 'Hồ sơ chuyên môn bác sĩ cần bổ sung (Thẩm định Cấp 2) - FamiDoc',
+                text: `Kính gửi Bác sĩ ${doctor.doctorName},\n\nHồ sơ văn bằng và chứng chỉ hành nghề của bạn chưa đạt yêu cầu ở bước hậu kiểm Cấp 2.\nLý do: ${rejectionReason}\n\nVui lòng đăng nhập vào cổng Bác sĩ FamiDoc để cập nhật lại hồ sơ và gửi thẩm định lại.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+              });
+            } catch {
+              // Silently ignore mail errors in dev
+            }
+          }
+
+          if (doctor.facility?.userId) {
+            const facUser = await tx.user.findUnique({
+              where: { id: doctor.facility.userId },
+            });
+            if (facUser?.email && facUser.email !== docUser?.email) {
+              try {
+                await this.mailerService.sendMail({
+                  to: facUser.email,
+                  subject: `Hồ sơ bác sĩ ${doctor.doctorName} bị từ chối ở Thẩm định Cấp 2 - FamiDoc`,
+                  text: `Kính gửi ${doctor.facility.facilityName},\n\nHồ sơ bác sĩ ${doctor.doctorName} chưa đạt phê duyệt Cấp 2 của Quản trị viên FamiDoc.\nLý do: ${rejectionReason}\n\nBác sĩ cần bổ sung lại hồ sơ để Cơ sở y tế thẩm định Cấp 1 lại trước khi trình duyệt Cấp 2.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+                });
+              } catch {
+                // Silently ignore mail errors in dev
+              }
+            }
+          }
         }
 
         return doc;
@@ -1505,7 +1566,30 @@ export class DoctorsServiceImpl implements IDoctorsService {
       );
     }
 
-    return this.formatFacility(facility);
+    const today = todayInVietnam();
+    const [activeStaffing, historicalStaffing] = await Promise.all([
+      this.prisma.b2bStaffingContract?.findFirst({
+        where: {
+          facilityId: facility.id,
+          status: 'ACTIVE',
+          startDate: { lte: today },
+          endDate: { gte: today },
+        },
+        select: { id: true },
+      }) ?? Promise.resolve(null),
+      this.prisma.b2bStaffingContract?.findFirst({
+        where: {
+          facilityId: facility.id,
+          status: { in: ['ACTIVE', 'EXPIRED', 'TERMINATED'] },
+        },
+        select: { id: true },
+      }) ?? Promise.resolve(null),
+    ]);
+
+    return this.formatFacility(facility, {
+      hasActiveStaffingContract: Boolean(activeStaffing),
+      hasHistoricalStaffingContract: Boolean(activeStaffing || historicalStaffing),
+    });
   }
 
   async getFacilityLegalDocument(
@@ -1622,6 +1706,10 @@ export class DoctorsServiceImpl implements IDoctorsService {
 
   private formatFacility(
     facility: any,
+    staffingFlags?: {
+      hasActiveStaffingContract: boolean;
+      hasHistoricalStaffingContract: boolean;
+    },
   ): FacilityResponseDto {
     return {
       id: facility.id,
@@ -1642,6 +1730,13 @@ export class DoctorsServiceImpl implements IDoctorsService {
       licenseIssuer: facility.licenseIssuer ?? null,
       licenseDate: facility.licenseDate ?? null,
       legalRejectionReason: facility.legalRejectionReason ?? null,
+      ...(staffingFlags
+        ? {
+            hasActiveStaffingContract: staffingFlags.hasActiveStaffingContract,
+            hasHistoricalStaffingContract:
+              staffingFlags.hasHistoricalStaffingContract,
+          }
+        : {}),
       createdAt: facility.createdAt,
       updatedAt: facility.updatedAt,
       ...(facility.user

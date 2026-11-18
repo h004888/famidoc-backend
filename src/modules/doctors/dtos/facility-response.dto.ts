@@ -86,6 +86,16 @@ export class FacilityResponseDto {
   @ApiPropertyOptional()
   legalRejectionReason?: string | null;
 
+  @ApiPropertyOptional({
+    description: 'Cơ sở y tế có hợp đồng cung ứng nhân lực B2B đang hiệu lực hay không',
+  })
+  hasActiveStaffingContract?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Cơ sở y tế đã từng có hợp đồng B2B đã kích hoạt/hết hạn/chấm dứt hay chưa',
+  })
+  hasHistoricalStaffingContract?: boolean;
+
   @ApiProperty({ example: '2026-11-12T07:00:00.000Z' })
   createdAt!: string;
 

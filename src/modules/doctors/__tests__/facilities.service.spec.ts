@@ -93,6 +93,9 @@ describe('Facilities Onboarding Service (Admin-Led Provisioning & Legal Verifica
           verificationStatus: FacilityVerificationStatus.ACTIVE,
         }),
       },
+      b2bStaffingContract: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       auditLog: {
         create: jest.fn().mockResolvedValue({ id: 1n }),
       },
@@ -529,6 +532,39 @@ describe('Facilities Onboarding Service (Admin-Led Provisioning & Legal Verifica
           id: 'other-facility-user',
         }),
       ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('Step 5: getMyFacility staffing flags', () => {
+    it('returns hasActiveStaffingContract=false and hasHistoricalStaffingContract=false when no B2B contract exists', async () => {
+      prismaService.b2bStaffingContract.findFirst.mockResolvedValue(null);
+
+      const res = await service.getMyFacility(facilityUser);
+
+      expect(res.hasActiveStaffingContract).toBe(false);
+      expect(res.hasHistoricalStaffingContract).toBe(false);
+    });
+
+    it('returns hasActiveStaffingContract=true when an ACTIVE B2B contract exists', async () => {
+      prismaService.b2bStaffingContract.findFirst
+        .mockResolvedValueOnce({ id: 'b2b-active' })
+        .mockResolvedValueOnce({ id: 'b2b-active' });
+
+      const res = await service.getMyFacility(facilityUser);
+
+      expect(res.hasActiveStaffingContract).toBe(true);
+      expect(res.hasHistoricalStaffingContract).toBe(true);
+    });
+
+    it('returns hasActiveStaffingContract=false and hasHistoricalStaffingContract=true when only historical contract exists', async () => {
+      prismaService.b2bStaffingContract.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'b2b-terminated' });
+
+      const res = await service.getMyFacility(facilityUser);
+
+      expect(res.hasActiveStaffingContract).toBe(false);
+      expect(res.hasHistoricalStaffingContract).toBe(true);
     });
   });
 });
