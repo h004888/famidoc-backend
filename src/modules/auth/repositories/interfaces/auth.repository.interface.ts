@@ -57,6 +57,41 @@ export interface UpsertOtpChallengeData {
   maxAttempts?: number;
 }
 
+export interface AuthSessionRecord {
+  id: string;
+  userId: string;
+  tokenHash: string;
+  familyId: string;
+  rememberMe: boolean;
+  clientIp?: string | null;
+  userAgent?: string | null;
+  expiresAt: Date;
+  revokedAt?: Date | null;
+  replacedBySessionId?: string | null;
+  createdAt: Date;
+}
+
+export interface CreateAuthSessionData {
+  userId: string;
+  tokenHash: string;
+  familyId: string;
+  rememberMe: boolean;
+  clientIp?: string | null;
+  userAgent?: string | null;
+  expiresAt: Date;
+}
+
+export interface RotateAuthSessionInput {
+  currentSessionId: string;
+  familyId: string;
+  newSession: CreateAuthSessionData;
+}
+
+export interface RotateAuthSessionResult {
+  rotated: boolean;
+  session: AuthSessionRecord | null;
+}
+
 export interface IAuthRepository
   extends IBaseRepository<AuthEntity, CreateAuthDto, UpdateAuthDto> {
   findByEmail(email: string): Promise<AuthEntity | null>;
@@ -83,4 +118,15 @@ export interface IAuthRepository
     lockedUntil?: Date | null,
   ): Promise<void>;
   resetFailedAttempts(userId: string): Promise<void>;
+  createAuthSession(data: CreateAuthSessionData): Promise<AuthSessionRecord>;
+  findAuthSessionByTokenHash(
+    tokenHash: string,
+  ): Promise<AuthSessionRecord | null>;
+  rotateAuthSession(
+    input: RotateAuthSessionInput,
+  ): Promise<RotateAuthSessionResult>;
+  revokeAuthSessionByTokenHash(tokenHash: string): Promise<void>;
+  revokeAuthSessionById(sessionId: string): Promise<void>;
+  revokeAllUserAuthSessions(userId: string): Promise<void>;
+  purgeExpiredAuthSessions(before?: Date): Promise<number>;
 }

@@ -6,10 +6,14 @@ import { CreateAuthDto } from '../../dtos/create-auth.dto';
 import { UpdateAuthDto } from '../../dtos/update-auth.dto';
 import {
   AuthEntity,
+  AuthSessionRecord,
+  CreateAuthSessionData,
   CreateFamilyRepDbData,
   IAuthRepository,
   OtpChallengePurposeType,
   OtpChallengeRecord,
+  RotateAuthSessionInput,
+  RotateAuthSessionResult,
   UpsertOtpChallengeData,
 } from '../interfaces/auth.repository.interface';
 
@@ -228,5 +232,110 @@ export class AuthRepositoryImpl
         lockedUntil: null,
       },
     });
+  }
+
+  private toAuthSessionRecord(row: any): AuthSessionRecord {
+    return row as AuthSessionRecord;
+  }
+
+  async createAuthSession(
+    data: CreateAuthSessionData,
+  ): Promise<AuthSessionRecord> {
+    const row = await this.prismaService.authSession.create({
+      data: {
+        userId: data.userId,
+        tokenHash: data.tokenHash,
+        familyId: data.familyId,
+        rememberMe: data.rememberMe,
+        clientIp: data.clientIp ?? null,
+        userAgent: data.userAgent ? data.userAgent.slice(0, 255) : null,
+        expiresAt: data.expiresAt,
+      },
+    });
+    return this.toAuthSessionRecord(row);
+  }
+
+  async findAuthSessionByTokenHash(
+    tokenHash: string,
+  ): Promise<AuthSessionRecord | null> {
+    const row = await this.prismaService.authSession.findUnique({
+      where: { tokenHash },
+    });
+    return row ? this.toAuthSessionRecord(row) : null;
+  }
+
+  async rotateAuthSession(
+    input: RotateAuthSessionInput,
+  ): Promise<RotateAuthSessionResult> {
+    return this.prismaService.$transaction(async (tx) => {
+      const now = new Date();
+      const created = await tx.authSession.create({
+        data: {
+          userId: input.newSession.userId,
+          tokenHash: input.newSession.tokenHash,
+          familyId: input.newSession.familyId,
+          rememberMe: input.newSession.rememberMe,
+          clientIp: input.newSession.clientIp ?? null,
+          userAgent: input.newSession.userAgent
+            ? input.newSession.userAgent.slice(0, 255)
+            : null,
+          expiresAt: input.newSession.expiresAt,
+        },
+      });
+
+      const updated = await tx.authSession.updateMany({
+        where: {
+          id: input.currentSessionId,
+          revokedAt: null,
+          expiresAt: { gt: now },
+        },
+        data: {
+          revokedAt: now,
+          replacedBySessionId: created.id,
+        },
+      });
+
+      if (updated.count === 0) {
+        // Phát hiện reuse hoặc token hết hạn: thu hồi toàn bộ chuỗi familyId
+        await tx.authSession.updateMany({
+          where: {
+            familyId: input.familyId,
+            revokedAt: null,
+          },
+          data: { revokedAt: now },
+        });
+        return { rotated: false, session: null };
+      }
+
+      return { rotated: true, session: this.toAuthSessionRecord(created) };
+    });
+  }
+
+  async revokeAuthSessionByTokenHash(tokenHash: string): Promise<void> {
+    await this.prismaService.authSession.updateMany({
+      where: { tokenHash, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  async revokeAuthSessionById(sessionId: string): Promise<void> {
+    await this.prismaService.authSession.updateMany({
+      where: { id: sessionId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  async revokeAllUserAuthSessions(userId: string): Promise<void> {
+    await this.prismaService.authSession.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  async purgeExpiredAuthSessions(before = new Date()): Promise<number> {
+    const res = await this.prismaService.authSession.deleteMany({
+      where: { expiresAt: { lt: before } },
+    });
+    return res.count;
   }
 }

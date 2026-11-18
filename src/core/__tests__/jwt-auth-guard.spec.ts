@@ -20,6 +20,9 @@ describe('JwtAuthGuard', () => {
       user: {
         findUnique: jest.fn(),
       },
+      authSession: {
+        findUnique: jest.fn(),
+      },
     };
 
     reflector = {
@@ -169,5 +172,22 @@ describe('JwtAuthGuard', () => {
 
     const result = await guard.canActivate(ctx);
     expect(result).toBe(true);
+  });
+
+  it('should throw UnauthorizedException if token sid session is revoked in PostgreSQL', async () => {
+    const ctx = createMockContext('Bearer token123');
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: 'user-1',
+      iat: 1000,
+      exp: 2000,
+      jti: 'jti-1',
+      sid: 'sess-revoked',
+    });
+    prismaService.authSession.findUnique.mockResolvedValue({
+      revokedAt: new Date(),
+      expiresAt: new Date(Date.now() + 3600_000),
+    });
+
+    await expect(guard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
   });
 });

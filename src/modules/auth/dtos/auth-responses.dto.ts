@@ -92,6 +92,18 @@ export class LoginDataDto {
   })
   accessToken!: string;
 
+  @ApiPropertyOptional({
+    example: 'rft_...',
+    description: 'Refresh Token dùng để gia hạn phiên khi accessToken hết hạn',
+  })
+  refreshToken?: string;
+
+  @ApiPropertyOptional({
+    example: 3600,
+    description: 'Thời hạn sống của accessToken tính bằng giây',
+  })
+  expiresInSeconds?: number;
+
   @ApiProperty({
     example: 'FAMILY_REP',
     description: 'Vai trò của tài khoản',
@@ -109,6 +121,8 @@ export type LoginResponseDto = LoginDataDto;
 
 export interface LoginSuccessResponse {
   accessToken: string;
+  refreshToken?: string;
+  expiresInSeconds?: number;
   role: string;
   user: {
     id: string;
