@@ -2205,8 +2205,6 @@ export class ContractsServiceImpl implements IContractsService {
             ageGroup,
             gender: rawPatient.gender || 'OTHER',
             relationshipToHead: rawPatient.relationshipToHead || 'MEMBER',
-            citizenId: rawPatient.citizenId,
-            healthInsuranceNumber: rawPatient.healthInsuranceNumber,
             allergies,
             documents,
           };
@@ -3173,6 +3171,7 @@ export class ContractsServiceImpl implements IContractsService {
   ) {
     await session.updateContractStatus(contract.id, 'TERMINATED', reason);
     await session.cancelPendingInvoices(contract.id);
+    await session.clearDocumensoState?.(contract.id);
     await session.recordChange(actorId, contract, action, contract.id);
   }
   private assertContractServing(contract: ChangeContract) {

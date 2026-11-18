@@ -14,9 +14,7 @@ describe('CreatePatientDto Validation', () => {
     dateOfBirth: '2015-05-20',
     gender: Gender.FEMALE,
     bloodType: 'O+',
-    registeredHospital: 'BV Đại học Y Dược TP.HCM',
     chronicDiseases: 'Viêm mũi dị ứng',
-    healthInsuranceNumber: 'GD4790123899999',
   };
 
   it('chấp nhận payload chuẩn gửi relationshipToRepresentative cùng metadata y tế mới', async () => {
@@ -26,7 +24,6 @@ describe('CreatePatientDto Validation', () => {
     );
     expect(result.relationshipToRepresentative).toBe('CHILD');
     expect(result.bloodType).toBe('O+');
-    expect(result.registeredHospital).toBe('BV Đại học Y Dược TP.HCM');
     expect(result.chronicDiseases).toBe('Viêm mũi dị ứng');
   });
 
@@ -44,10 +41,38 @@ describe('CreatePatientDto Validation', () => {
     ).rejects.toThrow();
   });
 
-  it('từ chối field lạ không nằm trong whitelist (ví dụ identityCardNumber)', async () => {
+  it('từ chối field lạ không nằm trong whitelist (ví dụ citizenId, healthInsuranceNumber, registeredHospital, identityCardNumber, phoneNumber)', async () => {
     await expect(
       pipe.transform(
         { ...basePayload, relationshipToRepresentative: 'CHILD', identityCardNumber: '123456' },
+        { type: 'body', metatype: CreatePatientDto },
+      ),
+    ).rejects.toThrow();
+
+    await expect(
+      pipe.transform(
+        { ...basePayload, relationshipToRepresentative: 'CHILD', citizenId: '001201500001' },
+        { type: 'body', metatype: CreatePatientDto },
+      ),
+    ).rejects.toThrow();
+
+    await expect(
+      pipe.transform(
+        { ...basePayload, relationshipToRepresentative: 'CHILD', healthInsuranceNumber: 'GD4790123899999' },
+        { type: 'body', metatype: CreatePatientDto },
+      ),
+    ).rejects.toThrow();
+
+    await expect(
+      pipe.transform(
+        { ...basePayload, relationshipToRepresentative: 'CHILD', registeredHospital: 'BV Test' },
+        { type: 'body', metatype: CreatePatientDto },
+      ),
+    ).rejects.toThrow();
+
+    await expect(
+      pipe.transform(
+        { ...basePayload, relationshipToRepresentative: 'CHILD', phoneNumber: '0987654321' },
         { type: 'body', metatype: CreatePatientDto },
       ),
     ).rejects.toThrow();

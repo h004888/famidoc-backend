@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { Gender } from '@prisma/client';
 import { PatientsRepositoryImpl } from '../repositories/impl/patients.repository.impl';
 import type { CreatePatientDto } from '../dtos/create-patient.dto';
@@ -11,9 +11,7 @@ describe('PatientsRepositoryImpl - atomic memberCount lock & metadata', () => {
     gender: Gender.FEMALE,
     relationshipToHead: 'CHILD',
     bloodType: 'A+',
-    registeredHospital: 'BV Đại học Y Dược TP.HCM',
     chronicDiseases: 'Không',
-    healthInsuranceNumber: 'GD4790123899999',
   };
 
   it('khóa dòng hợp đồng ACTIVE bằng FOR UPDATE, đếm ACTIVE, tạo Patient và ContractMember trong 1 transaction', async () => {
@@ -21,6 +19,7 @@ describe('PatientsRepositoryImpl - atomic memberCount lock & metadata', () => {
       $queryRaw: jest.fn().mockResolvedValue([{ id: 'contract-1', member_count: 2 }]),
       patient: {
         count: jest.fn().mockResolvedValue(1),
+        findFirst: jest.fn().mockResolvedValue(null),
         create: jest.fn().mockResolvedValue({ id: 'pt-new', fullName: dto.fullName }),
       },
       contractMember: {
@@ -43,7 +42,6 @@ describe('PatientsRepositoryImpl - atomic memberCount lock & metadata', () => {
         familyId,
         relationshipToHead: 'CHILD',
         bloodType: 'A+',
-        registeredHospital: 'BV Đại học Y Dược TP.HCM',
         chronicDiseases: 'Không',
         status: 'ACTIVE',
       }),
@@ -57,7 +55,7 @@ describe('PatientsRepositoryImpl - atomic memberCount lock & metadata', () => {
   it('ném ForbiddenException (403) nếu không có hợp đồng ACTIVE khi khóa dòng', async () => {
     const tx = {
       $queryRaw: jest.fn().mockResolvedValue([]),
-      patient: { count: jest.fn(), create: jest.fn() },
+      patient: { count: jest.fn(), findFirst: jest.fn(), create: jest.fn() },
       contractMember: { create: jest.fn() },
     };
     const prisma = {
@@ -74,7 +72,7 @@ describe('PatientsRepositoryImpl - atomic memberCount lock & metadata', () => {
   it('ném BadRequestException (400) nếu số thành viên ACTIVE đạt trần memberCount', async () => {
     const tx = {
       $queryRaw: jest.fn().mockResolvedValue([{ id: 'contract-1', member_count: 2 }]),
-      patient: { count: jest.fn().mockResolvedValue(2), create: jest.fn() },
+      patient: { count: jest.fn().mockResolvedValue(2), findFirst: jest.fn(), create: jest.fn() },
       contractMember: { create: jest.fn() },
     };
     const prisma = {
@@ -86,5 +84,24 @@ describe('PatientsRepositoryImpl - atomic memberCount lock & metadata', () => {
       BadRequestException,
     );
     expect(tx.patient.create).not.toHaveBeenCalled();
+  });
+
+  it('ném ConflictException (409) khi trùng chủ hộ SELF đang ACTIVE', async () => {
+    const txSelf = {
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 'contract-1', member_count: 4 }]),
+      patient: {
+        count: jest.fn().mockResolvedValue(1),
+        findFirst: jest.fn().mockResolvedValueOnce({ id: 'pt-head' }),
+        create: jest.fn(),
+      },
+      contractMember: { create: jest.fn() },
+    };
+    const repoSelf = new PatientsRepositoryImpl({
+      $transaction: jest.fn((cb: (t: typeof txSelf) => Promise<unknown>) => cb(txSelf)),
+    } as any);
+    await expect(
+      repoSelf.createWithActiveContractLock(familyId, { ...dto, relationshipToHead: 'SELF' }),
+    ).rejects.toThrow(ConflictException);
+    expect(txSelf.patient.create).not.toHaveBeenCalled();
   });
 });

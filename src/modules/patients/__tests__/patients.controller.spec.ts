@@ -32,10 +32,7 @@ describe('PatientsController', () => {
     dateOfBirth: new Date('2015-05-20'),
     gender: Gender.MALE,
     relationshipToHead: 'CON',
-    citizenId: '001201500001',
-    healthInsuranceNumber: 'DN4010123456789',
     bloodType: 'O+',
-    registeredHospital: null,
     chronicDiseases: null,
     status: 'ACTIVE' as const,
     createdAt: new Date(),
@@ -58,6 +55,8 @@ describe('PatientsController', () => {
     documentName: 'Xét nghiệm máu',
     documentType: PatientDocumentType.LAB_RESULT,
     fileUrl: 'https://storage.famidoc.vn/docs/blood_test.pdf',
+    mimeType: 'application/pdf',
+    notes: null,
     fileSizeKb: 1024,
     recordedDate: new Date('2026-11-01'),
     uploadedAt: new Date(),
@@ -74,6 +73,13 @@ describe('PatientsController', () => {
       listAllergies: jest.fn(),
       addDocument: jest.fn(),
       listDocuments: jest.fn(),
+      getDocumentFile: jest.fn(),
+      deleteDocument: jest.fn(),
+      deleteAllergy: jest.fn(),
+      addVitalSign: jest.fn(),
+      listVitalSigns: jest.fn(),
+      updateVitalSign: jest.fn(),
+      deleteVitalSign: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -109,7 +115,6 @@ describe('PatientsController', () => {
         dateOfBirth: '2015-05-20',
         gender: Gender.MALE,
         relationshipToRepresentative: 'CON',
-        identityNumber: '001201500001',
       };
       service.createPatient.mockResolvedValue(mockPatient);
 
@@ -184,7 +189,7 @@ describe('PatientsController', () => {
   });
 
   describe('POST /api/v1/patients/:id/documents', () => {
-    it('đính kèm hồ sơ y tế thành công', async () => {
+    it('đính kèm hồ sơ y tế (multipart file hoặc URL) thành công', async () => {
       const dto: CreatePatientDocumentDto = {
         documentName: 'Xét nghiệm máu',
         documentType: PatientDocumentType.LAB_RESULT,
@@ -192,11 +197,22 @@ describe('PatientsController', () => {
         fileSizeKb: 1024,
         recordedDate: '2026-11-01',
       };
+      const fakeFile = { originalname: 'test.pdf' } as Express.Multer.File;
       service.addDocument.mockResolvedValue(mockDocument);
 
-      const result = await controller.addDocument(mockFamilyRepReq, 'patient-uuid-1', dto);
+      const result = await controller.addDocument(
+        mockFamilyRepReq,
+        'patient-uuid-1',
+        dto,
+        fakeFile,
+      );
 
-      expect(service.addDocument).toHaveBeenCalledWith(mockFamilyRepReq.user, 'patient-uuid-1', dto);
+      expect(service.addDocument).toHaveBeenCalledWith(
+        mockFamilyRepReq.user,
+        'patient-uuid-1',
+        dto,
+        fakeFile,
+      );
       expect(result).toEqual(mockDocument);
     });
   });
@@ -209,6 +225,129 @@ describe('PatientsController', () => {
 
       expect(service.listDocuments).toHaveBeenCalledWith(mockFamilyRepReq.user, 'patient-uuid-1');
       expect(result).toEqual([mockDocument]);
+    });
+  });
+
+  describe('GET /api/v1/patients/:id/documents/:documentId/file', () => {
+    it('stream tệp tài liệu với Content-Type đúng', async () => {
+      const bytes = Buffer.from('%PDF-1.4');
+      service.getDocumentFile.mockResolvedValue({
+        bytes,
+        contentType: 'application/pdf',
+      });
+      const mockRes = {
+        setHeader: jest.fn(),
+        send: jest.fn(),
+      } as unknown as import('express').Response;
+
+      await controller.getDocumentFile(
+        mockFamilyRepReq,
+        'patient-uuid-1',
+        'doc-uuid-1',
+        mockRes,
+      );
+
+      expect(service.getDocumentFile).toHaveBeenCalledWith(
+        mockFamilyRepReq.user,
+        'patient-uuid-1',
+        'doc-uuid-1',
+      );
+      expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
+      expect(mockRes.send).toHaveBeenCalledWith(bytes);
+    });
+  });
+
+  describe('DELETE /api/v1/patients/:id/documents/:documentId', () => {
+    it('xóa tài liệu y tế thành công', async () => {
+      service.deleteDocument.mockResolvedValue(mockDocument);
+
+      const result = await controller.deleteDocument(
+        mockFamilyRepReq,
+        'patient-uuid-1',
+        'doc-uuid-1',
+      );
+
+      expect(service.deleteDocument).toHaveBeenCalledWith(
+        mockFamilyRepReq.user,
+        'patient-uuid-1',
+        'doc-uuid-1',
+      );
+      expect(result).toEqual(mockDocument);
+    });
+  });
+
+  describe('DELETE /api/v1/patients/:id/allergies/:allergyId', () => {
+    it('xóa dị ứng thành công', async () => {
+      service.deleteAllergy.mockResolvedValue(mockAllergy);
+
+      const result = await controller.deleteAllergy(
+        mockFamilyRepReq,
+        'patient-uuid-1',
+        'allergy-uuid-1',
+      );
+
+      expect(service.deleteAllergy).toHaveBeenCalledWith(
+        mockFamilyRepReq.user,
+        'patient-uuid-1',
+        'allergy-uuid-1',
+      );
+      expect(result).toEqual(mockAllergy);
+    });
+  });
+
+  describe('VitalSigns endpoints', () => {
+    const mockVital = {
+      id: 'vital-uuid-1',
+      emrId: null,
+      patientId: 'patient-uuid-1',
+      systolicBp: 120,
+      diastolicBp: 80,
+      heartRate: 72,
+      temperature: 36.6,
+      spo2: 98,
+      respiratoryRate: 16,
+      bloodGlucose: 5.4,
+      isAbnormalAlert: false,
+      recordedAt: new Date(),
+    };
+
+    it('listVitalSigns chuyển tham số days tới service', async () => {
+      service.listVitalSigns.mockResolvedValue([mockVital]);
+
+      const result = await controller.listVitalSigns(mockFamilyRepReq, 'patient-uuid-1', '14');
+
+      expect(service.listVitalSigns).toHaveBeenCalledWith(
+        mockFamilyRepReq.user,
+        'patient-uuid-1',
+        14,
+      );
+      expect(result).toEqual([mockVital]);
+    });
+
+    it('addVitalSign, updateVitalSign và deleteVitalSign ủy quyền đúng cho service', async () => {
+      service.addVitalSign.mockResolvedValue(mockVital);
+      service.updateVitalSign.mockResolvedValue(mockVital);
+      service.deleteVitalSign.mockResolvedValue(mockVital);
+
+      const created = await controller.addVitalSign(mockFamilyRepReq, 'patient-uuid-1', {
+        systolicBp: 120,
+      });
+      expect(created).toEqual(mockVital);
+
+      const updated = await controller.updateVitalSign(
+        mockFamilyRepReq,
+        'patient-uuid-1',
+        'vital-uuid-1',
+        { heartRate: 75 },
+      );
+      expect(updated).toEqual(mockVital);
+
+      const deleted = await controller.deleteVitalSign(
+        mockFamilyRepReq,
+        'patient-uuid-1',
+        'vital-uuid-1',
+      );
+      expect(deleted).toEqual(mockVital);
     });
   });
 });

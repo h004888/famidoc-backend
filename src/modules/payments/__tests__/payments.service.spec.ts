@@ -203,8 +203,8 @@ describe('PaymentsServiceImpl (simulation)', () => {
     ]);
     expect(a.id).toBe(b.id);
     expect(a.amountVnd).toBe(150_000);
-    expect(a.paymentCode).toMatch(/^FD[0-9]{6}$/);
-    expect(a.transferContent).toBe(`NGUYEN HOAI NAM - ${a.paymentCode}`);
+    expect(a.paymentCode).toMatch(/^FD(?=[2-9A-HJ-NP-Z]*[2-9])[2-9A-HJ-NP-Z]{8}$/);
+    expect(a.transferContent).toBe(`${a.paymentCode} TT FAMIDOC NGUYEN HOAI NAM`);
     expect(Date.parse(a.expiresAt) - Date.parse(a.createdAt)).toBe(15 * 60_000);
   });
 
@@ -237,7 +237,7 @@ describe('PaymentsServiceImpl (simulation)', () => {
     const next = await service.createVietQRPayment(old.contractId, undefined, payer);
     expect(next.amountVnd).toBe(155000);
     expect(next.paymentCode).not.toBe(adjusted.paymentCode);
-    expect(next.transferContent).toBe(`THU PHI MOI ${next.paymentCode}`);
+    expect(next.transferContent).toBe(`${next.paymentCode} THU PHI MOI`);
   });
 
   it('expires a request and allocates a different code for its next attempt', async () => {
@@ -620,9 +620,9 @@ describe('PaymentsServiceImpl (simulation)', () => {
     expect(url.searchParams.get('bank')).toBe(payment.expectedGateway);
     expect(url.searchParams.get('amount')).toBe('150000');
     expect(url.searchParams.get('des')).toBe(
-      `NGUYEN HOAI NAM - ${payment.paymentCode}`,
+      `${payment.paymentCode} TT FAMIDOC NGUYEN HOAI NAM`,
     );
-    expect(url.searchParams.get('template')).toBe('qr_only');
+    expect(url.searchParams.get('template')).toBe('qronly');
     expect(result.status).toBe(PaymentRequestStatus.PENDING);
   });
 
@@ -670,6 +670,24 @@ describe('PaymentsServiceImpl (simulation)', () => {
     expect(status.latestTransaction?.amountVnd).toBe(payment.amountVnd + 1);
   });
 
+  it('surfaces the latest reviewed transaction on an expired request (LATE_PAYMENT)', async () => {
+    const payment = await pendingPayment();
+    now = new Date(Date.parse(payment.expiresAt) + 60_000);
+    await service.handleVietQRWebhook(
+      payload(payment, {
+        transactionDate: '2026-10-27 08:20:00',
+      }),
+    );
+    const status = await service.getPaymentStatus(payment.id);
+    expect(status.status).toBe(PaymentRequestStatus.EXPIRED);
+    expect(status.latestTransaction?.outcome).toBe(
+      TransactionOutcome.REVIEW_REQUIRED,
+    );
+    expect(status.latestTransaction?.reason).toBe(
+      TransactionReason.LATE_PAYMENT,
+    );
+  });
+
   it('continues matching an existing 32-character code when SePay extracts only its first 24 characters', async () => {
     const payment = await pendingPayment();
     payment.paymentCode = 'FD' + '1234567890ABCDEF'.repeat(2);
@@ -705,7 +723,7 @@ describe('PaymentsServiceImpl (simulation)', () => {
     });
     const result = await service.getPaymentStatus(payment.id);
     expect(result.transferContent).toBe(
-      `NGUYEN HOAI NAM - ${payment.paymentCode}`,
+      `${payment.paymentCode} TT FAMIDOC NGUYEN HOAI NAM`,
     );
   });
 
