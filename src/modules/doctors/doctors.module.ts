@@ -6,7 +6,9 @@ import { FacilitiesDoctorsController } from './controllers/facilities-doctors.co
 import { DoctorsController } from './controllers/doctors.controller';
 import { FacilitiesController } from './controllers/facilities.controller';
 import { AdminFacilitiesController } from './controllers/admin-facilities.controller';
+import { DoctorQuotaProposalsController } from './controllers/doctor-quota-proposals.controller';
 import { DoctorsServiceImpl } from './services/impl/doctors.service.impl';
+import { DoctorQuotaProposalsService } from './services/doctor-quota-proposals.service';
 import { DOCTORS_SERVICE_TOKEN } from './services/interfaces/doctors.service.interface';
 
 @Module({
@@ -16,13 +18,15 @@ import { DOCTORS_SERVICE_TOKEN } from './services/interfaces/doctors.service.int
     DoctorsController,
     FacilitiesController,
     AdminFacilitiesController,
+    DoctorQuotaProposalsController,
   ],
   providers: [
     {
       provide: DOCTORS_SERVICE_TOKEN,
       useClass: DoctorsServiceImpl,
     },
+    DoctorQuotaProposalsService,
   ],
-  exports: [DOCTORS_SERVICE_TOKEN],
+  exports: [DOCTORS_SERVICE_TOKEN, DoctorQuotaProposalsService],
 })
 export class DoctorsModule {}

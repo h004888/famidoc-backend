@@ -20,13 +20,14 @@ export class CreateMedicalContractDto {
   @IsNotEmpty()
   packageId!: string;
 
-  @ApiProperty({
-    description: 'ID cơ sở y tế đảm trách',
+  @ApiPropertyOptional({
+    description:
+      'ID cơ sở y tế đảm trách (tùy chọn khi đã chọn bác sĩ; máy chủ tự suy ra từ doctor.facilityId)',
     example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
   @IsUUID('4')
-  @IsNotEmpty()
-  facilityId!: string;
+  @IsOptional()
+  facilityId?: string;
 
   @ApiPropertyOptional({
     description: 'ID bác sĩ gia đình phân công',
@@ -82,6 +83,24 @@ export class CreateMedicalContractDto {
   @IsUUID('4')
   @IsOptional()
   replaceContractId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'ID phiên gợi ý bác sĩ tự động (Track B) đã khớp thành công để xác nhận tạo hợp đồng',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
+  @IsUUID('4')
+  @IsOptional()
+  matchingSessionId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'ID yêu cầu hàng chờ điều phối Admin đã được gán bác sĩ (status = ASSIGNED)',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
+  @IsUUID('4')
+  @IsOptional()
+  queueRequestId?: string;
 }
 
 export class CreateFourPartyContractDto extends CreateMedicalContractDto {}

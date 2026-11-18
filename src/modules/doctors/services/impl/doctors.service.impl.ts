@@ -33,6 +33,12 @@ import type { CreateFacilityDto } from '../../dtos/create-facility.dto';
 import type { SubmitFacilityLegalProfileDto } from '../../dtos/submit-facility-legal-profile.dto';
 import type { VerifyFacilityLegalDto } from '../../dtos/verify-facility-legal.dto';
 import type { FacilityResponseDto } from '../../dtos/facility-response.dto';
+import { DoctorClinicalTier } from '@prisma/client';
+import {
+  computeQuotaMetrics,
+  countActiveAndHeldMap,
+} from '../../../contracts/pricing/doctor-quota.helper';
+import { inferDoctorClinicalTier } from '../../utils/doctor-clinical-tier.util';
 import type { ListDoctorsQueryDto } from '../../dtos/list-doctors-query.dto';
 
 @Injectable()
@@ -893,8 +899,19 @@ export class DoctorsServiceImpl implements IDoctorsService {
       }),
     ]);
 
+    const doctorIds = items.map((doc) => doc.id);
+    const activeHeldMap =
+      typeof this.prisma.medicalContract?.findMany === 'function'
+        ? await countActiveAndHeldMap(this.prisma, doctorIds)
+        : new Map<string, number>();
+
     return {
-      items: items.map((doc) => this.formatDoctor(doc)),
+      items: items.map((doc) =>
+        this.formatDoctor(
+          doc,
+          activeHeldMap.get(doc.id) ?? doc.activePanelCount ?? 0,
+        ),
+      ),
       total,
       page,
       limit,
@@ -918,7 +935,14 @@ export class DoctorsServiceImpl implements IDoctorsService {
     return this.listDoctors(actor, query);
   }
 
-  private formatDoctor(doctor: any): DoctorResponseDto {
+  private formatDoctor(doctor: any, activeAndHeldCountOverride?: number): DoctorResponseDto {
+    const activeAndHeld =
+      activeAndHeldCountOverride ?? doctor.activePanelCount ?? 0;
+    const quota = computeQuotaMetrics(doctor.maxPanelCapacity, activeAndHeld);
+    const clinicalTier: DoctorClinicalTier =
+      doctor.clinicalTier ??
+      inferDoctorClinicalTier(doctor.experienceYears ?? 0, doctor.academicTitle);
+
     return {
       id: doctor.id,
       userId: doctor.userId,
@@ -927,9 +951,13 @@ export class DoctorsServiceImpl implements IDoctorsService {
       specialty: doctor.specialty,
       academicTitle: doctor.academicTitle,
       experienceYears: doctor.experienceYears,
+      clinicalTier,
       bio: doctor.bio,
       activePanelCount: doctor.activePanelCount,
       maxPanelCapacity: doctor.maxPanelCapacity,
+      activeAndHeldCount: quota.activeAndHeldCount,
+      remainingSlots: quota.remainingSlots,
+      isQuotaFull: quota.isQuotaFull,
       ratingAvg: Number(doctor.ratingAvg),
       totalReviews: doctor.totalReviews,
       onboardingStatus: doctor.onboardingStatus,

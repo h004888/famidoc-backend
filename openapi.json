@@ -718,6 +718,30 @@
             }
           },
           {
+            "name": "clinicalTier",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo phân hạng bác sĩ (JUNIOR, STANDARD, SENIOR)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "JUNIOR",
+                "STANDARD",
+                "SENIOR"
+              ]
+            }
+          },
+          {
+            "name": "onlyAvailable",
+            "required": false,
+            "in": "query",
+            "description": "Chỉ hiển thị bác sĩ còn slot tiếp nhận hộ gia đình",
+            "schema": {
+              "example": true,
+              "type": "boolean"
+            }
+          },
+          {
             "name": "page",
             "required": false,
             "in": "query",
@@ -860,6 +884,66 @@
           }
         },
         "summary": "Tra cứu danh bạ bác sĩ gia đình công khai (STT 11 - UC-08)",
+        "tags": [
+          "Public Portal"
+        ]
+      }
+    },
+    "/api/v1/public/care-model": {
+      "get": {
+        "description": "Trả về các hình thức khám và cam kết dịch vụ đang áp dụng thống nhất cho mọi bác sĩ gia đình.",
+        "operationId": "PublicController_getPublicCareModel",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Lấy nội dung chăm sóc nền tảng thành công.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Lấy nội dung chăm sóc nền tảng thành công."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DoctorCareModelDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Lấy phạm vi chăm sóc chung của nền tảng (hình thức khám và cam kết)",
         "tags": [
           "Public Portal"
         ]
@@ -1242,7 +1326,7 @@
     },
     "/api/v1/facilities/doctors": {
       "post": {
-        "description": "Cơ sở y tế (hoặc Quản trị viên) tạo tài khoản bác sĩ, thiết lập chuyên khoa, số năm kinh nghiệm và liên kết vào danh sách nhân sự của cơ sở.",
+        "description": "Chỉ Cơ sở y tế đối tác mới có quyền tạo tài khoản cho bác sĩ trực thuộc đơn vị mình, thiết lập chuyên khoa, số năm kinh nghiệm và liên kết vào danh sách nhân sự của cơ sở.",
         "operationId": "FacilitiesDoctorsController_provisionDoctorAccount[0]",
         "parameters": [],
         "requestBody": {
@@ -1316,11 +1400,89 @@
         "tags": [
           "Doctors & Facilities Management"
         ]
+      },
+      "get": {
+        "description": "Cơ sở y tế xem danh sách nhân sự bác sĩ trực thuộc để theo dõi tiến độ nộp bằng cấp chứng chỉ (PENDING_SUBMISSION) và thẩm định Cấp 1.",
+        "operationId": "FacilitiesDoctorsController_listFacilityDoctors[0]",
+        "parameters": [
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo ID cơ sở y tế (chỉ khả dụng cho Admin)",
+            "schema": {
+              "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+              "type": "string"
+            }
+          },
+          {
+            "name": "onboardingStatus",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo trạng thái tiến trình thẩm định của Bác sĩ",
+            "schema": {
+              "example": "FACILITY_VERIFIED",
+              "type": "string",
+              "enum": [
+                "PENDING_SUBMISSION",
+                "FACILITY_VERIFIED",
+                "ACTIVE",
+                "SUSPENDED"
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Từ khóa tìm kiếm theo họ tên hoặc chuyên khoa của bác sĩ",
+            "schema": {
+              "example": "Nguyễn Văn An",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Số thứ tự trang (bắt đầu từ 1)",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số lượng bản ghi mỗi trang (tối đa 50)",
+            "schema": {
+              "default": 10,
+              "example": 10,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách bác sĩ trực thuộc kèm phân trang."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Cơ sở y tế xem danh sách Bác sĩ trực thuộc đơn vị mình",
+        "tags": [
+          "Doctors & Facilities Management"
+        ]
       }
     },
     "/api/v1/facilities/doctors/{id}/doctors": {
       "post": {
-        "description": "Cơ sở y tế (hoặc Quản trị viên) tạo tài khoản bác sĩ, thiết lập chuyên khoa, số năm kinh nghiệm và liên kết vào danh sách nhân sự của cơ sở.",
+        "description": "Chỉ Cơ sở y tế đối tác mới có quyền tạo tài khoản cho bác sĩ trực thuộc đơn vị mình, thiết lập chuyên khoa, số năm kinh nghiệm và liên kết vào danh sách nhân sự của cơ sở.",
         "operationId": "FacilitiesDoctorsController_provisionDoctorAccount[1]",
         "parameters": [],
         "requestBody": {
@@ -1394,11 +1556,89 @@
         "tags": [
           "Doctors & Facilities Management"
         ]
+      },
+      "get": {
+        "description": "Cơ sở y tế xem danh sách nhân sự bác sĩ trực thuộc để theo dõi tiến độ nộp bằng cấp chứng chỉ (PENDING_SUBMISSION) và thẩm định Cấp 1.",
+        "operationId": "FacilitiesDoctorsController_listFacilityDoctors[1]",
+        "parameters": [
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo ID cơ sở y tế (chỉ khả dụng cho Admin)",
+            "schema": {
+              "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+              "type": "string"
+            }
+          },
+          {
+            "name": "onboardingStatus",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo trạng thái tiến trình thẩm định của Bác sĩ",
+            "schema": {
+              "example": "FACILITY_VERIFIED",
+              "type": "string",
+              "enum": [
+                "PENDING_SUBMISSION",
+                "FACILITY_VERIFIED",
+                "ACTIVE",
+                "SUSPENDED"
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Từ khóa tìm kiếm theo họ tên hoặc chuyên khoa của bác sĩ",
+            "schema": {
+              "example": "Nguyễn Văn An",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Số thứ tự trang (bắt đầu từ 1)",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số lượng bản ghi mỗi trang (tối đa 50)",
+            "schema": {
+              "default": 10,
+              "example": 10,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách bác sĩ trực thuộc kèm phân trang."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Cơ sở y tế xem danh sách Bác sĩ trực thuộc đơn vị mình",
+        "tags": [
+          "Doctors & Facilities Management"
+        ]
       }
     },
     "/api/v1/facilities": {
       "post": {
-        "description": "Cơ sở y tế (hoặc Quản trị viên) tạo tài khoản bác sĩ, thiết lập chuyên khoa, số năm kinh nghiệm và liên kết vào danh sách nhân sự của cơ sở.",
+        "description": "Chỉ Cơ sở y tế đối tác mới có quyền tạo tài khoản cho bác sĩ trực thuộc đơn vị mình, thiết lập chuyên khoa, số năm kinh nghiệm và liên kết vào danh sách nhân sự của cơ sở.",
         "operationId": "FacilitiesDoctorsController_provisionDoctorAccount[2]",
         "parameters": [],
         "requestBody": {
@@ -1472,11 +1712,89 @@
         "tags": [
           "Doctors & Facilities Management"
         ]
+      },
+      "get": {
+        "description": "Cơ sở y tế xem danh sách nhân sự bác sĩ trực thuộc để theo dõi tiến độ nộp bằng cấp chứng chỉ (PENDING_SUBMISSION) và thẩm định Cấp 1.",
+        "operationId": "FacilitiesDoctorsController_listFacilityDoctors[2]",
+        "parameters": [
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo ID cơ sở y tế (chỉ khả dụng cho Admin)",
+            "schema": {
+              "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+              "type": "string"
+            }
+          },
+          {
+            "name": "onboardingStatus",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo trạng thái tiến trình thẩm định của Bác sĩ",
+            "schema": {
+              "example": "FACILITY_VERIFIED",
+              "type": "string",
+              "enum": [
+                "PENDING_SUBMISSION",
+                "FACILITY_VERIFIED",
+                "ACTIVE",
+                "SUSPENDED"
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Từ khóa tìm kiếm theo họ tên hoặc chuyên khoa của bác sĩ",
+            "schema": {
+              "example": "Nguyễn Văn An",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Số thứ tự trang (bắt đầu từ 1)",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số lượng bản ghi mỗi trang (tối đa 50)",
+            "schema": {
+              "default": 10,
+              "example": 10,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách bác sĩ trực thuộc kèm phân trang."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Cơ sở y tế xem danh sách Bác sĩ trực thuộc đơn vị mình",
+        "tags": [
+          "Doctors & Facilities Management"
+        ]
       }
     },
     "/api/v1/facilities/{id}/doctors": {
       "post": {
-        "description": "Cơ sở y tế (hoặc Quản trị viên) tạo tài khoản bác sĩ, thiết lập chuyên khoa, số năm kinh nghiệm và liên kết vào danh sách nhân sự của cơ sở.",
+        "description": "Chỉ Cơ sở y tế đối tác mới có quyền tạo tài khoản cho bác sĩ trực thuộc đơn vị mình, thiết lập chuyên khoa, số năm kinh nghiệm và liên kết vào danh sách nhân sự của cơ sở.",
         "operationId": "FacilitiesDoctorsController_provisionDoctorAccount[3]",
         "parameters": [],
         "requestBody": {
@@ -1547,6 +1865,84 @@
           }
         ],
         "summary": "Cơ sở y tế khởi tạo tài khoản Bác sĩ trực thuộc (STT 15 - UC-20)",
+        "tags": [
+          "Doctors & Facilities Management"
+        ]
+      },
+      "get": {
+        "description": "Cơ sở y tế xem danh sách nhân sự bác sĩ trực thuộc để theo dõi tiến độ nộp bằng cấp chứng chỉ (PENDING_SUBMISSION) và thẩm định Cấp 1.",
+        "operationId": "FacilitiesDoctorsController_listFacilityDoctors[3]",
+        "parameters": [
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo ID cơ sở y tế (chỉ khả dụng cho Admin)",
+            "schema": {
+              "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+              "type": "string"
+            }
+          },
+          {
+            "name": "onboardingStatus",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo trạng thái tiến trình thẩm định của Bác sĩ",
+            "schema": {
+              "example": "FACILITY_VERIFIED",
+              "type": "string",
+              "enum": [
+                "PENDING_SUBMISSION",
+                "FACILITY_VERIFIED",
+                "ACTIVE",
+                "SUSPENDED"
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Từ khóa tìm kiếm theo họ tên hoặc chuyên khoa của bác sĩ",
+            "schema": {
+              "example": "Nguyễn Văn An",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Số thứ tự trang (bắt đầu từ 1)",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số lượng bản ghi mỗi trang (tối đa 50)",
+            "schema": {
+              "default": 10,
+              "example": 10,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách bác sĩ trực thuộc kèm phân trang."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Cơ sở y tế xem danh sách Bác sĩ trực thuộc đơn vị mình",
         "tags": [
           "Doctors & Facilities Management"
         ]
@@ -1966,6 +2362,151 @@
         ]
       }
     },
+    "/api/v1/doctors/me": {
+      "get": {
+        "description": "Bác sĩ đăng nhập xem thông tin tài khoản, đơn vị y tế liên kết, tiến trình thẩm định và danh sách chứng chỉ đã nộp.",
+        "operationId": "DoctorsController_getMyDoctorProfile",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Thông tin chi tiết hồ sơ bác sĩ.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Thông tin chi tiết hồ sơ bác sĩ."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/DoctorResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Bác sĩ xem thông tin hồ sơ của chính mình",
+        "tags": [
+          "Doctors Management"
+        ]
+      }
+    },
+    "/api/v1/doctors": {
+      "get": {
+        "description": "Quản trị viên (hoặc CSYT) xem danh sách bác sĩ, có thể lọc theo ?onboardingStatus=FACILITY_VERIFIED để tìm các bác sĩ đang chờ Quản trị viên duyệt Cấp 2.",
+        "operationId": "DoctorsController_listDoctors",
+        "parameters": [
+          {
+            "name": "facilityId",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo ID cơ sở y tế (chỉ khả dụng cho Admin)",
+            "schema": {
+              "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+              "type": "string"
+            }
+          },
+          {
+            "name": "onboardingStatus",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo trạng thái tiến trình thẩm định của Bác sĩ",
+            "schema": {
+              "example": "FACILITY_VERIFIED",
+              "type": "string",
+              "enum": [
+                "PENDING_SUBMISSION",
+                "FACILITY_VERIFIED",
+                "ACTIVE",
+                "SUSPENDED"
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Từ khóa tìm kiếm theo họ tên hoặc chuyên khoa của bác sĩ",
+            "schema": {
+              "example": "Nguyễn Văn An",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Số thứ tự trang (bắt đầu từ 1)",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Số lượng bản ghi mỗi trang (tối đa 50)",
+            "schema": {
+              "default": 10,
+              "example": 10,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách bác sĩ kèm phân trang."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Xem danh sách Bác sĩ trên hệ thống (Lọc theo trạng thái thẩm định)",
+        "tags": [
+          "Doctors Management"
+        ]
+      }
+    },
     "/api/v1/doctors/{id}": {
       "get": {
         "operationId": "DoctorsController_getDoctorProfile",
@@ -2037,6 +2578,758 @@
         "summary": "Xem chi tiết hồ sơ bác sĩ",
         "tags": [
           "Doctors Management"
+        ]
+      }
+    },
+    "/api/v1/facilities/register": {
+      "post": {
+        "description": "Cơ sở y tế cung cấp thông tin liên hệ và tên cơ sở cơ bản (không cần password, không cần mã số thuế hay giấy phép ban đầu) để gửi yêu cầu cấp tài khoản chờ Quản trị viên xét duyệt.",
+        "operationId": "FacilitiesController_registerFacility",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterFacilityDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Gửi đăng ký cơ sở y tế thành công, vui lòng chờ Quản trị viên thẩm định và cấp tài khoản qua email.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 201
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Gửi đăng ký cơ sở y tế thành công, vui lòng chờ Quản trị viên thẩm định và cấp tài khoản qua email."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/FacilityResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Email, số điện thoại hoặc tên cơ sở y tế đã tồn tại trên hệ thống."
+          }
+        },
+        "summary": "Cơ sở y tế gửi đăng ký thông tin cơ bản ban đầu (Public)",
+        "tags": [
+          "Healthcare Facilities Management"
+        ]
+      }
+    },
+    "/api/v1/facilities/me": {
+      "get": {
+        "operationId": "FacilitiesController_getMyFacility",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Thông tin chi tiết của cơ sở y tế đang đăng nhập.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Thông tin chi tiết của cơ sở y tế đang đăng nhập."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/FacilityResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Cơ sở y tế xem thông tin hồ sơ của chính mình",
+        "tags": [
+          "Healthcare Facilities Management"
+        ]
+      }
+    },
+    "/api/v1/facilities/me/legal-profile": {
+      "put": {
+        "description": "Sau khi được Admin duyệt cấp tài khoản và đăng nhập thành công, CSYT nộp Giấy phép hoạt động KCB (GPHĐ), Mã số thuế, Thông tin tài khoản ngân hàng thụ hưởng và file scan tài liệu pháp lý để Admin thẩm định pháp lý (Duyệt Lần 2).",
+        "operationId": "FacilitiesController_submitMyLegalProfile",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitFacilityLegalProfileDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Nộp hồ sơ pháp lý thành công, chuyển sang trạng thái chờ Quản trị viên thẩm định Cấp 2.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Nộp hồ sơ pháp lý thành công, chuyển sang trạng thái chờ Quản trị viên thẩm định Cấp 2."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/FacilityResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Số giấy phép hoạt động hoặc mã số thuế đã tồn tại trên hệ thống."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Cơ sở y tế nộp hồ sơ pháp lý chuyên sâu & tài khoản ngân hàng (Sau khi đăng nhập)",
+        "tags": [
+          "Healthcare Facilities Management"
+        ]
+      }
+    },
+    "/api/v1/admin/facilities": {
+      "get": {
+        "operationId": "AdminFacilitiesController_listFacilities",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo trạng thái PENDING/ACTIVE/SUSPENDED",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": 1,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "example": 10,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách các cơ sở y tế kèm phân trang."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Quản trị viên xem danh sách các cơ sở y tế trên hệ thống",
+        "tags": [
+          "Healthcare Facilities Management (Admin)"
+        ]
+      }
+    },
+    "/api/v1/admin/facilities/{id}": {
+      "get": {
+        "operationId": "AdminFacilitiesController_getFacilityDetail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của cơ sở y tế",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chi tiết thông tin cơ sở y tế.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Chi tiết thông tin cơ sở y tế."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/FacilityResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Quản trị viên xem chi tiết một cơ sở y tế theo ID",
+        "tags": [
+          "Healthcare Facilities Management (Admin)"
+        ]
+      }
+    },
+    "/api/v1/admin/facilities/{id}/legal-document": {
+      "get": {
+        "operationId": "AdminFacilitiesController_getLegalDocument",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Tải bản scan hồ sơ pháp lý của CSYT",
+        "tags": [
+          "Healthcare Facilities Management (Admin)"
+        ]
+      }
+    },
+    "/api/v1/admin/facilities/{id}/approve-account": {
+      "patch": {
+        "description": "Quản trị viên kiểm tra thông tin đăng ký cơ bản xem cơ sở y tế có thật hay không và phê duyệt cấp tài khoản. Hệ thống tự động sinh mật khẩu khởi tạo an toàn, kích hoạt User và gửi email cấp tài khoản tới CSYT.",
+        "operationId": "AdminFacilitiesController_approveFacilityAccount",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của cơ sở y tế",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveFacilityAccountDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Duyệt cấp tài khoản thành công, mật khẩu khởi tạo đã được gửi đến email cơ sở y tế.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Duyệt cấp tài khoản thành công, mật khẩu khởi tạo đã được gửi đến email cơ sở y tế."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/FacilityResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Quản trị viên DUYỆT LẦN 1 - Cấp tài khoản cho Cơ sở y tế",
+        "tags": [
+          "Healthcare Facilities Management (Admin)"
+        ]
+      }
+    },
+    "/api/v1/admin/facilities/{id}/verify-legal": {
+      "patch": {
+        "description": "Quản trị viên đối soát Giấy phép hoạt động (GPHĐ) và Mã số thuế trên Cổng thông tin CSDL Quốc gia / Bộ Y tế. Khi duyệt thành công, cơ sở y tế chuyển sang ACTIVE và đủ điều kiện để ký Hợp đồng cung ứng nhân lực (B2B Staffing Contract).",
+        "operationId": "AdminFacilitiesController_verifyFacilityLegal",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của cơ sở y tế",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyFacilityLegalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Thẩm định pháp lý Cấp 2 thành công, cơ sở y tế đã được kích hoạt ACTIVE sẵn sàng hoạt động.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Thẩm định pháp lý Cấp 2 thành công, cơ sở y tế đã được kích hoạt ACTIVE sẵn sàng hoạt động."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/FacilityResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Quản trị viên DUYỆT LẦN 2 - Hậu kiểm pháp lý & Kích hoạt đối tác",
+        "tags": [
+          "Healthcare Facilities Management (Admin)"
+        ]
+      }
+    },
+    "/api/v1/facilities/doctors/{id}/quota-proposals": {
+      "post": {
+        "operationId": "DoctorQuotaProposalsController_createFacilityQuotaProposal",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của bác sĩ trực thuộc CSYT",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDoctorQuotaProposalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "CSYT gửi đề xuất điều chỉnh hạn mức hộ gia đình (maxPanelCapacity) cho bác sĩ",
+        "tags": [
+          "Doctor Quota Governance"
+        ]
+      },
+      "get": {
+        "operationId": "DoctorQuotaProposalsController_listDoctorQuotaProposals",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của bác sĩ trực thuộc CSYT",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "CSYT xem lịch sử đề xuất điều chỉnh quota của một bác sĩ trực thuộc",
+        "tags": [
+          "Doctor Quota Governance"
+        ]
+      }
+    },
+    "/api/v1/facilities/quota-proposals": {
+      "get": {
+        "operationId": "DoctorQuotaProposalsController_listFacilityQuotaProposals",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING",
+                "APPROVED",
+                "REJECTED"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "CSYT xem toàn bộ đề xuất điều chỉnh quota của đơn vị mình",
+        "tags": [
+          "Doctor Quota Governance"
+        ]
+      }
+    },
+    "/api/v1/admin/quota-proposals": {
+      "get": {
+        "operationId": "DoctorQuotaProposalsController_listAdminQuotaProposals",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PENDING",
+                "APPROVED",
+                "REJECTED"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Quản trị viên xem danh sách đề xuất điều chỉnh quota từ các CSYT",
+        "tags": [
+          "Doctor Quota Governance"
+        ]
+      }
+    },
+    "/api/v1/admin/quota-proposals/{id}": {
+      "patch": {
+        "operationId": "DoctorQuotaProposalsController_reviewQuotaProposal",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của đề xuất quota",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewDoctorQuotaProposalDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Quản trị viên phê duyệt hoặc từ chối đề xuất điều chỉnh quota",
+        "tags": [
+          "Doctor Quota Governance"
         ]
       }
     },
@@ -3085,6 +4378,53 @@
         ]
       }
     },
+    "/api/v1/contracts/medical/{id}/cancel-draft": {
+      "post": {
+        "description": "Đại diện hộ gia đình (hoặc Admin) hủy hợp đồng đang PENDING_APPROVAL/PENDING_PAYMENT chưa có hoá đơn PAID: chuyển hợp đồng sang TERMINATED và hủy các yêu cầu thanh toán VietQR PENDING kèm phong bì Documenso nếu còn mở.",
+        "operationId": "ContractsController_cancelDraftMedicalContract",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của hợp đồng y tế",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelDraftContractDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Hủy bản nháp hợp đồng thành công."
+          },
+          "403": {
+            "description": "Không có quyền hủy hợp đồng này."
+          },
+          "409": {
+            "description": "Hợp đồng đã ACTIVE/TERMINATED hoặc đã có giao dịch PAID."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Hủy bản nháp hợp đồng y tế 4 bên chưa thanh toán (tránh bản nháp trùng lặp)",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
     "/api/v1/contracts/four-party/{id}/sign": {
       "put": {
         "description": "Tuần tự ký số 4 bên: FAMILY_REP -> ADMIN -> HEALTHCARE_FACILITY -> ASSIGNED_DOCTOR. Sau khi đủ 4 chữ ký sẽ chuyển sang PENDING_PAYMENT.",
@@ -3208,6 +4548,125 @@
         ]
       }
     },
+    "/api/v1/contracts/family/gate-status": {
+      "get": {
+        "description": "Dùng cho cổng bảo vệ khu vực quản trị gia đình (/family/*): chỉ mở khóa quản lý thành viên/đặt lịch/telemedicine khi có hợp đồng ACTIVE.",
+        "operationId": "ContractsController_getFamilyGateStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Kiểm tra trạng thái gói ACTIVE và hợp đồng đang chờ của hộ gia đình",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/api/v1/contracts/medical/{id}/signing-session": {
+      "get": {
+        "description": "Bên A (FAMILY_REP) nhận signingToken ngay sau khi tạo; Bên B/C/D nhận signingToken song song sau khi Bên A hoàn tất ký (HTTP 409 nếu Bên A chưa ký).",
+        "operationId": "ContractsController_getSigningSession",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của hợp đồng y tế",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Lấy phiên ký Documenso nhúng theo vai trò của người dùng hiện tại",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/api/v1/contracts/four-party/{id}/sync-documenso": {
+      "post": {
+        "operationId": "ContractsController_syncDocumensoEnvelope",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của hợp đồng y tế",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Đồng bộ trạng thái chữ ký trực tiếp từ Documenso sau khi ký trên giao diện nhúng",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/api/v1/contracts/medical/{id}/signed-pdf": {
+      "get": {
+        "description": "Chỉ trả tệp PDF đã được Documenso đóng dấu khi hợp đồng có documensoItemId và đã hoàn tất đủ 4/4 chữ ký (FAMILY_REP, HEALTHCARE_FACILITY, ASSIGNED_DOCTOR, ADMIN) hoặc đã ở trạng thái PENDING_PAYMENT/ACTIVE.",
+        "operationId": "ContractsController_downloadSignedPdf",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của hợp đồng y tế",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trả luồng dữ liệu application/pdf của hợp đồng đã ký đủ 4 bên."
+          },
+          "404": {
+            "description": "Không tìm thấy hợp đồng hoặc hợp đồng chưa có tệp trên Documenso."
+          },
+          "409": {
+            "description": "Hợp đồng chưa hoàn tất đủ 4/4 chữ ký nên chưa thể xuất bản PDF đã ký."
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Tải hoặc xem tệp PDF hợp đồng đã ký qua proxy Documenso (bảo mật API key)",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
     "/api/v1/contracts/{id}/assign-doctor": {
       "patch": {
         "description": "Cơ sở y tế (hoặc Admin) chỉ định hoặc điều chuyển bác sĩ gia đình chăm sóc cho hộ gia đình theo hợp đồng, kiểm soát giới hạn định biên tối đa 30 hộ/bác sĩ (BR-04, CFG-01).",
@@ -3268,6 +4727,14 @@
             "required": true,
             "in": "path",
             "description": "UUID của hợp đồng y tế",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "forceSync",
+            "required": true,
+            "in": "query",
             "schema": {
               "type": "string"
             }
@@ -3634,6 +5101,91 @@
           }
         ],
         "summary": "Ký số điện tử hợp đồng cung ứng nhân lực B2B (STT 14 - UC-15)",
+        "tags": [
+          "Contracts"
+        ]
+      }
+    },
+    "/api/v1/contracts/staffing/{id}/reject": {
+      "patch": {
+        "description": "Đại diện CSYT (hoặc Quản trị viên) từ chối dự thảo hợp đồng cung ứng nhân lực B2B kèm lý do phản hồi/yêu cầu sửa đổi điều khoản. Trạng thái chuyển sang TERMINATED và hệ thống phát thông báo đến các bên liên quan.",
+        "operationId": "ContractsController_rejectStaffingContract",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của hợp đồng cung ứng nhân lực",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectStaffingContractDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Từ chối dự thảo hợp đồng thành công, trạng thái chuyển sang TERMINATED.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "code": {
+                      "type": "number",
+                      "example": 200
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Từ chối dự thảo hợp đồng thành công, trạng thái chuyển sang TERMINATED."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/StaffingContractResponseDto"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "nullable": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "example": "2026-11-11T08:30:00.000Z"
+                    },
+                    "requestId": {
+                      "type": "string",
+                      "example": "req_01HV8Z7B3C4D5E6F7G8H9J0K1L"
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "code",
+                    "data",
+                    "timestamp",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Từ chối dự thảo hợp đồng cung ứng nhân lực B2B (Yêu cầu đàm phán / sửa đổi)",
         "tags": [
           "Contracts"
         ]
@@ -4071,6 +5623,25 @@
         ]
       }
     },
+    "/api/v1/webhooks/documenso": {
+      "post": {
+        "description": "Xác thực hằng thời gian qua header X-Documenso-Secret (timingSafeEqual), ghi nhận chữ ký idempotent và kích hoạt PENDING_PAYMENT khi đủ 4 bên.",
+        "operationId": "DocumensoWebhookController_handleDocumensoWebhook",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Đã xử lý hoặc bỏ qua sự kiện webhook hợp lệ."
+          },
+          "401": {
+            "description": "Thiếu hoặc sai secret xác thực X-Documenso-Secret."
+          }
+        },
+        "summary": "Nhận webhook ký kết hợp đồng 4 bên từ self-hosted Documenso",
+        "tags": [
+          "Webhooks"
+        ]
+      }
+    },
     "/api/v1/finance/analytics": {
       "get": {
         "operationId": "FinanceController_getRevenueAnalytics",
@@ -4172,6 +5743,106 @@
           }
         ],
         "summary": "Thực thi quyết toán doanh thu định kỳ hàng tháng cho cơ sở y tế",
+        "tags": [
+          "Finance"
+        ]
+      }
+    },
+    "/api/v1/finance/settlements/{id}/review": {
+      "patch": {
+        "operationId": "FinanceController_reviewSettlement",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewSettlementDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "CSYT xác nhận bảng quyết toán của mình hoặc báo sai lệch",
+        "tags": [
+          "Finance"
+        ]
+      }
+    },
+    "/api/v1/finance/settlements/{id}/evidence": {
+      "post": {
+        "operationId": "FinanceController_uploadSettlementEvidence",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "environment",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "LIVE",
+              "type": "string",
+              "enum": [
+                "TEST",
+                "LIVE"
+              ]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Tải chứng từ ngân hàng cho bảng quyết toán",
         "tags": [
           "Finance"
         ]
@@ -4966,6 +6637,43 @@
         "tags": [
           "Patients"
         ]
+      },
+      "delete": {
+        "operationId": "PatientsController_detachPatient",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của bệnh nhân",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Đã tách thành viên và hoàn trả suất thành viên trong gói"
+          },
+          "400": {
+            "description": "Không thể tách chủ hộ hoặc thành viên đã tách trước đó"
+          },
+          "403": {
+            "description": "Không có quyền thao tác hồ sơ ngoài gia đình"
+          },
+          "404": {
+            "description": "Không tìm thấy hồ sơ bệnh nhân"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Tách thành viên khỏi danh sách hoạt động của hộ gia đình (soft-deactivate)",
+        "tags": [
+          "Patients"
+        ]
       }
     },
     "/api/v1/patients/{id}/allergies": {
@@ -5125,6 +6833,1487 @@
         "summary": "Lấy danh sách tài liệu y tế của bệnh nhân",
         "tags": [
           "Patients"
+        ]
+      }
+    },
+    "/api/v1/admin/doctors/{doctorId}/treated-cases": {
+      "get": {
+        "operationId": "AdminTreatedCasesController_list",
+        "parameters": [
+          {
+            "name": "doctorId",
+            "required": true,
+            "in": "path",
+            "description": "UUID của bác sĩ",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách ca bệnh mọi trạng thái"
+          },
+          "403": {
+            "description": "Chỉ ADMIN mới có quyền truy cập"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Quản trị viên xem mọi ca bệnh tiêu biểu của bác sĩ",
+        "tags": [
+          "Doctor Treated Cases (Admin)"
+        ]
+      },
+      "post": {
+        "operationId": "AdminTreatedCasesController_create",
+        "parameters": [
+          {
+            "name": "doctorId",
+            "required": true,
+            "in": "path",
+            "description": "UUID của bác sĩ",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTreatedCaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tạo ca bệnh ở trạng thái PENDING"
+          },
+          "400": {
+            "description": "Dữ liệu không hợp lệ"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Quản trị viên nhập ca bệnh tiêu biểu mới (chờ duyệt)",
+        "tags": [
+          "Doctor Treated Cases (Admin)"
+        ]
+      }
+    },
+    "/api/v1/admin/doctors/{doctorId}/treated-cases/{id}": {
+      "patch": {
+        "operationId": "AdminTreatedCasesController_update",
+        "parameters": [
+          {
+            "name": "doctorId",
+            "required": true,
+            "in": "path",
+            "description": "UUID của bác sĩ",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của ca bệnh",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTreatedCaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cập nhật thành công"
+          },
+          "404": {
+            "description": "Không tìm thấy ca bệnh của bác sĩ"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Cập nhật nội dung ca bệnh (quay lại chờ duyệt nếu nội dung đổi)",
+        "tags": [
+          "Doctor Treated Cases (Admin)"
+        ]
+      }
+    },
+    "/api/v1/admin/doctors/{doctorId}/treated-cases/{id}/approve": {
+      "post": {
+        "operationId": "AdminTreatedCasesController_approve",
+        "parameters": [
+          {
+            "name": "doctorId",
+            "required": true,
+            "in": "path",
+            "description": "UUID của bác sĩ",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của ca bệnh",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Ca bệnh được duyệt và công khai"
+          },
+          "404": {
+            "description": "Không tìm thấy ca bệnh của bác sĩ"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Duyệt công khai ca bệnh tiêu biểu",
+        "tags": [
+          "Doctor Treated Cases (Admin)"
+        ]
+      }
+    },
+    "/api/v1/admin/doctors/{doctorId}/treated-cases/{id}/reject": {
+      "post": {
+        "operationId": "AdminTreatedCasesController_reject",
+        "parameters": [
+          {
+            "name": "doctorId",
+            "required": true,
+            "in": "path",
+            "description": "UUID của bác sĩ",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của ca bệnh",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectTreatedCaseDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Ca bệnh bị từ chối và không công khai"
+          },
+          "404": {
+            "description": "Không tìm thấy ca bệnh của bác sĩ"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Từ chối công khai ca bệnh tiêu biểu kèm lý do",
+        "tags": [
+          "Doctor Treated Cases (Admin)"
+        ]
+      }
+    },
+    "/api/v1/admin/platform-care-items": {
+      "get": {
+        "operationId": "AdminPlatformCareController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Danh sách nội dung mọi trạng thái"
+          },
+          "403": {
+            "description": "Chỉ ADMIN mới có quyền truy cập"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Quản trị viên xem toàn bộ nội dung chăm sóc nền tảng",
+        "tags": [
+          "Platform Care Content (Admin)"
+        ]
+      },
+      "post": {
+        "operationId": "AdminPlatformCareController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePlatformCareItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tạo nội dung thành công"
+          },
+          "400": {
+            "description": "Dữ liệu không hợp lệ"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Tạo mục nội dung chăm sóc mới",
+        "tags": [
+          "Platform Care Content (Admin)"
+        ]
+      }
+    },
+    "/api/v1/admin/platform-care-items/{id}": {
+      "patch": {
+        "operationId": "AdminPlatformCareController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của mục nội dung",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePlatformCareItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cập nhật thành công"
+          },
+          "404": {
+            "description": "Không tìm thấy nội dung"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Cập nhật nội dung chăm sóc",
+        "tags": [
+          "Platform Care Content (Admin)"
+        ]
+      },
+      "delete": {
+        "operationId": "AdminPlatformCareController_deactivate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của mục nội dung",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Nội dung được chuyển sang ngừng hoạt động"
+          },
+          "404": {
+            "description": "Không tìm thấy nội dung"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Ngừng công khai nội dung chăm sóc (xóa mềm)",
+        "tags": [
+          "Platform Care Content (Admin)"
+        ]
+      }
+    },
+    "/api/v1/encounters/periodic": {
+      "post": {
+        "operationId": "EncountersController_createPeriodicEncounter",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePeriodicEncounterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Đề xuất lịch khám định kỳ thành công"
+          },
+          "400": {
+            "description": "Hạn ngạch gói đã hết hoặc dữ liệu không hợp lệ"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Bác sĩ phụ trách lên lộ trình khám định kỳ dựa trên gói dịch vụ và hồ sơ sức khỏe",
+        "tags": [
+          "Encounters & Examination Scheduling"
+        ]
+      }
+    },
+    "/api/v1/encounters/ad-hoc": {
+      "post": {
+        "operationId": "EncountersController_createAdHocEncounter",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAdHocEncounterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Gửi yêu cầu khám đột xuất thành công"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Đại diện gia đình gửi yêu cầu khám đột xuất (Ad-hoc) tới bác sĩ phụ trách",
+        "tags": [
+          "Encounters & Examination Scheduling"
+        ]
+      }
+    },
+    "/api/v1/encounters/{id}/finalize": {
+      "patch": {
+        "operationId": "EncountersController_finalizeEncounter",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ID của buổi khám (Encounter)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinalizeEncounterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Chốt lịch khám đề xuất thành công"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Bác sĩ rà soát và chốt lịch khám cùng hình thức khám gửi gia đình duyệt",
+        "tags": [
+          "Encounters & Examination Scheduling"
+        ]
+      }
+    },
+    "/api/v1/encounters/{id}/confirm": {
+      "patch": {
+        "operationId": "EncountersController_confirmEncounter",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ID của buổi khám",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmEncounterDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Đồng bộ lịch khám thành công hoặc phát cảnh báo xung đột ca trực"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Gia đình xác nhận đồng ý lịch khám & đối chiếu ca trực CSYT để đồng bộ lịch",
+        "tags": [
+          "Encounters & Examination Scheduling"
+        ]
+      }
+    },
+    "/api/v1/encounters/{id}/reschedule": {
+      "post": {
+        "operationId": "EncountersController_requestReschedule",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ID của buổi khám",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestRescheduleDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tiếp nhận yêu cầu dời lịch và thông báo tới bác sĩ"
+          },
+          "400": {
+            "description": "Từ chối tự động do thời gian báo trước dưới 4 giờ"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Gia đình đề xuất đổi lịch khám sang khung giờ thay thế (Kiểm tra điều kiện trước >= 4 giờ)",
+        "tags": [
+          "Encounters & Examination Scheduling"
+        ]
+      }
+    },
+    "/api/v1/encounters/{id}/reschedule-review": {
+      "patch": {
+        "operationId": "EncountersController_reviewReschedule",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ID của buổi khám",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DoctorRescheduleReviewDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Phản hồi dời lịch thành công"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Bác sĩ phản hồi yêu cầu dời lịch: Đồng ý hoặc Đề xuất khung giờ thay thế",
+        "tags": [
+          "Encounters & Examination Scheduling"
+        ]
+      }
+    },
+    "/api/v1/encounters/shifts": {
+      "post": {
+        "operationId": "EncountersController_createDoctorShift",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDoctorShiftDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tạo ca trực cho bác sĩ thành công"
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Cơ sở Y tế phân bổ ca trực nội viện cho bác sĩ (phục vụ cân bằng tải)",
+        "tags": [
+          "Encounters & Examination Scheduling"
+        ]
+      }
+    },
+    "/api/v1/encounters/timetable/doctor": {
+      "get": {
+        "operationId": "EncountersController_getDoctorTimetable",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Số thứ tự trang (bắt đầu từ 1)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "Số lượng bản ghi trên một trang (tối đa 100)",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo trạng thái lịch khám",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "REQUESTED",
+                "CONFIRMED",
+                "IN_PROGRESS",
+                "COMPLETED",
+                "CANCELLED"
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo phân loại khám (PERIODIC_ROUTINE hoặc AD_HOC_ON_DEMAND)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PERIODIC_ROUTINE",
+                "AD_HOC_ON_DEMAND"
+              ]
+            }
+          },
+          {
+            "name": "encounterType",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo hình thức khám",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "HOME_VISIT",
+                "TELEHEALTH",
+                "FACILITY_VISIT"
+              ]
+            }
+          },
+          {
+            "name": "fromDate",
+            "required": false,
+            "in": "query",
+            "description": "Lọc từ ngày (định dạng YYYY-MM-DD)",
+            "schema": {
+              "example": "2026-11-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "toDate",
+            "required": false,
+            "in": "query",
+            "description": "Lọc đến ngày (định dạng YYYY-MM-DD)",
+            "schema": {
+              "example": "2026-11-30",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Lấy thời khóa biểu lịch khám của bác sĩ",
+        "tags": [
+          "Encounters & Examination Scheduling"
+        ]
+      }
+    },
+    "/api/v1/encounters/timetable/family": {
+      "get": {
+        "operationId": "EncountersController_getFamilyTimetable",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Số thứ tự trang (bắt đầu từ 1)",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "description": "Số lượng bản ghi trên một trang (tối đa 100)",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo trạng thái lịch khám",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "REQUESTED",
+                "CONFIRMED",
+                "IN_PROGRESS",
+                "COMPLETED",
+                "CANCELLED"
+              ]
+            }
+          },
+          {
+            "name": "category",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo phân loại khám (PERIODIC_ROUTINE hoặc AD_HOC_ON_DEMAND)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PERIODIC_ROUTINE",
+                "AD_HOC_ON_DEMAND"
+              ]
+            }
+          },
+          {
+            "name": "encounterType",
+            "required": false,
+            "in": "query",
+            "description": "Lọc theo hình thức khám",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "HOME_VISIT",
+                "TELEHEALTH",
+                "FACILITY_VISIT"
+              ]
+            }
+          },
+          {
+            "name": "fromDate",
+            "required": false,
+            "in": "query",
+            "description": "Lọc từ ngày (định dạng YYYY-MM-DD)",
+            "schema": {
+              "example": "2026-11-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "toDate",
+            "required": false,
+            "in": "query",
+            "description": "Lọc đến ngày (định dạng YYYY-MM-DD)",
+            "schema": {
+              "example": "2026-11-30",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Lấy thời khóa biểu lịch khám của hộ gia đình",
+        "tags": [
+          "Encounters & Examination Scheduling"
+        ]
+      }
+    },
+    "/api/v1/encounters/facility/schedule-board": {
+      "get": {
+        "operationId": "EncountersController_getFacilityScheduleBoard",
+        "parameters": [
+          {
+            "name": "fromDate",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "toDate",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "CSYT giám sát bảng điều phối ca trực nội viện và lịch khám ngoại viện của bác sĩ",
+        "tags": [
+          "Encounters & Examination Scheduling"
+        ]
+      }
+    },
+    "/api/v1/encounters/{id}": {
+      "get": {
+        "operationId": "EncountersController_getEncounterDetail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "ID của buổi khám",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Xem thông tin chi tiết một buổi khám",
+        "tags": [
+          "Encounters & Examination Scheduling"
+        ]
+      }
+    },
+    "/api/v1/admin/overview": {
+      "get": {
+        "operationId": "AdminController_overview",
+        "parameters": [
+          {
+            "name": "period",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "weekly",
+                "monthly",
+                "yearly"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Tổng quan doanh thu, lượt khám và khiếu nại của nền tảng",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/users": {
+      "get": {
+        "operationId": "AdminController_listUsers",
+        "parameters": [
+          {
+            "name": "role",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ADMIN",
+                "HEALTHCARE_FACILITY",
+                "DOCTOR",
+                "FAMILY_REP"
+              ]
+            }
+          },
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Danh sách tài khoản và vai trò",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/users/{id}/status": {
+      "patch": {
+        "operationId": "AdminController_changeStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminAccountStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Tạm khóa hoặc khôi phục quyền truy cập của tài khoản",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/audit-logs": {
+      "get": {
+        "operationId": "AdminController_auditLogs",
+        "parameters": [
+          {
+            "name": "resourceId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resourceName",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Tra cứu nhật ký vận hành và bảo mật",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/complaints": {
+      "get": {
+        "operationId": "AdminController_complaints",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "SUBMITTED",
+                "INVESTIGATING",
+                "RESOLVED",
+                "CLOSED"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Danh sách khiếu nại để quản trị viên xử lý",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/admin/facilities/{id}/resend-invite": {
+      "post": {
+        "operationId": "AdminController_resendFacilityInvite",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Gửi mã thiết lập lại mật khẩu cho CSYT đang hoàn thiện hồ sơ",
+        "tags": [
+          "Admin"
+        ]
+      }
+    },
+    "/api/v1/facilities/me/complaints": {
+      "get": {
+        "operationId": "FacilityComplaintsController_complaints",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "SUBMITTED",
+                "INVESTIGATING",
+                "RESOLVED",
+                "CLOSED"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Danh sách khiếu nại thuộc CSYT đang đăng nhập",
+        "tags": [
+          "Complaints"
+        ]
+      }
+    },
+    "/api/v1/matching/doctors": {
+      "post": {
+        "operationId": "MatchingController_matchDoctors",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchDoctorsIntakeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Track B — Gợi ý bác sĩ gia đình bằng TypeSafe Jev System One kết hợp cân bằng tải đối tác (hoặc chuyển vào Hàng chờ Admin)",
+        "tags": [
+          "Doctor Matching & Coordination Queue"
+        ]
+      }
+    },
+    "/api/v1/matching/sessions/{id}": {
+      "get": {
+        "operationId": "MatchingController_getMatchingSession",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của phiên gợi ý (MatchingSession)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Lấy chi tiết phiên gợi ý bác sĩ (Track B) để preview trước khi tạo hợp đồng",
+        "tags": [
+          "Doctor Matching & Coordination Queue"
+        ]
+      }
+    },
+    "/api/v1/matching-queue/my": {
+      "get": {
+        "operationId": "MatchingController_listMyQueueRequests",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Đại diện hộ gia đình xem danh sách yêu cầu đang trong hàng chờ điều phối",
+        "tags": [
+          "Doctor Matching & Coordination Queue"
+        ]
+      }
+    },
+    "/api/v1/matching-queue/{id}": {
+      "get": {
+        "operationId": "MatchingController_getQueueRequestDetail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của yêu cầu hàng chờ",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Xem chi tiết yêu cầu hàng chờ điều phối (bao gồm bác sĩ & CSYT đã được gán)",
+        "tags": [
+          "Doctor Matching & Coordination Queue"
+        ]
+      }
+    },
+    "/api/v1/matching-queue/{id}/cancel": {
+      "patch": {
+        "operationId": "MatchingController_cancelQueueRequest",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của yêu cầu hàng chờ",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelMatchingQueueDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Đại diện hộ gia đình hủy yêu cầu đang ở trạng thái QUEUED",
+        "tags": [
+          "Doctor Matching & Coordination Queue"
+        ]
+      }
+    },
+    "/api/v1/admin/matching-queue": {
+      "get": {
+        "operationId": "MatchingController_listAdminQueueRequests",
+        "parameters": [
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "QUEUED",
+                "ASSIGNED",
+                "CONFIRMED",
+                "CANCELLED",
+                "EXPIRED"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "example": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": 20,
+              "example": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Quản trị viên xem danh sách hàng chờ điều phối bác sĩ",
+        "tags": [
+          "Doctor Matching & Coordination Queue"
+        ]
+      }
+    },
+    "/api/v1/admin/matching-queue/{id}/assign": {
+      "patch": {
+        "operationId": "MatchingController_assignQueueDoctor",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "UUID của yêu cầu hàng chờ",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignQueueDoctorDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Quản trị viên phân công bác sĩ còn slot cho yêu cầu hàng chờ (tự suy ra CSYT & thông báo gia đình)",
+        "tags": [
+          "Doctor Matching & Coordination Queue"
+        ]
+      }
+    },
+    "/api/v1/admin/matching-config": {
+      "get": {
+        "operationId": "MatchingController_getAdminMatchingConfig",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Quản trị viên xem cấu hình runtime của model decision chuẩn System One (/v1/systemone)",
+        "tags": [
+          "Doctor Matching & Coordination Queue"
+        ]
+      },
+      "patch": {
+        "operationId": "MatchingController_updateAdminMatchingConfig",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMatchingConfigDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Quản trị viên cập nhật endpoint, model, kiểu câu hỏi và ngưỡng matching System One tại runtime",
+        "tags": [
+          "Doctor Matching & Coordination Queue"
+        ]
+      }
+    },
+    "/api/v1/admin/matching-config/test": {
+      "post": {
+        "operationId": "MatchingController_testAdminMatchingConfig",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestMatchingConfigDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "summary": "Quản trị viên kiểm tra kết nối & test thử payload chuẩn /v1/systemone trước khi lưu",
+        "tags": [
+          "Doctor Matching & Coordination Queue"
+        ]
+      }
+    },
+    "/api/v1/admin/matching-config/models": {
+      "get": {
+        "operationId": "MatchingController_discoverOllamaModels",
+        "parameters": [
+          {
+            "name": "endpointUrl",
+            "required": false,
+            "in": "query",
+            "description": "Endpoint URL đang nhập để suy ra origin Ollama (/api/tags)",
+            "schema": {
+              "example": "http://localhost:11434/v1/systemone",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "JWT-auth": []
+          }
+        ],
+        "summary": "Quản trị viên quét danh sách model sẵn có từ máy chủ Ollama (/api/tags) theo Endpoint URL",
+        "tags": [
+          "Doctor Matching & Coordination Queue"
         ]
       }
     }
@@ -5785,6 +8974,16 @@
             "example": 10,
             "description": "Số năm kinh nghiệm hành nghề y"
           },
+          "clinicalTier": {
+            "type": "string",
+            "enum": [
+              "JUNIOR",
+              "STANDARD",
+              "SENIOR"
+            ],
+            "example": "STANDARD",
+            "description": "Phân hạng trình độ bác sĩ"
+          },
           "bio": {
             "type": "object",
             "example": "Chuyên gia Y học gia đình với hơn 10 năm kinh nghiệm điều trị ngoại trú và theo dõi bệnh mãn tính.",
@@ -5803,7 +9002,27 @@
           "isAvailable": {
             "type": "boolean",
             "example": true,
-            "description": "Trạng thái tiếp nhận hộ gia đình mới (dưới hạn mức tối đa 30 hộ)"
+            "description": "Trạng thái tiếp nhận hộ gia đình mới (dưới hạn mức tối đa)"
+          },
+          "activePanelCount": {
+            "type": "number",
+            "example": 18,
+            "description": "Số hộ đang phụ trách và giữ chỗ"
+          },
+          "maxPanelCapacity": {
+            "type": "number",
+            "example": 30,
+            "description": "Hạn mức hộ gia đình tối đa"
+          },
+          "remainingSlots": {
+            "type": "number",
+            "example": 12,
+            "description": "Số slot hộ gia đình còn trống"
+          },
+          "isQuotaFull": {
+            "type": "boolean",
+            "example": false,
+            "description": "Bác sĩ đã kín slot nhận hộ gia đình mới hay chưa"
           },
           "avatarUrl": {
             "type": "object",
@@ -5832,35 +9051,73 @@
           "isAvailable"
         ]
       },
-      "DoctorStatsDto": {
+      "CareModelItemDto": {
         "type": "object",
         "properties": {
-          "experienceYears": {
-            "type": "number",
-            "description": "Số năm kinh nghiệm hành nghề lâm sàng",
-            "example": 24
+          "id": {
+            "type": "string",
+            "description": "UUID của mục nội dung chăm sóc"
           },
-          "ratingAvg": {
-            "type": "number",
-            "description": "Điểm đánh giá trung bình từ hộ gia đình (thang điểm 5.0)",
-            "example": 4.96
+          "category": {
+            "type": "string",
+            "description": "Nhóm nội dung",
+            "example": "SERVICE_MODE",
+            "enum": [
+              "SERVICE_MODE",
+              "COMMITMENT"
+            ]
           },
-          "totalReviews": {
-            "type": "number",
-            "description": "Tổng số lượt đánh giá công khai",
-            "example": 384
+          "title": {
+            "type": "string",
+            "description": "Tiêu đề hiển thị",
+            "example": "Khám tận nhà"
           },
-          "consultationCount": {
+          "description": {
+            "type": "string",
+            "description": "Mô tả chi tiết",
+            "example": "Khám lâm sàng tại nhà, đo điện tim ECG và theo dõi định kỳ."
+          },
+          "icon": {
+            "type": "object",
+            "description": "Biểu tượng hiển thị",
+            "example": "home",
+            "nullable": true
+          },
+          "sortOrder": {
             "type": "number",
-            "description": "Tổng số ca khám / tư vấn đã hoàn thành",
-            "example": 2400
+            "description": "Thứ tự hiển thị",
+            "example": 1
           }
         },
         "required": [
-          "experienceYears",
-          "ratingAvg",
-          "totalReviews",
-          "consultationCount"
+          "id",
+          "category",
+          "title",
+          "description",
+          "sortOrder"
+        ]
+      },
+      "DoctorCareModelDto": {
+        "type": "object",
+        "properties": {
+          "serviceModes": {
+            "description": "Các hình thức khám đang áp dụng",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CareModelItemDto"
+            }
+          },
+          "commitments": {
+            "description": "Các cam kết dịch vụ chung của nền tảng",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CareModelItemDto"
+            }
+          }
+        },
+        "required": [
+          "serviceModes",
+          "commitments"
         ]
       },
       "DoctorCarePackageItemDto": {
@@ -5918,21 +9175,25 @@
           },
           "features": {
             "description": "Danh sách các quyền lợi chính kèm theo gói",
-            "example": [
-              "3 lượt bác sĩ trực tiếp thăm khám tại nhà",
-              "4 lượt tư vấn video Telehealth 24/7",
-              "Bác sĩ phụ trách chính & lập phác đồ điều trị gia đình",
-              "Hồ sơ bệnh án điện tử (EHR) lưu trữ trọn đời"
-            ],
             "type": "array",
             "items": {
               "type": "string"
             }
           },
-          "popular": {
-            "type": "boolean",
-            "description": "Đánh dấu gói được nhiều gia đình lựa chọn nhất",
-            "example": true
+          "includedMembers": {
+            "type": "number",
+            "description": "Số thành viên được bao gồm trong giá gói",
+            "example": 3
+          },
+          "maxMembers": {
+            "type": "number",
+            "description": "Số thành viên tối đa của gói (gồm cả thành viên thêm)",
+            "example": 6
+          },
+          "additionalMemberMonthlyPrice": {
+            "type": "number",
+            "description": "Phụ phí mỗi thành viên thêm mỗi tháng (VND)",
+            "example": 75000
           }
         },
         "required": [
@@ -5942,7 +9203,231 @@
           "durationMonths",
           "basePrice",
           "periodicVisitsQuota",
-          "telehealthQuota"
+          "telehealthQuota",
+          "includedMembers",
+          "maxMembers",
+          "additionalMemberMonthlyPrice"
+        ]
+      },
+      "DoctorPanelDto": {
+        "type": "object",
+        "properties": {
+          "activeCount": {
+            "type": "number",
+            "description": "Số hộ gia đình bác sĩ đang phụ trách",
+            "example": 18
+          },
+          "maxCapacity": {
+            "type": "number",
+            "description": "Số hộ gia đình tối đa bác sĩ có thể phụ trách",
+            "example": 30
+          }
+        },
+        "required": [
+          "activeCount",
+          "maxCapacity"
+        ]
+      },
+      "DoctorStatsDto": {
+        "type": "object",
+        "properties": {
+          "experienceYears": {
+            "type": "number",
+            "description": "Số năm kinh nghiệm hành nghề lâm sàng",
+            "example": 24
+          },
+          "ratingAvg": {
+            "type": "object",
+            "description": "Điểm đánh giá trung bình (thang điểm 5.0); null khi bác sĩ chưa có đánh giá",
+            "example": 4.96,
+            "nullable": true
+          },
+          "totalReviews": {
+            "type": "number",
+            "description": "Tổng số lượt đánh giá công khai",
+            "example": 384
+          },
+          "completedEncounters": {
+            "type": "number",
+            "description": "Tổng số buổi khám đã hoàn tất",
+            "example": 2400
+          }
+        },
+        "required": [
+          "experienceYears",
+          "totalReviews",
+          "completedEncounters"
+        ]
+      },
+      "PublicFacilitySummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "UUID của cơ sở y tế"
+          },
+          "facilityName": {
+            "type": "string",
+            "description": "Tên cơ sở y tế",
+            "example": "Bệnh viện Đại học Y Dược TP.HCM"
+          },
+          "address": {
+            "type": "string",
+            "description": "Địa chỉ cơ sở y tế",
+            "example": "215 Hồng Bàng, Phường 11, Quận 5, TP. Hồ Chí Minh"
+          },
+          "verificationStatus": {
+            "type": "string",
+            "description": "Trạng thái xác thực của cơ sở y tế",
+            "example": "ACTIVE"
+          }
+        },
+        "required": [
+          "id",
+          "facilityName",
+          "address",
+          "verificationStatus"
+        ]
+      },
+      "DoctorCredentialItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "UUID của chứng chỉ"
+          },
+          "type": {
+            "type": "string",
+            "description": "Loại chứng chỉ",
+            "example": "PRACTICE_LICENSE_CCHN",
+            "enum": [
+              "PRACTICE_LICENSE_CCHN",
+              "FAMILY_MEDICINE_CERT",
+              "DEGREE"
+            ]
+          },
+          "typeLabel": {
+            "type": "string",
+            "description": "Tên hiển thị của loại chứng chỉ",
+            "example": "Chứng chỉ hành nghề"
+          },
+          "issuingAuthority": {
+            "type": "string",
+            "description": "Đơn vị cấp chứng chỉ",
+            "example": "Sở Y tế TP. Hồ Chí Minh"
+          },
+          "issueYear": {
+            "type": "number",
+            "description": "Năm cấp chứng chỉ",
+            "example": 2018
+          },
+          "verified": {
+            "type": "boolean",
+            "description": "Chứng chỉ đã được nền tảng xác thực",
+            "example": true
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "typeLabel",
+          "issuingAuthority",
+          "issueYear",
+          "verified"
+        ]
+      },
+      "DoctorTreatedCaseItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "UUID của ca bệnh tiêu biểu"
+          },
+          "summary": {
+            "type": "string",
+            "description": "Mô tả ca bệnh đã được duyệt công khai",
+            "example": "Quản lý tăng huyết áp kháng trị cho bệnh nhân 72 tuổi kèm suy tim độ II."
+          }
+        },
+        "required": [
+          "id",
+          "summary"
+        ]
+      },
+      "PublicDoctorReviewPreviewItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "UUID của đánh giá"
+          },
+          "patientDisplayName": {
+            "type": "string",
+            "description": "Tên người đánh giá đã được ẩn danh một phần",
+            "example": "Nguyễn V. A."
+          },
+          "ratingStars": {
+            "type": "number",
+            "description": "Số sao đánh giá",
+            "example": 5
+          },
+          "comment": {
+            "type": "object",
+            "description": "Nội dung nhận xét",
+            "example": "Bác sĩ rất tận tâm và giải thích chi tiết phác đồ.",
+            "nullable": true
+          },
+          "packageName": {
+            "type": "object",
+            "description": "Tên gói tại buổi khám được đánh giá",
+            "example": "Gói Đồng Hành",
+            "nullable": true
+          },
+          "district": {
+            "type": "object",
+            "description": "Quận/huyện của hộ gia đình",
+            "example": "Quận 7",
+            "nullable": true
+          },
+          "reviewedAt": {
+            "type": "object",
+            "description": "Thời điểm gửi đánh giá",
+            "example": "2026-11-01T08:30:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "patientDisplayName",
+          "ratingStars",
+          "reviewedAt"
+        ]
+      },
+      "PublicDoctorReviewsSummaryDto": {
+        "type": "object",
+        "properties": {
+          "ratingAvg": {
+            "type": "object",
+            "description": "Điểm đánh giá trung bình; null khi chưa có đánh giá",
+            "example": 4.96,
+            "nullable": true
+          },
+          "totalReviews": {
+            "type": "number",
+            "description": "Tổng số đánh giá",
+            "example": 384
+          },
+          "items": {
+            "description": "Tối đa 5 đánh giá mới nhất có nội dung",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicDoctorReviewPreviewItemDto"
+            }
+          }
+        },
+        "required": [
+          "ratingAvg",
+          "totalReviews",
+          "items"
         ]
       },
       "PublicDoctorDetailDto": {
@@ -5961,7 +9446,8 @@
           "academicTitle": {
             "type": "object",
             "description": "Học hàm, học vị chuyên môn",
-            "example": "PGS. TS. Bác sĩ"
+            "example": "PGS. TS. Bác sĩ",
+            "nullable": true
           },
           "specialty": {
             "type": "string",
@@ -5973,49 +9459,69 @@
             "description": "Mã định danh chuyên khoa rút gọn (slug/key)",
             "example": "general"
           },
-          "hospital": {
-            "type": "string",
-            "description": "Cơ sở y tế hoặc bệnh viện trực thuộc",
-            "example": "Bệnh viện Đại học Y Dược TP.HCM"
+          "avatarUrl": {
+            "type": "object",
+            "description": "Đường dẫn ảnh đại diện chuyên nghiệp của bác sĩ",
+            "example": "/images/medsev/home-one/doctor/1.jpg",
+            "nullable": true
           },
-          "location": {
-            "type": "string",
-            "description": "Tỉnh / thành phố nơi bác sĩ hoạt động",
-            "example": "TP. Hồ Chí Minh"
+          "bio": {
+            "type": "object",
+            "description": "Tiểu sử tóm tắt quá trình công tác và thế mạnh chuyên sâu",
+            "example": "Nguyên Phó Trưởng khoa Khám bệnh - Bệnh viện Đại học Y Dược TP.HCM.",
+            "nullable": true
           },
           "isVerified": {
             "type": "boolean",
-            "description": "Trạng thái đã thẩm định chứng chỉ hành nghề và hồ sơ y tế",
+            "description": "Hồ sơ đã được nền tảng xác thực",
             "example": true
           },
           "isAvailable": {
             "type": "boolean",
-            "description": "Khả năng tiếp nhận thêm hộ gia đình mới vào danh sách phụ trách",
+            "description": "Khả năng tiếp nhận thêm hộ gia đình mới",
             "example": true
           },
-          "avatarUrl": {
-            "type": "object",
-            "description": "Đường dẫn ảnh đại diện chuyên nghiệp của bác sĩ",
-            "example": "/images/medsev/home-one/doctor/1.jpg"
+          "clinicalTier": {
+            "type": "string",
+            "enum": [
+              "JUNIOR",
+              "STANDARD",
+              "SENIOR"
+            ],
+            "description": "Phân hạng trình độ bác sĩ",
+            "example": "SENIOR"
           },
-          "ratingAvg": {
+          "remainingSlots": {
             "type": "number",
-            "description": "Điểm đánh giá trung bình (tương thích ngược)",
-            "example": 4.8
+            "description": "Số slot hộ gia đình còn trống theo thời gian thực",
+            "example": 12
           },
-          "totalReviews": {
-            "type": "number",
-            "description": "Tổng số lượt đánh giá (tương thích ngược)",
-            "example": 20
+          "isQuotaFull": {
+            "type": "boolean",
+            "description": "Trạng thái đã kín slot hộ gia đình hay chưa",
+            "example": false
           },
-          "experienceYears": {
-            "type": "number",
-            "description": "Số năm kinh nghiệm lâm sàng (tương thích ngược)",
-            "example": 7
+          "juniorAlternatives": {
+            "description": "Danh sách bác sĩ trẻ (JUNIOR) còn slot gợi ý khi bác sĩ hiện tại đã kín chỗ",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicDoctorItemDto"
+            }
           },
-          "facility": {
-            "type": "object",
-            "description": "Thông tin cơ sở y tế trực thuộc (tương thích ngược)"
+          "lowerPricePackages": {
+            "description": "Danh sách các gói dịch vụ mức phí thấp hơn đi kèm gợi ý bác sĩ trẻ khi bác sĩ hiện tại đã kín chỗ",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DoctorCarePackageItemDto"
+            }
+          },
+          "panel": {
+            "description": "Thông tin sức chứa hộ gia đình của bác sĩ",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DoctorPanelDto"
+              }
+            ]
           },
           "stats": {
             "description": "Số liệu thống kê năng lực và uy tín bác sĩ",
@@ -6025,39 +9531,37 @@
               }
             ]
           },
-          "services": {
-            "description": "Các hình thức dịch vụ khám chữa bệnh tiếp nhận",
-            "example": [
-              "home",
-              "telehealth",
-              "clinic"
-            ],
+          "facility": {
+            "description": "Thông tin công khai của cơ sở y tế trực thuộc",
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PublicFacilitySummaryDto"
+              }
+            ]
+          },
+          "credentials": {
+            "description": "Chứng chỉ đã được nền tảng xác thực",
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/DoctorCredentialItemDto"
             }
           },
-          "education": {
-            "description": "Quá trình đào tạo, học vị và chứng chỉ chuyên môn",
-            "example": [
-              "Tiến sĩ Y khoa (Y học Gia đình & Nội khoa) - Đại học Paris Descartes (2008)",
-              "Thạc sĩ Y khoa chuyên ngành Nội khoa - Đại học Y Dược TP.HCM (2002)",
-              "Bác sĩ Đa khoa xuất sắc - Đại học Y Dược TP.HCM (1998)"
-            ],
+          "treatedCases": {
+            "description": "Ca bệnh tiêu biểu đã được duyệt công khai",
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/DoctorTreatedCaseItemDto"
             }
           },
-          "bio": {
-            "type": "object",
-            "description": "Tiểu sử tóm tắt quá trình công tác và thế mạnh chuyên sâu",
-            "example": "Nguyên Phó Trưởng khoa Khám bệnh - Bệnh viện Đại học Y Dược TP.HCM. Hơn 24 năm kinh nghiệm thực hành lâm sàng..."
-          },
-          "schedule": {
-            "type": "object",
-            "description": "Khung giờ và lịch trực tiếp nhận tư vấn/thăm khám",
-            "example": "Thứ 2 - Thứ 7: 08:00 - 18:00 (Nhận khám tại nhà các buổi chiều và tư vấn trực tuyến 24/7)"
+          "careModel": {
+            "description": "Phạm vi chăm sóc chung của nền tảng",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DoctorCareModelDto"
+              }
+            ]
           },
           "carePackages": {
             "description": "Danh sách các gói chăm sóc sức khỏe gia đình khả dụng",
@@ -6065,6 +9569,14 @@
             "items": {
               "$ref": "#/components/schemas/DoctorCarePackageItemDto"
             }
+          },
+          "reviews": {
+            "description": "Tóm tắt và các đánh giá đã xác thực mới nhất",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PublicDoctorReviewsSummaryDto"
+              }
+            ]
           }
         },
         "required": [
@@ -6072,14 +9584,15 @@
           "doctorName",
           "specialty",
           "specialtyKey",
-          "hospital",
-          "location",
           "isVerified",
           "isAvailable",
+          "panel",
           "stats",
-          "services",
-          "education",
-          "carePackages"
+          "credentials",
+          "treatedCases",
+          "careModel",
+          "carePackages",
+          "reviews"
         ]
       },
       "PublicDoctorReviewItemDto": {
@@ -6090,10 +9603,10 @@
             "description": "Mã định danh duy nhất (UUID) của đánh giá",
             "example": "550e8400-e29b-41d4-a716-446655440000"
           },
-          "patientName": {
+          "patientDisplayName": {
             "type": "string",
-            "description": "Họ tên hoặc danh xưng của người đại diện hộ gia đình đánh giá",
-            "example": "Chị Mai Lan"
+            "description": "Tên người đại diện hộ gia đình đã được ẩn danh một phần (giữ họ, rút gọn tên)",
+            "example": "Nguyễn V. A."
           },
           "ratingStars": {
             "type": "number",
@@ -6117,11 +9630,6 @@
             "description": "Khu vực / Quận huyện của hộ gia đình",
             "example": "Quận 7"
           },
-          "avatarUrl": {
-            "type": "object",
-            "description": "Ảnh đại diện người đánh giá",
-            "example": "/images/medsev/avatar/female-1.jpg"
-          },
           "createdAt": {
             "type": "object",
             "description": "Thời điểm gửi đánh giá",
@@ -6130,7 +9638,7 @@
         },
         "required": [
           "id",
-          "patientName",
+          "patientDisplayName",
           "ratingStars",
           "createdAt"
         ]
@@ -6254,7 +9762,7 @@
           },
           "facilityId": {
             "type": "string",
-            "description": "UUID của cơ sở y tế trực thuộc (bắt buộc đối với Admin; nếu CSYT gọi thì hệ thống tự động suy diễn)",
+            "description": "UUID của cơ sở y tế trực thuộc (hệ thống tự động suy diễn theo tài khoản Cơ sở y tế đang đăng nhập)",
             "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
           }
         },
@@ -6394,6 +9902,15 @@
             "type": "number",
             "example": 8
           },
+          "clinicalTier": {
+            "type": "string",
+            "enum": [
+              "JUNIOR",
+              "STANDARD",
+              "SENIOR"
+            ],
+            "example": "STANDARD"
+          },
           "bio": {
             "type": "object",
             "example": "Chuyên gia Y học gia đình với 8 năm kinh nghiệm.",
@@ -6408,6 +9925,21 @@
             "type": "number",
             "example": 30,
             "description": "Hạn mức tối đa số hộ gia đình"
+          },
+          "activeAndHeldCount": {
+            "type": "number",
+            "example": 2,
+            "description": "Tổng số hộ đang ACTIVE và giữ chỗ PENDING_*"
+          },
+          "remainingSlots": {
+            "type": "number",
+            "example": 28,
+            "description": "Số slot hộ gia đình còn trống"
+          },
+          "isQuotaFull": {
+            "type": "boolean",
+            "example": false,
+            "description": "Bác sĩ đã kín slot hay chưa"
           },
           "ratingAvg": {
             "type": "number",
@@ -6447,6 +9979,11 @@
             "items": {
               "$ref": "#/components/schemas/DoctorCredentialResponseDto"
             }
+          },
+          "initialPassword": {
+            "type": "string",
+            "description": "Mật khẩu khởi tạo được cấp cho Bác sĩ (chỉ trả về khi CSYT vừa tạo mới tài khoản)",
+            "example": "FamiDoc@Doctor2026"
           }
         },
         "required": [
@@ -6603,6 +10140,319 @@
         },
         "required": [
           "tier"
+        ]
+      },
+      "RegisterFacilityDto": {
+        "type": "object",
+        "properties": {
+          "facilityName": {
+            "type": "string",
+            "description": "Tên cơ sở y tế (Bệnh viện / Phòng khám)",
+            "example": "Bệnh viện Đa khoa Quốc tế An Sinh"
+          },
+          "representativeName": {
+            "type": "string",
+            "description": "Họ và tên người đại diện pháp luật / liên hệ của cơ sở y tế",
+            "example": "Nguyễn Văn Tuấn"
+          },
+          "email": {
+            "type": "string",
+            "description": "Email chính thức của cơ sở y tế để nhận thông báo và tài khoản quản trị",
+            "example": "contact@ansinhhospital.vn"
+          },
+          "phone": {
+            "type": "string",
+            "description": "Số điện thoại di động của người đại diện (định dạng Việt Nam)",
+            "example": "0987654321"
+          },
+          "address": {
+            "type": "string",
+            "description": "Địa chỉ trụ sở của cơ sở y tế",
+            "example": "123 Giải Phóng, Phường Đồng Tâm, Quận Hai Bà Trưng, Hà Nội"
+          }
+        },
+        "required": [
+          "facilityName",
+          "representativeName",
+          "email",
+          "phone",
+          "address"
+        ]
+      },
+      "FacilityUserSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "u1b2c3d4-5678-90ab-cdef-1234567890ab"
+          },
+          "email": {
+            "type": "string",
+            "example": "contact@ansinhhospital.vn"
+          },
+          "phone": {
+            "type": "string",
+            "example": "0987654321"
+          },
+          "fullName": {
+            "type": "string",
+            "example": "Nguyễn Văn Tuấn"
+          },
+          "role": {
+            "type": "string",
+            "example": "HEALTHCARE_FACILITY"
+          },
+          "status": {
+            "type": "string",
+            "example": "ACTIVE"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "phone",
+          "fullName",
+          "role",
+          "status"
+        ]
+      },
+      "FacilityResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "userId": {
+            "type": "string",
+            "example": "u1b2c3d4-5678-90ab-cdef-1234567890ab"
+          },
+          "facilityName": {
+            "type": "string",
+            "example": "Bệnh viện Đa khoa Quốc tế An Sinh"
+          },
+          "licenseNumber": {
+            "type": "string",
+            "example": "01293/BYT-GPHĐ"
+          },
+          "taxCode": {
+            "type": "string",
+            "example": "0102030405"
+          },
+          "address": {
+            "type": "string",
+            "example": "123 Giải Phóng, Phường Đồng Tâm, Quận Hai Bà Trưng, Hà Nội"
+          },
+          "hotline": {
+            "type": "string",
+            "example": "19001234"
+          },
+          "bankName": {
+            "type": "string",
+            "example": "Vietcombank"
+          },
+          "bankAccountNumber": {
+            "type": "string",
+            "example": "0011002233445"
+          },
+          "bankAccountHolder": {
+            "type": "string",
+            "example": "CONG TY CO PHAN BENH VIEN AN SINH"
+          },
+          "verificationStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "ACTIVE",
+              "SUSPENDED"
+            ],
+            "example": "PENDING"
+          },
+          "user": {
+            "$ref": "#/components/schemas/FacilityUserSummaryDto"
+          },
+          "legalDocumentsUrl": {
+            "type": "object",
+            "example": "https://cdn.famidoc.vn/facilities/legal/gphd-ansinh-signed.pdf"
+          },
+          "hasLegalDocument": {
+            "type": "boolean"
+          },
+          "licenseIssuer": {
+            "type": "object"
+          },
+          "licenseDate": {
+            "type": "object"
+          },
+          "legalRejectionReason": {
+            "type": "object"
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-11-12T07:00:00.000Z"
+          },
+          "updatedAt": {
+            "type": "string",
+            "example": "2026-11-12T07:00:00.000Z"
+          }
+        },
+        "required": [
+          "id",
+          "userId",
+          "facilityName",
+          "licenseNumber",
+          "taxCode",
+          "address",
+          "hotline",
+          "bankName",
+          "bankAccountNumber",
+          "bankAccountHolder",
+          "verificationStatus",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "SubmitFacilityLegalProfileDto": {
+        "type": "object",
+        "properties": {
+          "facilityName": {
+            "type": "string",
+            "description": "Tên pháp nhân cơ sở y tế theo Giấy phép (nếu có điều chỉnh)",
+            "example": "Bệnh viện Đa khoa Quốc tế An Sinh"
+          },
+          "licenseNumber": {
+            "type": "string",
+            "description": "Số Giấy phép hoạt động khám bệnh, chữa bệnh (GPHĐ) do Bộ Y tế / Sở Y tế cấp",
+            "example": "01293/BYT-GPHĐ"
+          },
+          "taxCode": {
+            "type": "string",
+            "description": "Mã số thuế doanh nghiệp (10 hoặc 13 số)",
+            "example": "0102030405"
+          },
+          "address": {
+            "type": "string",
+            "description": "Địa chỉ trụ sở chính thức của cơ sở y tế (nếu có điều chỉnh)",
+            "example": "123 Giải Phóng, Phường Đồng Tâm, Quận Hai Bà Trưng, Hà Nội"
+          },
+          "hotline": {
+            "type": "string",
+            "description": "Số điện thoại đường dây nóng y tế",
+            "example": "19001234"
+          },
+          "bankName": {
+            "type": "string",
+            "description": "Tên ngân hàng mở tài khoản phục vụ quyết toán doanh thu B2B",
+            "example": "Ngân hàng TMCP Ngoại thương Việt Nam (Vietcombank)"
+          },
+          "bankAccountNumber": {
+            "type": "string",
+            "description": "Số tài khoản ngân hàng thụ hưởng của cơ sở y tế",
+            "example": "0011002233445"
+          },
+          "bankAccountHolder": {
+            "type": "string",
+            "description": "Tên chủ tài khoản (phải đúng tên pháp nhân hoặc người đại diện hợp pháp)",
+            "example": "CONG TY CO PHAN BENH VIEN AN SINH"
+          },
+          "legalDocumentsUrl": {
+            "type": "string",
+            "description": "Đường dẫn file PDF scan tập hợp hồ sơ pháp lý (GPHĐ, ĐKKD, Đề xuất hợp tác)",
+            "example": "https://cdn.famidoc.vn/facilities/legal/gphd-ansinh-signed.pdf"
+          },
+          "licenseIssuer": {
+            "type": "string"
+          },
+          "licenseDate": {
+            "type": "string",
+            "example": "2026-11-17"
+          }
+        },
+        "required": [
+          "licenseNumber",
+          "taxCode",
+          "hotline",
+          "bankName",
+          "bankAccountNumber",
+          "bankAccountHolder"
+        ]
+      },
+      "ApproveFacilityAccountDto": {
+        "type": "object",
+        "properties": {
+          "approved": {
+            "type": "boolean",
+            "description": "Kết quả duyệt cấp tài khoản ban đầu (true: Duyệt cấp tài khoản, false: Từ chối)",
+            "example": true
+          },
+          "rejectionReason": {
+            "type": "string",
+            "description": "Lý do từ chối nếu không duyệt cấp tài khoản",
+            "example": "Thông tin cơ sở y tế không có thật hoặc địa chỉ không chính xác."
+          }
+        },
+        "required": [
+          "approved"
+        ]
+      },
+      "VerifyFacilityLegalDto": {
+        "type": "object",
+        "properties": {
+          "approved": {
+            "type": "boolean",
+            "description": "Kết quả thẩm định pháp lý Cấp 2 (true: Duyệt kích hoạt đối tác, false: Từ chối)",
+            "example": true
+          },
+          "rejectionReason": {
+            "type": "string",
+            "description": "Lý do từ chối nếu không thông qua thẩm định pháp lý",
+            "example": "Số giấy phép hoạt động không trùng khớp với dữ liệu đăng ký của Bộ Y tế."
+          }
+        },
+        "required": [
+          "approved"
+        ]
+      },
+      "CreateDoctorQuotaProposalDto": {
+        "type": "object",
+        "properties": {
+          "requestedMaxPanel": {
+            "type": "number",
+            "description": "Hạn mức số hộ gia đình tối đa đề xuất mới",
+            "example": 40,
+            "minimum": 1,
+            "maximum": 200
+          },
+          "reason": {
+            "type": "string",
+            "description": "Lý do đề xuất điều chỉnh hạn mức hộ gia đình",
+            "example": "Bác sĩ có thêm 2 điều dưỡng hỗ trợ theo dõi tại nhà nên đủ năng lực tiếp nhận 40 hộ."
+          }
+        },
+        "required": [
+          "requestedMaxPanel",
+          "reason"
+        ]
+      },
+      "ReviewDoctorQuotaProposalDto": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "APPROVE",
+              "REJECT"
+            ],
+            "description": "Quyết định của Quản trị viên: APPROVE hoặc REJECT"
+          },
+          "reviewNote": {
+            "type": "string",
+            "description": "Ghi chú thẩm định (bắt buộc khi từ chối)",
+            "example": "Đã đối soát nhân sự hỗ trợ tại cơ sở, chấp thuận tăng hạn mức."
+          }
+        },
+        "required": [
+          "action"
         ]
       },
       "CreateAuthDto": {
@@ -7148,7 +10998,7 @@
           },
           "facilityId": {
             "type": "string",
-            "description": "ID cơ sở y tế đảm trách",
+            "description": "ID cơ sở y tế đảm trách (tùy chọn khi đã chọn bác sĩ; máy chủ tự suy ra từ doctor.facilityId)",
             "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
           },
           "doctorId": {
@@ -7157,7 +11007,7 @@
             "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
           },
           "patientIds": {
-            "description": "Danh sách ID thành viên gia đình được bảo trợ trong hợp đồng",
+            "description": "Danh sách ID thành viên gia đình (tùy chọn; luồng mới chốt theo memberCount và bổ sung hồ sơ thành viên sau khi hợp đồng ACTIVE)",
             "type": "array",
             "items": {
               "type": "string"
@@ -7170,14 +11020,31 @@
           },
           "memberCount": {
             "type": "number",
-            "description": "Số lượng thành viên tham gia chăm sóc",
+            "description": "Số lượng suất thành viên đăng ký cho hợp đồng",
             "default": 1
+          },
+          "additionalTerms": {
+            "type": "string",
+            "description": "Điều khoản bổ sung hoặc thỏa thuận đặc thù cho hợp đồng (nếu có)"
+          },
+          "replaceContractId": {
+            "type": "string",
+            "description": "ID hợp đồng nháp chưa thanh toán cần hủy nguyên tử trước khi tạo hợp đồng mới (thay đổi gói hoặc số thành viên)",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "matchingSessionId": {
+            "type": "string",
+            "description": "ID phiên gợi ý bác sĩ tự động (Track B) đã khớp thành công để xác nhận tạo hợp đồng",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "queueRequestId": {
+            "type": "string",
+            "description": "ID yêu cầu hàng chờ điều phối Admin đã được gán bác sĩ (status = ASSIGNED)",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
           }
         },
         "required": [
-          "packageId",
-          "facilityId",
-          "patientIds"
+          "packageId"
         ]
       },
       "CreateMedicalContractDto": {
@@ -7190,7 +11057,7 @@
           },
           "facilityId": {
             "type": "string",
-            "description": "ID cơ sở y tế đảm trách",
+            "description": "ID cơ sở y tế đảm trách (tùy chọn khi đã chọn bác sĩ; máy chủ tự suy ra từ doctor.facilityId)",
             "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
           },
           "doctorId": {
@@ -7199,7 +11066,7 @@
             "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
           },
           "patientIds": {
-            "description": "Danh sách ID thành viên gia đình được bảo trợ trong hợp đồng",
+            "description": "Danh sách ID thành viên gia đình (tùy chọn; luồng mới chốt theo memberCount và bổ sung hồ sơ thành viên sau khi hợp đồng ACTIVE)",
             "type": "array",
             "items": {
               "type": "string"
@@ -7212,15 +11079,42 @@
           },
           "memberCount": {
             "type": "number",
-            "description": "Số lượng thành viên tham gia chăm sóc",
+            "description": "Số lượng suất thành viên đăng ký cho hợp đồng",
             "default": 1
+          },
+          "additionalTerms": {
+            "type": "string",
+            "description": "Điều khoản bổ sung hoặc thỏa thuận đặc thù cho hợp đồng (nếu có)"
+          },
+          "replaceContractId": {
+            "type": "string",
+            "description": "ID hợp đồng nháp chưa thanh toán cần hủy nguyên tử trước khi tạo hợp đồng mới (thay đổi gói hoặc số thành viên)",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "matchingSessionId": {
+            "type": "string",
+            "description": "ID phiên gợi ý bác sĩ tự động (Track B) đã khớp thành công để xác nhận tạo hợp đồng",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "queueRequestId": {
+            "type": "string",
+            "description": "ID yêu cầu hàng chờ điều phối Admin đã được gán bác sĩ (status = ASSIGNED)",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
           }
         },
         "required": [
-          "packageId",
-          "facilityId",
-          "patientIds"
+          "packageId"
         ]
+      },
+      "CancelDraftContractDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Lý do hủy bản nháp hợp đồng (tùy chọn)",
+            "example": "Đổi gói chăm sóc khác"
+          }
+        }
       },
       "SignContractChangeDto": {
         "type": "object",
@@ -7594,6 +11488,21 @@
           }
         }
       },
+      "RejectStaffingContractDto": {
+        "type": "object",
+        "properties": {
+          "rejectionReason": {
+            "type": "string",
+            "description": "Lý do từ chối dự thảo hợp đồng hoặc yêu cầu sửa đổi điều khoản",
+            "example": "Đề xuất điều chỉnh tỷ lệ hoa hồng nền tảng thành 10% và thời hạn bắt đầu từ ngày 01/03/2026.",
+            "minLength": 5,
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "rejectionReason"
+        ]
+      },
       "CreateContractAddendumDto": {
         "type": "object",
         "properties": {
@@ -7775,9 +11684,10 @@
             "enum": [
               "PREPARE",
               "CONFIRM_TRANSFER",
-              "MARK_FAILED"
+              "MARK_FAILED",
+              "REOPEN_REVIEW"
             ],
-            "description": "Hành động quyết toán hàng tháng (PREPARE: lập bảng đối soát, CONFIRM_TRANSFER: xác nhận chuyển khoản, MARK_FAILED: báo thất bại)",
+            "description": "Lập bảng, xác nhận chuyển khoản, báo thất bại hoặc gửi lại bảng có sai lệch cho CSYT kiểm tra",
             "default": "PREPARE",
             "example": "PREPARE"
           },
@@ -7790,6 +11700,11 @@
             "type": "string",
             "description": "UUID của kỳ quyết toán (bắt buộc khi action khác PREPARE)",
             "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "reviewVersion": {
+            "type": "number",
+            "minimum": 1,
+            "description": "Phiên bản bảng quyết toán đang hiển thị"
           },
           "bankTransferOrderId": {
             "type": "string",
@@ -7819,6 +11734,39 @@
         },
         "required": [
           "action"
+        ]
+      },
+      "ReviewSettlementDto": {
+        "type": "object",
+        "properties": {
+          "environment": {
+            "type": "string",
+            "enum": [
+              "TEST",
+              "LIVE"
+            ],
+            "default": "LIVE"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "CONFIRM",
+              "REPORT_DISCREPANCY"
+            ]
+          },
+          "reviewVersion": {
+            "type": "number",
+            "minimum": 1,
+            "description": "Phiên bản bảng quyết toán đang được kiểm tra"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Nội dung sai lệch, bắt buộc khi báo sai lệch"
+          }
+        },
+        "required": [
+          "action",
+          "reviewVersion"
         ]
       },
       "RunSePayReconciliationDto": {
@@ -8031,6 +11979,16 @@
             "description": "Mã số thẻ bảo hiểm y tế",
             "example": "DN4010123456789"
           },
+          "registeredHospital": {
+            "type": "string",
+            "description": "Nơi ĐKKCB ban đầu (BHYT)",
+            "example": "BV Đại học Y Dược TP.HCM"
+          },
+          "chronicDiseases": {
+            "type": "string",
+            "description": "Bệnh nền đang theo dõi",
+            "example": "Tăng huyết áp, Dạ dày"
+          },
           "familyId": {
             "type": "string",
             "description": "ID hộ gia đình (bắt buộc khi ADMIN tạo hộ)"
@@ -8039,8 +11997,7 @@
         "required": [
           "fullName",
           "dateOfBirth",
-          "gender",
-          "relationshipToRepresentative"
+          "gender"
         ]
       },
       "UpdatePatientDto": {
@@ -8098,6 +12055,16 @@
             "type": "string",
             "description": "Mã số thẻ bảo hiểm y tế",
             "example": "DN4010123456789"
+          },
+          "registeredHospital": {
+            "type": "string",
+            "description": "Nơi ĐKKCB ban đầu (BHYT)",
+            "example": "BV Đại học Y Dược TP.HCM"
+          },
+          "chronicDiseases": {
+            "type": "string",
+            "description": "Bệnh nền đang theo dõi",
+            "example": "Tăng huyết áp, Dạ dày"
           },
           "familyId": {
             "type": "string",
@@ -8194,6 +12161,569 @@
           "fileSizeKb",
           "recordedDate"
         ]
+      },
+      "CreateTreatedCaseDto": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "type": "string",
+            "description": "Mô tả ca bệnh tiêu biểu cần kiểm duyệt trước khi công khai",
+            "example": "Quản lý tăng huyết áp kháng trị cho bệnh nhân 72 tuổi kèm suy tim độ II."
+          }
+        },
+        "required": [
+          "summary"
+        ]
+      },
+      "UpdateTreatedCaseDto": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "type": "string",
+            "description": "Nội dung mới của ca bệnh; khi thay đổi, ca bệnh quay lại trạng thái chờ duyệt",
+            "example": "Điều chỉnh phác đồ đái tháo đường type 2 cho hai thành viên trong cùng hộ gia đình."
+          }
+        }
+      },
+      "RejectTreatedCaseDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Lý do từ chối công khai ca bệnh",
+            "example": "Thông tin chưa đủ căn cứ xác thực hoặc có dấu hiệu nhận diện bệnh nhân."
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "CreatePlatformCareItemDto": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "description": "Nhóm nội dung chăm sóc",
+            "enum": [
+              "SERVICE_MODE",
+              "COMMITMENT"
+            ],
+            "example": "SERVICE_MODE"
+          },
+          "title": {
+            "type": "string",
+            "description": "Tiêu đề hiển thị",
+            "example": "Khám tận nhà"
+          },
+          "description": {
+            "type": "string",
+            "description": "Mô tả chi tiết",
+            "example": "Khám lâm sàng tại nhà, đo điện tim ECG và theo dõi định kỳ."
+          },
+          "icon": {
+            "type": "string",
+            "description": "Biểu tượng hiển thị",
+            "example": "home"
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "Thứ tự hiển thị; bỏ trống để xếp cuối nhóm",
+            "example": 1
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Trạng thái hoạt động",
+            "example": true,
+            "default": true
+          }
+        },
+        "required": [
+          "category",
+          "title"
+        ]
+      },
+      "UpdatePlatformCareItemDto": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": "string",
+            "description": "Nhóm nội dung chăm sóc",
+            "enum": [
+              "SERVICE_MODE",
+              "COMMITMENT"
+            ],
+            "example": "COMMITMENT"
+          },
+          "title": {
+            "type": "string",
+            "description": "Tiêu đề hiển thị"
+          },
+          "description": {
+            "type": "string",
+            "description": "Mô tả chi tiết"
+          },
+          "icon": {
+            "type": "string",
+            "description": "Biểu tượng hiển thị"
+          },
+          "sortOrder": {
+            "type": "number",
+            "description": "Thứ tự hiển thị"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Trạng thái hoạt động"
+          }
+        }
+      },
+      "CreatePeriodicEncounterDto": {
+        "type": "object",
+        "properties": {
+          "contractId": {
+            "type": "string",
+            "description": "ID hợp đồng y tế đang hoạt động",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "patientId": {
+            "type": "string",
+            "description": "ID thành viên gia đình (bệnh nhân) được khám",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "encounterType": {
+            "type": "string",
+            "description": "Hình thức khám bệnh: Khám tại nhà, Khám từ xa, hoặc Khám tại CSYT",
+            "enum": [
+              "HOME_VISIT",
+              "TELEHEALTH",
+              "FACILITY_VISIT"
+            ],
+            "example": "HOME_VISIT"
+          },
+          "scheduledDate": {
+            "type": "string",
+            "description": "Ngày khám dự kiến (định dạng YYYY-MM-DD)",
+            "example": "2026-12-01"
+          },
+          "scheduledTime": {
+            "type": "string",
+            "description": "Giờ khám dự kiến (định dạng HH:mm:ss hoặc HH:mm)",
+            "example": "09:00:00"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Ghi chú hoặc kế hoạch khám định kỳ từ bác sĩ",
+            "example": "Khám sức khỏe tổng quát định kỳ quý 4 cho người cao tuổi"
+          }
+        },
+        "required": [
+          "contractId",
+          "patientId",
+          "encounterType",
+          "scheduledDate",
+          "scheduledTime"
+        ]
+      },
+      "CreateAdHocEncounterDto": {
+        "type": "object",
+        "properties": {
+          "contractId": {
+            "type": "string",
+            "description": "ID hợp đồng y tế đang hoạt động",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "patientId": {
+            "type": "string",
+            "description": "ID bệnh nhân cần khám đột xuất",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "encounterType": {
+            "type": "string",
+            "description": "Hình thức khám mong muốn: Khám tại nhà, Khám từ xa, hoặc Khám tại CSYT",
+            "enum": [
+              "HOME_VISIT",
+              "TELEHEALTH",
+              "FACILITY_VISIT"
+            ],
+            "example": "TELEHEALTH"
+          },
+          "desiredDate": {
+            "type": "string",
+            "description": "Ngày mong muốn khám (định dạng YYYY-MM-DD)",
+            "example": "2026-11-20"
+          },
+          "desiredTime": {
+            "type": "string",
+            "description": "Giờ mong muốn khám (định dạng HH:mm hoặc HH:mm:ss)",
+            "example": "14:30:00"
+          },
+          "reason": {
+            "type": "string",
+            "description": "Triệu chứng hoặc lý do cần khám đột xuất",
+            "example": "Bệnh nhân có triệu chứng sốt cao và ho khan 2 ngày nay"
+          }
+        },
+        "required": [
+          "contractId",
+          "patientId",
+          "encounterType",
+          "desiredDate",
+          "desiredTime",
+          "reason"
+        ]
+      },
+      "FinalizeEncounterDto": {
+        "type": "object",
+        "properties": {
+          "encounterType": {
+            "type": "string",
+            "description": "Điều chỉnh hình thức khám nếu cần thiết",
+            "enum": [
+              "HOME_VISIT",
+              "TELEHEALTH",
+              "FACILITY_VISIT"
+            ],
+            "example": "HOME_VISIT"
+          },
+          "scheduledDate": {
+            "type": "string",
+            "description": "Ngày khám được bác sĩ chốt (định dạng YYYY-MM-DD)",
+            "example": "2026-11-21"
+          },
+          "scheduledTime": {
+            "type": "string",
+            "description": "Giờ khám được bác sĩ chốt (định dạng HH:mm hoặc HH:mm:ss)",
+            "example": "15:00:00"
+          },
+          "doctorNotes": {
+            "type": "string",
+            "description": "Ghi chú hoặc lời dặn của bác sĩ gửi kèm gia đình",
+            "example": "Đã xếp lịch khám tại nhà, đề nghị gia đình chuẩn bị sẵn sổ theo dõi huyết áp."
+          }
+        }
+      },
+      "ConfirmEncounterDto": {
+        "type": "object",
+        "properties": {
+          "confirmed": {
+            "type": "boolean",
+            "description": "Xác nhận đồng ý với lịch khám đề xuất",
+            "example": true
+          }
+        },
+        "required": [
+          "confirmed"
+        ]
+      },
+      "RequestRescheduleDto": {
+        "type": "object",
+        "properties": {
+          "proposedDate": {
+            "type": "string",
+            "description": "Ngày khám mới mong muốn đề xuất (định dạng YYYY-MM-DD)",
+            "example": "2026-11-25"
+          },
+          "proposedTime": {
+            "type": "string",
+            "description": "Giờ khám mới mong muốn đề xuất (định dạng HH:mm hoặc HH:mm:ss)",
+            "example": "10:00:00"
+          },
+          "rescheduleReason": {
+            "type": "string",
+            "description": "Lý do xin dời lịch khám",
+            "example": "Gia đình bận công tác đột xuất vào ngày đã định"
+          }
+        },
+        "required": [
+          "proposedDate",
+          "proposedTime",
+          "rescheduleReason"
+        ]
+      },
+      "DoctorRescheduleReviewDto": {
+        "type": "object",
+        "properties": {
+          "accept": {
+            "type": "boolean",
+            "description": "Bác sĩ chấp thuận (true) hoặc từ chối đề xuất của gia đình (false)",
+            "example": true
+          },
+          "counterDate": {
+            "type": "string",
+            "description": "Ngày thay thế bác sĩ đề xuất ngược lại cho gia đình (nếu từ chối nhưng có slot khác)",
+            "example": "2026-11-26"
+          },
+          "counterTime": {
+            "type": "string",
+            "description": "Giờ thay thế bác sĩ đề xuất ngược lại cho gia đình (định dạng HH:mm hoặc HH:mm:ss)",
+            "example": "14:00:00"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Lý do từ chối hoặc ghi chú khung giờ thay thế",
+            "example": "Khung giờ gia đình chọn tôi bị vướng ca trực tại bệnh viện, xin đề xuất chuyển sang chiều 26/11."
+          }
+        },
+        "required": [
+          "accept"
+        ]
+      },
+      "CreateDoctorShiftDto": {
+        "type": "object",
+        "properties": {
+          "doctorId": {
+            "type": "string",
+            "description": "ID bác sĩ được phân ca",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "shiftDate": {
+            "type": "string",
+            "description": "Ngày trực (định dạng YYYY-MM-DD)",
+            "example": "2026-11-20"
+          },
+          "startTime": {
+            "type": "string",
+            "description": "Giờ bắt đầu ca trực (định dạng HH:mm hoặc HH:mm:ss)",
+            "example": "07:30:00"
+          },
+          "endTime": {
+            "type": "string",
+            "description": "Giờ kết thúc ca trực (định dạng HH:mm hoặc HH:mm:ss)",
+            "example": "11:30:00"
+          },
+          "shiftType": {
+            "type": "string",
+            "description": "Loại ca trực (ví dụ: MORNING_CLINIC, AFTERNOON_CLINIC, NIGHT_DUTY, EMERGENCY)",
+            "example": "MORNING_CLINIC"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Ghi chú phân công ca trực",
+            "example": "Phụ trách phòng khám Đa khoa tầng 2"
+          }
+        },
+        "required": [
+          "doctorId",
+          "shiftDate",
+          "startTime",
+          "endTime",
+          "shiftType"
+        ]
+      },
+      "AdminAccountStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "SUSPENDED",
+              "ACTIVE"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "reason"
+        ]
+      },
+      "MatchDoctorsIntakeDto": {
+        "type": "object",
+        "properties": {
+          "packageId": {
+            "type": "string",
+            "description": "ID gói chăm sóc sức khỏe đã chọn",
+            "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+          },
+          "memberCount": {
+            "type": "number",
+            "description": "Số lượng thành viên trong hộ gia đình đăng ký gói",
+            "example": 4,
+            "minimum": 1
+          },
+          "requestedTier": {
+            "type": "string",
+            "enum": [
+              "JUNIOR",
+              "STANDARD",
+              "SENIOR"
+            ],
+            "description": "Trình độ bác sĩ mong muốn (để trống nếu không giới hạn)"
+          },
+          "ageGroups": {
+            "description": "Nhóm đối tượng trong hộ gia đình (ví dụ: Trẻ nhỏ, Người cao tuổi)",
+            "example": [
+              "Trẻ nhỏ (< 12 tuổi)",
+              "Người cao tuổi (> 60 tuổi)"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "careCategories": {
+            "description": "Nhóm nhu cầu chăm sóc / bệnh nền chính",
+            "example": [
+              "Tăng huyết áp / Tim mạch",
+              "Theo dõi nhi khoa định kỳ"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "districtArea": {
+            "type": "string",
+            "description": "Quận / Huyện hoặc khu vực sinh sống",
+            "example": "Quận 1, TP.HCM"
+          },
+          "careDescription": {
+            "type": "string",
+            "description": "Mô tả nhu cầu chăm sóc sức khỏe (không nhập thông tin định danh PII)",
+            "example": "Gia đình có ông bà bị tăng huyết áp nhẹ cần bác sĩ theo dõi định kỳ tại nhà."
+          }
+        },
+        "required": [
+          "packageId",
+          "memberCount"
+        ]
+      },
+      "CancelMatchingQueueDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Lý do hủy yêu cầu chờ điều phối"
+          }
+        }
+      },
+      "AssignQueueDoctorDto": {
+        "type": "object",
+        "properties": {
+          "doctorId": {
+            "type": "string",
+            "description": "UUID của bác sĩ còn slot được Admin phân công"
+          },
+          "adminNote": {
+            "type": "string",
+            "description": "Ghi chú điều phối của Quản trị viên"
+          }
+        },
+        "required": [
+          "doctorId"
+        ]
+      },
+      "UpdateMatchingConfigDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Bật/tắt đánh giá bằng model decision chuẩn System One",
+            "example": true
+          },
+          "endpointUrl": {
+            "type": "string",
+            "description": "URL endpoint chuẩn POST /v1/systemone (ví dụ http://localhost:11434/v1/systemone hoặc https://api.typesafe.ai/v1/systemone)",
+            "example": "http://localhost:11434/v1/systemone"
+          },
+          "modelName": {
+            "type": "string",
+            "description": "Tên model decision trên endpoint System One",
+            "example": "d3:4b"
+          },
+          "questionType": {
+            "type": "string",
+            "description": "Kiểu câu hỏi gửi tới /v1/systemone",
+            "enum": [
+              "score",
+              "noul"
+            ],
+            "example": "score"
+          },
+          "apiKey": {
+            "type": "string",
+            "description": "API Key Bearer (không bắt buộc cho endpoint local như Ollama; để trống nếu không muốn thay đổi)"
+          },
+          "clearApiKey": {
+            "type": "boolean",
+            "description": "Đặt true để xóa API Key đã lưu và chạy chế độ không xác thực",
+            "example": false
+          },
+          "timeoutMs": {
+            "type": "number",
+            "description": "Timeout gọi API System One (ms)",
+            "example": 25000,
+            "minimum": 1000,
+            "maximum": 120000
+          },
+          "maxCandidates": {
+            "type": "number",
+            "description": "Số lượng ứng viên tối đa gửi sang model đánh giá mỗi lượt",
+            "example": 10,
+            "minimum": 1,
+            "maximum": 30
+          },
+          "minFitThreshold": {
+            "type": "number",
+            "description": "Ngưỡng điểm phù hợp tối thiểu [0..1] trước khi fallback hàng chờ Admin",
+            "example": 0.6,
+            "minimum": 0,
+            "maximum": 1
+          },
+          "fitWeight": {
+            "type": "number",
+            "description": "Trọng số điểm phù hợp model [0..1]",
+            "example": 0.7,
+            "minimum": 0,
+            "maximum": 1
+          },
+          "vacancyWeight": {
+            "type": "number",
+            "description": "Trọng số độ trống slot đối tác [0..1]",
+            "example": 0.3,
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "TestMatchingConfigDto": {
+        "type": "object",
+        "properties": {
+          "endpointUrl": {
+            "type": "string",
+            "description": "URL endpoint /v1/systemone cần kiểm tra thử (mặc định dùng cấu hình hiện hành)",
+            "example": "http://localhost:11434/v1/systemone"
+          },
+          "modelName": {
+            "type": "string",
+            "description": "Tên model cần kiểm tra thử",
+            "example": "d3:4b"
+          },
+          "questionType": {
+            "type": "string",
+            "enum": [
+              "score",
+              "noul"
+            ],
+            "example": "score"
+          },
+          "apiKey": {
+            "type": "string",
+            "description": "API Key thử nghiệm (tùy chọn)"
+          },
+          "clearApiKey": {
+            "type": "boolean",
+            "description": "Bỏ qua API Key đã lưu khi test thử kết nối không cần khóa"
+          },
+          "timeoutMs": {
+            "type": "number",
+            "description": "Timeout test thử (ms)",
+            "example": 25000,
+            "minimum": 1000,
+            "maximum": 120000
+          }
+        }
       }
     }
   }

@@ -63,6 +63,7 @@ enum ServicePackageStatus {
 }
 
 enum B2bContractStatus {
+  PENDING_SIGNATURE
   PENDING_FACILITY_SIGNATURE
   REVISION_REQUESTED
   PENDING_ADMIN_SIGNATURE
@@ -189,6 +190,33 @@ enum OtpChallengePurpose {
   RESET_PASSWORD
 }
 
+enum DoctorClinicalTier {
+  JUNIOR
+  STANDARD
+  SENIOR
+}
+
+enum QuotaProposalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum MatchingSessionStatus {
+  MATCHED
+  QUEUED
+  CONFIRMED
+  EXPIRED
+}
+
+enum MatchingQueueStatus {
+  QUEUED
+  ASSIGNED
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+
 // =========================================================================
 // 1. PHÂN HỆ XÁC THỰC, NGƯỜI DÙNG & RBAC (FE-01, FE-03)
 // =========================================================================
@@ -224,6 +252,11 @@ model User {
   resolvedComplaints                Complaint[]           @relation("ComplaintResolver")
   auditLogs                         AuditLog[]
   approvedDoctorTreatedCases        DoctorTreatedCase[]   @relation("TreatedCaseApprover")
+  requestedQuotaProposals           DoctorQuotaProposal[] @relation("QuotaProposalRequester")
+  reviewedQuotaProposals            DoctorQuotaProposal[] @relation("QuotaProposalReviewer")
+  matchingSessions                  MatchingSession[]
+  matchingQueueRequests             MatchingQueueRequest[] @relation("QueueRequester")
+  assignedQueueRequests             MatchingQueueRequest[] @relation("QueueAdminAssigner")
 
   @@map("users")
 }
@@ -278,13 +311,15 @@ model HealthcareFacility {
   bankName           String                     @map("bank_name") @db.VarChar(100)
   bankAccountNumber  String                     @map("bank_account_number") @db.VarChar(50)
   bankAccountHolder  String                     @map("bank_account_holder") @db.VarChar(100)
-  legalDocumentsUrl  String?                    @map("legal_documents_url") @db.Text
-  legalDocumentKey   String?                    @map("legal_document_key") @db.Text
-  businessLicenseKey String?                    @map("business_license_key") @db.Text
-  licenseIssuer      String?                    @map("license_issuer") @db.VarChar(255)
-  licenseDate        DateTime?                  @map("license_date") @db.Date
-  legalRejectionReason String?                  @map("legal_rejection_reason") @db.Text
-  verificationStatus FacilityVerificationStatus @default(PENDING) @map("verification_status")
+  legalDocumentsUrl    String?                    @map("legal_documents_url") @db.Text
+  legalDocumentKey     String?                    @map("legal_document_key") @db.Text
+  businessLicenseKey   String?                    @map("business_license_key") @db.Text
+  contactEmail         String?                    @map("contact_email") @db.VarChar(150)
+  representativeName   String?                    @map("representative_name") @db.VarChar(100)
+  licenseIssuer        String?                    @map("license_issuer") @db.VarChar(255)
+  licenseDate          DateTime?                  @map("license_date") @db.Date
+  legalRejectionReason String?                    @map("legal_rejection_reason") @db.Text
+  verificationStatus   FacilityVerificationStatus @default(PENDING) @map("verification_status")
   createdAt          DateTime                   @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt          DateTime                   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
@@ -295,6 +330,9 @@ model HealthcareFacility {
   staffingContracts   B2bStaffingContract[]
   medicalContracts    MedicalContract[]
   facilitySettlements FacilitySettlement[]
+  quotaProposals      DoctorQuotaProposal[]
+  matchingSessions    MatchingSession[]
+  assignedQueueItems  MatchingQueueRequest[] @relation("QueueAssignedFacility")
 
   @@map("healthcare_facilities")
 }
@@ -307,11 +345,12 @@ model Doctor {
   specialty        String                 @db.VarChar(100)
   academicTitle    String?                @map("academic_title") @db.VarChar(50)
   experienceYears  Int                    @map("experience_years")
+  clinicalTier     DoctorClinicalTier     @default(STANDARD) @map("clinical_tier")
   bio              String?                @db.Text
   activePanelCount Int                    @default(0) @map("active_panel_count")
   maxPanelCapacity Int                    @default(30) @map("max_panel_capacity")
-  ratingAvg        Decimal                @default(5.00) @map("rating_avg") @db.Decimal(3, 2)
-  totalReviews     Int                    @default(0) @map("total_reviews")
+  ratingAvg              Decimal                @default(5.00) @map("rating_avg") @db.Decimal(3, 2)
+  totalReviews           Int                    @default(0) @map("total_reviews")
   onboardingStatus       DoctorOnboardingStatus @default(PENDING_SUBMISSION) @map("onboarding_status")
   rejectionReason        String?                @map("rejection_reason") @db.Text
   credentialsSubmittedAt DateTime?              @map("credentials_submitted_at") @db.Timestamptz()
@@ -319,15 +358,19 @@ model Doctor {
   updatedAt        DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   // Relations
-  user             User                @relation(fields: [userId], references: [id], onDelete: Restrict)
-  facility         HealthcareFacility  @relation(fields: [facilityId], references: [id], onDelete: Restrict)
-  credentials      DoctorCredential[]
-  shifts           DoctorShift[]
-  medicalContracts MedicalContract[]
-  encounters       Encounter[]
-  reviews          DoctorReview[]
-  treatedCases     DoctorTreatedCase[]
+  user               User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  facility           HealthcareFacility     @relation(fields: [facilityId], references: [id], onDelete: Restrict)
+  credentials        DoctorCredential[]
+  shifts             DoctorShift[]
+  medicalContracts   MedicalContract[]
+  encounters         Encounter[]
+  reviews            DoctorReview[]
+  treatedCases       DoctorTreatedCase[]
+  quotaProposals     DoctorQuotaProposal[]
+  matchingSessions   MatchingSession[]
+  assignedQueueItems MatchingQueueRequest[] @relation("QueueAssignedDoctor")
 
+  @@index([clinicalTier, onboardingStatus], map: "idx_doctors_tier_status")
   @@map("doctors")
 }
 
@@ -424,7 +467,9 @@ model ServicePackage {
   retiredAt                    DateTime? @map("retired_at") @db.Timestamptz()
 
   // Relations
-  medicalContracts MedicalContract[]
+  medicalContracts      MedicalContract[]
+  matchingSessions      MatchingSession[]
+  matchingQueueRequests MatchingQueueRequest[]
 
   @@unique([lineageCode, version])
   @@map("service_packages")
@@ -497,10 +542,12 @@ model FamilyUnit {
   updatedAt            DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   // Relations
-  representativeUser User              @relation(fields: [representativeUserId], references: [id], onDelete: Restrict)
-  patients           Patient[]
-  medicalContracts   MedicalContract[]
-  doctorReviews      DoctorReview[]
+  representativeUser    User                   @relation(fields: [representativeUserId], references: [id], onDelete: Restrict)
+  patients              Patient[]
+  medicalContracts      MedicalContract[]
+  doctorReviews         DoctorReview[]
+  matchingSessions      MatchingSession[]
+  matchingQueueRequests MatchingQueueRequest[]
 
   @@map("family_units")
 }
@@ -580,6 +627,7 @@ model MedicalContract {
   startDate           DateTime              @map("start_date") @db.Date
   endDate             DateTime              @map("end_date") @db.Date
   contractStatus      MedicalContractStatus @default(PENDING_APPROVAL) @map("contract_status")
+  holdExpiresAt       DateTime?             @map("hold_expires_at") @db.Timestamptz()
   terminationReason   String?               @map("termination_reason") @db.Text
   terminatedAt        DateTime?             @map("terminated_at") @db.Timestamptz()
   createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz()
@@ -613,13 +661,16 @@ model MedicalContract {
   addenda        ContractAddendum[]
   members        ContractMember[]
   encounters     Encounter[]
-  invoices       Invoice[]
-  complaints     Complaint[]
+  invoices             Invoice[]
+  complaints           Complaint[]
+  matchingSession      MatchingSession?
+  matchingQueueRequest MatchingQueueRequest?
 
   // BR-06 & GB-19: Mỗi hộ gia đình chỉ có duy nhất 1 hợp đồng ACTIVE
   // Lưu ý: Chỉ mục UNIQUE có điều kiện WHERE contract_status = 'ACTIVE' được tạo ở tầng PostgreSQL migration:
   // CREATE UNIQUE INDEX idx_unique_active_contract_per_family ON medical_contracts (family_id) WHERE contract_status = 'ACTIVE';
   @@index([familyId], map: "idx_medical_contracts_family_id")
+  @@index([doctorId, contractStatus, holdExpiresAt], map: "idx_medical_contracts_doctor_quota")
   @@map("medical_contracts")
 }
 
@@ -932,11 +983,11 @@ model PaymentTransaction {
   // Relations
   invoice           Invoice?                @relation("InvoiceTransactions", fields: [invoiceId], references: [id], onDelete: Restrict)
   acceptedBy        Invoice?                @relation("AcceptedInvoiceTransaction")
-  reconciliationRun SePayReconciliationRun? @relation(fields: [reconciliationRunId], references: [id], onDelete: SetNull)
+  reconciliationRun SePayReconciliationRun? @relation(fields: [reconciliationRunId], references: [id], onDelete: SetNull, map: "payment_transactions_reconciliation_run_fkey")
 
   @@unique([environment, gatewayTransactionId])
-  @@unique([environment, sepayWebhookTransactionId])
-  @@unique([environment, sepayApiTransactionId])
+  @@unique([environment, sepayWebhookTransactionId], map: "payment_transactions_environment_webhook_id_key")
+  @@unique([environment, sepayApiTransactionId], map: "payment_transactions_environment_api_id_key")
   @@index([bankReferenceKey])
   @@index([outcome, createdAt])
   @@index([environment, paymentTime])
@@ -1122,4 +1173,112 @@ model FacilitySettlementItem {
 
   @@unique([invoiceId, recognitionYear, recognitionMonth], map: "settlement_invoice_period_unique")
   @@map("facility_settlement_items")
+}
+
+// =========================================================================
+// 10. QUẢN TRỊ QUOTA & DUAL-TRACK MATCHING (Track A / Track B / Hàng chờ)
+// =========================================================================
+
+model DoctorQuotaProposal {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  doctorId          String              @map("doctor_id") @db.Uuid
+  facilityId        String              @map("facility_id") @db.Uuid
+  requestedByUserId String              @map("requested_by_user_id") @db.Uuid
+  currentMaxPanel   Int                 @map("current_max_panel")
+  requestedMaxPanel Int                 @map("requested_max_panel")
+  reason            String              @db.Text
+  status            QuotaProposalStatus @default(PENDING)
+  reviewedByUserId  String?             @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt        DateTime?           @map("reviewed_at") @db.Timestamptz()
+  reviewNote        String?             @map("review_note") @db.Text
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt         DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  doctor          Doctor             @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  facility        HealthcareFacility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
+  requestedByUser User               @relation("QuotaProposalRequester", fields: [requestedByUserId], references: [id], onDelete: Restrict)
+  reviewedByUser  User?              @relation("QuotaProposalReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([doctorId, status], map: "idx_doctor_quota_proposals_doctor_status")
+  @@index([facilityId, status], map: "idx_doctor_quota_proposals_facility_status")
+  @@index([status, createdAt], map: "idx_doctor_quota_proposals_status_created")
+  @@map("doctor_quota_proposals")
+}
+
+model MatchingSession {
+  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId               String?               @map("user_id") @db.Uuid
+  familyId             String?               @map("family_id") @db.Uuid
+  packageId            String                @map("package_id") @db.Uuid
+  memberCount          Int                   @map("member_count")
+  requestedTier        DoctorClinicalTier?   @map("requested_tier")
+  ageGroups            Json                  @default("[]") @map("age_groups") @db.JsonB
+  careCategories       Json                  @default("[]") @map("care_categories") @db.JsonB
+  districtArea         String?               @map("district_area") @db.VarChar(120)
+  sanitizedDescription String?               @map("sanitized_description") @db.Text
+  matchedDoctorId      String?               @map("matched_doctor_id") @db.Uuid
+  inferredFacilityId   String?               @map("inferred_facility_id") @db.Uuid
+  jevModelVersion      String?               @map("jev_model_version") @db.VarChar(50)
+  jevFitScore          Decimal?              @map("jev_fit_score") @db.Decimal(5, 4)
+  vacancyScore         Decimal?              @map("vacancy_score") @db.Decimal(5, 4)
+  compositeScore       Decimal?              @map("composite_score") @db.Decimal(5, 4)
+  rationale            String?               @db.Text
+  candidateSnapshots   Json?                 @map("candidate_snapshots") @db.JsonB
+  status               MatchingSessionStatus @default(MATCHED)
+  contractId           String?               @unique @map("contract_id") @db.Uuid
+  expiresAt            DateTime              @map("expires_at") @db.Timestamptz()
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt            DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  user             User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  familyUnit       FamilyUnit?           @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  servicePackage   ServicePackage        @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  matchedDoctor    Doctor?               @relation(fields: [matchedDoctorId], references: [id], onDelete: SetNull)
+  inferredFacility HealthcareFacility?   @relation(fields: [inferredFacilityId], references: [id], onDelete: SetNull)
+  contract         MedicalContract?      @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  queueRequest     MatchingQueueRequest?
+
+  @@index([userId, createdAt], map: "idx_matching_sessions_user_created")
+  @@index([status, expiresAt], map: "idx_matching_sessions_status_expires")
+  @@map("matching_sessions")
+}
+
+model MatchingQueueRequest {
+  id                   String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  matchingSessionId    String?             @unique @map("matching_session_id") @db.Uuid
+  userId               String?             @map("user_id") @db.Uuid
+  familyId             String?             @map("family_id") @db.Uuid
+  packageId            String              @map("package_id") @db.Uuid
+  memberCount          Int                 @map("member_count")
+  requestedTier        DoctorClinicalTier? @map("requested_tier")
+  ageGroups            Json                @default("[]") @map("age_groups") @db.JsonB
+  careCategories       Json                @default("[]") @map("care_categories") @db.JsonB
+  districtArea         String?             @map("district_area") @db.VarChar(120)
+  sanitizedDescription String?             @map("sanitized_description") @db.Text
+  fallbackReason       String              @map("fallback_reason") @db.VarChar(100)
+  status               MatchingQueueStatus @default(QUEUED)
+  slaExpiresAt         DateTime            @map("sla_expires_at") @db.Timestamptz()
+  assignedDoctorId     String?             @map("assigned_doctor_id") @db.Uuid
+  assignedFacilityId   String?             @map("assigned_facility_id") @db.Uuid
+  assignedByUserId     String?             @map("assigned_by_user_id") @db.Uuid
+  assignedAt           DateTime?           @map("assigned_at") @db.Timestamptz()
+  adminNote            String?             @map("admin_note") @db.Text
+  contractId           String?             @unique @map("contract_id") @db.Uuid
+  cancelledAt          DateTime?           @map("cancelled_at") @db.Timestamptz()
+  createdAt            DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt            DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  matchingSession  MatchingSession?    @relation(fields: [matchingSessionId], references: [id], onDelete: SetNull)
+  user             User?               @relation("QueueRequester", fields: [userId], references: [id], onDelete: SetNull)
+  familyUnit       FamilyUnit?         @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  servicePackage   ServicePackage      @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  assignedDoctor   Doctor?             @relation("QueueAssignedDoctor", fields: [assignedDoctorId], references: [id], onDelete: SetNull)
+  assignedFacility HealthcareFacility? @relation("QueueAssignedFacility", fields: [assignedFacilityId], references: [id], onDelete: SetNull)
+  assignedByUser   User?               @relation("QueueAdminAssigner", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+  contract         MedicalContract?    @relation(fields: [contractId], references: [id], onDelete: SetNull)
+
+  @@index([status, slaExpiresAt], map: "idx_matching_queue_status_sla")
+  @@index([familyId, status], map: "idx_matching_queue_family_status")
+  @@index([userId, status], map: "idx_matching_queue_user_status")
+  @@map("matching_queue_requests")
 }
