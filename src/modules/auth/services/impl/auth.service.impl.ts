@@ -12,7 +12,9 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import {
+  createHash,
   createHmac,
+  randomBytes,
   randomInt,
   randomUUID,
   timingSafeEqual,
@@ -23,6 +25,7 @@ import { RegisterFamilyRepDto } from '../../dtos/register-family-rep.dto';
 import { VerifyEmailOtpDto } from '../../dtos/verify-email-otp.dto';
 import { ResendEmailOtpDto } from '../../dtos/resend-email-otp.dto';
 import { LoginDto } from '../../dtos/login.dto';
+import { RefreshTokenDto } from '../../dtos/refresh-token.dto';
 import { ForgotPasswordDto } from '../../dtos/forgot-password.dto';
 import { ResetPasswordDto } from '../../dtos/reset-password.dto';
 import { ChangePasswordDto } from '../../dtos/change-password.dto';
@@ -51,6 +54,8 @@ import { UpdateAuthDto } from '../../dtos/update-auth.dto';
 
 const JWT_REMEMBER_EXPIRES_IN = '7d';
 const JWT_SESSION_EXPIRES_IN = '1h';
+const REFRESH_SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+const REFRESH_REMEMBER_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class AuthServiceImpl implements IAuthService {
@@ -383,9 +388,45 @@ export class AuthServiceImpl implements IAuthService {
     }
   }
 
+  private hashRefreshToken(rawToken: string): string {
+    return createHash('sha256').update(rawToken).digest('hex');
+  }
+
+  private generateRefreshToken(): string {
+    return `rft_${randomBytes(48).toString('base64url')}`;
+  }
+
+  private buildAccessPayload(user: AuthEntity, sessionId?: string) {
+    const payload: any = {
+      sub: user.id,
+      jti: randomUUID(),
+      email: user.email,
+      role: user.role,
+      ...(sessionId ? { sid: sessionId } : {}),
+    };
+    if (user.role === 'DOCTOR' && user.status === 'PENDING') {
+      payload.scope = 'ONBOARDING_ONLY';
+    }
+    return payload;
+  }
+
+  private toLoginUserDto(user: AuthEntity) {
+    return {
+      id: user.id,
+      email: user.email,
+      phone: user.phone,
+      fullName: user.fullName,
+      role: user.role,
+      status: user.status,
+      avatarUrl: user.avatarUrl,
+      mustChangePassword: Boolean(user.mustChangePassword),
+    };
+  }
+
   async login(
     dto: LoginDto,
-    _clientIp?: string,
+    clientIp?: string,
+    userAgent?: string,
   ): Promise<LoginSuccessResponse> {
     const LOCKOUT_DURATION_SECONDS = 1800; // 30 minutes (SRS Security Section IV.2.3)
     const email = (dto.email || '').trim().toLowerCase();
@@ -474,36 +515,35 @@ export class AuthServiceImpl implements IAuthService {
         await this.authRepository.resetFailedAttempts(user.id);
       }
 
-      const payload: any = {
-        sub: user.id,
-        jti: randomUUID(),
-        email: user.email,
-        role: user.role,
-      };
+      const rememberMe = dto.rememberMe === true;
+      const expiresIn = rememberMe
+        ? JWT_REMEMBER_EXPIRES_IN
+        : JWT_SESSION_EXPIRES_IN;
+      const expiresInSeconds = rememberMe ? 7 * 24 * 3600 : 3600;
+      const refreshTtlMs = rememberMe
+        ? REFRESH_REMEMBER_TTL_MS
+        : REFRESH_SESSION_TTL_MS;
 
-      if (user.role === 'DOCTOR' && user.status === 'PENDING') {
-        payload.scope = 'ONBOARDING_ONLY';
-      }
+      const rawRefreshToken = this.generateRefreshToken();
+      const session = await this.authRepository.createAuthSession({
+        userId: user.id,
+        tokenHash: this.hashRefreshToken(rawRefreshToken),
+        familyId: randomUUID(),
+        rememberMe,
+        clientIp: clientIp ?? null,
+        userAgent: userAgent ?? null,
+        expiresAt: new Date(Date.now() + refreshTtlMs),
+      });
 
-      const expiresIn =
-        dto.rememberMe === true
-          ? JWT_REMEMBER_EXPIRES_IN
-          : JWT_SESSION_EXPIRES_IN;
+      const payload = this.buildAccessPayload(user, session.id);
       const accessToken = this.jwtService.sign(payload, { expiresIn });
 
       return {
         accessToken,
+        refreshToken: rawRefreshToken,
+        expiresInSeconds,
         role: user.role,
-        user: {
-          id: user.id,
-          email: user.email,
-          phone: user.phone,
-          fullName: user.fullName,
-          role: user.role,
-          status: user.status,
-          avatarUrl: user.avatarUrl,
-          mustChangePassword: Boolean(user.mustChangePassword),
-        },
+        user: this.toLoginUserDto(user),
       };
     } catch (err: any) {
       if (
@@ -519,11 +559,106 @@ export class AuthServiceImpl implements IAuthService {
     }
   }
 
-  async logout(_userId: string, token: string): Promise<ApiResponseMessage> {
-    if (this.redisClient) {
-      const rawToken = token.replace(/^Bearer\s+/i, '').trim();
-      if (rawToken) {
-        const decoded: any = this.jwtService.decode(rawToken);
+  async refresh(
+    dto: RefreshTokenDto,
+    clientIp?: string,
+    userAgent?: string,
+  ): Promise<LoginSuccessResponse> {
+    const rawToken = dto?.refreshToken?.trim();
+    if (!rawToken) {
+      throw new UnauthorizedException('Refresh token is required');
+    }
+
+    const tokenHash = this.hashRefreshToken(rawToken);
+    const existing = await this.authRepository.findAuthSessionByTokenHash(
+      tokenHash,
+    );
+    if (!existing) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+
+    if (existing.revokedAt) {
+      throw new UnauthorizedException('Refresh token has been revoked');
+    }
+
+    if (existing.expiresAt.getTime() <= Date.now()) {
+      throw new UnauthorizedException('Refresh token has expired');
+    }
+
+    const user = await this.authRepository.findById(existing.userId);
+    if (!user) {
+      throw new UnauthorizedException('User account no longer exists');
+    }
+
+    if (user.status === 'SUSPENDED' || user.status === 'LOCKED') {
+      throw new ForbiddenException('Account has been suspended');
+    }
+    if (user.status === 'PENDING' && user.role !== 'DOCTOR') {
+      throw new ForbiddenException('Account is pending activation');
+    }
+
+    const nextRawRefreshToken = this.generateRefreshToken();
+    const refreshTtlMs = existing.rememberMe
+      ? REFRESH_REMEMBER_TTL_MS
+      : REFRESH_SESSION_TTL_MS;
+    const rotated = await this.authRepository.rotateAuthSession({
+      currentSessionId: existing.id,
+      familyId: existing.familyId,
+      newSession: {
+        userId: user.id,
+        tokenHash: this.hashRefreshToken(nextRawRefreshToken),
+        familyId: existing.familyId,
+        rememberMe: existing.rememberMe,
+        clientIp: clientIp ?? null,
+        userAgent: userAgent ?? null,
+        expiresAt: new Date(Date.now() + refreshTtlMs),
+      },
+    });
+
+    if (!rotated.rotated || !rotated.session) {
+      throw new UnauthorizedException(
+        'Refresh token has been revoked or reused',
+      );
+    }
+
+    const expiresIn = existing.rememberMe
+      ? JWT_REMEMBER_EXPIRES_IN
+      : JWT_SESSION_EXPIRES_IN;
+    const expiresInSeconds = existing.rememberMe ? 7 * 24 * 3600 : 3600;
+    const accessToken = this.jwtService.sign(
+      this.buildAccessPayload(user, rotated.session.id),
+      { expiresIn },
+    );
+
+    return {
+      accessToken,
+      refreshToken: nextRawRefreshToken,
+      expiresInSeconds,
+      role: user.role,
+      user: this.toLoginUserDto(user),
+    };
+  }
+
+  async logout(
+    _userId: string,
+    token: string,
+    refreshToken?: string,
+  ): Promise<ApiResponseMessage> {
+    const rawRefresh = refreshToken?.trim();
+    if (rawRefresh) {
+      await this.authRepository.revokeAuthSessionByTokenHash(
+        this.hashRefreshToken(rawRefresh),
+      );
+    }
+
+    const rawToken = token.replace(/^Bearer\s+/i, '').trim();
+    if (rawToken) {
+      const decoded: any = this.jwtService.decode(rawToken);
+      if (decoded?.sid) {
+        await this.authRepository.revokeAuthSessionById(decoded.sid);
+      }
+
+      if (this.redisClient) {
         const ttl = decoded?.exp
           ? Math.max(decoded.exp - Math.floor(Date.now() / 1000), 60)
           : 3600;

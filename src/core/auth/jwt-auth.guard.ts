@@ -49,6 +49,16 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Invalid or expired access token');
     }
 
+    if (claims && typeof (claims as any).sid === 'string') {
+      const session = await (this.prisma as any).authSession?.findUnique?.({
+        where: { id: (claims as any).sid },
+        select: { revokedAt: true, expiresAt: true },
+      });
+      if (!session || session.revokedAt || session.expiresAt <= new Date()) {
+        throw new UnauthorizedException('Session has been revoked');
+      }
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: claims.sub },
       include: {

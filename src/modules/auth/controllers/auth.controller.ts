@@ -33,6 +33,8 @@ import { RegisterFamilyRepDto } from '../dtos/register-family-rep.dto';
 import { VerifyEmailOtpDto } from '../dtos/verify-email-otp.dto';
 import { ResendEmailOtpDto } from '../dtos/resend-email-otp.dto';
 import { LoginDto } from '../dtos/login.dto';
+import { RefreshTokenDto } from '../dtos/refresh-token.dto';
+import { LogoutDto } from '../dtos/logout.dto';
 import { ForgotPasswordDto } from '../dtos/forgot-password.dto';
 import { ResetPasswordDto } from '../dtos/reset-password.dto';
 import { ChangePasswordDto } from '../dtos/change-password.dto';
@@ -128,7 +130,30 @@ export class AuthController {
     description: 'Tài khoản bị tạm khóa 30 phút do sai quá 5 lần',
   })
   login(@Body() dto: LoginDto, @Req() req: any) {
-    return this.authService.login(dto, req?.ip);
+    return this.authService.login(
+      dto,
+      req?.ip,
+      req?.headers?.['user-agent'],
+    );
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Gia hạn cặp Access/Refresh Token từ PostgreSQL' })
+  @ApiBody({ type: RefreshTokenDto })
+  @ResponseMessage('Gia hạn phiên đăng nhập thành công')
+  @ApiStandardResponse({
+    type: LoginDataDto,
+    status: HttpStatus.OK,
+    description: 'Cấp mới cặp Access Token & Refresh Token',
+  })
+  @ApiResponse({ status: 401, description: 'Refresh token không hợp lệ hoặc đã thu hồi' })
+  refresh(@Body() dto: RefreshTokenDto, @Req() req: any) {
+    return this.authService.refresh(
+      dto,
+      req?.ip,
+      req?.headers?.['user-agent'],
+    );
   }
 
   @UseGuards(JwtAuthGuard)
@@ -146,9 +171,13 @@ export class AuthController {
     status: 401,
     description: 'Chưa xác thực hoặc token không hợp lệ',
   })
-  logout(@Req() req: any) {
+  logout(@Req() req: any, @Body() dto?: LogoutDto) {
     const authHeader = req?.headers?.authorization || '';
-    return this.authService.logout(req?.user?.id, authHeader);
+    return this.authService.logout(
+      req?.user?.id,
+      authHeader,
+      dto?.refreshToken,
+    );
   }
 
   @Post('forgot-password')

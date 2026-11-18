@@ -41,6 +41,21 @@ describe('AuthServiceImpl', () => {
       updatePassword: jest.fn(),
       updateFailedAttempts: jest.fn(),
       resetFailedAttempts: jest.fn(),
+      createAuthSession: jest.fn().mockResolvedValue({
+        id: 'session-1',
+        userId: 'user-1',
+        tokenHash: 'hash',
+        familyId: 'fam-1',
+        rememberMe: false,
+        expiresAt: new Date(Date.now() + 86400_000),
+        createdAt: new Date(),
+      }),
+      findAuthSessionByTokenHash: jest.fn(),
+      rotateAuthSession: jest.fn(),
+      revokeAuthSessionByTokenHash: jest.fn(),
+      revokeAuthSessionById: jest.fn(),
+      revokeAllUserAuthSessions: jest.fn(),
+      purgeExpiredAuthSessions: jest.fn(),
     };
 
     redisService = {
@@ -1246,5 +1261,89 @@ describe('AuthServiceImpl', () => {
     expect(successRes.accessToken).toBe('jwt_token_valid');
     expect(successRes.user.mustChangePassword).toBe(true);
     expect(repository.resetFailedAttempts).toHaveBeenCalledWith('u-1');
+  });
+
+  describe('Refresh Token Rotation (PostgreSQL)', () => {
+    it('login issues refreshToken and stores hashed session in PostgreSQL', async () => {
+      const passwordHash = hashSync('Secret@123', 4);
+      repository.findByEmail.mockResolvedValue({
+        id: 'user-1',
+        email: 'rep@famidoc.vn',
+        phone: '0912345678',
+        fullName: 'Rep',
+        passwordHash,
+        role: 'FAMILY_REP',
+        status: 'ACTIVE',
+      } as any);
+      jwtService.sign.mockReturnValue('access-jwt');
+
+      const res: any = await service.login({
+        email: 'rep@famidoc.vn',
+        password: 'Secret@123',
+        rememberMe: false,
+      });
+
+      expect(res.accessToken).toBe('access-jwt');
+      expect(typeof res.refreshToken).toBe('string');
+      expect(res.refreshToken.length).toBeGreaterThan(20);
+      expect(res.expiresInSeconds).toBe(3600);
+      expect(repository.createAuthSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('refresh rotates refreshToken in PostgreSQL and returns new token pair', async () => {
+      repository.findAuthSessionByTokenHash.mockResolvedValue({
+        id: 'sess-1',
+        userId: 'user-1',
+        tokenHash: 'old-hash',
+        familyId: 'fam-1',
+        rememberMe: false,
+        expiresAt: new Date(Date.now() + 3600_000),
+        revokedAt: null,
+        createdAt: new Date(),
+      });
+      repository.findById.mockResolvedValue({
+        id: 'user-1',
+        email: 'rep@famidoc.vn',
+        phone: '0912345678',
+        fullName: 'Rep',
+        role: 'FAMILY_REP',
+        status: 'ACTIVE',
+      } as any);
+      repository.rotateAuthSession.mockResolvedValue({
+        rotated: true,
+        session: {
+          id: 'sess-2',
+          userId: 'user-1',
+          tokenHash: 'new-hash',
+          familyId: 'fam-1',
+          rememberMe: false,
+          expiresAt: new Date(Date.now() + 86400_000),
+          createdAt: new Date(),
+        },
+      });
+      jwtService.sign.mockReturnValue('new-access-jwt');
+
+      const res = await (service as any).refresh({ refreshToken: 'raw-refresh-token' });
+      expect(res.accessToken).toBe('new-access-jwt');
+      expect(typeof res.refreshToken).toBe('string');
+      expect(res.refreshToken).not.toBe('raw-refresh-token');
+    });
+
+    it('refresh rejects revoked or reused token', async () => {
+      repository.findAuthSessionByTokenHash.mockResolvedValue({
+        id: 'sess-1',
+        userId: 'user-1',
+        tokenHash: 'old-hash',
+        familyId: 'fam-1',
+        rememberMe: false,
+        expiresAt: new Date(Date.now() + 3600_000),
+        revokedAt: new Date(),
+        createdAt: new Date(),
+      });
+
+      await expect(
+        (service as any).refresh({ refreshToken: 'reused-token' }),
+      ).rejects.toThrow(UnauthorizedException);
+    });
   });
 });
