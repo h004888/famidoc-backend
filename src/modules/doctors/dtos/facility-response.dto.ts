@@ -72,6 +72,12 @@ export class FacilityResponseDto {
   hasLegalDocument?: boolean;
 
   @ApiPropertyOptional()
+  hasOperatingLicense?: boolean;
+
+  @ApiPropertyOptional()
+  hasBusinessLicense?: boolean;
+
+  @ApiPropertyOptional()
   licenseIssuer?: string | null;
 
   @ApiPropertyOptional()

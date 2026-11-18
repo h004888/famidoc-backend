@@ -110,22 +110,36 @@ export class DocumensoSyncService {
       select: { id: true },
     });
 
-    if (!contract) {
-      this.logger.warn(
-        `Nhận webhook Documenso (${eventType}) nhưng không khớp hợp đồng (envelopeId=${envelopeId})`,
-      );
-      return { ok: true, ignored: true };
-    }
-
     const recipients = (payload.payload?.recipients ?? []).map((r) => ({
       recipientId: r.id,
       signingStatus: r.signingStatus ?? r.status,
       completedAt: r.signedAt ?? r.completedAt ?? null,
     }));
 
-    await this.applySignedRecipients(contract.id, recipients, ipAddress);
+    if (contract) {
+      await this.applySignedRecipients(contract.id, recipients, ipAddress);
+      return { ok: true, contractId: contract.id };
+    }
 
-    return { ok: true, contractId: contract.id };
+    const staffingContract = await this.prisma.b2bStaffingContract.findFirst({
+      where: { documensoEnvelopeId: envelopeId },
+      select: { id: true },
+    });
+
+    if (!staffingContract) {
+      this.logger.warn(
+        `Nhận webhook Documenso (${eventType}) nhưng không khớp hợp đồng (envelopeId=${envelopeId})`,
+      );
+      return { ok: true, ignored: true };
+    }
+
+    await this.applyStaffingSignedRecipients(
+      staffingContract.id,
+      recipients,
+      ipAddress,
+    );
+
+    return { ok: true, contractId: staffingContract.id };
   }
 
   async syncContractFromDocumenso(
@@ -409,5 +423,222 @@ export class DocumensoSyncService {
     }
 
     return txResult.result;
+  }
+
+  async syncStaffingContractFromDocumenso(
+    contractId: string,
+    ipAddress = 'documenso-sync',
+  ): Promise<{
+    synced: boolean;
+    contractId: string;
+    status: string;
+    facilitySigned: boolean;
+    adminSigned: boolean;
+    signedPdfUrl: string | null;
+  }> {
+    const contract = await this.prisma.b2bStaffingContract.findUnique({
+      where: { id: contractId },
+      select: {
+        id: true,
+        status: true,
+        documensoEnvelopeId: true,
+        documensoItemId: true,
+        facilitySignedAt: true,
+        adminSignedAt: true,
+        signedPdfUrl: true,
+      },
+    });
+
+    if (!contract) {
+      throw new NotFoundException('Không tìm thấy hợp đồng cung ứng nhân lực');
+    }
+
+    if (!contract.documensoEnvelopeId) {
+      return {
+        synced: false,
+        contractId: contract.id,
+        status: contract.status,
+        facilitySigned: Boolean(contract.facilitySignedAt),
+        adminSigned: Boolean(contract.adminSignedAt),
+        signedPdfUrl: contract.signedPdfUrl,
+      };
+    }
+
+    const envelope = await this.documensoClient.getEnvelope(
+      contract.documensoEnvelopeId,
+    );
+
+    const recipients = (envelope.recipients ?? []).map((r) => ({
+      recipientId: r.id,
+      signingStatus: r.signingStatus,
+      completedAt: r.signedAt ?? r.completedAt ?? null,
+    }));
+
+    return this.applyStaffingSignedRecipients(
+      contract.id,
+      recipients,
+      ipAddress,
+    );
+  }
+
+  async applyStaffingSignedRecipients(
+    contractId: string,
+    rawRecipients: Array<{
+      recipientId?: number;
+      signingStatus?: string;
+      status?: string;
+      completedAt?: string | null;
+    }>,
+    ipAddress: string,
+  ): Promise<{
+    synced: boolean;
+    contractId: string;
+    status: string;
+    facilitySigned: boolean;
+    adminSigned: boolean;
+    signedPdfUrl: string | null;
+  }> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM b2b_staffing_contracts WHERE id = ${contractId}::uuid FOR UPDATE`;
+
+      const contract = await tx.b2bStaffingContract.findUnique({
+        where: { id: contractId },
+        include: { facility: { select: { userId: true, facilityName: true } } },
+      });
+
+      if (!contract) {
+        throw new NotFoundException('Không tìm thấy hợp đồng cung ứng nhân lực');
+      }
+
+      if (
+        ['TERMINATED', 'EXPIRED', 'REVISION_REQUESTED', 'ACTIVE'].includes(
+          contract.status,
+        )
+      ) {
+        return {
+          synced: false,
+          contractId: contract.id,
+          status: contract.status,
+          facilitySigned: Boolean(contract.facilitySignedAt),
+          adminSigned: Boolean(contract.adminSignedAt),
+          signedPdfUrl: contract.signedPdfUrl,
+        };
+      }
+
+      const byRecipientId = new Map<
+        number,
+        { isCompleted: boolean; completedAt: Date }
+      >();
+      for (const r of rawRecipients) {
+        if (typeof r.recipientId !== 'number') continue;
+        const remoteStatus = r.signingStatus ?? r.status;
+        const isCompleted =
+          remoteStatus === 'SIGNED' ||
+          remoteStatus === 'COMPLETED' ||
+          Boolean(r.completedAt);
+        byRecipientId.set(r.recipientId, {
+          isCompleted,
+          completedAt: r.completedAt ? new Date(r.completedAt) : new Date(),
+        });
+      }
+
+      const facilityRemote =
+        typeof contract.facilityDocumensoRecipientId === 'number'
+          ? byRecipientId.get(contract.facilityDocumensoRecipientId)
+          : undefined;
+      const adminRemote =
+        typeof contract.adminDocumensoRecipientId === 'number'
+          ? byRecipientId.get(contract.adminDocumensoRecipientId)
+          : undefined;
+
+      let facilitySignedAt = contract.facilitySignedAt;
+      let adminSignedAt = contract.adminSignedAt;
+      let nextStatus = contract.status;
+      let nextSignedPdfUrl = contract.signedPdfUrl;
+      const updateData: Prisma.B2bStaffingContractUncheckedUpdateInput = {};
+
+      if (!facilitySignedAt && facilityRemote?.isCompleted) {
+        facilitySignedAt = facilityRemote.completedAt;
+        updateData.facilitySignedAt = facilitySignedAt;
+        if (nextStatus === 'PENDING_FACILITY_SIGNATURE') {
+          nextStatus = 'PENDING_ADMIN_SIGNATURE';
+          updateData.status = 'PENDING_ADMIN_SIGNATURE';
+        }
+      }
+
+      // Sequential rule: Admin can only finalize after Facility has signed.
+      if (facilitySignedAt && !adminSignedAt && adminRemote?.isCompleted) {
+        adminSignedAt = adminRemote.completedAt;
+        updateData.adminSignedAt = adminSignedAt;
+        if (
+          nextStatus === 'PENDING_FACILITY_SIGNATURE' ||
+          nextStatus === 'PENDING_ADMIN_SIGNATURE'
+        ) {
+          nextStatus = 'ACTIVE';
+          updateData.status = 'ACTIVE';
+          if (contract.documensoItemId) {
+            nextSignedPdfUrl = `/api/v1/contracts/staffing/${contract.id}/signed-pdf`;
+            updateData.signedPdfUrl = nextSignedPdfUrl;
+          }
+        }
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        updateData.updatedAt = new Date();
+        await tx.b2bStaffingContract.update({
+          where: { id: contract.id },
+          data: updateData,
+        });
+
+        await tx.auditLog.create({
+          data: {
+            actorUserId: contract.facility.userId,
+            action:
+              nextStatus === 'ACTIVE'
+                ? 'STAFFING_CONTRACT_ACTIVATED_DOCUMENSO'
+                : 'STAFFING_CONTRACT_FACILITY_SIGNED_DOCUMENSO',
+            resourceName: 'B2bStaffingContract',
+            resourceId: contract.id,
+            clientIp: ipAddress.slice(0, 45) || 'documenso-sync',
+            timestamp: new Date(),
+          },
+        });
+
+        if (nextStatus === 'PENDING_ADMIN_SIGNATURE') {
+          const admins = await tx.user.findMany({
+            where: { role: 'ADMIN', status: 'ACTIVE' },
+            select: { id: true },
+          });
+          for (const admin of admins) {
+            await tx.notification.create({
+              data: {
+                userId: admin.id,
+                title: 'CSYT đã ký hợp đồng B2B — Chờ Admin ký kích hoạt',
+                content: `${contract.facility.facilityName} đã ký hợp đồng B2B ${contract.contractCode}. Vui lòng kiểm tra và ký số bước cuối.`,
+                type: 'STAFFING_CONTRACT_FACILITY_SIGNED',
+              },
+            });
+          }
+        } else if (nextStatus === 'ACTIVE' && contract.facility.userId) {
+          await tx.notification.create({
+            data: {
+              userId: contract.facility.userId,
+              title: 'Hợp đồng B2B đã chính thức có hiệu lực',
+              content: `Hợp đồng B2B ${contract.contractCode} đã được cả hai bên ký số hoàn tất. Bạn có thể bắt đầu tạo tài khoản bác sĩ.`,
+              type: 'STAFFING_CONTRACT_ACTIVE',
+            },
+          });
+        }
+      }
+
+      return {
+        synced: true,
+        contractId: contract.id,
+        status: nextStatus,
+        facilitySigned: Boolean(facilitySignedAt),
+        adminSigned: Boolean(adminSignedAt),
+        signedPdfUrl: nextSignedPdfUrl,
+      };
+    });
   }
 }

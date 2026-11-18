@@ -1,12 +1,16 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { plainToInstance, Transform, Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
   IsEnum,
+  IsInt,
   IsISO8601,
   IsNotEmpty,
+  IsOptional,
   IsString,
+  MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { DoctorCredentialType } from '@prisma/client';
@@ -49,23 +53,75 @@ export class CredentialItemDto {
   @IsString()
   issuingAuthority!: string;
 
-  @ApiProperty({
-    example: 'https://cdn.famidoc.vn/credentials/cchn-bs-an.pdf',
-    description: 'Đường dẫn file scan / hình ảnh văn bằng chứng chỉ (PDF/PNG)',
+  @ApiPropertyOptional({
+    description: 'Đường dẫn file chứng chỉ (hệ thống tự sinh từ tệp scan tải lên)',
   })
-  @IsNotEmpty({ message: 'Đường dẫn file không được để trống' })
+  @IsOptional()
   @IsString()
-  fileUrl!: string;
+  fileUrl?: string;
 }
 
 export class SubmitDoctorCredentialsDto {
+  @ApiPropertyOptional({
+    description: 'Học hàm / học vị (BS, ThS.BS, BS.CKI, PGS.TS...)',
+    example: 'BS.CKI',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  academicTitle?: string;
+
+  @ApiPropertyOptional({
+    description: 'Chuyên khoa hành nghề',
+    example: 'Y học gia đình',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(150)
+  specialty?: string;
+
+  @ApiPropertyOptional({
+    description: 'Số năm kinh nghiệm hành nghề',
+    example: 6,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Số năm kinh nghiệm phải là số nguyên' })
+  @Min(0, { message: 'Số năm kinh nghiệm không thể âm' })
+  experienceYears?: number;
+
+  @ApiPropertyOptional({
+    description: 'Tiểu sử chuyên môn & kinh nghiệm công tác của bác sĩ',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  bio?: string;
+
   @ApiProperty({
     type: [CredentialItemDto],
     description:
-      'Danh sách văn bằng, chứng chỉ hành nghề và chứng nhận Y học gia đình',
+      'Danh sách đầy đủ 3 loại văn bằng chứng chỉ: CCHN, Bằng tốt nghiệp, Chứng nhận Y học gia đình',
+  })
+  @Transform(({ value }) => {
+    let parsed = value;
+    if (typeof value === 'string') {
+      try {
+        parsed = JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => plainToInstance(CredentialItemDto, item));
+    }
+    return parsed;
   })
   @IsArray({ message: 'credentials phải là một mảng danh sách' })
-  @ArrayMinSize(1, { message: 'Phải tải lên ít nhất 1 chứng chỉ hoặc văn bằng' })
+  @ArrayMinSize(3, {
+    message:
+      'Bác sĩ phải nộp đủ 3 loại giấy tờ: CCHN, Bằng chuyên môn và Chứng chỉ Y học gia đình',
+  })
   @ValidateNested({ each: true })
   @Type(() => CredentialItemDto)
   credentials!: CredentialItemDto[];

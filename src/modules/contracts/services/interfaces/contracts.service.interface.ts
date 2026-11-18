@@ -13,8 +13,12 @@ import type {
 } from '../../dtos/contract-change.dto';
 import type {
   CreateStaffingContractDto,
+  UpdateStaffingContractDto,
   SignStaffingContractDto,
   RejectStaffingContractDto,
+  RequestStaffingTerminationDto,
+  TerminateStaffingContractDto,
+  StaffingTerminationImpactDto,
   ListStaffingContractsDto,
   StaffingContractResponseDto,
 } from '../../dtos/staffing-contract.dto';
@@ -90,16 +94,77 @@ export interface IContractsService {
     dto: CreateStaffingContractDto,
     ip: string,
   ): Promise<StaffingContractResponseDto>;
+  updateStaffingContract(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: UpdateStaffingContractDto,
+    ip: string,
+  ): Promise<StaffingContractResponseDto>;
   signStaffingContract(
     actor: AuthenticatedUser,
     id: string,
     dto: SignStaffingContractDto,
     ip: string,
   ): Promise<StaffingContractResponseDto>;
+  requestStaffingRevision(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: RejectStaffingContractDto,
+    ip: string,
+  ): Promise<StaffingContractResponseDto>;
   rejectStaffingContract(
     actor: AuthenticatedUser,
     id: string,
     dto: RejectStaffingContractDto,
+    ip: string,
+  ): Promise<StaffingContractResponseDto>;
+  getStaffingSigningSession(
+    actor: AuthenticatedUser,
+    id: string,
+  ): Promise<{
+    contractId: string;
+    contractCode: string;
+    status: string;
+    signerRole: 'HEALTHCARE_FACILITY' | 'ADMIN';
+    alreadySigned: boolean;
+    canSign: boolean;
+    waitingReason?: string;
+    signingToken: string | null;
+    signingUrl: string | null;
+    facilitySigned: boolean;
+    adminSigned: boolean;
+    signedPdfUrl: string | null;
+  }>;
+  syncStaffingDocumensoEnvelope(
+    actor: AuthenticatedUser,
+    id: string,
+    ip: string,
+  ): Promise<{
+    synced: boolean;
+    contractId: string;
+    status: string;
+    facilitySigned: boolean;
+    adminSigned: boolean;
+    signedPdfUrl: string | null;
+  }>;
+  downloadStaffingSignedPdf(
+    actor: AuthenticatedUser,
+    id: string,
+  ): Promise<{ buffer: Buffer; filename: string }>;
+  getStaffingTerminationImpact(
+    actor: AuthenticatedUser,
+    id: string,
+  ): Promise<StaffingTerminationImpactDto>;
+  requestStaffingTermination(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: RequestStaffingTerminationDto,
+    ip: string,
+  ): Promise<StaffingContractResponseDto>;
+  terminateStaffingContract(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: TerminateStaffingContractDto,
     ip: string,
   ): Promise<StaffingContractResponseDto>;
   listStaffingContracts(

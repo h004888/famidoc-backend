@@ -102,6 +102,12 @@ export class DoctorResponseDto {
   })
   onboardingStatus!: DoctorOnboardingStatus;
 
+  @ApiPropertyOptional({ nullable: true })
+  rejectionReason?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  credentialsSubmittedAt?: Date | null;
+
   @ApiProperty({ example: '2026-01-01T00:00:00.000Z' })
   createdAt!: Date;
 
@@ -113,11 +119,4 @@ export class DoctorResponseDto {
 
   @ApiPropertyOptional({ type: [DoctorCredentialResponseDto] })
   credentials?: DoctorCredentialResponseDto[];
-
-  @ApiPropertyOptional({
-    description:
-      'Mật khẩu khởi tạo được cấp cho Bác sĩ (chỉ trả về khi CSYT vừa tạo mới tài khoản)',
-    example: 'FamiDoc@Doctor2026',
-  })
-  initialPassword?: string;
 }

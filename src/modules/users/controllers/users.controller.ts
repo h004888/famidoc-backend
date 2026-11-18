@@ -18,6 +18,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
+import { AllowOnboarding } from '../../../core/auth/allow-onboarding.decorator';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
 import { UpdateProfileDto } from '../dtos/update-profile.dto';
 import {
@@ -29,6 +30,7 @@ import {
 @ApiBearerAuth('JWT-auth')
 @Controller(['api/v1/users', 'api/v1/me'])
 @UseGuards(JwtAuthGuard)
+@AllowOnboarding()
 @UsePipes(
   new ValidationPipe({
     whitelist: true,

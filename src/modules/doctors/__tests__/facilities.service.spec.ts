@@ -2,16 +2,18 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
-  NotFoundException,
+  ValidationPipe,
 } from '@nestjs/common';
 import { DoctorsServiceImpl } from '../services/impl/doctors.service.impl';
+import { SubmitFacilityLegalProfileDto } from '../dtos/submit-facility-legal-profile.dto';
 import type { AuthenticatedUser } from '../../../core/auth/authenticated-request';
 import { FacilityVerificationStatus, UserStatus } from '@prisma/client';
 
-describe('Facilities Onboarding Service (2-Stage Verification)', () => {
+describe('Facilities Onboarding Service (Admin-Led Provisioning & Legal Verification)', () => {
   let service: DoctorsServiceImpl;
   let prismaService: any;
   let mailerService: any;
+  let storageService: any;
 
   const adminUser: AuthenticatedUser = {
     id: 'admin-uuid-1',
@@ -36,6 +38,9 @@ describe('Facilities Onboarding Service (2-Stage Verification)', () => {
     bankName: 'CHƯA_CẬP_NHẬT',
     bankAccountNumber: 'CHƯA_CẬP_NHẬT',
     bankAccountHolder: 'CHƯA_CẬP_NHẬT',
+    legalDocumentKey: null,
+    businessLicenseKey: null,
+    legalRejectionReason: null,
     verificationStatus: FacilityVerificationStatus.PENDING,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -45,9 +50,17 @@ describe('Facilities Onboarding Service (2-Stage Verification)', () => {
       phone: '0987654321',
       fullName: 'Nguyễn Văn Tuấn',
       role: 'HEALTHCARE_FACILITY',
-      status: 'PENDING',
+      status: UserStatus.ACTIVE,
+      mustChangePassword: true,
     },
   };
+
+  const validPdfFile = {
+    buffer: Buffer.from('%PDF-1.7\nlegal-scan-data'),
+    size: 25,
+    originalname: 'gphd.pdf',
+    mimetype: 'application/pdf',
+  } as Express.Multer.File;
 
   beforeEach(() => {
     prismaService = {
@@ -61,7 +74,8 @@ describe('Facilities Onboarding Service (2-Stage Verification)', () => {
           phone: '0987654321',
           fullName: 'Nguyễn Văn Tuấn',
           role: 'HEALTHCARE_FACILITY',
-          status: 'PENDING',
+          status: 'ACTIVE',
+          mustChangePassword: true,
         }),
         update: jest.fn().mockResolvedValue({
           id: 'fac-user-uuid-1',
@@ -91,11 +105,16 @@ describe('Facilities Onboarding Service (2-Stage Verification)', () => {
       sendMail: jest.fn().mockResolvedValue(true),
     };
 
-    service = new DoctorsServiceImpl(prismaService, mailerService);
+    storageService = {
+      uploadFile: jest.fn().mockResolvedValue('facility-legal/fac-uuid-1/license.pdf'),
+      downloadFile: jest.fn(),
+    };
+
+    service = new DoctorsServiceImpl(prismaService, mailerService, storageService);
   });
 
-  describe('Stage 1 - Step 1: registerFacility (Public Basic Registration)', () => {
-    const regDto = {
+  describe('Step 1: createFacilityByAdmin', () => {
+    const createDto = {
       facilityName: 'Bệnh viện Đa khoa Quốc tế An Sinh',
       representativeName: 'Nguyễn Văn Tuấn',
       email: 'contact@ansinhhospital.vn',
@@ -103,208 +122,261 @@ describe('Facilities Onboarding Service (2-Stage Verification)', () => {
       address: '123 Giải Phóng, Hà Nội',
     };
 
-    it('should successfully register basic facility info without password and emit notifications', async () => {
-      const result = await service.registerFacility(regDto, '127.0.0.1');
+    it('creates ACTIVE facility user with mustChangePassword=true, random password, PENDING verification, and sends email', async () => {
+      const result = await service.createFacilityByAdmin(
+        adminUser,
+        createDto,
+        '127.0.0.1',
+      );
 
       expect(result).toBeDefined();
-      expect(result.facilityName).toBe(regDto.facilityName);
       expect(result.verificationStatus).toBe(FacilityVerificationStatus.PENDING);
       expect(prismaService.user.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             email: 'contact@ansinhhospital.vn',
             role: 'HEALTHCARE_FACILITY',
-            status: 'PENDING',
-          }),
-        }),
-      );
-      expect(prismaService.healthcareFacility.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            facilityName: regDto.facilityName,
-            verificationStatus: 'PENDING',
-          }),
-        }),
-      );
-      expect(prismaService.notification.create).toHaveBeenCalled();
-    });
-
-    it('should throw ConflictException if email or phone already exists', async () => {
-      prismaService.user.findFirst.mockResolvedValue({ id: 'existing-user' });
-
-      await expect(
-        service.registerFacility(regDto, '127.0.0.1'),
-      ).rejects.toThrow(ConflictException);
-    });
-
-    it('should throw ConflictException if facilityName already exists', async () => {
-      prismaService.healthcareFacility.findFirst.mockResolvedValue({
-        id: 'existing-fac',
-      });
-
-      await expect(
-        service.registerFacility(regDto, '127.0.0.1'),
-      ).rejects.toThrow(ConflictException);
-    });
-  });
-
-  describe('Stage 1 - Step 2: approveFacilityAccount (Admin Duyệt Lần 1 - Cấp tài khoản)', () => {
-    it('should allow Admin to approve account, set user status ACTIVE, and send password email', async () => {
-      const result = await service.approveFacilityAccount(
-        adminUser,
-        'fac-uuid-1',
-        { approved: true },
-        '127.0.0.1',
-      );
-
-      expect(result).toBeDefined();
-      expect(prismaService.user.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'fac-user-uuid-1', status: 'PENDING' },
-          data: expect.objectContaining({
             status: 'ACTIVE',
+            mustChangePassword: true,
           }),
         }),
       );
       expect(mailerService.sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
           to: 'contact@ansinhhospital.vn',
-          subject: expect.stringContaining('Thông báo phê duyệt cấp tài khoản'),
+          text: expect.stringContaining('Fd!'),
         }),
       );
+      expect(prismaService.notification.create).toHaveBeenCalled();
     });
 
-    it('should allow Admin to reject account with reason', async () => {
-      await service.approveFacilityAccount(
-        adminUser,
-        'fac-uuid-1',
-        { approved: false, rejectionReason: 'Cơ sở không có thật' },
-        '127.0.0.1',
-      );
-
-      expect(prismaService.user.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            status: 'SUSPENDED',
-          }),
-        }),
-      );
-      expect(mailerService.sendMail).toHaveBeenCalledWith(
-        expect.objectContaining({
-          subject: expect.stringContaining('Thông báo từ chối cấp tài khoản'),
-        }),
-      );
-    });
-
-    it('should throw ForbiddenException if non-admin calls', async () => {
+    it('rejects non-admin callers with ForbiddenException', async () => {
       await expect(
-        service.approveFacilityAccount(
-          facilityUser,
-          'fac-uuid-1',
-          { approved: true },
-          '127.0.0.1',
-        ),
+        service.createFacilityByAdmin(facilityUser, createDto, '127.0.0.1'),
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('should throw NotFoundException if facility does not exist', async () => {
-      prismaService.healthcareFacility.findUnique.mockResolvedValue(null);
+    it('throws ConflictException if email or phone already exists', async () => {
+      prismaService.user.findFirst.mockResolvedValue({ id: 'existing-user' });
 
       await expect(
-        service.approveFacilityAccount(
-          adminUser,
-          'non-existing',
-          { approved: true },
-          '127.0.0.1',
-        ),
-      ).rejects.toThrow(NotFoundException);
+        service.createFacilityByAdmin(adminUser, createDto, '127.0.0.1'),
+      ).rejects.toThrow(ConflictException);
     });
 
-    it('should throw BadRequestException if facility user is already ACTIVE', async () => {
-      prismaService.healthcareFacility.findUnique.mockResolvedValue({
-        ...mockFacility,
-        user: { ...mockFacility.user, status: 'ACTIVE' },
+    it('throws ConflictException if facilityName already exists', async () => {
+      prismaService.healthcareFacility.findFirst.mockResolvedValue({
+        id: 'existing-fac',
       });
 
       await expect(
-        service.approveFacilityAccount(
-          adminUser,
-          'fac-uuid-1',
-          { approved: true },
-          '127.0.0.1',
-        ),
-      ).rejects.toThrow(BadRequestException);
+        service.createFacilityByAdmin(adminUser, createDto, '127.0.0.1'),
+      ).rejects.toThrow(ConflictException);
     });
   });
 
-  describe('Stage 2 - Step 3: submitFacilityLegalProfile (CSYT nộp hồ sơ pháp lý chuyên sâu)', () => {
-    const legalDto = {
+  describe('Step 2: submitFacilityLegalProfile', () => {
+    const legalDto: SubmitFacilityLegalProfileDto = {
       licenseNumber: '01293/BYT-GPHĐ',
+      licenseIssuer: 'Bộ Y tế - Cục Quản lý Khám chữa bệnh',
+      licenseDate: '2024-05-15',
       taxCode: '0102030405',
+      address: '123 Giải Phóng, Phường Đồng Tâm, Quận Hai Bà Trưng, Hà Nội',
       hotline: '19001234',
       bankName: 'Vietcombank',
       bankAccountNumber: '0011002233445',
       bankAccountHolder: 'CONG TY CO PHAN BENH VIEN AN SINH',
-      legalDocumentsUrl: 'https://cdn.famidoc.vn/legal.pdf',
     };
 
-    it('should allow CSYT to submit legal & financial profile and set verificationStatus PENDING', async () => {
+    const validBusinessPdfFile = {
+      buffer: Buffer.from('%PDF-1.7\nbusiness-scan-data'),
+      size: 28,
+      originalname: 'dkkd.pdf',
+      mimetype: 'application/pdf',
+    } as Express.Multer.File;
+
+    const bothFiles = {
+      operatingLicenseFile: [validPdfFile],
+      businessLicenseFile: [validBusinessPdfFile],
+    };
+
+    it('DTO rejects missing address, licenseIssuer, or licenseDate and accepts complete payload', async () => {
+      const pipe = new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      });
+
+      await expect(
+        pipe.transform(
+          {
+            licenseNumber: '01293/BYT-GPHĐ',
+            taxCode: '0102030405',
+            hotline: '19001234',
+            bankName: 'Vietcombank',
+            bankAccountNumber: '0011002233445',
+            bankAccountHolder: 'CONG TY AN SINH',
+          },
+          { type: 'body', metatype: SubmitFacilityLegalProfileDto },
+        ),
+      ).rejects.toMatchObject({ status: 400 });
+
+      await expect(
+        pipe.transform(legalDto, {
+          type: 'body',
+          metatype: SubmitFacilityLegalProfileDto,
+        }),
+      ).resolves.toMatchObject(legalDto);
+    });
+
+    it('uploads both GPHĐ and ĐKKD scan files to S3, clears legalRejectionReason, and keeps verificationStatus PENDING', async () => {
+      storageService.uploadFile
+        .mockResolvedValueOnce('facility-legal/fac-uuid-1/operating-license.pdf')
+        .mockResolvedValueOnce('facility-legal/fac-uuid-1/business-license.pdf');
+
       const result = await service.submitFacilityLegalProfile(
         facilityUser,
         legalDto,
         '127.0.0.1',
+        bothFiles,
       );
 
       expect(result).toBeDefined();
+      expect(storageService.uploadFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mimetype: 'application/pdf',
+          originalname: 'operating-license.pdf',
+        }),
+        'facility-legal/fac-uuid-1',
+      );
+      expect(storageService.uploadFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mimetype: 'application/pdf',
+          originalname: 'business-license.pdf',
+        }),
+        'facility-legal/fac-uuid-1',
+      );
       expect(prismaService.healthcareFacility.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             licenseNumber: '01293/BYT-GPHĐ',
-            taxCode: '0102030405',
-            bankName: 'Vietcombank',
+            licenseIssuer: 'Bộ Y tế - Cục Quản lý Khám chữa bệnh',
+            address: '123 Giải Phóng, Phường Đồng Tâm, Quận Hai Bà Trưng, Hà Nội',
+            legalDocumentKey: 'facility-legal/fac-uuid-1/operating-license.pdf',
+            businessLicenseKey: 'facility-legal/fac-uuid-1/business-license.pdf',
+            legalDocumentsUrl: null,
+            legalRejectionReason: null,
             verificationStatus: 'PENDING',
           }),
         }),
       );
     });
 
-    it('should throw ConflictException if licenseNumber already exists on another facility', async () => {
+    it('retains existing businessLicenseKey when facility resubmits only operatingLicenseFile', async () => {
+      prismaService.healthcareFacility.findUnique.mockResolvedValue({
+        ...mockFacility,
+        legalDocumentKey: 'facility-legal/fac-uuid-1/old-gphd.pdf',
+        businessLicenseKey: 'facility-legal/fac-uuid-1/existing-dkkd.pdf',
+      });
+      storageService.uploadFile.mockResolvedValueOnce(
+        'facility-legal/fac-uuid-1/new-gphd.pdf',
+      );
+
+      await service.submitFacilityLegalProfile(
+        facilityUser,
+        legalDto,
+        '127.0.0.1',
+        { operatingLicenseFile: [validPdfFile] },
+      );
+
+      expect(storageService.uploadFile).toHaveBeenCalledTimes(1);
+      expect(prismaService.healthcareFacility.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            legalDocumentKey: 'facility-legal/fac-uuid-1/new-gphd.pdf',
+            businessLicenseKey: 'facility-legal/fac-uuid-1/existing-dkkd.pdf',
+          }),
+        }),
+      );
+    });
+
+    it('requires both GPHĐ and ĐKKD scan files on initial submission', async () => {
+      await expect(
+        service.submitFacilityLegalProfile(facilityUser, legalDto, '127.0.0.1'),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.submitFacilityLegalProfile(facilityUser, legalDto, '127.0.0.1', {
+          operatingLicenseFile: [validPdfFile],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects licenseDate in the future', async () => {
+      await expect(
+        service.submitFacilityLegalProfile(
+          facilityUser,
+          { ...legalDto, licenseDate: '2099-01-01' },
+          '127.0.0.1',
+          bothFiles,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects invalid magic bytes even if filename ends with .pdf', async () => {
+      const fakeFile = {
+        buffer: Buffer.from('not-a-pdf'),
+        size: 9,
+        originalname: 'fake.pdf',
+        mimetype: 'application/pdf',
+      } as Express.Multer.File;
+
+      await expect(
+        service.submitFacilityLegalProfile(
+          facilityUser,
+          legalDto,
+          '127.0.0.1',
+          {
+            operatingLicenseFile: [fakeFile],
+            businessLicenseFile: [validBusinessPdfFile],
+          },
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws ConflictException if licenseNumber already exists on another facility', async () => {
       prismaService.healthcareFacility.findFirst.mockResolvedValueOnce({
         id: 'other-fac',
-        licenseNumber: '01293/BYT-GPHĐ',
       });
 
       await expect(
-        service.submitFacilityLegalProfile(facilityUser, legalDto, '127.0.0.1'),
+        service.submitFacilityLegalProfile(
+          facilityUser,
+          legalDto,
+          '127.0.0.1',
+          bothFiles,
+        ),
       ).rejects.toThrow(ConflictException);
     });
 
-    it('should throw ConflictException if taxCode already exists on another facility', async () => {
-      prismaService.healthcareFacility.findFirst
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({
-          id: 'other-fac',
-          taxCode: '0102030405',
-        });
-
-      await expect(
-        service.submitFacilityLegalProfile(facilityUser, legalDto, '127.0.0.1'),
-      ).rejects.toThrow(ConflictException);
-    });
-
-    it('should throw BadRequestException if facility is already ACTIVE', async () => {
+    it('throws BadRequestException if facility is already ACTIVE', async () => {
       prismaService.healthcareFacility.findUnique.mockResolvedValue({
         ...mockFacility,
         verificationStatus: FacilityVerificationStatus.ACTIVE,
       });
 
       await expect(
-        service.submitFacilityLegalProfile(facilityUser, legalDto, '127.0.0.1'),
+        service.submitFacilityLegalProfile(
+          facilityUser,
+          legalDto,
+          '127.0.0.1',
+          bothFiles,
+        ),
       ).rejects.toThrow(BadRequestException);
     });
   });
 
-  describe('Stage 2 - Step 4: verifyFacilityLegal (Admin Duyệt Lần 2 - Hậu kiểm pháp lý)', () => {
+  describe('Step 3: verifyFacilityLegal', () => {
     const readyFacility = {
       ...mockFacility,
       user: { ...mockFacility.user, status: UserStatus.ACTIVE },
@@ -313,10 +385,12 @@ describe('Facilities Onboarding Service (2-Stage Verification)', () => {
       bankName: 'Vietcombank',
       bankAccountNumber: '0011002233445',
       bankAccountHolder: 'CONG TY AN SINH',
+      legalDocumentKey: 'facility-legal/fac-uuid-1/operating-license.pdf',
+      businessLicenseKey: 'facility-legal/fac-uuid-1/business-license.pdf',
       verificationStatus: FacilityVerificationStatus.PENDING,
     };
 
-    it('should allow Admin to verify legal profile and activate facility (ACTIVE)', async () => {
+    it('activates facility (ACTIVE) on approval and notifies via notification + email', async () => {
       prismaService.healthcareFacility.findUnique.mockResolvedValue(readyFacility);
 
       const result = await service.verifyFacilityLegal(
@@ -331,33 +405,21 @@ describe('Facilities Onboarding Service (2-Stage Verification)', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             verificationStatus: 'ACTIVE',
+            legalRejectionReason: null,
           }),
         }),
       );
       expect(mailerService.sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
-          subject: expect.stringContaining('đã được kích hoạt thành công'),
+          subject: expect.stringContaining('kích hoạt thành công'),
         }),
       );
     });
 
-    it('should throw BadRequestException if facility has not submitted legal profile yet (still PENDING placeholders)', async () => {
-      prismaService.healthcareFacility.findUnique.mockResolvedValue(mockFacility); // licenseNumber: PENDING_LICENSE_...
-
-      await expect(
-        service.verifyFacilityLegal(
-          adminUser,
-          'fac-uuid-1',
-          { approved: true },
-          '127.0.0.1',
-        ),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('should throw BadRequestException if facility is already ACTIVE', async () => {
+    it('blocks approval when businessLicenseKey or legalDocumentKey is missing, while allowing rejection', async () => {
       prismaService.healthcareFacility.findUnique.mockResolvedValue({
         ...readyFacility,
-        verificationStatus: FacilityVerificationStatus.ACTIVE,
+        businessLicenseKey: null,
       });
 
       await expect(
@@ -368,9 +430,63 @@ describe('Facilities Onboarding Service (2-Stage Verification)', () => {
           '127.0.0.1',
         ),
       ).rejects.toThrow(BadRequestException);
+
+      await service.verifyFacilityLegal(
+        adminUser,
+        'fac-uuid-1',
+        { approved: false, rejectionReason: 'Thiếu bản scan ĐKKD' },
+        '127.0.0.1',
+      );
+      expect(prismaService.healthcareFacility.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            legalRejectionReason: 'Thiếu bản scan ĐKKD',
+          }),
+        }),
+      );
     });
 
-    it('should throw ForbiddenException if non-admin calls', async () => {
+    it('stores legalRejectionReason and notifies facility when rejected', async () => {
+      prismaService.healthcareFacility.findUnique.mockResolvedValue(readyFacility);
+
+      await service.verifyFacilityLegal(
+        adminUser,
+        'fac-uuid-1',
+        { approved: false, rejectionReason: 'Bản scan GPHĐ bị mờ' },
+        '127.0.0.1',
+      );
+
+      expect(prismaService.healthcareFacility.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            legalRejectionReason: 'Bản scan GPHĐ bị mờ',
+          }),
+        }),
+      );
+      expect(prismaService.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: 'fac-user-uuid-1',
+            type: 'FACILITY_LEGAL_REJECTED',
+          }),
+        }),
+      );
+    });
+
+    it('requires rejectionReason when approved is false', async () => {
+      prismaService.healthcareFacility.findUnique.mockResolvedValue(readyFacility);
+
+      await expect(
+        service.verifyFacilityLegal(
+          adminUser,
+          'fac-uuid-1',
+          { approved: false, rejectionReason: '   ' },
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws ForbiddenException if non-admin calls', async () => {
       await expect(
         service.verifyFacilityLegal(
           facilityUser,
@@ -378,6 +494,40 @@ describe('Facilities Onboarding Service (2-Stage Verification)', () => {
           { approved: true },
           '127.0.0.1',
         ),
+      ).rejects.toThrow(ForbiddenException);
+    });
+  });
+
+  describe('Step 4: getFacilityLegalDocument', () => {
+    it('allows Admin and owning Facility to download both operating and business documents, and blocks other Facilities', async () => {
+      prismaService.healthcareFacility.findUnique.mockResolvedValue({
+        id: 'fac-uuid-1',
+        userId: 'fac-user-uuid-1',
+        legalDocumentKey: 'facility-legal/fac-uuid-1/operating-license.pdf',
+        businessLicenseKey: 'facility-legal/fac-uuid-1/business-license.pdf',
+      });
+      storageService.downloadFile = jest.fn().mockResolvedValue({
+        bytes: Buffer.from('%PDF-1.4 test'),
+        contentType: 'application/pdf',
+      });
+
+      const adminDoc = await service.getFacilityLegalDocument('fac-uuid-1', adminUser, 'operating');
+      expect(adminDoc.contentType).toBe('application/pdf');
+      expect(storageService.downloadFile).toHaveBeenCalledWith(
+        'facility-legal/fac-uuid-1/operating-license.pdf',
+      );
+
+      const ownBizDoc = await service.getFacilityLegalDocument('fac-uuid-1', facilityUser, 'business');
+      expect(ownBizDoc.contentType).toBe('application/pdf');
+      expect(storageService.downloadFile).toHaveBeenCalledWith(
+        'facility-legal/fac-uuid-1/business-license.pdf',
+      );
+
+      await expect(
+        service.getFacilityLegalDocument('fac-uuid-1', {
+          ...facilityUser,
+          id: 'other-facility-user',
+        }),
       ).rejects.toThrow(ForbiddenException);
     });
   });

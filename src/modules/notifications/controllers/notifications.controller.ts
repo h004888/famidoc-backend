@@ -20,6 +20,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
+import { AllowOnboarding } from '../../../core/auth/allow-onboarding.decorator';
 import { Roles, RolesGuard } from '../../../core/auth/roles.guard';
 import { ContractRemindersService } from '../services/contract-reminders.service';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
@@ -58,6 +59,7 @@ export class NotificationsController {
   }
 
   @Get()
+  @AllowOnboarding()
   @ApiOperation({ summary: 'Lấy danh sách thông báo của người dùng hiện tại' })
   @ApiResponse({ status: 200, description: 'Danh sách thông báo người dùng' })
   getUserNotifications(
@@ -68,6 +70,7 @@ export class NotificationsController {
   }
 
   @Patch(':id/read')
+  @AllowOnboarding()
   @ApiOperation({ summary: 'Đánh dấu thông báo đã đọc theo ID' })
   @ApiParam({ name: 'id', description: 'UUID của thông báo' })
   @ApiResponse({

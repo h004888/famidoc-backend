@@ -55,6 +55,9 @@ export class JwtAuthGuard implements CanActivate {
         familyUnit: {
           select: { id: true },
         },
+        healthcareFacility: {
+          select: { id: true, verificationStatus: true },
+        },
       },
     });
     if (!user)
@@ -73,6 +76,15 @@ export class JwtAuthGuard implements CanActivate {
       }
       throw new ForbiddenException(
         'Tài khoản chưa hoàn tất kích hoạt onboarding.',
+      );
+    }
+    if (
+      user.role === 'HEALTHCARE_FACILITY' &&
+      user.healthcareFacility?.verificationStatus !== 'ACTIVE' &&
+      !allowOnboarding
+    ) {
+      throw new ForbiddenException(
+        'Cơ sở y tế chưa hoàn tất thẩm định hồ sơ pháp lý (ACTIVE). Vui lòng nộp hồ sơ pháp lý để kích hoạt tài khoản.',
       );
     }
     request.user = {
