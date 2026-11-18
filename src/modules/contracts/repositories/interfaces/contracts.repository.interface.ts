@@ -244,6 +244,7 @@ export interface ContractsSession {
     documensoItemId: string,
   ): Promise<boolean | void>;
   clearLegacyNonDocumensoSignatures?(contractId: string): Promise<void>;
+  clearDocumensoState?(contractId: string): Promise<void>;
   findFamilyGateStatus?(familyId: string): Promise<{
     activeContract: {
       id: string;
