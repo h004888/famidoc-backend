@@ -590,11 +590,20 @@ export class PrismaContractsSession implements ContractsSession {
     facilityId: string,
     startDate: Date,
     endDate: Date,
+    excludeContractId?: string,
   ) {
     return this.tx.b2bStaffingContract.findFirst({
       where: {
         facilityId,
-        status: { in: ['ACTIVE', 'PENDING_SIGNATURE'] },
+        ...(excludeContractId ? { id: { not: excludeContractId } } : {}),
+        status: {
+          in: [
+            'ACTIVE',
+            'PENDING_FACILITY_SIGNATURE',
+            'REVISION_REQUESTED',
+            'PENDING_ADMIN_SIGNATURE',
+          ],
+        },
         startDate: { lte: endDate },
         endDate: { gte: startDate },
       },
@@ -604,14 +613,34 @@ export class PrismaContractsSession implements ContractsSession {
   createStaffingContract(data: Prisma.B2bStaffingContractUncheckedCreateInput) {
     return this.tx.b2bStaffingContract.create({
       data,
-      include: { facility: true },
+      include: { facility: { include: { user: true } } },
     });
   }
 
   findStaffingContract(id: string) {
     return this.tx.b2bStaffingContract.findUnique({
       where: { id },
-      include: { facility: true },
+      include: { facility: { include: { user: true } } },
+    });
+  }
+
+  async lockStaffingContractForUpdate(id: string) {
+    await this.tx
+      .$queryRaw`SELECT id FROM b2b_staffing_contracts WHERE id = ${id}::uuid FOR UPDATE`;
+    return this.findStaffingContract(id);
+  }
+
+  updateStaffingContract(
+    id: string,
+    data: Prisma.B2bStaffingContractUncheckedUpdateInput,
+  ) {
+    return this.tx.b2bStaffingContract.update({
+      where: { id },
+      data: {
+        ...data,
+        updatedAt: new Date(),
+      },
+      include: { facility: { include: { user: true } } },
     });
   }
 
@@ -627,8 +656,82 @@ export class PrismaContractsSession implements ContractsSession {
         ...(signedPdfUrl ? { signedPdfUrl } : {}),
         updatedAt: new Date(),
       },
-      include: { facility: true },
+      include: { facility: { include: { user: true } } },
     });
+  }
+
+  async getStaffingTerminationImpact(facilityId: string) {
+    const [
+      activeMedicalContracts,
+      pendingMedicalContracts,
+      openEncounters,
+      unsettledSettlements,
+      unsettledPaidInvoices,
+      activeOrOnboardingDoctors,
+      openComplaints,
+    ] = await Promise.all([
+      this.tx.medicalContract.count({
+        where: { facilityId, contractStatus: 'ACTIVE' },
+      }),
+      this.tx.medicalContract.count({
+        where: {
+          facilityId,
+          contractStatus: { in: ['PENDING_APPROVAL', 'PENDING_PAYMENT'] },
+        },
+      }),
+      this.tx.encounter.count({
+        where: {
+          contract: { facilityId },
+          encounterStatus: { in: ['REQUESTED', 'CONFIRMED', 'IN_PROGRESS'] },
+        },
+      }),
+      this.tx.facilitySettlement.count({
+        where: {
+          facilityId,
+          disbursementStatus: { in: ['PENDING', 'CONFIRMED', 'FAILED'] },
+        },
+      }),
+      this.tx.invoice.count({
+        where: {
+          paymentStatus: 'PAID',
+          contract: { facilityId },
+          settlementItems: {
+            none: {
+              settlement: { disbursementStatus: 'SETTLED' },
+            },
+          },
+        },
+      }),
+      this.tx.doctor.count({
+        where: {
+          facilityId,
+          onboardingStatus: {
+            in: [
+              'PENDING_SUBMISSION',
+              'PENDING_FACILITY_REVIEW',
+              'FACILITY_VERIFIED',
+              'ACTIVE',
+            ],
+          },
+        },
+      }),
+      this.tx.complaint.count({
+        where: {
+          contract: { facilityId },
+          status: { in: ['SUBMITTED', 'INVESTIGATING'] },
+        },
+      }),
+    ]);
+
+    return {
+      activeMedicalContracts,
+      pendingMedicalContracts,
+      openEncounters,
+      unsettledSettlements,
+      unsettledPaidInvoices,
+      activeOrOnboardingDoctors,
+      openComplaints,
+    };
   }
 
   async listStaffingContracts(
@@ -642,7 +745,7 @@ export class PrismaContractsSession implements ContractsSession {
         where,
         skip,
         take,
-        include: { facility: true },
+        include: { facility: { include: { user: true } } },
         orderBy: { createdAt: 'desc' },
       }),
     ]);

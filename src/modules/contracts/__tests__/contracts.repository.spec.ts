@@ -6,11 +6,27 @@ describe('PrismaContractsSession Documenso & legacy signature helpers', () => {
       contractDocumensoSigner: {
         createMany: jest.fn().mockResolvedValue({ count: 4 }),
       },
-      medicalContract: {
-        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
-      },
       contractSignature: {
         deleteMany: jest.fn().mockResolvedValue({ count: 2 }),
+      },
+      medicalContract: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        count: jest.fn().mockResolvedValue(0),
+      },
+      encounter: {
+        count: jest.fn().mockResolvedValue(0),
+      },
+      facilitySettlement: {
+        count: jest.fn().mockResolvedValue(0),
+      },
+      invoice: {
+        count: jest.fn().mockResolvedValue(0),
+      },
+      doctor: {
+        count: jest.fn().mockResolvedValue(0),
+      },
+      complaint: {
+        count: jest.fn().mockResolvedValue(0),
       },
     };
   }
@@ -84,6 +100,22 @@ describe('PrismaContractsSession Documenso & legacy signature helpers', () => {
         contractId: 'ctr-1',
         addendumId: null,
         documensoRecipientId: null,
+      },
+    });
+  });
+
+  it('getStaffingTerminationImpact(): dùng đúng trường encounterStatus trên model Encounter', async () => {
+    const tx = makeMockTx();
+    tx.encounter.count.mockResolvedValueOnce(2);
+    const session = new PrismaContractsSession(tx as any);
+
+    const result = await session.getStaffingTerminationImpact('fac-1');
+
+    expect(result.openEncounters).toBe(2);
+    expect(tx.encounter.count).toHaveBeenCalledWith({
+      where: {
+        contract: { facilityId: 'fac-1' },
+        encounterStatus: { in: ['REQUESTED', 'CONFIRMED', 'IN_PROGRESS'] },
       },
     });
   });

@@ -77,6 +77,12 @@ export class AuthUserDto {
     description: 'Đường dẫn ảnh đại diện',
   })
   avatarUrl?: string | null;
+
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Cờ gợi ý người dùng đổi mật khẩu khởi tạo ở lần đăng nhập đầu',
+  })
+  mustChangePassword?: boolean;
 }
 
 export class LoginDataDto {
@@ -112,6 +118,7 @@ export interface LoginSuccessResponse {
     role: string;
     status: string;
     avatarUrl?: string | null;
+    mustChangePassword?: boolean;
   };
 }
 

@@ -59,14 +59,16 @@ export class ProvisionDoctorDto {
   @IsString()
   academicTitle?: string;
 
-  @ApiProperty({
-    description: 'Số năm kinh nghiệm hành nghề lâm sàng',
-    example: 8,
+  @ApiPropertyOptional({
+    description: 'Số năm kinh nghiệm hành nghề lâm sàng (mặc định 0 nếu bác sĩ tự cập nhật sau)',
+    example: 0,
+    default: 0,
   })
+  @IsOptional()
   @Type(() => Number)
   @IsInt({ message: 'Số năm kinh nghiệm phải là số nguyên' })
   @Min(0, { message: 'Số năm kinh nghiệm không thể âm' })
-  experienceYears!: number;
+  experienceYears?: number = 0;
 
   @ApiPropertyOptional({
     description: 'Tóm tắt tiểu sử chuyên môn và định hướng khám chữa bệnh',

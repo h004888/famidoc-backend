@@ -11,13 +11,19 @@ import {
   Put,
   Query,
   Req,
+  Res,
+  UploadedFiles,
   UseGuards,
+  UseInterceptors,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
   ApiOperation,
   ApiParam,
   ApiResponse,
@@ -38,7 +44,17 @@ import { ListDoctorsQueryDto } from '../dtos/list-doctors-query.dto';
 import {
   DOCTORS_SERVICE_TOKEN,
   type IDoctorsService,
+  type UploadedDoctorCredentialFiles,
 } from '../services/interfaces/doctors.service.interface';
+
+const CREDENTIAL_UPLOAD_FIELDS = [
+  { name: 'cchnFile', maxCount: 1 },
+  { name: 'practiceLicenseFile', maxCount: 1 },
+  { name: 'degreeFile', maxCount: 1 },
+  { name: 'familyMedicineFile', maxCount: 1 },
+  { name: 'familyMedicineCertFile', maxCount: 1 },
+  { name: 'files', maxCount: 5 },
+];
 
 @ApiTags('Doctors Management')
 @ApiBearerAuth('JWT-auth')
@@ -60,36 +76,50 @@ export class DoctorsController {
   @Put('me/credentials')
   @Roles('DOCTOR')
   @AllowOnboarding()
+  @UseInterceptors(
+    FileFieldsInterceptor(CREDENTIAL_UPLOAD_FIELDS, {
+      limits: { fileSize: 10 * 1024 * 1024, files: 5 },
+    }),
+  )
+  @ApiConsumes('multipart/form-data', 'application/json')
   @ApiOperation({
     summary:
-      'Bác sĩ tải lên hồ sơ văn bằng, chứng chỉ hành nghề của chính mình (UC-21 alias)',
+      'Bác sĩ tải lên hồ sơ chuyên môn và đủ 3 loại văn bằng/chứng chỉ (UC-21)',
   })
   @ApiBody({ type: SubmitDoctorCredentialsDto })
   @ApiResponse({
     status: 200,
-    description: 'Nộp hồ sơ chứng chỉ thành công.',
+    description: 'Nộp hồ sơ chứng chỉ thành công, chuyển sang chờ CSYT duyệt cấp 1.',
     type: DoctorResponseDto,
   })
   submitMyCredentials(
     @Req() req: AuthenticatedRequest,
     @Body() dto: SubmitDoctorCredentialsDto,
+    @UploadedFiles() files?: UploadedDoctorCredentialFiles,
   ): Promise<DoctorResponseDto> {
     return this.service.submitDoctorCredentials(
       req.user,
       'me',
       dto,
       req.ip ?? 'unknown',
+      files,
     );
   }
 
   @Put(':id/credentials')
   @Roles('DOCTOR', 'ADMIN')
   @AllowOnboarding()
+  @UseInterceptors(
+    FileFieldsInterceptor(CREDENTIAL_UPLOAD_FIELDS, {
+      limits: { fileSize: 10 * 1024 * 1024, files: 5 },
+    }),
+  )
+  @ApiConsumes('multipart/form-data', 'application/json')
   @ApiOperation({
     summary:
       'Bác sĩ tải lên hồ sơ văn bằng, chứng chỉ hành nghề (STT 16 - UC-21)',
     description:
-      'Bác sĩ nộp chứng chỉ hành nghề khám chữa bệnh (CCHN), chứng chỉ đào tạo Y học gia đình và văn bằng chuyên môn.',
+      'Bác sĩ cập nhật thông tin chuyên môn và nộp đủ 3 tệp scan PDF/PNG/JPEG: CCHN, Bằng tốt nghiệp chuyên môn và Chứng chỉ Y học gia đình.',
   })
   @ApiParam({ name: 'id', description: 'UUID của hồ sơ Bác sĩ' })
   @ApiBody({ type: SubmitDoctorCredentialsDto })
@@ -103,13 +133,59 @@ export class DoctorsController {
     @Req() req: AuthenticatedRequest,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() dto: SubmitDoctorCredentialsDto,
+    @UploadedFiles() files?: UploadedDoctorCredentialFiles,
   ): Promise<DoctorResponseDto> {
     return this.service.submitDoctorCredentials(
       req.user,
       id,
       dto,
       req.ip ?? 'unknown',
+      files,
     );
+  }
+
+  @Get('me/credentials/:credentialId/file')
+  @Roles('DOCTOR')
+  @AllowOnboarding()
+  @ApiOperation({ summary: 'Bác sĩ xem lại tệp chứng chỉ đã tải lên của chính mình' })
+  async getMyCredentialFile(
+    @Req() req: AuthenticatedRequest,
+    @Param('credentialId', new ParseUUIDPipe({ version: '4' }))
+    credentialId: string,
+    @Res() res: Response,
+  ) {
+    const { bytes, contentType } = await this.service.getDoctorCredentialFile(
+      req.user,
+      'me',
+      credentialId,
+    );
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', 'inline');
+    res.send(bytes);
+  }
+
+  @Get(':id/credentials/:credentialId/file')
+  @Roles('DOCTOR', 'HEALTHCARE_FACILITY', 'ADMIN')
+  @AllowOnboarding()
+  @ApiOperation({
+    summary:
+      'Tải hoặc xem trực tiếp tệp văn bằng/chứng chỉ của bác sĩ từ SeaweedFS S3',
+  })
+  async getDoctorCredentialFile(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('credentialId', new ParseUUIDPipe({ version: '4' }))
+    credentialId: string,
+    @Res() res: Response,
+  ) {
+    const { bytes, contentType } = await this.service.getDoctorCredentialFile(
+      req.user,
+      id,
+      credentialId,
+    );
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', 'inline');
+    res.send(bytes);
   }
 
   @Patch(':id/credentials/facility-approve')

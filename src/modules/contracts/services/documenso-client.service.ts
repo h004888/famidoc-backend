@@ -158,6 +158,47 @@ export class DocumensoClientService {
     pdfBuffer,
     recipients,
   }: CreateDocumensoEnvelopeInput): Promise<DocumensoEnvelopeCreatedResult> {
+    return this.createEnvelopeWithOrder({
+      contractId,
+      contractNumber,
+      pdfBuffer,
+      recipients,
+      title: `Hợp đồng dịch vụ y tế 4 bên - ${contractNumber}`,
+      signingOrder: 'PARALLEL',
+    });
+  }
+
+  /**
+   * Tạo Envelope 2 bên tuần tự cho Hợp đồng cung ứng nhân lực B2B:
+   * Thứ tự 1: Cơ sở Y tế (`HEALTHCARE_FACILITY`) -> Thứ tự 2: Quản trị viên (`ADMIN`).
+   */
+  async createTwoPartyEnvelope({
+    contractId,
+    contractNumber,
+    pdfBuffer,
+    recipients,
+  }: CreateDocumensoEnvelopeInput): Promise<DocumensoEnvelopeCreatedResult> {
+    return this.createEnvelopeWithOrder({
+      contractId,
+      contractNumber,
+      pdfBuffer,
+      recipients,
+      title: `Hợp đồng cung ứng nhân lực B2B - ${contractNumber}`,
+      signingOrder: 'SEQUENTIAL',
+    });
+  }
+
+  private async createEnvelopeWithOrder({
+    contractId,
+    contractNumber,
+    pdfBuffer,
+    recipients,
+    title,
+    signingOrder,
+  }: CreateDocumensoEnvelopeInput & {
+    title: string;
+    signingOrder: 'PARALLEL' | 'SEQUENTIAL';
+  }): Promise<DocumensoEnvelopeCreatedResult> {
     const baseUrl = this.getBaseUrl();
     const apiToken = this.getApiToken();
 
@@ -170,7 +211,7 @@ export class DocumensoClientService {
     const normalizedEmails = recipients.map((r) => r.email.trim().toLowerCase());
     if (new Set(normalizedEmails).size !== recipients.length) {
       throw new BadRequestException(
-        'Email của 4 bên ký hợp đồng (Bên A, Bên B, Bên C, Bên D) phải khác nhau để tạo phiên ký trên Documenso.',
+        `Email của ${recipients.length} bên ký hợp đồng phải khác nhau để tạo phiên ký trên Documenso.`,
       );
     }
 
@@ -178,11 +219,11 @@ export class DocumensoClientService {
     const formData = new FormData();
     const payload = {
       type: 'DOCUMENT' as const,
-      title: `Hợp đồng dịch vụ y tế 4 bên - ${contractNumber}`,
+      title,
       externalId: contractId,
       meta: {
         distributionMethod: 'NONE' as const,
-        signingOrder: 'PARALLEL' as const,
+        signingOrder,
         language: 'en' as const,
         timezone: 'Asia/Ho_Chi_Minh',
       },

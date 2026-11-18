@@ -2,13 +2,15 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Inject,
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
   Req,
-  StreamableFile,
   UseGuards,
   UsePipes,
   ValidationPipe,
@@ -26,9 +28,14 @@ import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../../../core/auth/roles.guard';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
 import { BypassTransform } from '../../../core/decorators/bypass-transform.decorator';
-import { ApproveFacilityAccountDto } from '../dtos/approve-facility-account.dto';
+import { ResponseMessage } from '../../../core/decorators/response-message.decorator';
+import { CreateFacilityDto } from '../dtos/create-facility.dto';
 import { VerifyFacilityLegalDto } from '../dtos/verify-facility-legal.dto';
 import { FacilityResponseDto } from '../dtos/facility-response.dto';
+import {
+  createLegalDocumentStream,
+  parseFacilityDocumentType,
+} from '../utils/legal-document-stream.util';
 import {
   DOCTORS_SERVICE_TOKEN,
   type IDoctorsService,
@@ -52,11 +59,46 @@ export class AdminFacilitiesController {
     private readonly service: IDoctorsService,
   ) {}
 
+  @Post()
+  @HttpCode(HttpStatus.CREATED)
+  @ResponseMessage(
+    'Tạo tài khoản Cơ sở Y tế thành công. Thông tin đăng nhập đã được gửi qua email.',
+  )
+  @ApiOperation({
+    summary: 'Quản trị viên tạo tài khoản mới cho Cơ sở Y tế',
+    description:
+      'Quản trị viên khởi tạo tài khoản CSYT với mật khẩu ngẫu nhiên an toàn, gửi email thông tin đăng nhập cho CSYT và đặt trạng thái hồ sơ pháp lý là PENDING chờ CSYT nộp hồ sơ.',
+  })
+  @ApiBody({ type: CreateFacilityDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Tạo tài khoản CSYT thành công.',
+    type: FacilityResponseDto,
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Email, số điện thoại hoặc tên cơ sở y tế đã tồn tại.',
+  })
+  createFacility(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: CreateFacilityDto,
+  ): Promise<FacilityResponseDto> {
+    return this.service.createFacilityByAdmin(
+      req.user,
+      dto,
+      req.ip ?? 'unknown',
+    );
+  }
+
   @Get()
   @ApiOperation({
     summary: 'Quản trị viên xem danh sách các cơ sở y tế trên hệ thống',
   })
-  @ApiQuery({ name: 'status', required: false, description: 'Lọc theo trạng thái PENDING/ACTIVE/SUSPENDED' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    description: 'Lọc theo trạng thái PENDING/ACTIVE/SUSPENDED',
+  })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 10 })
   @ApiResponse({
@@ -95,55 +137,36 @@ export class AdminFacilitiesController {
 
   @Get(':id/legal-document')
   @BypassTransform()
+  @ApiQuery({
+    name: 'type',
+    required: false,
+    enum: ['operating', 'business'],
+    description: 'operating = GPHĐ KBCB (mặc định), business = Giấy chứng nhận ĐKKD',
+  })
   @ApiOperation({ summary: 'Tải bản scan hồ sơ pháp lý của CSYT' })
-  async getLegalDocument(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
-    const { bytes, contentType } = await this.service.getFacilityLegalDocument(id);
-    const extension = contentType === 'image/png' ? 'png' : contentType === 'image/jpeg' ? 'jpg' : 'pdf';
-    return new StreamableFile(bytes, {
-      type: contentType,
-      disposition: `attachment; filename="facility-license.${extension}"`,
-    });
-  }
-
-  @Patch(':id/approve-account')
-  @ApiOperation({
-    summary: 'Quản trị viên DUYỆT LẦN 1 - Cấp tài khoản cho Cơ sở y tế',
-    description:
-      'Quản trị viên kiểm tra thông tin đăng ký cơ bản xem cơ sở y tế có thật hay không và phê duyệt cấp tài khoản. Hệ thống tự động sinh mật khẩu khởi tạo an toàn, kích hoạt User và gửi email cấp tài khoản tới CSYT.',
-  })
-  @ApiParam({ name: 'id', description: 'UUID của cơ sở y tế' })
-  @ApiBody({ type: ApproveFacilityAccountDto })
-  @ApiResponse({
-    status: 200,
-    description:
-      'Duyệt cấp tài khoản thành công, mật khẩu khởi tạo đã được gửi đến email cơ sở y tế.',
-    type: FacilityResponseDto,
-  })
-  approveFacilityAccount(
+  async getLegalDocument(
     @Req() req: AuthenticatedRequest,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
-    @Body() dto: ApproveFacilityAccountDto,
-  ): Promise<FacilityResponseDto> {
-    return this.service.approveFacilityAccount(
-      req.user,
-      id,
-      dto,
-      req.ip ?? 'unknown',
-    );
+    @Query('type') type?: string,
+  ) {
+    const docType = parseFacilityDocumentType(type);
+    const { bytes, contentType } =
+      await this.service.getFacilityLegalDocument(id, req.user, docType);
+    return createLegalDocumentStream(bytes, contentType);
   }
 
   @Patch(':id/verify-legal')
   @ApiOperation({
-    summary: 'Quản trị viên DUYỆT LẦN 2 - Hậu kiểm pháp lý & Kích hoạt đối tác',
+    summary: 'Quản trị viên thẩm định hồ sơ pháp lý & Kích hoạt đối tác',
     description:
-      'Quản trị viên đối soát Giấy phép hoạt động (GPHĐ) và Mã số thuế trên Cổng thông tin CSDL Quốc gia / Bộ Y tế. Khi duyệt thành công, cơ sở y tế chuyển sang ACTIVE và đủ điều kiện để ký Hợp đồng cung ứng nhân lực (B2B Staffing Contract).',
+      'Quản trị viên đối soát Giấy phép hoạt động (GPHĐ), Mã số thuế và bản scan hồ sơ pháp lý của CSYT. Khi duyệt thành công, CSYT chuyển sang ACTIVE và đủ điều kiện ký Hợp đồng B2B.',
   })
   @ApiParam({ name: 'id', description: 'UUID của cơ sở y tế' })
   @ApiBody({ type: VerifyFacilityLegalDto })
   @ApiResponse({
     status: 200,
     description:
-      'Thẩm định pháp lý Cấp 2 thành công, cơ sở y tế đã được kích hoạt ACTIVE sẵn sàng hoạt động.',
+      'Thẩm định pháp lý thành công, cơ sở y tế đã được kích hoạt ACTIVE hoặc trả về yêu cầu bổ sung.',
     type: FacilityResponseDto,
   })
   verifyFacilityLegal(

@@ -33,6 +33,7 @@ enum FacilityVerificationStatus {
 
 enum DoctorOnboardingStatus {
   PENDING_SUBMISSION
+  PENDING_FACILITY_REVIEW
   FACILITY_VERIFIED
   ACTIVE
   SUSPENDED
@@ -62,7 +63,9 @@ enum ServicePackageStatus {
 }
 
 enum B2bContractStatus {
-  PENDING_SIGNATURE
+  PENDING_FACILITY_SIGNATURE
+  REVISION_REQUESTED
+  PENDING_ADMIN_SIGNATURE
   ACTIVE
   EXPIRED
   TERMINATED
@@ -199,6 +202,7 @@ model User {
   fullName            String     @map("full_name") @db.VarChar(100)
   avatarUrl           String?    @map("avatar_url") @db.VarChar(255)
   status              UserStatus @default(PENDING)
+  mustChangePassword  Boolean    @default(false) @map("must_change_password")
   failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
   lockedUntil         DateTime?  @map("locked_until") @db.Timestamptz()
   createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz()
@@ -276,10 +280,11 @@ model HealthcareFacility {
   bankAccountHolder  String                     @map("bank_account_holder") @db.VarChar(100)
   legalDocumentsUrl  String?                    @map("legal_documents_url") @db.Text
   legalDocumentKey   String?                    @map("legal_document_key") @db.Text
+  businessLicenseKey String?                    @map("business_license_key") @db.Text
   licenseIssuer      String?                    @map("license_issuer") @db.VarChar(255)
   licenseDate        DateTime?                  @map("license_date") @db.Date
   legalRejectionReason String?                  @map("legal_rejection_reason") @db.Text
-  verificationStatus FacilityVerificationStatus @default(ACTIVE) @map("verification_status")
+  verificationStatus FacilityVerificationStatus @default(PENDING) @map("verification_status")
   createdAt          DateTime                   @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt          DateTime                   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
@@ -307,8 +312,10 @@ model Doctor {
   maxPanelCapacity Int                    @default(30) @map("max_panel_capacity")
   ratingAvg        Decimal                @default(5.00) @map("rating_avg") @db.Decimal(3, 2)
   totalReviews     Int                    @default(0) @map("total_reviews")
-  onboardingStatus DoctorOnboardingStatus @default(PENDING_SUBMISSION) @map("onboarding_status")
-  createdAt        DateTime               @default(now()) @map("created_at") @db.Timestamptz()
+  onboardingStatus       DoctorOnboardingStatus @default(PENDING_SUBMISSION) @map("onboarding_status")
+  rejectionReason        String?                @map("rejection_reason") @db.Text
+  credentialsSubmittedAt DateTime?              @map("credentials_submitted_at") @db.Timestamptz()
+  createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz()
   updatedAt        DateTime               @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   // Relations
@@ -332,6 +339,7 @@ model DoctorCredential {
   issueDate          DateTime             @map("issue_date") @db.Date
   issuingAuthority   String               @map("issuing_authority") @db.VarChar(200)
   fileUrl            String               @map("file_url") @db.VarChar(255)
+  fileKey            String?              @map("file_key") @db.Text
   facilityVerified   Boolean              @default(false) @map("facility_verified")
   facilityVerifiedBy String?              @map("facility_verified_by") @db.Uuid
   facilityVerifiedAt DateTime?            @map("facility_verified_at") @db.Timestamptz()
@@ -438,17 +446,36 @@ model PlatformCareItem {
 }
 
 model B2bStaffingContract {
-  id                     String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  contractCode           String            @unique @map("contract_code") @db.VarChar(50)
-  facilityId             String            @map("facility_id") @db.Uuid
-  platformCommissionRate Decimal           @default(15.00) @map("platform_commission_rate") @db.Decimal(5, 2)
-  facilityRevenueRate    Decimal           @default(85.00) @map("facility_revenue_rate") @db.Decimal(5, 2)
-  startDate              DateTime          @map("start_date") @db.Date
-  endDate                DateTime          @map("end_date") @db.Date
-  signedPdfUrl           String?           @map("signed_pdf_url") @db.VarChar(255)
-  status                 B2bContractStatus @default(PENDING_SIGNATURE)
-  createdAt              DateTime          @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt              DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  id                           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contractCode                 String            @unique @map("contract_code") @db.VarChar(50)
+  facilityId                   String            @map("facility_id") @db.Uuid
+  platformCommissionRate       Decimal           @default(15.00) @map("platform_commission_rate") @db.Decimal(5, 2)
+  facilityRevenueRate          Decimal           @default(85.00) @map("facility_revenue_rate") @db.Decimal(5, 2)
+  startDate                    DateTime          @map("start_date") @db.Date
+  endDate                      DateTime          @map("end_date") @db.Date
+  signedPdfUrl                 String?           @map("signed_pdf_url") @db.VarChar(255)
+  signedPdfKey                 String?           @map("signed_pdf_key") @db.Text
+  contractTerms                String?           @map("contract_terms") @db.Text
+  revisionReason               String?           @map("revision_reason") @db.Text
+  documensoEnvelopeId          String?           @unique @map("documenso_envelope_id") @db.VarChar(100)
+  documensoItemId              String?           @map("documenso_item_id") @db.VarChar(100)
+  facilityDocumensoRecipientId Int?              @map("facility_documenso_recipient_id")
+  facilitySigningUrl           String?           @map("facility_signing_url") @db.Text
+  facilitySigningToken         String?           @map("facility_signing_token") @db.VarChar(128)
+  adminDocumensoRecipientId    Int?              @map("admin_documenso_recipient_id")
+  adminSigningUrl              String?           @map("admin_signing_url") @db.Text
+  adminSigningToken            String?           @map("admin_signing_token") @db.VarChar(128)
+  facilitySignedAt             DateTime?         @map("facility_signed_at") @db.Timestamptz()
+  adminSignedAt                DateTime?         @map("admin_signed_at") @db.Timestamptz()
+  terminationRequestStatus     String?           @map("termination_request_status") @db.VarChar(32)
+  terminationRequestReason     String?           @map("termination_request_reason") @db.Text
+  terminationRequestedAt       DateTime?         @map("termination_requested_at") @db.Timestamptz()
+  terminatedReason             String?           @map("terminated_reason") @db.Text
+  terminatedAt                 DateTime?         @map("terminated_at") @db.Timestamptz()
+  terminatedByUserId           String?           @map("terminated_by_user_id") @db.Uuid
+  status                       B2bContractStatus @default(PENDING_FACILITY_SIGNATURE)
+  createdAt                    DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt                    DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   // Relations
   facility HealthcareFacility @relation(fields: [facilityId], references: [id], onDelete: Restrict)

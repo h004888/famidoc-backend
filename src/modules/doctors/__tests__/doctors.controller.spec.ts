@@ -1,5 +1,7 @@
+import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { FacilitiesDoctorsController } from '../controllers/facilities-doctors.controller';
+import { FacilitiesController } from '../controllers/facilities.controller';
 import { DoctorsController } from '../controllers/doctors.controller';
 import {
   DOCTORS_SERVICE_TOKEN,
@@ -12,6 +14,7 @@ import { DoctorCredentialType, DoctorOnboardingStatus } from '@prisma/client';
 
 describe('Doctors & Facilities Controllers', () => {
   let facilitiesDoctorsController: FacilitiesDoctorsController;
+  let facilitiesController: FacilitiesController;
   let doctorsController: DoctorsController;
   let service: jest.Mocked<IDoctorsService>;
 
@@ -64,6 +67,10 @@ describe('Doctors & Facilities Controllers', () => {
     service = {
       provisionDoctorAccount: jest.fn().mockResolvedValue(mockDoctorResponse),
       submitDoctorCredentials: jest.fn().mockResolvedValue(mockDoctorResponse),
+      getDoctorCredentialFile: jest.fn().mockResolvedValue({
+        bytes: Buffer.from('%PDF-1.4'),
+        contentType: 'application/pdf',
+      }),
       approveDoctorCredentialsByFacility: jest.fn().mockResolvedValue({
         ...mockDoctorResponse,
         onboardingStatus: DoctorOnboardingStatus.FACILITY_VERIFIED,
@@ -85,18 +92,24 @@ describe('Doctors & Facilities Controllers', () => {
         page: 1,
         limit: 10,
       }),
-      registerFacility: jest.fn(),
-      approveFacilityAccount: jest.fn(),
+      createFacilityByAdmin: jest.fn(),
       submitFacilityLegalProfile: jest.fn(),
       verifyFacilityLegal: jest.fn(),
-      getFacilityLegalDocument: jest.fn(),
+      getFacilityLegalDocument: jest.fn().mockResolvedValue({
+        bytes: Buffer.from('%PDF-1.4'),
+        contentType: 'application/pdf',
+      }),
       getMyFacility: jest.fn(),
       listFacilitiesForAdmin: jest.fn(),
       getFacilityDetailForAdmin: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [FacilitiesDoctorsController, DoctorsController],
+      controllers: [
+        FacilitiesDoctorsController,
+        FacilitiesController,
+        DoctorsController,
+      ],
       providers: [
         {
           provide: DOCTORS_SERVICE_TOKEN,
@@ -113,6 +126,8 @@ describe('Doctors & Facilities Controllers', () => {
     facilitiesDoctorsController = module.get<FacilitiesDoctorsController>(
       FacilitiesDoctorsController,
     );
+    facilitiesController =
+      module.get<FacilitiesController>(FacilitiesController);
     doctorsController = module.get<DoctorsController>(DoctorsController);
   });
 
@@ -166,6 +181,7 @@ describe('Doctors & Facilities Controllers', () => {
         'doc-uuid-1',
         dto,
         '127.0.0.1',
+        undefined,
       );
     });
 
@@ -193,6 +209,7 @@ describe('Doctors & Facilities Controllers', () => {
         'me',
         dto,
         '127.0.0.1',
+        undefined,
       );
     });
   });
@@ -330,6 +347,42 @@ describe('Doctors & Facilities Controllers', () => {
         expect.objectContaining({ approved: true }),
         '127.0.0.1',
       );
+    });
+  });
+
+  describe('FacilitiesController - legal document ?type= query validation', () => {
+    it('delegates ?type=business and default operating type to service.getFacilityLegalDocument', async () => {
+      await facilitiesController.getMyLegalDocument(mockFacilityReq, 'business');
+      expect(service.getFacilityLegalDocument).toHaveBeenCalledWith(
+        'me',
+        mockFacilityReq.user,
+        'business',
+      );
+
+      await facilitiesController.getLegalDocument(
+        mockAdminReq,
+        'fac-uuid-1',
+        undefined,
+      );
+      expect(service.getFacilityLegalDocument).toHaveBeenCalledWith(
+        'fac-uuid-1',
+        mockAdminReq.user,
+        'operating',
+      );
+    });
+
+    it('rejects invalid ?type= query parameter with BadRequestException', async () => {
+      await expect(
+        facilitiesController.getMyLegalDocument(mockFacilityReq, 'invalid'),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        facilitiesController.getLegalDocument(
+          mockAdminReq,
+          'fac-uuid-1',
+          'unknown',
+        ),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

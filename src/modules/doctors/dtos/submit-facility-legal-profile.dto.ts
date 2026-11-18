@@ -4,7 +4,6 @@ import {
   IsDateString,
   IsOptional,
   IsString,
-  IsUrl,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -39,13 +38,15 @@ export class SubmitFacilityLegalProfileDto {
   @MaxLength(20, { message: 'Mã số thuế tối đa 20 ký tự' })
   taxCode!: string;
 
-  @ApiPropertyOptional({
-    description: 'Địa chỉ trụ sở chính thức của cơ sở y tế (nếu có điều chỉnh)',
+  @ApiProperty({
+    description: 'Địa chỉ trụ sở chính thức của cơ sở y tế theo Giấy phép',
     example: '123 Giải Phóng, Phường Đồng Tâm, Quận Hai Bà Trưng, Hà Nội',
   })
-  @IsOptional()
+  @IsNotEmpty({ message: 'Địa chỉ trụ sở không được để trống' })
   @IsString()
-  address?: string;
+  @MinLength(5, { message: 'Địa chỉ trụ sở tối thiểu 5 ký tự' })
+  @MaxLength(500, { message: 'Địa chỉ trụ sở tối đa 500 ký tự' })
+  address!: string;
 
   @ApiProperty({
     description: 'Số điện thoại đường dây nóng y tế',
@@ -83,23 +84,23 @@ export class SubmitFacilityLegalProfileDto {
   @MaxLength(100)
   bankAccountHolder!: string;
 
-  @ApiPropertyOptional({
-    description: 'Đường dẫn file PDF scan tập hợp hồ sơ pháp lý (GPHĐ, ĐKKD, Đề xuất hợp tác)',
-    example: 'https://cdn.famidoc.vn/facilities/legal/gphd-ansinh-signed.pdf',
+  @ApiProperty({
+    description: 'Cơ quan cấp Giấy phép hoạt động KBCB',
+    example: 'Bộ Y tế - Cục Quản lý Khám chữa bệnh',
   })
-  @IsOptional()
-  @IsUrl({ protocols: ['https'], require_protocol: true })
-  @MaxLength(2048)
-  legalDocumentsUrl?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
+  @IsNotEmpty({ message: 'Cơ quan cấp giấy phép không được để trống' })
   @IsString()
   @MaxLength(255)
-  licenseIssuer?: string;
+  licenseIssuer!: string;
 
-  @ApiPropertyOptional({ example: '2026-11-17' })
-  @IsOptional()
-  @IsDateString({ strict: true })
-  licenseDate?: string;
+  @ApiProperty({
+    description: 'Ngày cấp Giấy phép hoạt động KBCB (YYYY-MM-DD)',
+    example: '2024-05-15',
+  })
+  @IsNotEmpty({ message: 'Ngày cấp giấy phép không được để trống' })
+  @IsDateString(
+    { strict: true },
+    { message: 'Ngày cấp giấy phép phải theo định dạng YYYY-MM-DD hợp lệ' },
+  )
+  licenseDate!: string;
 }
