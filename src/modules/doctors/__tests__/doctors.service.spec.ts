@@ -3,12 +3,15 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  ValidationPipe,
 } from '@nestjs/common';
 import { DoctorsServiceImpl } from '../services/impl/doctors.service.impl';
+import { ProvisionDoctorDto } from '../dtos/provision-doctor.dto';
 import { PrismaService } from '../../../core/database/prisma.service';
 import { StorageService } from '../../../core/services/storage.service';
 import type { AuthenticatedUser } from '../../../core/auth/authenticated-request';
 import { DoctorCredentialType, DoctorOnboardingStatus } from '@prisma/client';
+import ExcelJS from 'exceljs';
 
 describe('DoctorsServiceImpl', () => {
   let service: DoctorsServiceImpl;
@@ -204,14 +207,58 @@ describe('DoctorsServiceImpl', () => {
       );
     });
 
-    it('should send welcome email when doctor is provisioned', async () => {
-      await service.provisionDoctorAccount(facilityUser, dto, '127.0.0.1');
+    it('should evaluate B2B contract startDate <= today <= endDate using Vietnam timezone', async () => {
+      jest.useFakeTimers();
+      try {
+        // 2026-11-17T18:30:00.000Z === 2026-11-18 01:30:00 UTC+7
+        jest.setSystemTime(new Date('2026-11-17T18:30:00.000Z'));
 
+        await service.provisionDoctorAccount(facilityUser, dto, '127.0.0.1');
+
+        expect(prismaService.b2bStaffingContract.findFirst).toHaveBeenCalledWith({
+          where: {
+            facilityId: 'fac-uuid-1',
+            status: 'ACTIVE',
+            startDate: { lte: new Date('2026-11-18T00:00:00.000Z') },
+            endDate: { gte: new Date('2026-11-18T00:00:00.000Z') },
+          },
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('should send welcome email when doctor is provisioned and return mailSent=true with email/phone', async () => {
+      const result = await service.provisionDoctorAccount(
+        facilityUser,
+        dto,
+        '127.0.0.1',
+      );
+
+      expect(result.email).toBe(dto.email);
+      expect(result.phone).toBe(dto.phone);
+      expect(result.mailSent).toBe(true);
+      expect(result.mailWarning).toBeUndefined();
       expect(mailerService.sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
           to: dto.email,
         }),
       );
+    });
+
+    it('should preserve doctor account and return mailSent=false with mailWarning when provisioning email fails', async () => {
+      mailerService.sendMail.mockRejectedValueOnce(new Error('SMTP down'));
+
+      const result = await service.provisionDoctorAccount(
+        facilityUser,
+        dto,
+        '127.0.0.1',
+      );
+
+      expect(result.email).toBe(dto.email);
+      expect(result.phone).toBe(dto.phone);
+      expect(result.mailSent).toBe(false);
+      expect(result.mailWarning).toBeTruthy();
     });
 
     it('should throw ConflictException if email or phone already exists', async () => {
@@ -228,6 +275,48 @@ describe('DoctorsServiceImpl', () => {
       await expect(
         service.provisionDoctorAccount(facilityUser, dto, '127.0.0.1'),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should normalize +84/84 phone on ProvisionDoctorDto and reject invalid 0|... or 8484...', async () => {
+      const { facilityId: _, ...baseDto } = dto;
+      const pipe = new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      });
+
+      const normalized = await pipe.transform(
+        { ...baseDto, phone: '+84 912 345 678' },
+        { type: 'body', metatype: ProvisionDoctorDto },
+      );
+      expect(normalized.phone).toBe('0912345678');
+
+      await expect(
+        pipe.transform(
+          { ...baseDto, phone: '0|12345678' },
+          { type: 'body', metatype: ProvisionDoctorDto },
+        ),
+      ).rejects.toMatchObject({ status: 400 });
+
+      await expect(
+        pipe.transform(
+          { ...baseDto, phone: '8484912345678' },
+          { type: 'body', metatype: ProvisionDoctorDto },
+        ),
+      ).rejects.toMatchObject({ status: 400 });
+
+      await service.provisionDoctorAccount(
+        facilityUser,
+        { ...baseDto, phone: '84912345678' },
+        '127.0.0.1',
+      );
+      expect(prismaService.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            phone: '0912345678',
+          }),
+        }),
+      );
     });
   });
 
@@ -464,6 +553,62 @@ describe('DoctorsServiceImpl', () => {
         ),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('should accept today issueDate in Vietnam timezone during 00:00–06:59 UTC+7', async () => {
+      prismaService.doctor.findUnique.mockResolvedValue({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.PENDING_SUBMISSION,
+      });
+
+      jest.useFakeTimers();
+      try {
+        // 2026-11-17T18:30:00.000Z === 2026-11-18 01:30:00 UTC+7
+        jest.setSystemTime(new Date('2026-11-17T18:30:00.000Z'));
+
+        const todayVnDto = {
+          credentials: [
+            {
+              ...credDto.credentials[0],
+              issueDate: '2026-11-18',
+            },
+            credDto.credentials[1],
+            credDto.credentials[2],
+          ],
+        };
+
+        const result = await service.submitDoctorCredentials(
+          doctorUser,
+          'doc-uuid-1',
+          todayVnDto,
+          '127.0.0.1',
+          uploadedThreeFiles,
+        );
+        expect(result).toBeDefined();
+
+        const tomorrowVnDto = {
+          credentials: [
+            {
+              ...credDto.credentials[0],
+              issueDate: '2026-11-19',
+            },
+            credDto.credentials[1],
+            credDto.credentials[2],
+          ],
+        };
+
+        await expect(
+          service.submitDoctorCredentials(
+            doctorUser,
+            'doc-uuid-1',
+            tomorrowVnDto,
+            '127.0.0.1',
+            uploadedThreeFiles,
+          ),
+        ).rejects.toThrow(BadRequestException);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   describe('approveDoctorCredentialsByFacility (STT 17 - UC-22)', () => {
@@ -675,6 +820,41 @@ describe('DoctorsServiceImpl', () => {
       });
     });
 
+    it('sends platform review emails only after DB transaction commits and does not fail approval when mailer throws', async () => {
+      const callOrder: string[] = [];
+      prismaService.$transaction.mockImplementationOnce(async (cb: any) => {
+        const res = await cb(prismaService);
+        callOrder.push('tx-committed');
+        return res;
+      });
+      prismaService.doctor.findUnique.mockResolvedValue({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.FACILITY_VERIFIED,
+        credentials: [{ id: 'cred-1' }],
+      });
+      prismaService.doctor.update.mockResolvedValue({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.ACTIVE,
+      });
+      prismaService.user.findUnique
+        .mockResolvedValueOnce({ id: mockDoctor.userId, email: 'doc@famidoc.vn' })
+        .mockResolvedValueOnce({ id: mockFacility.userId, email: 'facility@hoanmy.vn' });
+      mailerService.sendMail.mockImplementationOnce(async () => {
+        callOrder.push('sendMail');
+        throw new Error('SMTP down');
+      });
+
+      const result = await service.approveDoctorCredentialsByPlatform(
+        adminUser,
+        'doc-uuid-1',
+        { approved: true },
+        '127.0.0.1',
+      );
+
+      expect(result.onboardingStatus).toBe(DoctorOnboardingStatus.ACTIVE);
+      expect(callOrder).toEqual(['tx-committed', 'sendMail']);
+    });
+
     it('should throw BadRequestException if doctor is not yet FACILITY_VERIFIED', async () => {
       prismaService.doctor.findUnique.mockResolvedValue({
         ...mockDoctor,
@@ -826,10 +1006,15 @@ describe('DoctorsServiceImpl', () => {
       );
     });
 
-    it('should allow HEALTHCARE_FACILITY to list doctors scoped to its facility', async () => {
+    it('should allow HEALTHCARE_FACILITY to list doctors scoped to its facility and include user email/phone', async () => {
       prismaService.healthcareFacility.findUnique.mockResolvedValue(mockFacility);
       prismaService.doctor.count.mockResolvedValue(1);
-      prismaService.doctor.findMany.mockResolvedValue([mockDoctor]);
+      prismaService.doctor.findMany.mockResolvedValue([
+        {
+          ...mockDoctor,
+          user: { email: 'bs.an@famidoc.vn', phone: '0912345678' },
+        },
+      ]);
 
       const result = await service.listFacilityDoctors(facilityUser, {
         page: 1,
@@ -837,13 +1022,281 @@ describe('DoctorsServiceImpl', () => {
       });
 
       expect(result.items).toHaveLength(1);
+      expect(result.items[0].email).toBe('bs.an@famidoc.vn');
+      expect(result.items[0].phone).toBe('0912345678');
       expect(prismaService.doctor.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             facilityId: mockFacility.id,
           }),
+          include: expect.objectContaining({
+            user: { select: { email: true, phone: true } },
+          }),
         }),
       );
+    });
+  });
+
+  describe('Bulk Excel Doctor Import (generateTemplate, preview, confirm)', () => {
+    async function makeExcelFile(
+      rows: Array<Array<string | number>>,
+    ): Promise<Express.Multer.File> {
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Danh sách bác sĩ');
+      ws.addRow([
+        'Họ và tên (*)',
+        'Email (*)',
+        'Số điện thoại (*)',
+        'Chuyên khoa',
+        'Học hàm / Học vị',
+        'Số năm kinh nghiệm',
+        'Tiểu sử chuyên môn',
+      ]);
+      for (const r of rows) {
+        ws.addRow(r);
+      }
+      const raw = await wb.xlsx.writeBuffer();
+      const buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+      return {
+        fieldname: 'file',
+        originalname: 'doctors.xlsx',
+        encoding: '7bit',
+        mimetype:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        buffer,
+        size: buffer.length,
+      } as Express.Multer.File;
+    }
+
+    it('rejects template download when facility has no active B2B contract', async () => {
+      prismaService.b2bStaffingContract.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.generateDoctorImportTemplate(facilityUser),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('rejects preview and confirm when facility has no active B2B contract', async () => {
+      const file = await makeExcelFile([
+        ['BS Mới 1', 'new1@hospital.vn', '0911111111', '', '', '', ''],
+      ]);
+
+      prismaService.b2bStaffingContract.findFirst.mockResolvedValueOnce(null);
+      await expect(
+        service.previewDoctorsExcelImport(facilityUser, file),
+      ).rejects.toThrow(BadRequestException);
+
+      prismaService.b2bStaffingContract.findFirst.mockResolvedValueOnce(null);
+      await expect(
+        service.confirmDoctorsBulkImport(
+          facilityUser,
+          {
+            doctors: [
+              {
+                rowNumber: 2,
+                doctorName: 'BS Mới 1',
+                email: 'new1@hospital.vn',
+                phone: '0911111111',
+              },
+            ],
+          },
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('generates Excel template for active facility with active B2B contract', async () => {
+      const buf = await service.generateDoctorImportTemplate(facilityUser);
+      expect(Buffer.isBuffer(buf)).toBe(true);
+      expect(buf[0]).toBe(0x50);
+      expect(buf[1]).toBe(0x4b);
+    });
+
+    it('classifies preview rows into NEW_VALID, EXISTING_SKIPPED, and INVALID (internal dup + partial conflict + other facility)', async () => {
+      const file = await makeExcelFile([
+        ['BS Mới 1', 'new1@hospital.vn', '0911111111', 'Khoa Nhi', 'BS', 3, ''],
+        ['BS Cũ Đợt 1', 'old@hospital.vn', '0922222222', '', '', '', ''],
+        ['BS Trùng Trong File', 'new1@hospital.vn', '0933333333', '', '', '', ''],
+        ['BS Nhầm SĐT Cũ', 'wrongphone@hospital.vn', '0922222222', '', '', '', ''],
+        ['BS CSYT Khác', 'otherfac@hospital.vn', '0944444444', '', '', '', ''],
+        ['X', 'bad-email', '123', '', '', '', ''],
+      ]);
+
+      prismaService.user.findMany.mockResolvedValueOnce([
+        {
+          id: 'u-old',
+          email: 'old@hospital.vn',
+          phone: '0922222222',
+          fullName: 'BS Cũ Đợt 1',
+          role: 'DOCTOR',
+          doctor: {
+            id: 'doc-old',
+            facilityId: mockFacility.id,
+            doctorName: 'BS Cũ Đợt 1',
+            onboardingStatus: DoctorOnboardingStatus.PENDING_SUBMISSION,
+          },
+        },
+        {
+          id: 'u-other',
+          email: 'otherfac@hospital.vn',
+          phone: '0944444444',
+          fullName: 'BS CSYT Khác',
+          role: 'DOCTOR',
+          doctor: {
+            id: 'doc-other',
+            facilityId: 'other-facility-uuid',
+            doctorName: 'BS CSYT Khác',
+            onboardingStatus: DoctorOnboardingStatus.ACTIVE,
+          },
+        },
+      ]);
+
+      const preview = await service.previewDoctorsExcelImport(facilityUser, file);
+
+      expect(preview.summary.totalReadRows).toBe(6);
+      expect(preview.summary.validCount).toBe(1);
+      expect(preview.summary.existingSkippedCount).toBe(1);
+      expect(preview.summary.invalidCount).toBe(4);
+
+      expect(preview.validRows[0]).toMatchObject({
+        rowNumber: 2,
+        email: 'new1@hospital.vn',
+        phone: '0911111111',
+      });
+      expect(preview.existingRows[0]).toMatchObject({
+        rowNumber: 3,
+        existingDoctorId: 'doc-old',
+      });
+      expect(preview.invalidRows.map((r) => r.rowNumber)).toEqual([4, 5, 6, 7]);
+    });
+
+    it('rejects confirm batch exceeding 30 new doctors', async () => {
+      const tooMany = Array.from({ length: 31 }, (_, i) => ({
+        rowNumber: i + 2,
+        doctorName: `BS ${i + 1}`,
+        email: `doc${i + 1}@hospital.vn`,
+        phone: `0912345${String(i).padStart(3, '0')}`,
+      }));
+
+      await expect(
+        service.confirmDoctorsBulkImport(
+          facilityUser,
+          { doctors: tooMany },
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('creates valid doctors independently and preserves created accounts even when mail fails for one doctor', async () => {
+      prismaService.user.findMany.mockResolvedValueOnce([
+        { email: 'taken@hospital.vn', phone: '0999999999' },
+      ]);
+
+      mailerService.sendMail
+        .mockResolvedValueOnce({ messageId: 'ok-1' })
+        .mockRejectedValueOnce(new Error('SMTP timeout'));
+
+      const result = await service.confirmDoctorsBulkImport(
+        facilityUser,
+        {
+          doctors: [
+            {
+              rowNumber: 2,
+              doctorName: 'BS Thành Công 1',
+              email: 'ok1@hospital.vn',
+              phone: '0911111111',
+            },
+            {
+              rowNumber: 3,
+              doctorName: 'BS Trùng Trước Lúc Confirm',
+              email: 'taken@hospital.vn',
+              phone: '0999999999',
+            },
+            {
+              rowNumber: 4,
+              doctorName: 'BS Thành Công Mail Lỗi',
+              email: 'ok2@hospital.vn',
+              phone: '0922222222',
+            },
+          ],
+        },
+        '127.0.0.1',
+      );
+
+      expect(result.summary).toEqual({
+        requestedCount: 3,
+        createdCount: 2,
+        failedCount: 1,
+        mailSentCount: 1,
+        mailFailedCount: 1,
+      });
+      expect(result.createdDoctors).toHaveLength(2);
+      expect(result.createdDoctors[0].mailSent).toBe(true);
+      expect(result.createdDoctors[1].mailSent).toBe(false);
+      expect(result.createdDoctors[1].mailWarning).toBeDefined();
+      expect(result.failedRows).toHaveLength(1);
+      expect(result.failedRows[0].email).toBe('taken@hospital.vn');
+    });
+
+    it('matches legacy 84/+84 DB phones and uppercase DB emails in preview and confirm', async () => {
+      const file = await makeExcelFile([
+        ['BS Cũ Legacy 84', 'legacy@hospital.vn', '0912345678', '', '', '', ''],
+      ]);
+
+      prismaService.user.findMany.mockResolvedValueOnce([
+        {
+          id: 'u-legacy',
+          email: 'LEGACY@HOSPITAL.VN',
+          phone: '84912345678',
+          fullName: 'BS Cũ Legacy 84',
+          role: 'DOCTOR',
+          doctor: {
+            id: 'doc-legacy',
+            facilityId: mockFacility.id,
+            doctorName: 'BS Cũ Legacy 84',
+            onboardingStatus: DoctorOnboardingStatus.ACTIVE,
+          },
+        },
+      ]);
+
+      const preview = await service.previewDoctorsExcelImport(facilityUser, file);
+      expect(preview.summary.existingSkippedCount).toBe(1);
+      expect(preview.summary.validCount).toBe(0);
+      expect(preview.existingRows[0].existingDoctorId).toBe('doc-legacy');
+      expect(prismaService.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            OR: expect.arrayContaining([
+              { email: { equals: 'legacy@hospital.vn', mode: 'insensitive' } },
+              {
+                phone: {
+                  in: expect.arrayContaining(['0912345678', '84912345678', '+84912345678']),
+                },
+              },
+            ]),
+          },
+        }),
+      );
+
+      prismaService.user.findMany.mockResolvedValueOnce([
+        { email: 'LEGACY@HOSPITAL.VN', phone: '+84912345678' },
+      ]);
+      const confirm = await service.confirmDoctorsBulkImport(
+        facilityUser,
+        {
+          doctors: [
+            {
+              rowNumber: 2,
+              doctorName: 'BS Cũ Legacy 84',
+              email: 'other@hospital.vn',
+              phone: '0912345678',
+            },
+          ],
+        },
+        '127.0.0.1',
+      );
+      expect(confirm.summary.createdCount).toBe(0);
+      expect(confirm.summary.failedCount).toBe(1);
     });
   });
 });

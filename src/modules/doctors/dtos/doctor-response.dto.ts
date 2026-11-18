@@ -70,6 +70,12 @@ export class DoctorResponseDto {
   @ApiProperty({ example: '3fa85f64-5717-4562-b3fc-2c963f66afa6' })
   facilityId!: string;
 
+  @ApiPropertyOptional({ example: 'bs.nguyenvanan@famidoc.vn' })
+  email?: string;
+
+  @ApiPropertyOptional({ example: '0912345678' })
+  phone?: string;
+
   @ApiProperty({ example: 'BS. CKI Nguyễn Văn An' })
   doctorName!: string;
 
@@ -147,4 +153,16 @@ export class DoctorResponseDto {
 
   @ApiPropertyOptional({ type: [DoctorCredentialResponseDto] })
   credentials?: DoctorCredentialResponseDto[];
+
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Trạng thái gửi email thông tin đăng nhập khi khởi tạo bác sĩ đơn lẻ',
+  })
+  mailSent?: boolean;
+
+  @ApiPropertyOptional({
+    example: 'Tài khoản đã được tạo nhưng gửi email thông tin đăng nhập thất bại',
+    description: 'Cảnh báo nếu gửi email thông tin đăng nhập thất bại',
+  })
+  mailWarning?: string;
 }

@@ -238,6 +238,8 @@ export class FinanceServiceImpl implements IFinanceService {
             facilityPayoutAmount: 0,
             bankDestination: {
               bankName: facility.bankName,
+              bankBin: facility.bankBin ?? null,
+              bankCode: facility.bankCode ?? null,
               accountNumber: facility.bankAccountNumber,
               accountHolder: facility.bankAccountHolder,
             },

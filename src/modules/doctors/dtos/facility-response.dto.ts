@@ -48,6 +48,12 @@ export class FacilityResponseDto {
   @ApiProperty({ example: 'Vietcombank' })
   bankName!: string;
 
+  @ApiPropertyOptional({ example: '970436', nullable: true })
+  bankBin?: string | null;
+
+  @ApiPropertyOptional({ example: 'VCB', nullable: true })
+  bankCode?: string | null;
+
   @ApiProperty({ example: '0011002233445' })
   bankAccountNumber!: string;
 

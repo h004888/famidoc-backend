@@ -11,6 +11,11 @@ import type { SubmitFacilityLegalProfileDto } from '../../dtos/submit-facility-l
 import type { VerifyFacilityLegalDto } from '../../dtos/verify-facility-legal.dto';
 import type { FacilityResponseDto } from '../../dtos/facility-response.dto';
 import type { ListDoctorsQueryDto } from '../../dtos/list-doctors-query.dto';
+import type {
+  BulkImportDoctorsPreviewResponseDto,
+  ConfirmBulkImportDoctorsDto,
+  ConfirmBulkImportDoctorsResponseDto,
+} from '../../dtos/bulk-import-doctors.dto';
 
 export interface UploadedFacilityLegalFiles {
   operatingLicenseFile?: Express.Multer.File[];
@@ -77,6 +82,19 @@ export interface IDoctorsService {
     dto: ProvisionDoctorDto,
     ip: string,
   ): Promise<DoctorResponseDto>;
+
+  generateDoctorImportTemplate(actor: AuthenticatedUser): Promise<Buffer>;
+
+  previewDoctorsExcelImport(
+    actor: AuthenticatedUser,
+    file?: Express.Multer.File,
+  ): Promise<BulkImportDoctorsPreviewResponseDto>;
+
+  confirmDoctorsBulkImport(
+    actor: AuthenticatedUser,
+    dto: ConfirmBulkImportDoctorsDto,
+    ip: string,
+  ): Promise<ConfirmBulkImportDoctorsResponseDto>;
 
   submitDoctorCredentials(
     actor: AuthenticatedUser,
