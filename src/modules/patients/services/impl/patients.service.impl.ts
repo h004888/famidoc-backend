@@ -5,8 +5,12 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
+import { StorageService } from '../../../../core/services/storage.service';
+import { validateUploadedDocumentFile } from '../../../../core/validation/document-file.validator';
+import { buildMediaUrl } from '../../../../shared/utils/media-url.util';
 import type { CreatePatientDto } from '../../dtos/create-patient.dto';
 import type { UpdatePatientDto } from '../../dtos/update-patient.dto';
 import type { CreateAllergyDto } from '../../dtos/create-allergy.dto';
@@ -18,6 +22,7 @@ import {
   type DuplicatePatientConflict,
   type IPatientsRepository,
   type PatientDetail,
+  type SerializedPatientDocument,
   type SerializedVitalSign,
 } from '../../repositories/interfaces/patients.repository.interface';
 import type { IPatientsService } from '../interfaces/patients.service.interface';
@@ -36,6 +41,8 @@ export class PatientsServiceImpl implements IPatientsService {
   constructor(
     @Inject(PATIENTS_REPOSITORY_TOKEN)
     private readonly repository: IPatientsRepository,
+    @Optional()
+    private readonly storage?: StorageService,
   ) {}
 
   private validateDateOfBirth(rawDate: string): void {
@@ -196,7 +203,12 @@ export class PatientsServiceImpl implements IPatientsService {
   }
 
   async getPatientById(user: AuthenticatedUser, id: string): Promise<PatientDetail> {
-    return this.assertPatientAccess(user, id);
+    const patient = await this.assertPatientAccess(user, id);
+    if (!patient.documents) return patient;
+    return {
+      ...patient,
+      documents: patient.documents.map((doc) => this.serializeDocument(doc)),
+    };
   }
 
   async updatePatient(
@@ -243,21 +255,149 @@ export class PatientsServiceImpl implements IPatientsService {
     return this.repository.findAllergiesByPatientId(patientId);
   }
 
+  private serializeDocument(doc: PatientDocument): SerializedPatientDocument {
+    const isExternal = /^https?:\/\//i.test(doc.fileUrl);
+    const isImage = Boolean(
+      doc.mimeType?.startsWith('image/') ||
+        /\.(png|jpe?g|webp)$/i.test(doc.fileUrl),
+    );
+    const downloadPath = isExternal
+      ? doc.fileUrl
+      : `/api/v1/patients/${doc.patientId}/documents/${doc.id}/file`;
+
+    let previewUrl: string | null = null;
+    if (isImage) {
+      if (isExternal) {
+        previewUrl = doc.fileUrl;
+      } else if (
+        process.env.MEDIA_BASE_URL &&
+        process.env.IMGPROXY_KEY &&
+        process.env.IMGPROXY_SALT
+      ) {
+        previewUrl = buildMediaUrl(doc.fileUrl, {
+          width: 900,
+          height: 0,
+          resizingType: 'fit',
+          format: 'webp',
+        });
+      }
+    }
+
+    return {
+      ...doc,
+      previewUrl,
+      downloadPath,
+    };
+  }
+
   async addDocument(
     user: AuthenticatedUser,
     patientId: string,
     dto: CreatePatientDocumentDto,
-  ): Promise<PatientDocument> {
+    file?: Express.Multer.File,
+  ): Promise<SerializedPatientDocument> {
     await this.assertPatientAccess(user, patientId);
-    return this.repository.addDocument(patientId, dto);
+
+    let resolvedFileUrl = dto.fileUrl?.trim() || '';
+    let resolvedMimeType = dto.mimeType?.trim() || null;
+    let resolvedSizeKb = dto.fileSizeKb ?? 0;
+
+    if (file) {
+      const validated = validateUploadedDocumentFile(file, {
+        label: 'Tài liệu y tế',
+      });
+      if (!this.storage) {
+        throw new NotFoundException('Dịch vụ lưu trữ tài liệu chưa khả dụng');
+      }
+      resolvedFileUrl = await this.storage.uploadFile(
+        {
+          ...file,
+          buffer: validated.buffer,
+          mimetype: validated.contentType,
+          originalname: `document.${validated.extension}`,
+        },
+        `patient-documents/${patientId}`,
+      );
+      resolvedMimeType = validated.contentType;
+      resolvedSizeKb =
+        dto.fileSizeKb !== undefined
+          ? dto.fileSizeKb
+          : Math.max(1, Math.round(validated.buffer.length / 1024));
+    } else {
+      if (!resolvedFileUrl || !/^https?:\/\//i.test(resolvedFileUrl)) {
+        throw new BadRequestException(
+          'Vui lòng tải lên tệp PDF/PNG/JPG hoặc cung cấp đường dẫn http(s) hợp lệ',
+        );
+      }
+      if (!resolvedMimeType && /\.(png|jpe?g|webp)(\?|$)/i.test(resolvedFileUrl)) {
+        resolvedMimeType = 'image/jpeg';
+      } else if (!resolvedMimeType && /\.pdf(\?|$)/i.test(resolvedFileUrl)) {
+        resolvedMimeType = 'application/pdf';
+      }
+    }
+
+    const created = await this.repository.addDocument(patientId, {
+      documentName: dto.documentName.trim(),
+      documentType: dto.documentType,
+      fileUrl: resolvedFileUrl,
+      mimeType: resolvedMimeType,
+      notes: dto.notes?.trim() || null,
+      fileSizeKb: resolvedSizeKb,
+      recordedDate: dto.recordedDate,
+    });
+    return this.serializeDocument(created);
   }
 
   async listDocuments(
     user: AuthenticatedUser,
     patientId: string,
-  ): Promise<PatientDocument[]> {
+  ): Promise<SerializedPatientDocument[]> {
     await this.assertPatientAccess(user, patientId);
-    return this.repository.findDocumentsByPatientId(patientId);
+    const docs = await this.repository.findDocumentsByPatientId(patientId);
+    return docs.map((doc) => this.serializeDocument(doc));
+  }
+
+  async getDocumentFile(
+    user: AuthenticatedUser,
+    patientId: string,
+    documentId: string,
+  ): Promise<{ bytes: Buffer; contentType: string }> {
+    await this.assertPatientAccess(user, patientId);
+    if (!this.repository.findDocumentById || !this.storage) {
+      throw new NotFoundException('Chức năng tải tệp tài liệu chưa khả dụng');
+    }
+    const existing = await this.repository.findDocumentById(documentId);
+    if (!existing || existing.patientId !== patientId) {
+      throw new NotFoundException('Không tìm thấy tài liệu y tế');
+    }
+    if (/^https?:\/\//i.test(existing.fileUrl)) {
+      throw new BadRequestException('Tài liệu dùng đường dẫn ngoài, không lưu trữ nội bộ');
+    }
+    const downloaded = await this.storage.downloadFile(existing.fileUrl);
+    return {
+      bytes: downloaded.bytes,
+      contentType: existing.mimeType || downloaded.contentType,
+    };
+  }
+
+  async deleteDocument(
+    user: AuthenticatedUser,
+    patientId: string,
+    documentId: string,
+  ): Promise<SerializedPatientDocument> {
+    await this.assertPatientAccess(user, patientId);
+    if (!this.repository.findDocumentById || !this.repository.deleteDocument) {
+      throw new NotFoundException('Chức năng xóa tài liệu y tế chưa khả dụng');
+    }
+    const existing = await this.repository.findDocumentById(documentId);
+    if (!existing || existing.patientId !== patientId) {
+      throw new NotFoundException('Không tìm thấy tài liệu y tế');
+    }
+    const deleted = await this.repository.deleteDocument(documentId);
+    if (this.storage && !/^https?:\/\//i.test(existing.fileUrl)) {
+      await this.storage.deleteFile(existing.fileUrl);
+    }
+    return this.serializeDocument(deleted);
   }
 
   private serializeVitalSign(vital: VitalSign): SerializedVitalSign {

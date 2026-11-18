@@ -1,4 +1,4 @@
-import type { Patient, PatientAllergy, PatientDocument } from '@prisma/client';
+import type { Patient, PatientAllergy } from '@prisma/client';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
 import type { CreatePatientDto } from '../../dtos/create-patient.dto';
 import type { UpdatePatientDto } from '../../dtos/update-patient.dto';
@@ -8,6 +8,7 @@ import type { CreateVitalSignDto } from '../../dtos/create-vital-sign.dto';
 import type { UpdateVitalSignDto } from '../../dtos/update-vital-sign.dto';
 import type {
   PatientDetail,
+  SerializedPatientDocument,
   SerializedVitalSign,
 } from '../../repositories/interfaces/patients.repository.interface';
 
@@ -22,8 +23,26 @@ export interface IPatientsService {
   addAllergy(user: AuthenticatedUser, patientId: string, dto: CreateAllergyDto): Promise<PatientAllergy>;
   listAllergies(user: AuthenticatedUser, patientId: string): Promise<PatientAllergy[]>;
   deleteAllergy(user: AuthenticatedUser, patientId: string, allergyId: string): Promise<PatientAllergy>;
-  addDocument(user: AuthenticatedUser, patientId: string, dto: CreatePatientDocumentDto): Promise<PatientDocument>;
-  listDocuments(user: AuthenticatedUser, patientId: string): Promise<PatientDocument[]>;
+  addDocument(
+    user: AuthenticatedUser,
+    patientId: string,
+    dto: CreatePatientDocumentDto,
+    file?: Express.Multer.File,
+  ): Promise<SerializedPatientDocument>;
+  listDocuments(
+    user: AuthenticatedUser,
+    patientId: string,
+  ): Promise<SerializedPatientDocument[]>;
+  getDocumentFile(
+    user: AuthenticatedUser,
+    patientId: string,
+    documentId: string,
+  ): Promise<{ bytes: Buffer; contentType: string }>;
+  deleteDocument(
+    user: AuthenticatedUser,
+    patientId: string,
+    documentId: string,
+  ): Promise<SerializedPatientDocument>;
   addVitalSign(user: AuthenticatedUser, patientId: string, dto: CreateVitalSignDto): Promise<SerializedVitalSign>;
   listVitalSigns(user: AuthenticatedUser, patientId: string, days?: number): Promise<SerializedVitalSign[]>;
   updateVitalSign(

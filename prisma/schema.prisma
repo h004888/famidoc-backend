@@ -104,6 +104,8 @@ enum PatientDocumentType {
   LAB_RESULT
   IMAGING_XRAY_CT
   DISCHARGE_SUMMARY
+  PRESCRIPTION
+  OTHER
 }
 
 enum MedicalContractStatus {
@@ -597,6 +599,8 @@ model PatientDocument {
   documentName String              @map("document_name") @db.VarChar(200)
   documentType PatientDocumentType @map("document_type")
   fileUrl      String              @map("file_url") @db.VarChar(255)
+  mimeType     String?             @map("mime_type") @db.VarChar(100)
+  notes        String?             @db.Text
   fileSizeKb   Int                 @map("file_size_kb")
   recordedDate DateTime            @map("recorded_date") @db.Date
   uploadedAt   DateTime            @default(now()) @map("uploaded_at") @db.Timestamptz()
