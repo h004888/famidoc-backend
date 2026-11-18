@@ -135,7 +135,7 @@ describe('AuthRepositoryImpl', () => {
     await repository.updatePassword('u-1', 'new_hash');
     expect(prismaService.user.update).toHaveBeenCalledWith({
       where: { id: 'u-1' },
-      data: { passwordHash: 'new_hash' },
+      data: { passwordHash: 'new_hash', mustChangePassword: false },
     });
   });
 

@@ -1,14 +1,15 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEmail,
   IsNotEmpty,
+  IsOptional,
   IsString,
   Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
 
-export class RegisterFacilityDto {
+export class CreateFacilityDto {
   @ApiProperty({
     description: 'Tên cơ sở y tế (Bệnh viện / Phòng khám)',
     example: 'Bệnh viện Đa khoa Quốc tế An Sinh',
@@ -30,7 +31,7 @@ export class RegisterFacilityDto {
   representativeName!: string;
 
   @ApiProperty({
-    description: 'Email chính thức của cơ sở y tế để nhận thông báo và tài khoản quản trị',
+    description: 'Email chính thức của cơ sở y tế để nhận tài khoản đăng nhập',
     example: 'contact@ansinhhospital.vn',
   })
   @IsNotEmpty({ message: 'Email không được để trống' })
@@ -47,12 +48,12 @@ export class RegisterFacilityDto {
   })
   phone!: string;
 
-  @ApiProperty({
-    description: 'Địa chỉ trụ sở của cơ sở y tế',
+  @ApiPropertyOptional({
+    description: 'Địa chỉ trụ sở của cơ sở y tế (tùy chọn khi tạo tài khoản)',
     example: '123 Giải Phóng, Phường Đồng Tâm, Quận Hai Bà Trưng, Hà Nội',
   })
-  @IsNotEmpty({ message: 'Địa chỉ không được để trống' })
+  @IsOptional()
   @IsString()
-  @MinLength(5, { message: 'Địa chỉ tối thiểu 5 ký tự' })
-  address!: string;
+  @MaxLength(500, { message: 'Địa chỉ tối đa 500 ký tự' })
+  address?: string;
 }

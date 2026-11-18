@@ -3,6 +3,7 @@ import {
   loadMasterContractTemplateHtml,
 } from './documenso-contract-template.schema';
 import type { DocumensoContractFieldValues } from './documenso-contract-template.schema';
+import { resolvePlatformLegalIdentity } from './platform-legal-identity';
 
 /** Mã hoá ký tự HTML để chống XSS khi nội suy giá trị vào template. */
 export function escapeHtml(value: string): string {
@@ -106,6 +107,7 @@ export function buildDocumensoContractFieldValues(
   const rep = input.family.representativeUser;
   const facUser = input.facility.user;
   const docUser = input.doctor?.user;
+  const platformLegal = resolvePlatformLegalIdentity(input.admin);
 
   return {
     contract_number: input.contractNumber,
@@ -136,20 +138,11 @@ export function buildDocumensoContractFieldValues(
     party_c_contact:
       [docUser?.email, docUser?.phone].filter(Boolean).join(' | ') ||
       'Liên hệ qua nền tảng FamiDoc',
-    party_d_company_name:
-      process.env.FAMIDOC_LEGAL_COMPANY_NAME || 'Nền tảng Y tế Gia đình FamiDoc',
-    party_d_tax_code: process.env.FAMIDOC_LEGAL_TAX_CODE || '0109998888',
-    party_d_address:
-      process.env.FAMIDOC_LEGAL_ADDRESS ||
-      'Việt Nam (Vận hành trực tuyến tại https://famidoc.online)',
-    party_d_representative:
-      process.env.FAMIDOC_LEGAL_REPRESENTATIVE ||
-      input.admin?.fullName ||
-      'Ban Quản trị Nền tảng FamiDoc',
-    party_d_contact:
-      process.env.FAMIDOC_LEGAL_SUPPORT_CONTACT ||
-      input.admin?.email ||
-      'support@famidoc.online',
+    party_d_company_name: platformLegal.companyName,
+    party_d_tax_code: platformLegal.taxCode,
+    party_d_address: platformLegal.address,
+    party_d_representative: platformLegal.representative,
+    party_d_contact: platformLegal.supportContact,
     package_name: input.pkg.packageName,
     package_code: input.pkg.lineageCode,
     billing_cycle_label: `Chu kỳ ${input.durationMonths} tháng`,

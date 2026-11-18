@@ -13,6 +13,7 @@ export interface AuthEntity {
   role: 'ADMIN' | 'HEALTHCARE_FACILITY' | 'DOCTOR' | 'FAMILY_REP';
   avatarUrl?: string | null;
   status: 'PENDING' | 'ACTIVE' | 'SUSPENDED' | 'LOCKED';
+  mustChangePassword?: boolean;
   failedLoginAttempts?: number;
   lockedUntil?: Date | null;
   createdAt?: Date;

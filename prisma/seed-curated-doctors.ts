@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { hash } from 'bcryptjs';
 import type { NormalizedDatasetResult } from '../scripts/etl-doctor-dataset';
+import { inferDoctorClinicalTier } from '../src/modules/doctors/utils/doctor-clinical-tier.util';
 
 const prisma = new PrismaClient();
 
@@ -113,6 +114,11 @@ export async function seedCuratedDoctors() {
         },
       });
 
+      const clinicalTier = inferDoctorClinicalTier(
+        doc.experienceYears,
+        doc.academicTitle,
+      );
+
       const upsertedDoctor = await tx.doctor.upsert({
         where: { userId: doc.userId },
         update: {
@@ -120,6 +126,7 @@ export async function seedCuratedDoctors() {
           specialty: doc.specialty,
           academicTitle: doc.academicTitle,
           experienceYears: doc.experienceYears,
+          clinicalTier,
           bio: doc.bio,
           ratingAvg: doc.ratingAvg,
           totalReviews: doc.totalReviews,
@@ -136,6 +143,7 @@ export async function seedCuratedDoctors() {
           specialty: doc.specialty,
           academicTitle: doc.academicTitle,
           experienceYears: doc.experienceYears,
+          clinicalTier,
           bio: doc.bio,
           ratingAvg: doc.ratingAvg,
           totalReviews: doc.totalReviews,
