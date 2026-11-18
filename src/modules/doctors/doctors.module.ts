@@ -1,27 +1,32 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../../core/database/prisma.module';
 import { AuthAccessModule } from '../../core/auth/auth-access.module';
+import { StorageModule } from '../../core/services/storage.module';
 import { FacilitiesDoctorsController } from './controllers/facilities-doctors.controller';
 import { DoctorsController } from './controllers/doctors.controller';
 import { FacilitiesController } from './controllers/facilities.controller';
 import { AdminFacilitiesController } from './controllers/admin-facilities.controller';
+import { DoctorQuotaProposalsController } from './controllers/doctor-quota-proposals.controller';
 import { DoctorsServiceImpl } from './services/impl/doctors.service.impl';
+import { DoctorQuotaProposalsService } from './services/doctor-quota-proposals.service';
 import { DOCTORS_SERVICE_TOKEN } from './services/interfaces/doctors.service.interface';
 
 @Module({
-  imports: [PrismaModule, AuthAccessModule],
+  imports: [PrismaModule, AuthAccessModule, StorageModule],
   controllers: [
     FacilitiesDoctorsController,
     DoctorsController,
     FacilitiesController,
     AdminFacilitiesController,
+    DoctorQuotaProposalsController,
   ],
   providers: [
     {
       provide: DOCTORS_SERVICE_TOKEN,
       useClass: DoctorsServiceImpl,
     },
+    DoctorQuotaProposalsService,
   ],
-  exports: [DOCTORS_SERVICE_TOKEN],
+  exports: [DOCTORS_SERVICE_TOKEN, DoctorQuotaProposalsService],
 })
 export class DoctorsModule {}

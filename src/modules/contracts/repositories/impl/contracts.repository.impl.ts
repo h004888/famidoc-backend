@@ -14,6 +14,7 @@ import {
   notifyContractParties,
   writeBusinessAudit,
 } from '../../../../core/business/business-helpers';
+import { buildActiveAndHeldWhere } from '../../pricing/doctor-quota.helper';
 import {
   CONTRACT_CHANGE_INCLUDE,
   CHANGE_ADDENDUM_INCLUDE,
@@ -31,7 +32,7 @@ export class ContractsRepositoryImpl implements IContractsRepository {
     );
   }
 }
-class PrismaContractsSession implements ContractsSession {
+export class PrismaContractsSession implements ContractsSession {
   constructor(private readonly tx: Prisma.TransactionClient) {}
   async findContractForUpdate(id: string) {
     // Mọi thay đổi của cùng hợp đồng đi lần lượt, tránh hai phụ lục cùng tính theo dữ liệu cũ.
@@ -109,7 +110,11 @@ class PrismaContractsSession implements ContractsSession {
       data: {
         contractStatus: status,
         ...(status === 'TERMINATED'
-          ? { terminationReason: reason, terminatedAt: new Date() }
+          ? {
+              terminationReason: reason,
+              terminatedAt: new Date(),
+              holdExpiresAt: null,
+            }
           : {}),
       },
     });
@@ -291,6 +296,55 @@ class PrismaContractsSession implements ContractsSession {
     });
   }
 
+  async lockDoctorAndCountActiveAndHeld(
+    doctorId: string,
+    exceptContractId?: string,
+  ) {
+    await this.tx
+      .$queryRaw`SELECT id FROM doctors WHERE id=${doctorId}::uuid FOR UPDATE`;
+    const doctor = await this.findDoctorById(doctorId);
+    if (!doctor) return null;
+    const activeAndHeldCount = await this.tx.medicalContract.count({
+      where: buildActiveAndHeldWhere(doctorId, {
+        now: new Date(),
+        exceptContractId,
+      }),
+    });
+    return { doctor, activeAndHeldCount };
+  }
+
+  findMatchingSessionById(id: string) {
+    return this.tx.matchingSession.findUnique({
+      where: { id },
+    });
+  }
+
+  async markMatchingSessionConfirmed(id: string, contractId: string) {
+    await this.tx.matchingSession.update({
+      where: { id },
+      data: {
+        status: 'CONFIRMED',
+        contractId,
+      },
+    });
+  }
+
+  findMatchingQueueRequestById(id: string) {
+    return this.tx.matchingQueueRequest.findUnique({
+      where: { id },
+    });
+  }
+
+  async markMatchingQueueConfirmed(id: string, contractId: string) {
+    await this.tx.matchingQueueRequest.update({
+      where: { id },
+      data: {
+        status: 'CONFIRMED',
+        contractId,
+      },
+    });
+  }
+
   findDoctorByUserId(userId: string) {
     return this.tx.doctor.findUnique({
       where: { userId },
@@ -349,16 +403,47 @@ class PrismaContractsSession implements ContractsSession {
       documensoToken: string;
       documensoSigningUrl: string;
       status: string;
+      completedAt?: Date | null;
     }>,
   ) {
     if (!signers.length) return;
-    await this.tx.contractDocumensoSigner.createMany({ data: signers });
+    await this.tx.contractDocumensoSigner.createMany({
+      data: signers,
+      skipDuplicates: true,
+    });
   }
 
   findDocumensoSigners(contractId: string) {
     return this.tx.contractDocumensoSigner.findMany({
       where: { contractId },
       orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async updateContractDocumensoEnvelope(
+    contractId: string,
+    documensoEnvelopeId: string,
+    documensoItemId: string,
+  ): Promise<boolean> {
+    const res = await this.tx.medicalContract.updateMany({
+      where: {
+        id: contractId,
+        documensoEnvelopeId: null,
+        contractStatus: 'PENDING_APPROVAL',
+        isDemo: false,
+      },
+      data: { documensoEnvelopeId, documensoItemId },
+    });
+    return res.count > 0;
+  }
+
+  async clearLegacyNonDocumensoSignatures(contractId: string) {
+    await this.tx.contractSignature.deleteMany({
+      where: {
+        contractId,
+        addendumId: null,
+        documensoRecipientId: null,
+      },
     });
   }
 
@@ -559,11 +644,20 @@ class PrismaContractsSession implements ContractsSession {
     facilityId: string,
     startDate: Date,
     endDate: Date,
+    excludeContractId?: string,
   ) {
     return this.tx.b2bStaffingContract.findFirst({
       where: {
         facilityId,
-        status: { in: ['ACTIVE', 'PENDING_SIGNATURE'] },
+        ...(excludeContractId ? { id: { not: excludeContractId } } : {}),
+        status: {
+          in: [
+            'ACTIVE',
+            'PENDING_FACILITY_SIGNATURE',
+            'REVISION_REQUESTED',
+            'PENDING_ADMIN_SIGNATURE',
+          ],
+        },
         startDate: { lte: endDate },
         endDate: { gte: startDate },
       },
@@ -573,14 +667,34 @@ class PrismaContractsSession implements ContractsSession {
   createStaffingContract(data: Prisma.B2bStaffingContractUncheckedCreateInput) {
     return this.tx.b2bStaffingContract.create({
       data,
-      include: { facility: true },
+      include: { facility: { include: { user: true } } },
     });
   }
 
   findStaffingContract(id: string) {
     return this.tx.b2bStaffingContract.findUnique({
       where: { id },
-      include: { facility: true },
+      include: { facility: { include: { user: true } } },
+    });
+  }
+
+  async lockStaffingContractForUpdate(id: string) {
+    await this.tx
+      .$queryRaw`SELECT id FROM b2b_staffing_contracts WHERE id = ${id}::uuid FOR UPDATE`;
+    return this.findStaffingContract(id);
+  }
+
+  updateStaffingContract(
+    id: string,
+    data: Prisma.B2bStaffingContractUncheckedUpdateInput,
+  ) {
+    return this.tx.b2bStaffingContract.update({
+      where: { id },
+      data: {
+        ...data,
+        updatedAt: new Date(),
+      },
+      include: { facility: { include: { user: true } } },
     });
   }
 
@@ -596,8 +710,82 @@ class PrismaContractsSession implements ContractsSession {
         ...(signedPdfUrl ? { signedPdfUrl } : {}),
         updatedAt: new Date(),
       },
-      include: { facility: true },
+      include: { facility: { include: { user: true } } },
     });
+  }
+
+  async getStaffingTerminationImpact(facilityId: string) {
+    const [
+      activeMedicalContracts,
+      pendingMedicalContracts,
+      openEncounters,
+      unsettledSettlements,
+      unsettledPaidInvoices,
+      activeOrOnboardingDoctors,
+      openComplaints,
+    ] = await Promise.all([
+      this.tx.medicalContract.count({
+        where: { facilityId, contractStatus: 'ACTIVE' },
+      }),
+      this.tx.medicalContract.count({
+        where: {
+          facilityId,
+          contractStatus: { in: ['PENDING_APPROVAL', 'PENDING_PAYMENT'] },
+        },
+      }),
+      this.tx.encounter.count({
+        where: {
+          contract: { facilityId },
+          encounterStatus: { in: ['REQUESTED', 'CONFIRMED', 'IN_PROGRESS'] },
+        },
+      }),
+      this.tx.facilitySettlement.count({
+        where: {
+          facilityId,
+          disbursementStatus: { in: ['PENDING', 'CONFIRMED', 'FAILED'] },
+        },
+      }),
+      this.tx.invoice.count({
+        where: {
+          paymentStatus: 'PAID',
+          contract: { facilityId },
+          settlementItems: {
+            none: {
+              settlement: { disbursementStatus: 'SETTLED' },
+            },
+          },
+        },
+      }),
+      this.tx.doctor.count({
+        where: {
+          facilityId,
+          onboardingStatus: {
+            in: [
+              'PENDING_SUBMISSION',
+              'PENDING_FACILITY_REVIEW',
+              'FACILITY_VERIFIED',
+              'ACTIVE',
+            ],
+          },
+        },
+      }),
+      this.tx.complaint.count({
+        where: {
+          contract: { facilityId },
+          status: { in: ['SUBMITTED', 'INVESTIGATING'] },
+        },
+      }),
+    ]);
+
+    return {
+      activeMedicalContracts,
+      pendingMedicalContracts,
+      openEncounters,
+      unsettledSettlements,
+      unsettledPaidInvoices,
+      activeOrOnboardingDoctors,
+      openComplaints,
+    };
   }
 
   async listStaffingContracts(
@@ -611,7 +799,7 @@ class PrismaContractsSession implements ContractsSession {
         where,
         skip,
         take,
-        include: { facility: true },
+        include: { facility: { include: { user: true } } },
         orderBy: { createdAt: 'desc' },
       }),
     ]);

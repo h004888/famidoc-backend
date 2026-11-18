@@ -133,4 +133,41 @@ describe('JwtAuthGuard', () => {
     const result = await guard.canActivate(ctx);
     expect(result).toBe(true);
   });
+
+  it('should throw ForbiddenException for PENDING facility when onboarding is not allowed', async () => {
+    const ctx = createMockContext('Bearer token123');
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: 'fac-user-1',
+      iat: 1000,
+      exp: 2000,
+    });
+    prismaService.user.findUnique.mockResolvedValue({
+      id: 'fac-user-1',
+      role: 'HEALTHCARE_FACILITY',
+      status: 'ACTIVE',
+      healthcareFacility: { id: 'fac-1', verificationStatus: 'PENDING' },
+    });
+    reflector.getAllAndOverride.mockReturnValue(false);
+
+    await expect(guard.canActivate(ctx)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('should allow PENDING facility on @AllowOnboarding endpoints', async () => {
+    const ctx = createMockContext('Bearer token123');
+    jwtService.verifyAsync.mockResolvedValue({
+      sub: 'fac-user-1',
+      iat: 1000,
+      exp: 2000,
+    });
+    prismaService.user.findUnique.mockResolvedValue({
+      id: 'fac-user-1',
+      role: 'HEALTHCARE_FACILITY',
+      status: 'ACTIVE',
+      healthcareFacility: { id: 'fac-1', verificationStatus: 'PENDING' },
+    });
+    reflector.getAllAndOverride.mockReturnValue(true);
+
+    const result = await guard.canActivate(ctx);
+    expect(result).toBe(true);
+  });
 });

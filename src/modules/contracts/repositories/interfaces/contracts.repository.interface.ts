@@ -14,6 +14,28 @@ import type {
   CreateTerminationRequest,
   UpdateTerminationRequest,
 } from '../../entities/contract-change.entity';
+export type StaffingFacilityWithUser = HealthcareFacility & {
+  user?: {
+    id: string;
+    email: string | null;
+    fullName: string;
+    phone: string | null;
+  } | null;
+};
+
+export type StaffingContractWithFacility = B2bStaffingContract & {
+  facility: StaffingFacilityWithUser;
+};
+
+export interface StaffingTerminationImpactCounts {
+  activeMedicalContracts: number;
+  pendingMedicalContracts: number;
+  openEncounters: number;
+  unsettledSettlements: number;
+  unsettledPaidInvoices: number;
+  activeOrOnboardingDoctors: number;
+  openComplaints: number;
+}
 export const CONTRACT_CHANGE_INCLUDE = {
   familyUnit: true,
   facility: true,
@@ -112,8 +134,17 @@ export interface ContractsSession {
     resourceId: string,
   ): Promise<void>;
   findFacilityById(id: string): Promise<HealthcareFacility | null>;
-  findFacilityByUserId(userId: string): Promise<HealthcareFacility | null>;
+  findFacilityById(id: string): Promise<StaffingFacilityWithUser | null>;
+  findFacilityByUserId(userId: string): Promise<StaffingFacilityWithUser | null>;
   findDoctorById(id: string): Promise<any | null>;
+  lockDoctorAndCountActiveAndHeld?(
+    doctorId: string,
+    exceptContractId?: string,
+  ): Promise<{ doctor: any; activeAndHeldCount: number } | null>;
+  findMatchingSessionById?(id: string): Promise<any | null>;
+  markMatchingSessionConfirmed?(id: string, contractId: string): Promise<void>;
+  findMatchingQueueRequestById?(id: string): Promise<any | null>;
+  markMatchingQueueConfirmed?(id: string, contractId: string): Promise<void>;
   findDoctorByUserId(userId: string): Promise<any | null>;
   findFamilyById(id: string): Promise<any | null>;
   findFamilyByRepresentativeUserId(userId: string): Promise<any | null>;
@@ -153,24 +184,35 @@ export interface ContractsSession {
     facilityId: string,
     startDate: Date,
     endDate: Date,
+    excludeContractId?: string,
   ): Promise<B2bStaffingContract | null>;
   createStaffingContract(
     data: Prisma.B2bStaffingContractUncheckedCreateInput,
-  ): Promise<B2bStaffingContract & { facility: HealthcareFacility }>;
+  ): Promise<StaffingContractWithFacility>;
   findStaffingContract(
     id: string,
-  ): Promise<(B2bStaffingContract & { facility: HealthcareFacility }) | null>;
+  ): Promise<StaffingContractWithFacility | null>;
+  lockStaffingContractForUpdate?(
+    id: string,
+  ): Promise<StaffingContractWithFacility | null>;
+  updateStaffingContract?(
+    id: string,
+    data: Prisma.B2bStaffingContractUncheckedUpdateInput,
+  ): Promise<StaffingContractWithFacility>;
   updateStaffingContractStatus(
     id: string,
     status: B2bContractStatus,
     signedPdfUrl?: string,
-  ): Promise<B2bStaffingContract & { facility: HealthcareFacility }>;
+  ): Promise<StaffingContractWithFacility>;
+  getStaffingTerminationImpact?(
+    facilityId: string,
+  ): Promise<StaffingTerminationImpactCounts>;
   listStaffingContracts(
     where: Prisma.B2bStaffingContractWhereInput,
     skip: number,
     take: number,
   ): Promise<{
-    items: (B2bStaffingContract & { facility: HealthcareFacility })[];
+    items: StaffingContractWithFacility[];
     total: number;
   }>;
   recordStaffingAudit(
@@ -192,9 +234,16 @@ export interface ContractsSession {
       documensoToken: string;
       documensoSigningUrl: string;
       status: string;
+      completedAt?: Date | null;
     }>,
   ): Promise<void>;
   findDocumensoSigners?(contractId: string): Promise<ContractDocumensoSigner[]>;
+  updateContractDocumensoEnvelope?(
+    contractId: string,
+    documensoEnvelopeId: string,
+    documensoItemId: string,
+  ): Promise<boolean | void>;
+  clearLegacyNonDocumensoSignatures?(contractId: string): Promise<void>;
   findFamilyGateStatus?(familyId: string): Promise<{
     activeContract: {
       id: string;

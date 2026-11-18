@@ -4,6 +4,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import {
+  GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -48,6 +49,22 @@ export class StorageService {
       throw new ServiceUnavailableException(
         'Không thể kiểm tra tệp trên kho lưu trữ.',
       );
+    }
+  }
+
+  async downloadFile(key: string): Promise<{ bytes: Buffer; contentType: string }> {
+    try {
+      const response = await this.s3.send(
+        new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+        { abortSignal: AbortSignal.timeout(10_000) },
+      );
+      if (!response.Body) throw new Error('Empty storage response');
+      return {
+        bytes: Buffer.from(await response.Body.transformToByteArray()),
+        contentType: response.ContentType ?? 'application/octet-stream',
+      };
+    } catch {
+      throw new ServiceUnavailableException('Không thể tải tệp từ kho lưu trữ.');
     }
   }
 

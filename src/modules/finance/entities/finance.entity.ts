@@ -12,6 +12,7 @@ export interface RevenueAnalyticsResult {
   platformFeeVnd: number;
   facilityShareVnd: number;
   unmatchedTransactionsCount?: number;
+  unreconciledInvoiceCount?: number;
   settlements: FacilitySettlement[];
 }
 export interface PreparedSettlementResult {

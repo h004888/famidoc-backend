@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { DoctorsServiceImpl } from '../services/impl/doctors.service.impl';
 import { PrismaService } from '../../../core/database/prisma.service';
+import { StorageService } from '../../../core/services/storage.service';
 import type { AuthenticatedUser } from '../../../core/auth/authenticated-request';
 import { DoctorCredentialType, DoctorOnboardingStatus } from '@prisma/client';
 
@@ -126,6 +127,13 @@ describe('DoctorsServiceImpl', () => {
           provide: 'MAILER_SERVICE',
           useValue: mailerService,
         },
+        {
+          provide: StorageService,
+          useValue: {
+            uploadFile: jest.fn(),
+            downloadFile: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -159,11 +167,19 @@ describe('DoctorsServiceImpl', () => {
 
       expect(result).toBeDefined();
       expect(result.doctorName).toBe('BS. CKI Nguyễn Văn An');
-      expect(result.initialPassword).toBe('FamiDoc@Doctor2026');
+      expect((result as any).initialPassword).toBeUndefined();
       expect(result.onboardingStatus).toBe(
         DoctorOnboardingStatus.PENDING_SUBMISSION,
       );
-      expect(prismaService.user.create).toHaveBeenCalled();
+      expect(prismaService.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            role: 'DOCTOR',
+            status: 'PENDING',
+            mustChangePassword: true,
+          }),
+        }),
+      );
       expect(prismaService.doctor.create).toHaveBeenCalled();
       expect(prismaService.auditLog.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
@@ -216,27 +232,81 @@ describe('DoctorsServiceImpl', () => {
   });
 
   describe('submitDoctorCredentials (STT 16 - UC-21)', () => {
+    const pdfFile = {
+      fieldname: 'file',
+      originalname: 'doc.pdf',
+      encoding: '7bit',
+      mimetype: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\n%valid-content'),
+      size: 24,
+    } as Express.Multer.File;
+
+    const uploadedThreeFiles = {
+      cchnFile: [pdfFile],
+      degreeFile: [pdfFile],
+      familyMedicineFile: [pdfFile],
+    };
+
     const credDto = {
+      academicTitle: 'ThS. BS.CKI',
+      specialty: 'Y học gia đình',
+      experienceYears: 9,
+      bio: 'Bác sĩ y học gia đình tận tâm.',
       credentials: [
         {
           credentialType: DoctorCredentialType.PRACTICE_LICENSE_CCHN,
           certificateNumber: 'CCHN-123',
           issueDate: '2020-01-01',
           issuingAuthority: 'Bộ Y tế',
-          fileUrl: 'https://cdn.famidoc.vn/cchn.pdf',
+        },
+        {
+          credentialType: DoctorCredentialType.DEGREE,
+          certificateNumber: 'DEG-456',
+          issueDate: '2018-06-15',
+          issuingAuthority: 'Đại học Y Hà Nội',
+        },
+        {
+          credentialType: DoctorCredentialType.FAMILY_MEDICINE_CERT,
+          certificateNumber: 'FM-789',
+          issueDate: '2021-03-10',
+          issuingAuthority: 'Trường ĐH Y Dược TP.HCM',
         },
       ],
     };
 
-    it('should allow doctor to upload credentials', async () => {
+    beforeEach(() => {
+      const storage = (service as any).storage;
+      storage.uploadFile = jest.fn().mockResolvedValue('doctor-credentials/doc-uuid-1/test.pdf');
+      prismaService.doctor.update.mockResolvedValue({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.PENDING_FACILITY_REVIEW,
+        academicTitle: 'ThS. BS.CKI',
+      });
+    });
+
+    it('should allow doctor to upload 3 real files, update profile, and transition to PENDING_FACILITY_REVIEW', async () => {
       const result = await service.submitDoctorCredentials(
         doctorUser,
         'doc-uuid-1',
         credDto,
         '127.0.0.1',
+        uploadedThreeFiles,
       );
 
       expect(result).toBeDefined();
+      expect(result.onboardingStatus).toBe(
+        DoctorOnboardingStatus.PENDING_FACILITY_REVIEW,
+      );
+      expect(prismaService.doctor.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            onboardingStatus: 'PENDING_FACILITY_REVIEW',
+            rejectionReason: null,
+            academicTitle: 'ThS. BS.CKI',
+            experienceYears: 9,
+          }),
+        }),
+      );
       expect(prismaService.doctorCredential.deleteMany).toHaveBeenCalledWith({
         where: { doctorId: 'doc-uuid-1' },
       });
@@ -254,6 +324,38 @@ describe('DoctorsServiceImpl', () => {
       });
     });
 
+    it('should reject submission when any of the 3 mandatory document types is missing', async () => {
+      await expect(
+        service.submitDoctorCredentials(
+          doctorUser,
+          'doc-uuid-1',
+          { credentials: [credDto.credentials[0]] },
+          '127.0.0.1',
+          { cchnFile: [pdfFile] },
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject submission when uploaded file has spoofed/invalid magic bytes', async () => {
+      const badFile = {
+        ...pdfFile,
+        buffer: Buffer.from('NOT_A_REAL_PDF'),
+      } as Express.Multer.File;
+      await expect(
+        service.submitDoctorCredentials(
+          doctorUser,
+          'doc-uuid-1',
+          credDto,
+          '127.0.0.1',
+          {
+            cchnFile: [badFile],
+            degreeFile: [pdfFile],
+            familyMedicineFile: [pdfFile],
+          },
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
     it('should allow doctor to upload credentials using "me" alias', async () => {
       prismaService.doctor.findFirst = jest.fn().mockResolvedValue(mockDoctor);
 
@@ -262,6 +364,7 @@ describe('DoctorsServiceImpl', () => {
         'me',
         credDto,
         '127.0.0.1',
+        uploadedThreeFiles,
       );
 
       expect(result).toBeDefined();
@@ -280,6 +383,7 @@ describe('DoctorsServiceImpl', () => {
           'doc-uuid-1',
           credDto,
           '127.0.0.1',
+          uploadedThreeFiles,
         ),
       ).rejects.toThrow(ForbiddenException);
     });
@@ -296,6 +400,7 @@ describe('DoctorsServiceImpl', () => {
           'doc-uuid-1',
           credDto,
           '127.0.0.1',
+          uploadedThreeFiles,
         ),
       ).rejects.toThrow(BadRequestException);
     });
@@ -312,6 +417,8 @@ describe('DoctorsServiceImpl', () => {
             ...credDto.credentials[0],
             issueDate: '2099-01-01',
           },
+          credDto.credentials[1],
+          credDto.credentials[2],
         ],
       };
 
@@ -321,6 +428,7 @@ describe('DoctorsServiceImpl', () => {
           'doc-uuid-1',
           futureDateDto,
           '127.0.0.1',
+          uploadedThreeFiles,
         ),
       ).rejects.toThrow(BadRequestException);
     });
@@ -443,7 +551,13 @@ describe('DoctorsServiceImpl', () => {
   });
 
   describe('approveDoctorCredentialsByPlatform (STT 18 - UC-22)', () => {
-    it('should allow ADMIN to approve doctor credentials and activate doctor (ACTIVE)', async () => {
+    it('should allow ADMIN to approve doctor credentials, activate user+doctor, and notify+email both Doctor and Facility', async () => {
+      prismaService.user.findUnique
+        .mockResolvedValueOnce({ id: mockDoctor.userId, email: 'doc@famidoc.vn' })
+        .mockResolvedValueOnce({
+          id: mockFacility.userId,
+          email: 'facility@hoanmy.vn',
+        });
       prismaService.doctor.findUnique.mockResolvedValue({
         ...mockDoctor,
         onboardingStatus: DoctorOnboardingStatus.FACILITY_VERIFIED,
@@ -469,9 +583,20 @@ describe('DoctorsServiceImpl', () => {
           type: 'DOCTOR_PLATFORM_APPROVED',
         }),
       });
+      expect(prismaService.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: mockFacility.userId,
+          type: 'DOCTOR_ONBOARDING_COMPLETED',
+        }),
+      });
       expect(mailerService.sendMail).toHaveBeenCalledWith(
         expect.objectContaining({
           to: 'doc@famidoc.vn',
+        }),
+      );
+      expect(mailerService.sendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'facility@hoanmy.vn',
         }),
       );
       expect(prismaService.doctorCredential.updateMany).toHaveBeenCalledWith({
@@ -510,7 +635,7 @@ describe('DoctorsServiceImpl', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('should handle platform rejection and send notification to doctor', async () => {
+    it('should handle platform rejection and send notification to both doctor and facility', async () => {
       prismaService.doctor.findUnique.mockResolvedValue({
         ...mockDoctor,
         onboardingStatus: DoctorOnboardingStatus.FACILITY_VERIFIED,
@@ -519,6 +644,7 @@ describe('DoctorsServiceImpl', () => {
       prismaService.doctor.update.mockResolvedValue({
         ...mockDoctor,
         onboardingStatus: DoctorOnboardingStatus.PENDING_SUBMISSION,
+        rejectionReason: 'Số CCHN không hợp lệ',
       });
 
       const result = await service.approveDoctorCredentialsByPlatform(
@@ -532,6 +658,12 @@ describe('DoctorsServiceImpl', () => {
       expect(prismaService.notification.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           userId: mockDoctor.userId,
+          type: 'DOCTOR_PLATFORM_REJECTED',
+        }),
+      });
+      expect(prismaService.notification.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: mockFacility.userId,
           type: 'DOCTOR_PLATFORM_REJECTED',
         }),
       });

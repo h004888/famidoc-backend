@@ -6,26 +6,36 @@ import type {
   PlatformApproveCredentialsDto,
 } from '../../dtos/verify-credentials.dto';
 import type { DoctorResponseDto } from '../../dtos/doctor-response.dto';
-import type { RegisterFacilityDto } from '../../dtos/register-facility.dto';
-import type { ApproveFacilityAccountDto } from '../../dtos/approve-facility-account.dto';
+import type { CreateFacilityDto } from '../../dtos/create-facility.dto';
 import type { SubmitFacilityLegalProfileDto } from '../../dtos/submit-facility-legal-profile.dto';
 import type { VerifyFacilityLegalDto } from '../../dtos/verify-facility-legal.dto';
 import type { FacilityResponseDto } from '../../dtos/facility-response.dto';
 import type { ListDoctorsQueryDto } from '../../dtos/list-doctors-query.dto';
 
+export interface UploadedFacilityLegalFiles {
+  operatingLicenseFile?: Express.Multer.File[];
+  file?: Express.Multer.File[];
+  businessLicenseFile?: Express.Multer.File[];
+}
+
+export type FacilityLegalDocumentType = 'operating' | 'business';
+
+export interface UploadedDoctorCredentialFiles {
+  cchnFile?: Express.Multer.File[];
+  practiceLicenseFile?: Express.Multer.File[];
+  degreeFile?: Express.Multer.File[];
+  familyMedicineFile?: Express.Multer.File[];
+  familyMedicineCertFile?: Express.Multer.File[];
+  files?: Express.Multer.File[];
+}
+
 export const DOCTORS_SERVICE_TOKEN = Symbol('IDoctorsService');
 
 export interface IDoctorsService {
   // Facility Onboarding
-  registerFacility(
-    dto: RegisterFacilityDto,
-    ip: string,
-  ): Promise<FacilityResponseDto>;
-
-  approveFacilityAccount(
+  createFacilityByAdmin(
     actor: AuthenticatedUser,
-    facilityId: string,
-    dto: ApproveFacilityAccountDto,
+    dto: CreateFacilityDto,
     ip: string,
   ): Promise<FacilityResponseDto>;
 
@@ -33,7 +43,14 @@ export interface IDoctorsService {
     actor: AuthenticatedUser,
     dto: SubmitFacilityLegalProfileDto,
     ip: string,
+    files?: Express.Multer.File | UploadedFacilityLegalFiles,
   ): Promise<FacilityResponseDto>;
+
+  getFacilityLegalDocument(
+    facilityId: string,
+    actor?: AuthenticatedUser,
+    docType?: FacilityLegalDocumentType,
+  ): Promise<{ bytes: Buffer; contentType: string }>;
 
   verifyFacilityLegal(
     actor: AuthenticatedUser,
@@ -66,7 +83,14 @@ export interface IDoctorsService {
     doctorId: string,
     dto: SubmitDoctorCredentialsDto,
     ip: string,
+    uploadedFiles?: UploadedDoctorCredentialFiles,
   ): Promise<DoctorResponseDto>;
+
+  getDoctorCredentialFile(
+    actor: AuthenticatedUser,
+    doctorId: string,
+    credentialId: string,
+  ): Promise<{ bytes: Buffer; contentType: string }>;
 
   approveDoctorCredentialsByFacility(
     actor: AuthenticatedUser,

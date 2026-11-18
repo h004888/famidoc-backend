@@ -5,6 +5,19 @@ import {
 import { createHash } from 'node:crypto';
 import type { SePayWebhookDto } from '../dtos/sepay-webhook.dto';
 
+export interface FingerprintTransaction {
+  providerTransactionId: string;
+  gateway: string;
+  accountNumber: string;
+  transactionDate: string;
+  transferType: 'in' | 'out';
+  transferAmount: number;
+  code?: string | null;
+  content: string;
+  referenceCode?: string;
+  subAccount?: string | null;
+}
+
 export function createPaymentCode(number: number): string {
   if (!Number.isSafeInteger(number) || number < 1 || number > 999999)
     throw new ServiceUnavailableException(
@@ -51,7 +64,9 @@ export function parseSePayDate(value: string): Date {
   return date;
 }
 
-export function extractPaymentCodes(dto: SePayWebhookDto): string[] {
+export function extractPaymentCodes(
+  dto: Pick<SePayWebhookDto, 'content' | 'code'>,
+): string[] {
   // Nhận mã mới FD + 6 chữ số và mã cũ 24/32 ký tự; phải là mã trọn vẹn trong nội dung.
   const codes = new Set<string>();
   const content = dto.content.toUpperCase();
@@ -74,9 +89,26 @@ export function extractPaymentCodes(dto: SePayWebhookDto): string[] {
 }
 
 export function transactionFingerprint(dto: SePayWebhookDto): string {
+  return bankTransactionFingerprint({
+    providerTransactionId: String(dto.id),
+    gateway: dto.gateway,
+    accountNumber: dto.accountNumber,
+    transactionDate: dto.transactionDate,
+    transferType: dto.transferType,
+    transferAmount: dto.transferAmount,
+    code: dto.code,
+    content: dto.content,
+    referenceCode: dto.referenceCode,
+    subAccount: dto.subAccount,
+  });
+}
+
+export function bankTransactionFingerprint(
+  dto: FingerprintTransaction,
+): string {
   // Không đưa timestamp chữ ký vào fingerprint: mỗi lần retry có thể được ký lại.
   const fields = [
-    dto.id,
+    dto.providerTransactionId,
     dto.gateway.trim().toUpperCase(),
     dto.accountNumber,
     dto.transactionDate,

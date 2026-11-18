@@ -3,6 +3,7 @@ import type { AuthenticatedUser } from '../../../../core/auth/authenticated-requ
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -11,6 +12,10 @@ import { randomUUID } from 'node:crypto';
 
 import type { ListTransactionsDto } from '../../dtos/list-transactions.dto';
 import type { SePayWebhookDto } from '../../dtos/sepay-webhook.dto';
+import type {
+  ReconciledPaymentResult,
+  SePayApiTransaction,
+} from '../../sepay/sepay-api.types';
 import {
   BillingContractStatus,
   PaymentRequestStatus,
@@ -19,6 +24,7 @@ import {
   type ActivationResult,
   type BillingContract,
   type PaymentRequest,
+  type PaymentRequestStatusView,
   type PaymentTransaction,
   type PaymentTransactionResult,
 } from '../../entities/payment.entity';
@@ -38,8 +44,28 @@ import {
   buildTransferContent,
   extractPaymentCodes,
   parseSePayDate,
+  bankTransactionFingerprint,
   transactionFingerprint,
 } from '../../sepay/sepay-transaction.helpers';
+
+interface IncomingSePayTransaction {
+  providerTransactionId: string;
+  webhookTransactionId?: string;
+  apiTransactionId?: string;
+  gateway: string;
+  accountNumber: string;
+  transactionAt: Date;
+  code?: string | null;
+  content: string;
+  transferType: 'in' | 'out';
+  transferAmount: number;
+  referenceCode?: string;
+  subAccount?: string | null;
+  source: 'WEBHOOK' | 'SEPAY_API';
+  reconciliationRunId?: string;
+  fingerprint?: string;
+  rawPayload: Record<string, unknown>;
+}
 
 @Injectable()
 export class PaymentsServiceImpl implements IPaymentsService {
@@ -134,7 +160,7 @@ export class PaymentsServiceImpl implements IPaymentsService {
   async getPaymentStatus(
     id: string,
     actor?: AuthenticatedUser,
-  ): Promise<PaymentRequest> {
+  ): Promise<PaymentRequestStatusView> {
     this.config.assertPaymentsEnabled();
     return this.repository.transaction(async (session) => {
       const item = await this.requireRequest(session, id);
@@ -147,7 +173,41 @@ export class PaymentsServiceImpl implements IPaymentsService {
         item.status = PaymentRequestStatus.EXPIRED;
         await session.saveRequest(item);
       }
-      return this.withQrCode(item);
+      const view: PaymentRequestStatusView = this.withQrCode(item);
+      // Bề mặt hóa trạng thái sau thanh toán để gia đình không bị "màn hình thành công giả".
+      if (item.status === PaymentRequestStatus.PAID) {
+        const contract = await session.findContract(
+          item.contractId,
+          item.addendumId,
+        );
+        if (contract) {
+          if (contract.status === BillingContractStatus.ACTIVE) {
+            view.activation = { activated: true, blockingReasons: [] };
+          } else {
+            view.activation = {
+              activated: false,
+              blockingReasons: (
+                await this.evaluateActivation(session, contract)
+              ).blockingReasons,
+            };
+          }
+        }
+      } else if (item.status === PaymentRequestStatus.PENDING) {
+        // Tiền có thể đã vào nhưng đang soát xét (LATE_PAYMENT, WRONG_ACCOUNT...):
+        // bề mặt hóa giao dịch gần nhất để gia đình biết mà không nhầm là "chưa ghi nhận".
+        const latest =
+          await session.findLatestTransactionByRequestId(item.id);
+        if (latest)
+          view.latestTransaction = {
+            id: latest.id,
+            outcome: latest.outcome,
+            reason: latest.reason,
+            referenceCode: latest.referenceCode || null,
+            amountVnd: latest.amountVnd,
+            receivedAt: latest.receivedAt,
+          };
+      }
+      return view;
     });
   }
 
@@ -195,65 +255,189 @@ export class PaymentsServiceImpl implements IPaymentsService {
   async handleVietQRWebhook(
     dto: SePayWebhookDto,
   ): Promise<PaymentTransactionResult> {
+    return this.handleIncomingTransaction({
+      providerTransactionId: String(dto.id),
+      webhookTransactionId: String(dto.id),
+      gateway: dto.gateway,
+      accountNumber: dto.accountNumber,
+      transactionAt: parseSePayDate(dto.transactionDate),
+      code: dto.code,
+      content: dto.content,
+      transferType: dto.transferType,
+      transferAmount: dto.transferAmount,
+      referenceCode: dto.referenceCode,
+      subAccount: dto.subAccount,
+      source: 'WEBHOOK',
+      fingerprint: transactionFingerprint(dto),
+      rawPayload: Object.fromEntries(Object.entries(dto)),
+    });
+  }
+
+  async handleSePayApiTransaction(
+    item: SePayApiTransaction,
+    reconciliationRunId: string,
+  ): Promise<ReconciledPaymentResult> {
+    const transactionAt = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(
+      item.transaction_date,
+    )
+      ? parseSePayDate(item.transaction_date)
+      : new Date(item.transaction_date);
+    if (!Number.isFinite(transactionAt.getTime()))
+      throw new BadRequestException('Invalid SePay API transaction_date');
+    const amount =
+      item.transfer_type === 'in' ? item.amount_in : item.amount_out;
+    if (!Number.isSafeInteger(amount) || amount <= 0)
+      throw new BadRequestException('Invalid SePay API transaction amount');
+    const result = await this.handleIncomingTransaction({
+      providerTransactionId: `sepay-v2:${item.id}`,
+      apiTransactionId: item.id,
+      gateway: item.bank_brand_name,
+      accountNumber: item.account_number,
+      transactionAt,
+      code: item.code,
+      content: item.transaction_content,
+      transferType: item.transfer_type,
+      transferAmount: amount,
+      referenceCode: item.reference_number,
+      source: 'SEPAY_API',
+      reconciliationRunId,
+      rawPayload: { ...item },
+    });
+    return {
+      duplicate: result.duplicate,
+      linked: result.linked,
+      transaction: result.transaction,
+    };
+  }
+
+  private async handleIncomingTransaction(
+    incoming: IncomingSePayTransaction,
+  ): Promise<PaymentTransactionResult & { linked: boolean }> {
     this.config.assertPaymentsEnabled();
-    const transactionAt = parseSePayDate(dto.transactionDate);
-    const fingerprint = transactionFingerprint(dto);
+    const fingerprint =
+      incoming.fingerprint ??
+      bankTransactionFingerprint({
+        providerTransactionId: incoming.providerTransactionId,
+        gateway: incoming.gateway,
+        accountNumber: incoming.accountNumber,
+        transactionDate: incoming.transactionAt.toISOString(),
+        transferType: incoming.transferType,
+        transferAmount: incoming.transferAmount,
+        code: incoming.code,
+        content: incoming.content,
+        referenceCode: incoming.referenceCode,
+        subAccount: incoming.subAccount,
+      });
     console.log('[DEBUG_CP05][WEBHOOK_SERVICE_START]', {
-      sepayId: dto.id,
-      parsedDate: transactionAt.toISOString(),
+      sepayId: incoming.providerTransactionId,
+      parsedDate: incoming.transactionAt.toISOString(),
       fingerprint,
       env: this.config.getEnvironment(),
+      source: incoming.source,
     });
     return this.repository.transaction(async (session) => {
-      const previous = await session.findTransaction(
-        String(dto.id),
-        this.config.getEnvironment(),
-      );
+      const previous = incoming.apiTransactionId
+        ? await session.findTransactionByApiId(incoming.apiTransactionId)
+        : await session.findTransactionByWebhookId(
+            incoming.webhookTransactionId!,
+          );
       if (previous) {
         console.log('[DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK]', {
           isDuplicate: true,
           previousId: previous.id,
           fingerprintMatch: previous.fingerprint === fingerprint,
         });
-        if (previous.fingerprint !== fingerprint)
+        if (
+          (previous.providerTransactionId === incoming.providerTransactionId &&
+            previous.fingerprint !== fingerprint) ||
+          !this.isSameBankTransaction(previous, incoming)
+        )
           throw new ConflictException(
             'Provider transaction ID reused with different data',
           );
         // Retry đúng dữ liệu chỉ trả kết quả cũ, không cộng tiền hay kéo dài hợp đồng.
-        return { duplicate: true, transaction: previous, activation: null };
+        return {
+          duplicate: true,
+          linked: false,
+          transaction: previous,
+          activation: null,
+        };
       }
       console.log('[DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK]', {
         isDuplicate: false,
-        sepayId: dto.id,
+        sepayId: incoming.providerTransactionId,
       });
-      const reference = dto.referenceCode?.trim() ?? '';
+      const reference = incoming.referenceCode?.trim() ?? '';
       const bankReferenceKey = reference
         ? JSON.stringify([
-            dto.gateway.trim().toUpperCase(),
-            dto.accountNumber,
+            incoming.gateway.trim().toUpperCase(),
+            incoming.accountNumber,
             reference,
           ])
         : null;
-      const codes = extractPaymentCodes(dto);
+      if (bankReferenceKey) {
+        const byReference = await session.findTransactionByBankIdentity(
+          incoming.accountNumber,
+          reference,
+        );
+        const crossSource =
+          (Boolean(incoming.apiTransactionId) &&
+            Boolean(byReference?.sepayWebhookTransactionId)) ||
+          (Boolean(incoming.webhookTransactionId) &&
+            Boolean(byReference?.sepayApiTransactionId));
+        if (
+          byReference &&
+          crossSource &&
+          this.isSameBankTransaction(byReference, incoming)
+        ) {
+          const linked = await session.linkReconciledTransaction(
+            byReference.id,
+            {
+              sepayWebhookTransactionId: incoming.webhookTransactionId,
+              sepayApiTransactionId: incoming.apiTransactionId,
+              reconciliationRunId: incoming.reconciliationRunId,
+              reconciledAt:
+                incoming.source === 'SEPAY_API'
+                  ? this.clock.now().toISOString()
+                  : undefined,
+            },
+          );
+          return {
+            duplicate: true,
+            linked: true,
+            transaction: linked,
+            activation: null,
+          };
+        }
+      }
+      const codes = extractPaymentCodes(incoming);
       // Mặc định giữ để kiểm tra; chỉ chuyển MATCHED sau khi mọi phép đối chiếu đều đạt.
       const record: PaymentTransaction = {
         id: randomUUID(),
         environment: this.config.getEnvironment(),
-        providerTransactionId: String(dto.id),
+        providerTransactionId: incoming.providerTransactionId,
         fingerprint,
         bankReferenceKey,
-        gateway: dto.gateway,
-        accountNumber: dto.accountNumber,
-        transferType: dto.transferType,
-        amountVnd: dto.transferAmount,
+        gateway: incoming.gateway,
+        accountNumber: incoming.accountNumber,
+        transferType: incoming.transferType,
+        amountVnd: incoming.transferAmount,
         paymentCode: codes.length === 1 ? codes[0] : null,
         paymentRequestId: null,
         referenceCode: reference,
-        transactionAt: transactionAt.toISOString(),
+        transactionAt: incoming.transactionAt.toISOString(),
         receivedAt: this.clock.now().toISOString(),
         outcome: TransactionOutcome.REVIEW_REQUIRED,
         reason: null,
-        rawPayload: Object.fromEntries(Object.entries(dto)),
+        sepayWebhookTransactionId: incoming.webhookTransactionId ?? null,
+        sepayApiTransactionId: incoming.apiTransactionId ?? null,
+        ingestionSource: incoming.source,
+        reconciledAt:
+          incoming.source === 'SEPAY_API'
+            ? this.clock.now().toISOString()
+            : null,
+        reconciliationRunId: incoming.reconciliationRunId ?? null,
+        rawPayload: incoming.rawPayload,
       };
       let payment: PaymentRequest | null = null;
       if (record.paymentCode) {
@@ -261,7 +445,7 @@ export class PaymentsServiceImpl implements IPaymentsService {
         record.paymentRequestId = payment?.id ?? null;
       }
       console.log('[DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE]', {
-        rawContent: dto.content,
+        rawContent: incoming.content,
         extractedCodes: codes,
         chosenCode: record.paymentCode,
         paymentRequestFound: !!payment,
@@ -292,7 +476,12 @@ export class PaymentsServiceImpl implements IPaymentsService {
           outcome: record.outcome,
         });
         await session.saveTransaction(record);
-        return { duplicate: false, transaction: record, activation: null };
+        return {
+          duplicate: false,
+          linked: false,
+          transaction: record,
+          activation: null,
+        };
       }
       // Sau đối chiếu, payment chắc chắn tồn tại. Không gộp các khoản thiếu/thừa để tự trả đủ.
       if (!payment) throw new NotFoundException('Payment request not found');
@@ -321,8 +510,26 @@ export class PaymentsServiceImpl implements IPaymentsService {
         activated: activation.activated,
         blockingReasons: activation.blockingReasons,
       });
-      return { duplicate: false, transaction: record, activation };
+      return {
+        duplicate: false,
+        linked: false,
+        transaction: record,
+        activation,
+      };
     });
+  }
+
+  private isSameBankTransaction(
+    existing: PaymentTransaction,
+    incoming: IncomingSePayTransaction,
+  ) {
+    return (
+      existing.accountNumber === incoming.accountNumber &&
+      existing.transferType === incoming.transferType &&
+      existing.amountVnd === incoming.transferAmount &&
+      existing.referenceCode === (incoming.referenceCode?.trim() ?? '') &&
+      Date.parse(existing.transactionAt) === incoming.transactionAt.getTime()
+    );
   }
 
   async tryActivate(
@@ -336,6 +543,53 @@ export class PaymentsServiceImpl implements IPaymentsService {
         await this.requireContract(session, contractId, addendumId),
       );
     });
+  }
+
+  // Kích hoạt bù an toàn: FAMILY_REP chỉ được yêu cầu cho hóa đơn đã PAID của chính hộ mình,
+  // ADMIN thì giữ quyền như cũ. Giao dịch chưa PAID không thể kích hoạt nên từ chối sớm.
+  async recheckActivation(
+    paymentId: string,
+    actor?: AuthenticatedUser,
+  ): Promise<ActivationResult> {
+    this.config.assertPaymentsEnabled();
+    return this.repository.transaction(async (session) => {
+      const payment = await this.requireRequest(session, paymentId);
+      if (actor && actor.role !== 'ADMIN') {
+        if (
+          actor.role !== 'FAMILY_REP' ||
+          actor.familyUnitId !== payment.familyId
+        )
+          throw new ForbiddenException(
+            'Only the payment owner family or an admin can recheck activation',
+          );
+        if (payment.status !== PaymentRequestStatus.PAID)
+          throw new ForbiddenException(
+            'Activation can only be rechecked after the payment is recorded',
+          );
+      }
+      return this.activateInTransaction(
+        session,
+        await this.requireContract(session, payment.contractId, payment.addendumId),
+      );
+    });
+  }
+
+  // Chỉ đánh giá điều kiện kích hoạt, không ghi dữ liệu: dùng cho cả tra cứu (getPaymentStatus)
+  // lẫn nhánh kiểm tra trước khi ghi hợp đồng ACTIVE trong activateInTransaction.
+  private async evaluateActivation(
+    session: PaymentsSession,
+    contract: BillingContract,
+  ): Promise<{ paid: boolean; blockingReasons: string[] }> {
+    const reasons = missingActivationRequirements(contract.requirements);
+    if (contract.status === BillingContractStatus.CANCELLED)
+      reasons.push('CONTRACT_CANCELLED');
+    const paid = (
+      await session.listRequests(contract.id, contract.addendumId)
+    ).some((item) => item.status === PaymentRequestStatus.PAID);
+    if (!paid) reasons.push('VERIFIED_PAYMENT_REQUIRED');
+    if (await this.otherActiveContractExists(session, contract))
+      reasons.push('FAMILY_ALREADY_HAS_ACTIVE_CONTRACT');
+    return { paid, blockingReasons: reasons };
   }
 
   // Mỗi nhánh trả một lý do rõ ràng; không tự suy đoán khi thông tin thanh toán mơ hồ.
@@ -408,15 +662,10 @@ export class PaymentsServiceImpl implements IPaymentsService {
       };
     }
     // Kiểm tra lại sau khi tiền vào vì phân công/sức chứa có thể đã đổi từ lúc tạo mã.
-    const reasons = missingActivationRequirements(contract.requirements);
-    if (contract.status === BillingContractStatus.CANCELLED)
-      reasons.push('CONTRACT_CANCELLED');
-    const paid = (
-      await session.listRequests(contract.id, contract.addendumId)
-    ).some((item) => item.status === PaymentRequestStatus.PAID);
-    if (!paid) reasons.push('VERIFIED_PAYMENT_REQUIRED');
-    if (await this.otherActiveContractExists(session, contract))
-      reasons.push('FAMILY_ALREADY_HAS_ACTIVE_CONTRACT');
+    const { blockingReasons: reasons } = await this.evaluateActivation(
+      session,
+      contract,
+    );
     // Thiếu bất kỳ điều kiện nào thì giữ PENDING nhưng vẫn bảo toàn trạng thái PAID.
     if (reasons.length)
       return {
@@ -455,7 +704,9 @@ export class PaymentsServiceImpl implements IPaymentsService {
     url.searchParams.set('bank', payment.expectedGateway);
     url.searchParams.set('amount', String(payment.amountVnd));
     url.searchParams.set('des', payment.transferContent ?? payment.paymentCode);
-    url.searchParams.set('template', 'compact');
+    // qr_only giữ ~89% canvas cho vùng QR thật (compact chỉ còn 69% sau khi trừ logo/dải brand),
+    // giúp module QR dày hơn ~2 lần khi render xuống kích thước hiển thị.
+    url.searchParams.set('template', 'qr_only');
     return { ...payment, qrUrl: url.toString() };
   }
   private assertPaymentOwner(

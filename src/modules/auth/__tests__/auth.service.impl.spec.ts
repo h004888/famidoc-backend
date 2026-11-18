@@ -1240,9 +1240,11 @@ describe('AuthServiceImpl', () => {
     // 3. Đăng nhập thành công khi hết hạn lock -> Reset DB failedAttempts về 0
     mockUser.failedLoginAttempts = 5;
     mockUser.lockedUntil = null;
+    mockUser.mustChangePassword = true;
     redisService.get.mockResolvedValue(null);
     const successRes = await service.login({ email: 'a@famidoc.vn', password: 'Password@123' });
     expect(successRes.accessToken).toBe('jwt_token_valid');
+    expect(successRes.user.mustChangePassword).toBe(true);
     expect(repository.resetFailedAttempts).toHaveBeenCalledWith('u-1');
   });
 });

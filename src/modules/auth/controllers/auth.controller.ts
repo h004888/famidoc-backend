@@ -132,6 +132,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @AllowOnboarding()
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')

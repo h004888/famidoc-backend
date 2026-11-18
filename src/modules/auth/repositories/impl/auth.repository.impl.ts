@@ -202,7 +202,7 @@ export class AuthRepositoryImpl
   async updatePassword(userId: string, passwordHash: string): Promise<void> {
     await this.prismaService.user.update({
       where: { id: userId },
-      data: { passwordHash },
+      data: { passwordHash, mustChangePassword: false },
     });
   }
 

@@ -110,11 +110,11 @@ import { demoIds, seedDemo } from '../prisma/seed';
       await app?.close();
     });
 
-    it('creates exactly 30 business tables and all foreign keys validate', async () => {
+    it('creates exactly 33 business tables and all foreign keys validate', async () => {
       const count = await db.$queryRaw<
         { count: bigint }[]
       >`SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename <> '_prisma_migrations'`;
-      expect(Number(count[0].count)).toBe(30);
+      expect(Number(count[0].count)).toBe(33);
       const invalid =
         await db.$queryRaw`SELECT conname FROM pg_constraint WHERE NOT convalidated AND connamespace='public'::regnamespace`;
       expect(invalid).toEqual([]);

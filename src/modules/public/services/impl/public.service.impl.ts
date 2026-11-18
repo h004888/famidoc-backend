@@ -4,6 +4,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../../core/database/prisma.service';
+import { DoctorClinicalTier } from '@prisma/client';
+import {
+  computeQuotaMetrics,
+  countActiveAndHeldMap,
+} from '../../../contracts/pricing/doctor-quota.helper';
+import { inferDoctorClinicalTier } from '../../../doctors/utils/doctor-clinical-tier.util';
 import { IPublicService } from '../interfaces/public.service.interface';
 import {
   PortalOverviewResponseDto,
@@ -398,6 +404,10 @@ export class PublicServiceImpl implements IPublicService {
       where.experienceYears = { gte: dto.minExperienceYears };
     }
 
+    if (dto.clinicalTier) {
+      where.clinicalTier = dto.clinicalTier;
+    }
+
     const orderBy = {
       [dto.sortBy || 'ratingAvg']: dto.sortOrder || 'desc',
     };
@@ -406,14 +416,15 @@ export class PublicServiceImpl implements IPublicService {
       this.prisma.doctor.count({ where }),
       this.prisma.doctor.findMany({
         where,
-        skip,
-        take: limit,
+        skip: dto.onlyAvailable ? 0 : skip,
+        take: dto.onlyAvailable ? Math.max(limit * 3, 50) : limit,
         select: {
           id: true,
           doctorName: true,
           specialty: true,
           academicTitle: true,
           experienceYears: true,
+          clinicalTier: true,
           bio: true,
           ratingAvg: true,
           totalReviews: true,
@@ -437,20 +448,37 @@ export class PublicServiceImpl implements IPublicService {
       }),
     ]);
 
+    const activeHeldMap =
+      typeof this.prisma.medicalContract?.findMany === 'function'
+        ? await countActiveAndHeldMap(
+            this.prisma,
+            doctors.map((d) => d.id),
+          )
+        : new Map<string, number>();
+
+    let mappedItems = doctors.map((doc) =>
+      this.mapPublicDoctorListItem(
+        doc,
+        activeHeldMap.get(doc.id) ?? doc.activePanelCount ?? 0,
+      ),
+    );
+
+    if (dto.onlyAvailable) {
+      const available = mappedItems.filter((item) => !item.isQuotaFull);
+      mappedItems = available.slice(skip, skip + limit);
+      return {
+        items: mappedItems,
+        meta: {
+          total: available.length,
+          page,
+          limit,
+          totalPages: Math.ceil(available.length / limit) || 1,
+        },
+      };
+    }
+
     return {
-      items: doctors.map((doc) => ({
-        id: doc.id,
-        doctorName: doc.doctorName,
-        specialty: doc.specialty,
-        academicTitle: doc.academicTitle,
-        experienceYears: doc.experienceYears,
-        bio: doc.bio,
-        ratingAvg: Number(doc.ratingAvg),
-        totalReviews: doc.totalReviews,
-        isAvailable: doc.activePanelCount < doc.maxPanelCapacity,
-        avatarUrl: (doc as any).user?.avatarUrl || null,
-        facility: doc.facility,
-      })),
+      items: mappedItems,
       meta: {
         total,
         page,
@@ -513,6 +541,7 @@ export class PublicServiceImpl implements IPublicService {
           academicTitle: true,
           specialty: true,
           experienceYears: true,
+          clinicalTier: true,
           bio: true,
           ratingAvg: true,
           totalReviews: true,
@@ -652,6 +681,122 @@ export class PublicServiceImpl implements IPublicService {
       .filter((row) => (row.reviewComment || '').trim().length > 0)
       .map((row) => this.mapReviewRow(row));
 
+    const heldMap =
+      typeof this.prisma.medicalContract?.findMany === 'function'
+        ? await countActiveAndHeldMap(this.prisma, [doctor.id])
+        : new Map<string, number>();
+    const activeAndHeldCount =
+      heldMap.get(doctor.id) ?? doctor.activePanelCount ?? 0;
+    const quota = computeQuotaMetrics(doctor.maxPanelCapacity, activeAndHeldCount);
+    const clinicalTier: DoctorClinicalTier =
+      (doctor as any).clinicalTier ??
+      inferDoctorClinicalTier(doctor.experienceYears, doctor.academicTitle);
+    const hasActiveFacility =
+      Boolean(doctor.facility) &&
+      (doctor.facility?.verificationStatus === undefined ||
+        doctor.facility.verificationStatus === 'ACTIVE');
+
+    let juniorAlternatives:
+      | Array<{
+          id: string;
+          doctorName: string;
+          specialty: string;
+          academicTitle: string | null;
+          experienceYears: number;
+          clinicalTier: DoctorClinicalTier;
+          bio: string | null;
+          ratingAvg: number;
+          totalReviews: number;
+          isAvailable: boolean;
+          activePanelCount: number;
+          maxPanelCapacity: number;
+          remainingSlots: number;
+          isQuotaFull: boolean;
+          avatarUrl: string | null;
+          facility: {
+            id: string;
+            facilityName: string;
+            address: string;
+            hotline: string;
+          } | null;
+        }>
+      | undefined;
+    let lowerPricePackages: typeof formattedCarePackages | undefined;
+
+    if (quota.isQuotaFull) {
+      lowerPricePackages = formattedCarePackages.slice(0, 3);
+      if (typeof this.prisma.doctor?.findMany === 'function') {
+        const juniorRows = await this.prisma.doctor.findMany({
+          where: {
+            id: { not: doctor.id },
+            onboardingStatus: 'ACTIVE',
+            clinicalTier: 'JUNIOR',
+            facility: { verificationStatus: 'ACTIVE' },
+          },
+          select: {
+            id: true,
+            doctorName: true,
+            specialty: true,
+            academicTitle: true,
+            experienceYears: true,
+            clinicalTier: true,
+            bio: true,
+            ratingAvg: true,
+            totalReviews: true,
+            activePanelCount: true,
+            maxPanelCapacity: true,
+            facility: {
+              select: {
+                id: true,
+                facilityName: true,
+                address: true,
+                hotline: true,
+              },
+            },
+            user: {
+              select: {
+                avatarUrl: true,
+              },
+            },
+          },
+          orderBy: [{ ratingAvg: 'desc' }, { experienceYears: 'desc' }],
+          take: 20,
+        });
+
+        const juniorHeldMap =
+          typeof this.prisma.medicalContract?.findMany === 'function'
+            ? await countActiveAndHeldMap(
+                this.prisma,
+                juniorRows.map((j) => j.id),
+              )
+            : new Map<string, number>();
+
+        juniorAlternatives = juniorRows
+          .map((j) =>
+            this.mapPublicDoctorListItem(
+              j,
+              juniorHeldMap.get(j.id) ?? j.activePanelCount ?? 0,
+            ),
+          )
+          .filter((j) => !j.isQuotaFull)
+          .sort((a, b) => {
+            const sameSpecA =
+              a.specialty.toLowerCase() === doctor.specialty.toLowerCase()
+                ? 1
+                : 0;
+            const sameSpecB =
+              b.specialty.toLowerCase() === doctor.specialty.toLowerCase()
+                ? 1
+                : 0;
+            if (sameSpecA !== sameSpecB) return sameSpecB - sameSpecA;
+            return b.remainingSlots - a.remainingSlots;
+          })
+          .slice(0, 4);
+      } else {
+        juniorAlternatives = [];
+      }
+    }
+
     return {
       id: doctor.id,
       doctorName: doctor.doctorName,
@@ -662,11 +807,16 @@ export class PublicServiceImpl implements IPublicService {
       bio: doctor.bio,
       isVerified:
         doctor.onboardingStatus === 'ACTIVE' && doctor.credentials.length > 0,
-      isAvailable: doctor.activePanelCount < doctor.maxPanelCapacity,
+      isAvailable: !quota.isQuotaFull && hasActiveFacility,
+      clinicalTier,
+      remainingSlots: quota.remainingSlots,
+      isQuotaFull: quota.isQuotaFull,
       panel: {
-        activeCount: doctor.activePanelCount,
-        maxCapacity: doctor.maxPanelCapacity,
+        activeCount: quota.activeAndHeldCount,
+        maxCapacity: quota.maxCapacity,
       },
+      ...(juniorAlternatives ? { juniorAlternatives } : {}),
+      ...(lowerPricePackages ? { lowerPricePackages } : {}),
       stats: {
         experienceYears: doctor.experienceYears,
         ratingAvg,
@@ -720,6 +870,31 @@ export class PublicServiceImpl implements IPublicService {
     });
 
     return this.buildCareModel(items);
+  }
+
+  private mapPublicDoctorListItem(doc: any, activeAndHeldCount: number) {
+    const quota = computeQuotaMetrics(doc.maxPanelCapacity, activeAndHeldCount);
+    const clinicalTier: DoctorClinicalTier =
+      doc.clinicalTier ??
+      inferDoctorClinicalTier(doc.experienceYears, doc.academicTitle);
+    return {
+      id: doc.id,
+      doctorName: doc.doctorName,
+      specialty: doc.specialty,
+      academicTitle: doc.academicTitle,
+      experienceYears: doc.experienceYears,
+      clinicalTier,
+      bio: doc.bio,
+      ratingAvg: Number(doc.ratingAvg),
+      totalReviews: doc.totalReviews,
+      isAvailable: !quota.isQuotaFull,
+      activePanelCount: quota.activeAndHeldCount,
+      maxPanelCapacity: quota.maxCapacity,
+      remainingSlots: quota.remainingSlots,
+      isQuotaFull: quota.isQuotaFull,
+      avatarUrl: doc.user?.avatarUrl || null,
+      facility: doc.facility,
+    };
   }
 
   private buildCareModel(

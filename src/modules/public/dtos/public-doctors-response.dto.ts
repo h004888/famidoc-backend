@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { DoctorClinicalTier } from '@prisma/client';
 import { PaginationMetaDto } from './public-packages-response.dto';
 
 export class PublicDoctorFacilityDto {
@@ -31,6 +32,13 @@ export class PublicDoctorItemDto {
   @ApiProperty({ example: 10, description: 'Số năm kinh nghiệm hành nghề y' })
   experienceYears!: number;
 
+  @ApiPropertyOptional({
+    enum: DoctorClinicalTier,
+    example: DoctorClinicalTier.STANDARD,
+    description: 'Phân hạng trình độ bác sĩ',
+  })
+  clinicalTier?: DoctorClinicalTier;
+
   @ApiProperty({
     example:
       'Chuyên gia Y học gia đình với hơn 10 năm kinh nghiệm điều trị ngoại trú và theo dõi bệnh mãn tính.',
@@ -47,9 +55,33 @@ export class PublicDoctorItemDto {
   @ApiProperty({
     example: true,
     description:
-      'Trạng thái tiếp nhận hộ gia đình mới (dưới hạn mức tối đa 30 hộ)',
+      'Trạng thái tiếp nhận hộ gia đình mới (dưới hạn mức tối đa)',
   })
   isAvailable!: boolean;
+
+  @ApiPropertyOptional({
+    example: 18,
+    description: 'Số hộ đang phụ trách và giữ chỗ',
+  })
+  activePanelCount?: number;
+
+  @ApiPropertyOptional({
+    example: 30,
+    description: 'Hạn mức hộ gia đình tối đa',
+  })
+  maxPanelCapacity?: number;
+
+  @ApiPropertyOptional({
+    example: 12,
+    description: 'Số slot hộ gia đình còn trống',
+  })
+  remainingSlots?: number;
+
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Bác sĩ đã kín slot nhận hộ gia đình mới hay chưa',
+  })
+  isQuotaFull?: boolean;
 
   @ApiPropertyOptional({
     example: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d',

@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -9,6 +10,7 @@ import { CarePackagesServiceImpl } from '../../care-packages/services/impl/care-
 import { QuotaPeriod } from '../../care-packages/entities/care-package.entity';
 import { InMemoryCarePackagesRepository } from '../../care-packages/repositories/impl/in-memory-care-packages.repository';
 import type { SePayWebhookDto } from '../dtos/sepay-webhook.dto';
+import type { SePayApiTransaction } from '../sepay/sepay-api.types';
 import {
   BillingContractStatus,
   PaymentRequestStatus,
@@ -130,6 +132,29 @@ describe('PaymentsServiceImpl (simulation)', () => {
       transferType: 'in',
       transferAmount: payment.amountVnd,
       referenceCode: 'TEST_REF_1',
+      ...overrides,
+    };
+  }
+
+  function apiTransaction(
+    payment: PaymentRequest,
+    overrides: Partial<SePayApiTransaction> = {},
+  ): SePayApiTransaction {
+    return {
+      id: randomUUID(),
+      transaction_date: now.toISOString(),
+      account_number: payment.expectedAccountNumber,
+      amount_in: payment.amountVnd,
+      amount_out: 0,
+      accumulated: payment.amountVnd,
+      transaction_content: payment.transferContent ?? payment.paymentCode,
+      reference_number: 'TEST_REF_1',
+      code: payment.paymentCode,
+      bank_brand_name: payment.expectedGateway,
+      bank_account_id: randomUUID(),
+      va_id: null,
+      webhook_success: 1,
+      transfer_type: 'in',
       ...overrides,
     };
   }
@@ -577,7 +602,52 @@ describe('PaymentsServiceImpl (simulation)', () => {
     expect(url.searchParams.get('des')).toBe(
       `NGUYEN HOAI NAM - ${payment.paymentCode}`,
     );
+    expect(url.searchParams.get('template')).toBe('qr_only');
     expect(result.status).toBe(PaymentRequestStatus.PENDING);
+  });
+
+  it('surfaces activation state on a paid request: activated when the contract is active', async () => {
+    const payment = await pendingPayment();
+    await service.handleVietQRWebhook(payload(payment));
+    const status = await service.getPaymentStatus(payment.id);
+    expect(status.status).toBe(PaymentRequestStatus.PAID);
+    expect(status.activation).toEqual({
+      activated: true,
+      blockingReasons: [],
+    });
+  });
+
+  it('surfaces blocking reasons when a paid request is not yet activated', async () => {
+    // Mã cấp khi hợp đồng đã sẵn sàng, sau đó điều kiện thay đổi trước khi tiền vào.
+    const contract = await readyContract();
+    const payment = await service.createVietQRPayment(contract.id);
+    await service.updateDemoRequirements(contract.id, {
+      doctorVerified: false,
+    });
+    const result = await service.handleVietQRWebhook(payload(payment));
+    expect(result.activation?.activated).toBe(false);
+    const status = await service.getPaymentStatus(payment.id);
+    expect(status.status).toBe(PaymentRequestStatus.PAID);
+    expect(status.activation?.activated).toBe(false);
+    expect(status.activation?.blockingReasons).toContain(
+      'DOCTOR_VERIFICATION_REQUIRED',
+    );
+  });
+
+  it('surfaces the latest reviewed transaction on a pending request', async () => {
+    const payment = await pendingPayment();
+    await service.handleVietQRWebhook(
+      payload(payment, { transferAmount: payment.amountVnd + 1 }),
+    );
+    const status = await service.getPaymentStatus(payment.id);
+    expect(status.status).toBe(PaymentRequestStatus.PENDING);
+    expect(status.latestTransaction?.outcome).toBe(
+      TransactionOutcome.REVIEW_REQUIRED,
+    );
+    expect(status.latestTransaction?.reason).toBe(
+      TransactionReason.AMOUNT_MISMATCH,
+    );
+    expect(status.latestTransaction?.amountVnd).toBe(payment.amountVnd + 1);
   });
 
   it('continues matching an existing 32-character code when SePay extracts only its first 24 characters', async () => {
@@ -617,5 +687,103 @@ describe('PaymentsServiceImpl (simulation)', () => {
     expect(result.transferContent).toBe(
       `NGUYEN HOAI NAM - ${payment.paymentCode}`,
     );
+  });
+
+  it('links the API v2 UUID to a transaction already received by webhook', async () => {
+    const payment = await pendingPayment();
+    await service.handleVietQRWebhook(payload(payment));
+    const remote = apiTransaction(payment);
+    const result = await service.handleSePayApiTransaction(
+      remote,
+      randomUUID(),
+    );
+    expect(result).toMatchObject({ duplicate: true, linked: true });
+    expect(result.transaction.sepayApiTransactionId).toBe(remote.id);
+    expect(result.transaction.reconciledAt).not.toBeNull();
+    expect((await service.listTransactions({ page: 1, limit: 20 })).total).toBe(
+      1,
+    );
+  });
+
+  it('backfills a missed webhook from API v2 and deduplicates a late webhook', async () => {
+    const payment = await pendingPayment();
+    const remote = apiTransaction(payment);
+    const backfilled = await service.handleSePayApiTransaction(
+      remote,
+      randomUUID(),
+    );
+    expect(backfilled).toMatchObject({ duplicate: false, linked: false });
+    expect(backfilled.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    const lateWebhook = await service.handleVietQRWebhook(payload(payment));
+    expect(lateWebhook.duplicate).toBe(true);
+    expect((await service.listTransactions({ page: 1, limit: 20 })).total).toBe(
+      1,
+    );
+  });
+
+  describe('recheckActivation', () => {
+    it('allows the owner FAMILY_REP to recheck a PAID request and activates once requirements are met', async () => {
+      const payment = await pendingPayment();
+      await service.updateDemoRequirements(payment.contractId, {
+        doctorVerified: false,
+      });
+      await service.handleVietQRWebhook(payload(payment));
+      const owner = {
+        id: randomUUID(),
+        role: 'FAMILY_REP' as const,
+        familyUnitId: payment.familyId,
+      };
+      const blocked = await service.recheckActivation(payment.id, owner);
+      expect(blocked.activated).toBe(false);
+      expect(blocked.blockingReasons).toContain('DOCTOR_VERIFICATION_REQUIRED');
+
+      await repository.transaction(async (session) => {
+        const contract = (await session.findContract(payment.contractId))!;
+        contract.requirements.doctorVerified = true;
+        await session.saveContract(contract);
+      });
+      const activated = await service.recheckActivation(payment.id, owner);
+      expect(activated.activated).toBe(true);
+      expect(activated.blockingReasons).toEqual([]);
+      expect((await service.getContract(payment.contractId)).status).toBe(
+        BillingContractStatus.ACTIVE,
+      );
+    });
+
+    it('rejects FAMILY_REP from another family or on an unpaid request with ForbiddenException', async () => {
+      const payment = await pendingPayment();
+      const owner = {
+        id: randomUUID(),
+        role: 'FAMILY_REP' as const,
+        familyUnitId: payment.familyId,
+      };
+      await expect(
+        service.recheckActivation(payment.id, owner),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      await service.handleVietQRWebhook(payload(payment));
+      const otherFamily = {
+        id: randomUUID(),
+        role: 'FAMILY_REP' as const,
+        familyUnitId: randomUUID(),
+      };
+      await expect(
+        service.recheckActivation(payment.id, otherFamily),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('keeps ADMIN able to recheck activation for any family or status', async () => {
+      const payment = await pendingPayment();
+      const admin = {
+        id: randomUUID(),
+        role: 'ADMIN' as const,
+        familyUnitId: null,
+      };
+      const pendingResult = await service.recheckActivation(payment.id, admin);
+      expect(pendingResult.activated).toBe(false);
+      expect(pendingResult.blockingReasons).toContain(
+        'VERIFIED_PAYMENT_REQUIRED',
+      );
+    });
   });
 });

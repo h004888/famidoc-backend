@@ -11,6 +11,7 @@ import { ContractPaymentNoticeService } from './services/contract-payment-notice
 import { ContractPdfRendererService } from './services/contract-pdf-renderer.service';
 import { DocumensoClientService } from './services/documenso-client.service';
 import { DocumensoSyncService } from './services/documenso-sync.service';
+import { ContractHoldCleanupService } from './services/contract-hold-cleanup.service';
 
 @Module({
   imports: [AuthAccessModule],
@@ -23,7 +24,12 @@ import { DocumensoSyncService } from './services/documenso-sync.service';
     ContractPdfRendererService,
     DocumensoClientService,
     DocumensoSyncService,
+    ContractHoldCleanupService,
   ],
-  exports: [ContractDocumentRendererService, ContractPdfRendererService],
+  exports: [
+    ContractDocumentRendererService,
+    ContractPdfRendererService,
+    ContractHoldCleanupService,
+  ],
 })
 export class ContractsModule {}

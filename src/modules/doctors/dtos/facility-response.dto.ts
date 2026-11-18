@@ -68,6 +68,24 @@ export class FacilityResponseDto {
   })
   legalDocumentsUrl?: string | null;
 
+  @ApiPropertyOptional()
+  hasLegalDocument?: boolean;
+
+  @ApiPropertyOptional()
+  hasOperatingLicense?: boolean;
+
+  @ApiPropertyOptional()
+  hasBusinessLicense?: boolean;
+
+  @ApiPropertyOptional()
+  licenseIssuer?: string | null;
+
+  @ApiPropertyOptional()
+  licenseDate?: Date | null;
+
+  @ApiPropertyOptional()
+  legalRejectionReason?: string | null;
+
   @ApiProperty({ example: '2026-11-12T07:00:00.000Z' })
   createdAt!: string;
 
