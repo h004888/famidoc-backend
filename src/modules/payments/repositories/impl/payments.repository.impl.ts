@@ -78,7 +78,37 @@ function requestEntity(
     acceptedTransactionId: row.acceptedTransactionId,
   };
 }
-function transactionEntity(row: TransactionRow): PaymentTransaction {
+function transactionEntity(
+  row: TransactionRow & {
+    invoice?: {
+      contract?: {
+        contractNumber?: string | null;
+        familyUnit?: {
+          representativeUser?: {
+            fullName?: string | null;
+            phone?: string | null;
+          } | null;
+        } | null;
+      } | null;
+    } | null;
+  },
+): PaymentTransaction {
+  const payload =
+    row.webhookPayload &&
+    typeof row.webhookPayload === 'object' &&
+    !Array.isArray(row.webhookPayload)
+      ? (row.webhookPayload as Record<string, unknown>)
+      : null;
+  const rawContent = payload?.content ?? payload?.transaction_content;
+  const transferContent =
+    typeof rawContent === 'string' && rawContent.trim()
+      ? rawContent.trim()
+      : null;
+  const contractNumber = row.invoice?.contract?.contractNumber ?? null;
+  const rep = row.invoice?.contract?.familyUnit?.representativeUser;
+  const payerName = rep?.fullName ?? null;
+  const phone = rep?.phone ?? null;
+  const payerPhoneLast4 = phone && phone.length >= 4 ? phone.slice(-4) : null;
   return {
     id: row.id,
     environment: row.environment as 'TEST' | 'LIVE',
@@ -101,6 +131,10 @@ function transactionEntity(row: TransactionRow): PaymentTransaction {
     ingestionSource: row.ingestionSource as 'WEBHOOK' | 'SEPAY_API',
     reconciledAt: row.reconciledAt?.toISOString() ?? null,
     reconciliationRunId: row.reconciliationRunId,
+    transferContent,
+    contractNumber,
+    payerName,
+    payerPhoneLast4,
   };
 }
 @Injectable()
@@ -532,6 +566,27 @@ class PrismaPaymentsSession implements PaymentsSession {
     return (
       await this.tx.paymentTransaction.findMany({
         where: { environment: this.environment },
+        include: {
+          invoice: {
+            select: {
+              contract: {
+                select: {
+                  contractNumber: true,
+                  familyUnit: {
+                    select: {
+                      representativeUser: {
+                        select: {
+                          fullName: true,
+                          phone: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       })
     ).map(transactionEntity);

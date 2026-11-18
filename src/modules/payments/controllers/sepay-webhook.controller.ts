@@ -9,6 +9,7 @@ import {
   UseFilters,
   UseGuards,
   UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import {
@@ -19,20 +20,26 @@ import {
 } from '@nestjs/swagger';
 import { BypassTransform } from '../../../core/decorators/bypass-transform.decorator';
 import { SePayWebhookDto } from '../dtos/sepay-webhook.dto';
+import { TransactionOutcome } from '../entities/payment.entity';
 import { SePayWebhookGuard } from '../guards/sepay-webhook.guard';
 import { SePayWebhookEvents, SePayWebhookExceptionFilter } from '../sepay/sepay-webhook-events';
-import { paymentsValidationPipe } from '../payments-validation.pipe';
 import {
   PAYMENTS_SERVICE_TOKEN,
   type IPaymentsService,
 } from '../services/interfaces/payments.service.interface';
+
+const sepayWebhookValidationPipe = new ValidationPipe({
+  whitelist: true,
+  forbidNonWhitelisted: false,
+  transform: true,
+});
 
 @ApiTags('Webhooks')
 @Controller()
 @BypassTransform()
 @UseGuards(SePayWebhookGuard)
 @UseFilters(SePayWebhookExceptionFilter)
-@UsePipes(paymentsValidationPipe)
+@UsePipes(sepayWebhookValidationPipe)
 export class SePayWebhookController {
   constructor(
     @Inject(PAYMENTS_SERVICE_TOKEN) private readonly service: IPaymentsService,
@@ -50,6 +57,7 @@ export class SePayWebhookController {
     response.locals.sepayWebhookTransactionId = providerTransactionId;
     const result = dto.id === 0 ? undefined : await this.service.handleVietQRWebhook(dto);
     await this.events.recordDelivery(providerTransactionId, result);
-    return { success: true };
+    const success = dto.id === 0 ? true : result?.transaction.outcome === TransactionOutcome.MATCHED;
+    return { success };
   }
 }

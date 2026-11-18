@@ -152,31 +152,44 @@ export class PaymentsServiceImpl implements IPaymentsService {
       const description = adjustment?.dto.transferDescription ?? previousOverride?.adminTransferDescription;
       if (!Number.isSafeInteger(amount) || amount <= 0 || amount > 9999999999)
         throw new BadRequestException('Invalid contract payment amount');
-      const paymentCode = createPaymentCode(await session.nextPaymentNumber());
-      const payment: PaymentRequest = {
-        id: randomUUID(),
-        contractId,
-        familyId: contract.familyId,
-        environment: this.config.getEnvironment(),
-        addendumId,
-        attempt: (requests.at(-1)?.attempt ?? 0) + 1,
-        paymentCode,
-        transferContent: description ? `${description} ${paymentCode}` :
-          buildTransferContent(contract.payerDisplayName, paymentCode),
-        adminTransferDescription: description,
-        amountVnd: amount,
-        currency: 'VND',
-        expectedAccountNumber: destination.accountNumber,
-        expectedGateway: destination.gateway,
-        status: PaymentRequestStatus.PENDING,
-        createdAt: now.toISOString(),
-        expiresAt: new Date(
-          now.getTime() + destination.ttlMinutes * 60_000,
-        ).toISOString(),
-        paidAt: null,
-        acceptedTransactionId: null,
-      };
-      await session.saveRequest(payment);
+      let payment!: PaymentRequest;
+      for (let attemptIdx = 0; attemptIdx < 5; attemptIdx += 1) {
+        const paymentCode = createPaymentCode();
+        payment = {
+          id: randomUUID(),
+          contractId,
+          familyId: contract.familyId,
+          environment: this.config.getEnvironment(),
+          addendumId,
+          attempt: (requests.at(-1)?.attempt ?? 0) + 1,
+          paymentCode,
+          transferContent: description
+            ? `${paymentCode} ${description}`
+            : buildTransferContent(contract.payerDisplayName, paymentCode),
+          adminTransferDescription: description,
+          amountVnd: amount,
+          currency: 'VND',
+          expectedAccountNumber: destination.accountNumber,
+          expectedGateway: destination.gateway,
+          status: PaymentRequestStatus.PENDING,
+          createdAt: now.toISOString(),
+          expiresAt: new Date(
+            now.getTime() + destination.ttlMinutes * 60_000,
+          ).toISOString(),
+          paidAt: null,
+          acceptedTransactionId: null,
+        };
+        try {
+          await session.saveRequest(payment);
+          break;
+        } catch (err) {
+          const isUniqueConflict =
+            typeof err === 'object' &&
+            err !== null &&
+            (err as { code?: string }).code === 'P2002';
+          if (!isUniqueConflict || attemptIdx === 4) throw err;
+        }
+      }
       if (adjustment) {
         await session.recordPaymentOverride({
           actorId: adjustment.actorId,
@@ -226,7 +239,11 @@ export class PaymentsServiceImpl implements IPaymentsService {
             };
           }
         }
-      } else if (item.status === PaymentRequestStatus.PENDING) {
+      } else if (
+        item.status === PaymentRequestStatus.PENDING ||
+        item.status === PaymentRequestStatus.EXPIRED ||
+        item.status === PaymentRequestStatus.CANCELLED
+      ) {
         // Tiền có thể đã vào nhưng đang soát xét (LATE_PAYMENT, WRONG_ACCOUNT...):
         // bề mặt hóa giao dịch gần nhất để gia đình biết mà không nhầm là "chưa ghi nhận".
         const latest =
@@ -270,9 +287,41 @@ export class PaymentsServiceImpl implements IPaymentsService {
   async listTransactions(query: ListTransactionsDto) {
     this.config.assertPaymentsEnabled();
     return this.repository.transaction(async (session) => {
-      const items = (await session.listTransactions()).filter(
-        (item) => !query.outcome || item.outcome === query.outcome,
-      );
+      const search = query.search?.trim().toLowerCase();
+      const items = (await session.listTransactions()).filter((item) => {
+        if (query.outcome && item.outcome !== query.outcome) return false;
+        if (query.transferType && item.transferType !== query.transferType)
+          return false;
+        if (search) {
+          const haystacks = [
+            item.providerTransactionId,
+            item.paymentCode,
+            item.referenceCode,
+            item.transferContent,
+            item.contractNumber,
+            item.payerName,
+          ];
+          if (
+            !haystacks.some(
+              (val) => typeof val === 'string' && val.toLowerCase().includes(search),
+            )
+          ) {
+            return false;
+          }
+        }
+        return true;
+      });
+      const summary = {
+        totalInVnd: items
+          .filter((i) => i.transferType === 'in')
+          .reduce((sum, i) => sum + i.amountVnd, 0),
+        totalOutVnd: items
+          .filter((i) => i.transferType === 'out')
+          .reduce((sum, i) => sum + i.amountVnd, 0),
+        reviewRequiredCount: items.filter(
+          (i) => i.outcome === TransactionOutcome.REVIEW_REQUIRED,
+        ).length,
+      };
       return {
         items: items.slice(
           (query.page - 1) * query.limit,
@@ -281,6 +330,7 @@ export class PaymentsServiceImpl implements IPaymentsService {
         total: items.length,
         page: query.page,
         limit: query.limit,
+        summary,
       };
     });
   }
@@ -320,7 +370,37 @@ export class PaymentsServiceImpl implements IPaymentsService {
       throw new BadRequestException('Invalid SePay API transaction_date');
     const amount =
       item.transfer_type === 'in' ? item.amount_in : item.amount_out;
-    if (!Number.isSafeInteger(amount) || amount <= 0)
+    if (amount === 0) {
+      console.warn('[SEPAY_API_ZERO_AMOUNT_SKIPPED]', { apiTransactionId: item.id });
+      const nowIso = this.clock.now().toISOString();
+      return {
+        duplicate: true,
+        linked: false,
+        transaction: {
+          id: randomUUID(),
+          environment: this.config.getEnvironment(),
+          providerTransactionId: `sepay-v2:${item.id}`,
+          fingerprint: '',
+          bankReferenceKey: null,
+          gateway: item.bank_brand_name,
+          accountNumber: item.account_number,
+          transferType: item.transfer_type,
+          amountVnd: 0,
+          paymentCode: null,
+          paymentRequestId: null,
+          referenceCode: item.reference_number ?? '',
+          transactionAt: transactionAt.toISOString(),
+          receivedAt: nowIso,
+          outcome: TransactionOutcome.IGNORED,
+          reason: null,
+          sepayApiTransactionId: item.id,
+          ingestionSource: 'SEPAY_API',
+          reconciledAt: nowIso,
+          reconciliationRunId,
+        },
+      };
+    }
+    if (!Number.isSafeInteger(amount) || amount < 0)
       throw new BadRequestException('Invalid SePay API transaction amount');
     const result = await this.handleIncomingTransaction({
       providerTransactionId: `sepay-v2:${item.id}`,
@@ -332,7 +412,7 @@ export class PaymentsServiceImpl implements IPaymentsService {
       content: item.transaction_content,
       transferType: item.transfer_type,
       transferAmount: amount,
-      referenceCode: item.reference_number,
+      referenceCode: item.reference_number ?? '',
       source: 'SEPAY_API',
       reconciliationRunId,
       rawPayload: { ...item },
@@ -479,7 +559,6 @@ export class PaymentsServiceImpl implements IPaymentsService {
         record.paymentRequestId = payment?.id ?? null;
       }
       console.log('[DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE]', {
-        rawContent: incoming.content,
         extractedCodes: codes,
         chosenCode: record.paymentCode,
         paymentRequestFound: !!payment,
@@ -738,9 +817,9 @@ export class PaymentsServiceImpl implements IPaymentsService {
     url.searchParams.set('bank', payment.expectedGateway);
     url.searchParams.set('amount', String(payment.amountVnd));
     url.searchParams.set('des', payment.transferContent ?? payment.paymentCode);
-    // qr_only giữ ~89% canvas cho vùng QR thật (compact chỉ còn 69% sau khi trừ logo/dải brand),
+    // qronly giữ ~89% canvas cho vùng QR thật (compact chỉ còn 69% sau khi trừ logo/dải brand),
     // giúp module QR dày hơn ~2 lần khi render xuống kích thước hiển thị.
-    url.searchParams.set('template', 'qr_only');
+    url.searchParams.set('template', 'qronly');
     return { ...payment, qrUrl: url.toString() };
   }
   private assertPaymentOwner(

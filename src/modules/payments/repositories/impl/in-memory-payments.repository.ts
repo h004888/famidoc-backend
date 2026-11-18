@@ -169,7 +169,26 @@ class MemorySession implements PaymentsSession {
   }
 
   async listTransactions(): Promise<PaymentTransaction[]> {
-    return structuredClone([...this.state.transactions.values()]);
+    return structuredClone([...this.state.transactions.values()]).map((item) => {
+      const rawContent =
+        item.rawPayload?.content ?? item.rawPayload?.transaction_content;
+      const transferContent =
+        item.transferContent ??
+        (typeof rawContent === 'string' && rawContent.trim()
+          ? rawContent.trim()
+          : null);
+      const req = item.paymentRequestId
+        ? this.state.requests.get(item.paymentRequestId)
+        : undefined;
+      const contract = req ? this.state.contracts.get(req.contractId) : undefined;
+      return {
+        ...item,
+        transferContent,
+        contractNumber: item.contractNumber ?? contract?.id ?? null,
+        payerName: item.payerName ?? contract?.payerDisplayName ?? null,
+        payerPhoneLast4: item.payerPhoneLast4 ?? null,
+      };
+    });
   }
 
   async saveTransaction(transaction: PaymentTransaction): Promise<void> {
