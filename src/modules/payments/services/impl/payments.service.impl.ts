@@ -630,6 +630,15 @@ export class PaymentsServiceImpl implements IPaymentsService {
         activated: activation.activated,
         blockingReasons: activation.blockingReasons,
       });
+      if (activation.activated) {
+        console.log('[AUTO_ACTIVATION][WEBHOOK]', {
+          paymentId: payment.id,
+          contractId: payment.contractId,
+          paymentCode: payment.paymentCode,
+          amountVnd: payment.amountVnd,
+          reason: 'time_check_skipped_auto_activation',
+        });
+      }
       return {
         duplicate: false,
         linked: false,
@@ -741,8 +750,10 @@ export class PaymentsServiceImpl implements IPaymentsService {
       return TransactionReason.AMOUNT_MISMATCH;
     const bankTime = Date.parse(record.transactionAt);
     // Chấp nhận dung sai 5 phút hai chiều để chịu được ngân hàng cắt giây về :00 (MBBank) và lệch đồng hồ.
-    if (bankTime < Date.parse(payment.createdAt) - BANK_TIME_SKEW_TOLERANCE_MS)
-      return TransactionReason.BEFORE_REQUEST;
+    // Bỏ qua kiểm tra thời gian (BEFORE_REQUEST, LATE_PAYMENT, SUPERSEDED_REQUEST)
+    // khi mã và số tiền khớp để tự động kích hoạt hợp đồng.
+    // if (bankTime < Date.parse(payment.createdAt) - BANK_TIME_SKEW_TOLERANCE_MS)
+    //   return TransactionReason.BEFORE_REQUEST;
     if (bankTime > this.clock.now().getTime() + BANK_TIME_SKEW_TOLERANCE_MS)
       return TransactionReason.FUTURE_TRANSACTION;
     if (payment.status === PaymentRequestStatus.CANCELLED)
@@ -755,14 +766,12 @@ export class PaymentsServiceImpl implements IPaymentsService {
     );
     if (!contract || contract.status !== BillingContractStatus.PENDING)
       return TransactionReason.CONTRACT_UNAVAILABLE;
-    const attempts = await session.listRequests(
-      payment.contractId,
-      payment.addendumId,
-    );
-    if (attempts.at(-1)?.id !== payment.id)
-      return TransactionReason.SUPERSEDED_REQUEST;
-    if (bankTime >= Date.parse(payment.expiresAt))
-      return TransactionReason.LATE_PAYMENT;
+    // Bỏ qua SUPERSEDED_REQUEST: cho phép giao dịch vào mã cũ nếu mã và tiền khớp.
+    // if (attempts.at(-1)?.id !== payment.id)
+    //   return TransactionReason.SUPERSEDED_REQUEST;
+    // Bỏ qua LATE_PAYMENT: cho phép giao dịch sau khi mã hết hạn nếu mã và tiền khớp.
+    // if (bankTime >= Date.parse(payment.expiresAt))
+    //   return TransactionReason.LATE_PAYMENT;
     // Callback đến muộn vẫn được chấp nhận nếu tiền vào trong hạn và chưa có mã thay thế.
     return null;
   }
