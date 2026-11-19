@@ -57,7 +57,7 @@ export class StorageService {
     try {
       const response = await this.s3.send(
         new GetObjectCommand({ Bucket: this.bucket, Key: key }),
-        { abortSignal: AbortSignal.timeout(10_000) },
+        { abortSignal: AbortSignal.timeout(30_000) },
       );
       if (!response.Body) throw new Error('Empty storage response');
       return {
