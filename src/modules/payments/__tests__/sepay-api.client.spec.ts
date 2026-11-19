@@ -114,4 +114,33 @@ describe('SePayApiClient', () => {
     expect(page.transactions).toHaveLength(1);
     expect(page.transactions[0].id).toBe('tx-null-ref');
   });
+
+  it('floors transaction_date_from to the start of the minute for minute-truncated banks', async () => {
+    let capturedFrom: string | null = null;
+    global.fetch = jest.fn(async (input) => {
+      const rawUrl =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      capturedFrom = new URL(rawUrl).searchParams.get('transaction_date_from');
+      return new Response(
+        JSON.stringify({
+          status: 'success',
+          meta: { pagination: { current_page: 1, has_more: false } },
+          data: [],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    }) as typeof fetch;
+    const client = new SePayApiClient(new SePayReconciliationConfig());
+    await client.listTransactions('TEST', {
+      bankAccountId: 'acc-uuid-1',
+      page: 1,
+      perPage: 50,
+      from: new Date('2026-11-19T03:36:22.699Z'),
+    });
+    expect(capturedFrom).toBe('2026-11-19 10:36:00');
+  });
 });

@@ -68,6 +68,8 @@ interface IncomingSePayTransaction {
   rawPayload: Record<string, unknown>;
 }
 
+const BANK_TIME_SKEW_TOLERANCE_MS = 300_000;
+
 @Injectable()
 export class PaymentsServiceImpl implements IPaymentsService {
   // Các dependency được NestJS cấp; không tạo kết nối DB/SePay bên trong service.
@@ -600,7 +602,12 @@ export class PaymentsServiceImpl implements IPaymentsService {
       if (!payment) throw new NotFoundException('Payment request not found');
       record.outcome = TransactionOutcome.MATCHED;
       payment.status = PaymentRequestStatus.PAID;
-      payment.paidAt = record.transactionAt;
+      payment.paidAt = new Date(
+        Math.max(
+          Date.parse(record.transactionAt),
+          Date.parse(payment.createdAt),
+        ),
+      ).toISOString();
       payment.acceptedTransactionId = record.id;
       console.log('[DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED]', {
         recordId: record.id,
@@ -733,10 +740,10 @@ export class PaymentsServiceImpl implements IPaymentsService {
     if (record.amountVnd !== payment.amountVnd)
       return TransactionReason.AMOUNT_MISMATCH;
     const bankTime = Date.parse(record.transactionAt);
-    // Ngân hàng trả thời gian chính xác đến giây; không so trực tiếp với mili giây lúc tạo.
-    if (bankTime < Math.floor(Date.parse(payment.createdAt) / 1000) * 1000)
+    // Chấp nhận dung sai 5 phút hai chiều để chịu được ngân hàng cắt giây về :00 (MBBank) và lệch đồng hồ.
+    if (bankTime < Date.parse(payment.createdAt) - BANK_TIME_SKEW_TOLERANCE_MS)
       return TransactionReason.BEFORE_REQUEST;
-    if (bankTime > this.clock.now().getTime() + 300_000)
+    if (bankTime > this.clock.now().getTime() + BANK_TIME_SKEW_TOLERANCE_MS)
       return TransactionReason.FUTURE_TRANSACTION;
     if (payment.status === PaymentRequestStatus.CANCELLED)
       return TransactionReason.CANCELLED_REQUEST;

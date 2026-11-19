@@ -66,11 +66,16 @@ export class SePayApiClient {
     url.searchParams.set('transaction_date_sort', 'asc');
     url.searchParams.set('timestamp_format', 'iso8601');
     if (query.sinceId) url.searchParams.set('since_id', query.sinceId);
-    if (query.from)
+    if (query.from) {
+      // Làm tròn xuống đầu phút để không bỏ sót giao dịch ngân hàng bị cắt giây về :00 (như MBBank).
+      const flooredFrom = new Date(
+        Math.floor(query.from.getTime() / 60_000) * 60_000,
+      );
       url.searchParams.set(
         'transaction_date_from',
-        formatVietnamDate(query.from),
+        formatVietnamDate(flooredFrom),
       );
+    }
     if (query.to)
       url.searchParams.set('transaction_date_to', formatVietnamDate(query.to));
 
