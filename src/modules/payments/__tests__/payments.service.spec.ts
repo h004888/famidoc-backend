@@ -392,14 +392,44 @@ describe('PaymentsServiceImpl (simulation)', () => {
     );
   });
 
-  it('does not match transfers from before the request was created', async () => {
+  it('does not match transfers older than the 5-minute tolerance before the request was created', async () => {
     const payment = await pendingPayment();
     const result = await service.handleVietQRWebhook(
       payload(payment, {
-        transactionDate: bankDate(new Date(now.getTime() - 1000)),
+        transactionDate: bankDate(new Date(now.getTime() - 360_000)),
       }),
     );
     expect(result.transaction.reason).toBe(TransactionReason.BEFORE_REQUEST);
+  });
+
+  it('matches MBBank transfers whose seconds are truncated to :00 in the same minute and clamps invoice paidAt', async () => {
+    now = new Date('2026-11-19T03:36:22.699Z');
+    const payment = await pendingPayment();
+    now = new Date('2026-11-19T03:36:54.131Z');
+    const result = await service.handleVietQRWebhook(
+      payload(payment, {
+        transactionDate: '2026-11-19 10:36:00',
+      }),
+    );
+    expect(result.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    expect(result.transaction.reason).toBeNull();
+    expect(result.transaction.transactionAt).toBe('2026-11-19T03:36:00.000Z');
+    const status = await service.getPaymentStatus(payment.id);
+    expect(status.status).toBe(PaymentRequestStatus.PAID);
+    expect(status.paidAt).toBe(payment.createdAt);
+  });
+
+  it('matches transfers across a minute boundary within the 5-minute clock-skew tolerance', async () => {
+    now = new Date('2026-11-19T03:36:02.000Z');
+    const payment = await pendingPayment();
+    now = new Date('2026-11-19T03:36:05.000Z');
+    const result = await service.handleVietQRWebhook(
+      payload(payment, {
+        transactionDate: '2026-11-19 10:35:00',
+      }),
+    );
+    expect(result.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    expect(result.activation?.activated).toBe(true);
   });
 
   it('flags a transaction timestamp too far in the future', async () => {
