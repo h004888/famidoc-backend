@@ -392,14 +392,15 @@ describe('PaymentsServiceImpl (simulation)', () => {
     );
   });
 
-  it('does not match transfers older than the 5-minute tolerance before the request was created', async () => {
+  it('activates on before-tolerance transfer when amount and code match (time check skipped)', async () => {
     const payment = await pendingPayment();
     const result = await service.handleVietQRWebhook(
       payload(payment, {
         transactionDate: bankDate(new Date(now.getTime() - 360_000)),
       }),
     );
-    expect(result.transaction.reason).toBe(TransactionReason.BEFORE_REQUEST);
+    expect(result.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    expect(result.activation?.activated).toBe(true);
   });
 
   it('matches MBBank transfers whose seconds are truncated to :00 in the same minute and clamps invoice paidAt', async () => {
@@ -456,21 +457,22 @@ describe('PaymentsServiceImpl (simulation)', () => {
     expect(result.activation?.activated).toBe(true);
   });
 
-  it('does not auto-accept an old code when a newer attempt already exists', async () => {
+  it('activates on superseaded old code when amount and code match (time check skipped)', async () => {
     const old = await pendingPayment();
     const dto = payload(old);
     now = new Date(now.getTime() + 16 * 60_000);
     await service.createVietQRPayment(old.contractId);
-    expect((await service.handleVietQRWebhook(dto)).transaction.reason).toBe(
-      TransactionReason.SUPERSEDED_REQUEST,
-    );
+    const result = await service.handleVietQRWebhook(dto);
+    expect(result.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    expect(result.activation?.activated).toBe(true);
   });
 
-  it('flags funds received at or after the request deadline', async () => {
+  it('activates on late payment when amount and code match (time check skipped)', async () => {
     const payment = await pendingPayment();
     now = new Date(payment.expiresAt);
     const result = await service.handleVietQRWebhook(payload(payment));
-    expect(result.transaction.reason).toBe(TransactionReason.LATE_PAYMENT);
+    expect(result.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    expect(result.activation?.activated).toBe(true);
   });
 
   it('does not activate a cancelled request and never implements automatic refunds', async () => {
@@ -700,22 +702,58 @@ describe('PaymentsServiceImpl (simulation)', () => {
     expect(status.latestTransaction?.amountVnd).toBe(payment.amountVnd + 1);
   });
 
-  it('surfaces the latest reviewed transaction on an expired request (LATE_PAYMENT)', async () => {
+  it('activates on late payment when amount and code match (time check skipped)', async () => {
     const payment = await pendingPayment();
     now = new Date(Date.parse(payment.expiresAt) + 60_000);
-    await service.handleVietQRWebhook(
+    const result = await service.handleVietQRWebhook(
       payload(payment, {
         transactionDate: '2026-10-27 08:20:00',
       }),
     );
-    const status = await service.getPaymentStatus(payment.id);
-    expect(status.status).toBe(PaymentRequestStatus.EXPIRED);
-    expect(status.latestTransaction?.outcome).toBe(
-      TransactionOutcome.REVIEW_REQUIRED,
+    expect(result.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    expect(result.activation?.activated).toBe(true);
+    expect((await service.getPaymentStatus(payment.id)).status).toBe(
+      PaymentRequestStatus.PAID,
     );
-    expect(status.latestTransaction?.reason).toBe(
-      TransactionReason.LATE_PAYMENT,
+  });
+
+  it('activates on before-request payment when amount and code match (time check skipped)', async () => {
+    const payment = await pendingPayment();
+    // Giao dịch xảy ra 10 phút TRƯỚC khi mã được tạo
+    const pastDate = new Date(Date.parse(payment.createdAt) - 600_000);
+    const transactionDate = pastDate.toISOString().replace('T', ' ').slice(0, 19);
+    const result = await service.handleVietQRWebhook(
+      payload(payment, {
+        transactionDate,
+      }),
     );
+    expect(result.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    expect(result.activation?.activated).toBe(true);
+    expect((await service.getPaymentStatus(payment.id)).status).toBe(
+      PaymentRequestStatus.PAID,
+    );
+  });
+
+  it('activates on superseaded request when amount and code match (time check skipped)', async () => {
+    // Tạo 2 payment requests: mã cũ (attempt 1) và mã mới (attempt 2)
+    const contract = await readyContract();
+    const familyId = contract.familyId;
+    const addendumId = contract.addendumId;
+
+    // Mã cũ (attempt 1)
+    const oldPayment = await service.createVietQRPayment(contract.id, addendumId);
+    // Tạo mã mới (attempt 2) — sẽ thay thế mã cũ
+    const newPayment = await service.createVietQRPayment(contract.id, addendumId);
+
+    // Giao dịch vào mã CŨ (oldPayment.paymentCode) nhưng đúng số tiền
+    const result = await service.handleVietQRWebhook(
+      payload(oldPayment, {
+        // Sử dụng paymentCode của mã cũ
+      }),
+    );
+    // Mã cũ vẫn được MATCHED vì đã bỏ qua SUPERSEDED_REQUEST
+    expect(result.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    expect(result.activation?.activated).toBe(true);
   });
 
   it('continues matching an existing 32-character code when SePay extracts only its first 24 characters', async () => {

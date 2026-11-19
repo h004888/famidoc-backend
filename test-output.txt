@@ -1,0 +1,2545 @@
+﻿  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '70920c5105a189e9cf26d82bf2d32a524904530a9ce85094880daf4a810c89db',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDP6ZMRVL9' ],
+      chosenCode: 'FDP6ZMRVL9',
+      paymentRequestFound: true,
+      paymentRequestId: '90240d50-b1ef-4b1f-8ed4-212c3898b300',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '5b9c1703-973a-436d-ab51-bec80380d163',
+      paymentRequestId: '90240d50-b1ef-4b1f-8ed4-212c3898b300',
+      contractId: 'cc6c7056-08b4-4391-8e6a-b32ed4a6de94',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: 'cc6c7056-08b4-4391-8e6a-b32ed4a6de94',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: '90240d50-b1ef-4b1f-8ed4-212c3898b300',
+      contractId: 'cc6c7056-08b4-4391-8e6a-b32ed4a6de94',
+      paymentCode: 'FDP6ZMRVL9',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '89e7dc28754df5b7c5206502c483e27b81eaf5c98a65717ff1d5d3e1af0e0398',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '89e7dc28754df5b7c5206502c483e27b81eaf5c98a65717ff1d5d3e1af0e0398',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+          at async Promise.all (index 0)
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDHDZ45DRB' ],
+      chosenCode: 'FDHDZ45DRB',
+      paymentRequestFound: true,
+      paymentRequestId: '307f2653-d8d8-4fd5-bcd3-ac29ad9d1da4',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+          at async Promise.all (index 0)
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+          at async Promise.all (index 0)
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: 'fab0cbcd-cd66-4073-9f86-5daca2592e7d',
+      paymentRequestId: '307f2653-d8d8-4fd5-bcd3-ac29ad9d1da4',
+      contractId: 'f8e9da11-2044-4e6f-8502-fab17bb18fc9',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+          at async Promise.all (index 0)
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: 'f8e9da11-2044-4e6f-8502-fab17bb18fc9',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+          at async Promise.all (index 0)
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: '307f2653-d8d8-4fd5-bcd3-ac29ad9d1da4',
+      contractId: 'f8e9da11-2044-4e6f-8502-fab17bb18fc9',
+      paymentCode: 'FDHDZ45DRB',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+          at async Promise.all (index 0)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] {
+      isDuplicate: true,
+      previousId: 'fab0cbcd-cd66-4073-9f86-5daca2592e7d',
+      fingerprintMatch: true
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:461:17
+          at async Promise.all (index 1)
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '89e7dc28754df5b7c5206502c483e27b81eaf5c98a65717ff1d5d3e1af0e0398',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] {
+      isDuplicate: true,
+      previousId: 'fab0cbcd-cd66-4073-9f86-5daca2592e7d',
+      fingerprintMatch: true
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:461:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '2228e9248c119e7451fdfb178a8f8d1acfc3591221205dc78cc2fa27e06fcd3f',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDD9VYS3EN' ],
+      chosenCode: 'FDD9VYS3EN',
+      paymentRequestFound: true,
+      paymentRequestId: '1f301d95-bda0-4e0e-856c-f88acb6edd38',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: 'beed6530-a187-4730-b100-05437c3964d5',
+      paymentRequestId: '1f301d95-bda0-4e0e-856c-f88acb6edd38',
+      contractId: '003fcd9e-b140-4379-8070-f70ad71bb55c',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '003fcd9e-b140-4379-8070-f70ad71bb55c',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: '1f301d95-bda0-4e0e-856c-f88acb6edd38',
+      contractId: '003fcd9e-b140-4379-8070-f70ad71bb55c',
+      paymentCode: 'FDD9VYS3EN',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'fe9d76f705f1d6923fa9898274568ea14079edc8fe4eb22eee7433ede90489fd',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] {
+      isDuplicate: true,
+      previousId: 'beed6530-a187-4730-b100-05437c3964d5',
+      fingerprintMatch: false
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:461:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'baa865fa43d87fc9a98c340264be48dfff4f3581db1016d47d1e9721787a2148',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDZLPR35LM' ],
+      chosenCode: 'FDZLPR35LM',
+      paymentRequestFound: true,
+      paymentRequestId: '40652683-d984-45bc-bee4-52265795c506',
+      expectedAmount: 150000,
+      receivedAmount: 149999
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: false, reason: 'AMOUNT_MISMATCH' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED] {
+      recordId: '6de5edc1-5181-4a29-add7-1d48d1640430',
+      reason: 'AMOUNT_MISMATCH',
+      outcome: 'REVIEW_REQUIRED'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:588:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '68394270127c89481c0ae1dd5368b83690a650a0620417ca338963fd759797ac',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDVN7ZSU4N' ],
+      chosenCode: 'FDVN7ZSU4N',
+      paymentRequestFound: true,
+      paymentRequestId: '92f40b56-83ec-42e5-ae2f-36198269ada7',
+      expectedAmount: 150000,
+      receivedAmount: 150001
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: false, reason: 'AMOUNT_MISMATCH' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED] {
+      recordId: '52056f57-a50a-4a65-a85d-a49afb67d8bd',
+      reason: 'AMOUNT_MISMATCH',
+      outcome: 'REVIEW_REQUIRED'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:588:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'cc08e6d9899df01f591b58c7169b5965a4da9af96b9c7e90a8daffcf8cb87391',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FD445TG4UV' ],
+      chosenCode: 'FD445TG4UV',
+      paymentRequestFound: true,
+      paymentRequestId: 'fb0696f4-e540-419c-8d05-729f3bbb4f2e',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: false, reason: 'WRONG_ACCOUNT' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED] {
+      recordId: '6b97aeef-14ef-4eaa-82f1-e6ea1fc38d77',
+      reason: 'WRONG_ACCOUNT',
+      outcome: 'REVIEW_REQUIRED'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:588:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '31249ad27f9aef261bb82166efc9bf4f702dbf964ded9497f251f4d5b7596f48',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDSF29E6HT' ],
+      chosenCode: 'FDSF29E6HT',
+      paymentRequestFound: true,
+      paymentRequestId: '86d8ee4c-e70e-4283-bf10-6af17033e874',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: false, reason: 'WRONG_ACCOUNT' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED] {
+      recordId: '139776d7-298e-4f4e-8d5d-19e29a5e5cd7',
+      reason: 'WRONG_ACCOUNT',
+      outcome: 'REVIEW_REQUIRED'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:588:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'f2f26088f87920faa1cabc6966074225242ba32ecd33fb003315ed38b5e044d8',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [],
+      chosenCode: null,
+      paymentRequestFound: false,
+      paymentRequestId: null,
+      expectedAmount: null,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: false, reason: 'MISSING_CODE' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED] {
+      recordId: '03bbe18e-0afa-408a-a22e-8ab6245d6d23',
+      reason: 'MISSING_CODE',
+      outcome: 'REVIEW_REQUIRED'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:588:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '7010e89754f7d135a728a9a3511d0ad3da108efc8cae7674c43a60b67b9acf73',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' ],
+      chosenCode: 'FDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+      paymentRequestFound: false,
+      paymentRequestId: null,
+      expectedAmount: null,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: false, reason: 'UNKNOWN_CODE' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED] {
+      recordId: '913a0875-e340-48e3-8105-2c957b01e706',
+      reason: 'UNKNOWN_CODE',
+      outcome: 'REVIEW_REQUIRED'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:588:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '78ce2304587d638e74c00e52859a4d1a96717f55e4c7eb0a82350dd667dcf298',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDZ235P82R' ],
+      chosenCode: 'FDZ235P82R',
+      paymentRequestFound: true,
+      paymentRequestId: '18e93149-0c49-4599-8835-914401267996',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: false, reason: 'OUTGOING_TRANSFER' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED] {
+      recordId: '82cfb4a2-56d7-4116-a505-99329eda097f',
+      reason: 'OUTGOING_TRANSFER',
+      outcome: 'IGNORED'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:588:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '0f23ced710abe8889ccc852b23b6207971f7974f5f93deb195037ed9879ab4f0',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDVAJ5YB4A' ],
+      chosenCode: 'FDVAJ5YB4A',
+      paymentRequestFound: true,
+      paymentRequestId: 'a35c351a-513e-4400-988e-c6151dc312f0',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '416f41bb-7ea1-4789-a29a-80ee3581548d',
+      paymentRequestId: 'a35c351a-513e-4400-988e-c6151dc312f0',
+      contractId: '1880a36f-44b5-49c2-94cf-dc132880acec',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '1880a36f-44b5-49c2-94cf-dc132880acec',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: 'a35c351a-513e-4400-988e-c6151dc312f0',
+      contractId: '1880a36f-44b5-49c2-94cf-dc132880acec',
+      paymentCode: 'FDVAJ5YB4A',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'cc2a5c0db517bce79707950a073c4b38f4a411f838dbd3de46b9eb6f5fdd2d0b',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [],
+      chosenCode: null,
+      paymentRequestFound: false,
+      paymentRequestId: null,
+      expectedAmount: null,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: false, reason: 'MISSING_CODE' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED] {
+      recordId: '8a989e30-94f2-4ccb-ba55-24fe85e68c2d',
+      reason: 'MISSING_CODE',
+      outcome: 'REVIEW_REQUIRED'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:588:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'd17046ff32b413500a837b807bea943e6b3e4f7b116f210d96afeff330531881',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDDV6HZALS', 'FDAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' ],
+      chosenCode: null,
+      paymentRequestFound: false,
+      paymentRequestId: null,
+      expectedAmount: null,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: false, reason: 'AMBIGUOUS_CODE' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED] {
+      recordId: 'a05cb979-d453-476d-a07b-b75f747204a2',
+      reason: 'AMBIGUOUS_CODE',
+      outcome: 'REVIEW_REQUIRED'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:588:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'bb18ae02473a96a7a30456c52f2f32bda3620b698d3bc2cebdc4b34afbe2d9e9',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDADLPBT5D' ],
+      chosenCode: 'FDADLPBT5D',
+      paymentRequestFound: true,
+      paymentRequestId: 'b1f7e357-3ad1-486c-9800-4d5ed33daf61',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: 'dd9d6eb2-82c6-4115-bcd8-ffe016a6c7fa',
+      paymentRequestId: 'b1f7e357-3ad1-486c-9800-4d5ed33daf61',
+      contractId: '7a0afd87-e2cd-44b4-a203-cd453ffdcbb4',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '7a0afd87-e2cd-44b4-a203-cd453ffdcbb4',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: 'b1f7e357-3ad1-486c-9800-4d5ed33daf61',
+      contractId: '7a0afd87-e2cd-44b4-a203-cd453ffdcbb4',
+      paymentCode: 'FDADLPBT5D',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '2',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'cfb75e54222699696dfb04be93a4f515ef7872f2186c09de1a7ae0f742c24d4d',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '2' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FD4VZ4JLAY' ],
+      chosenCode: 'FD4VZ4JLAY',
+      paymentRequestFound: true,
+      paymentRequestId: '263a1eaf-b165-4e83-b515-ec5c70e7d089',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: false, reason: 'DUPLICATE_BANK_REFERENCE' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED] {
+      recordId: '406638d6-cb74-4f75-9f74-b7935014bfbd',
+      reason: 'DUPLICATE_BANK_REFERENCE',
+      outcome: 'REVIEW_REQUIRED'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:588:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'b3e4a249a59f0e50060926f9c5657d5c67cd188acdd7b0822fa5613c506f843b',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDQF4G3L95' ],
+      chosenCode: 'FDQF4G3L95',
+      paymentRequestFound: true,
+      paymentRequestId: '3a1499d2-add1-4b0e-886a-81cdcfab82f2',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '526f5652-9050-458b-93f3-6ce154aa300d',
+      paymentRequestId: '3a1499d2-add1-4b0e-886a-81cdcfab82f2',
+      contractId: 'd79aed7d-9e89-4611-97b6-7636e5bca919',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: 'd79aed7d-9e89-4611-97b6-7636e5bca919',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: '3a1499d2-add1-4b0e-886a-81cdcfab82f2',
+      contractId: 'd79aed7d-9e89-4611-97b6-7636e5bca919',
+      paymentCode: 'FDQF4G3L95',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '2',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '36ccdd895aaf6c7fdf8add26ff27b51321b32ae93cac8bc70cdc6c27f3c9d84d',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '2' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDQF4G3L95' ],
+      chosenCode: 'FDQF4G3L95',
+      paymentRequestFound: true,
+      paymentRequestId: '3a1499d2-add1-4b0e-886a-81cdcfab82f2',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: false, reason: 'ALREADY_PAID' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED] {
+      recordId: 'cbb32932-b00d-4d13-bdd4-9418c8a368ee',
+      reason: 'ALREADY_PAID',
+      outcome: 'REVIEW_REQUIRED'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:588:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T00:54:00.000Z',
+      fingerprint: '921d0946a9cb6305d6198f59d88b0822573c0ec0f3b88a83cdb0f517e588f967',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDFMU84QTU' ],
+      chosenCode: 'FDFMU84QTU',
+      paymentRequestFound: true,
+      paymentRequestId: 'e10e1e89-d137-413f-afed-9b069f58a8c7',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: 'ea12b5e9-adb6-408d-b094-0ebd203ba92f',
+      paymentRequestId: 'e10e1e89-d137-413f-afed-9b069f58a8c7',
+      contractId: 'bbf8dc63-1130-494e-ab86-573c040b9b8c',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: 'bbf8dc63-1130-494e-ab86-573c040b9b8c',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: 'e10e1e89-d137-413f-afed-9b069f58a8c7',
+      contractId: 'bbf8dc63-1130-494e-ab86-573c040b9b8c',
+      paymentCode: 'FDFMU84QTU',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-11-19T03:36:00.000Z',
+      fingerprint: '8fea6d5a5911c78051bcd8244b5fbcd79df9a5ae22d729d673a506a29e669539',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDS9HV58PS' ],
+      chosenCode: 'FDS9HV58PS',
+      paymentRequestFound: true,
+      paymentRequestId: 'bf88b9c9-f9ec-4d45-ada6-b224d4425860',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '0d8a4530-b1ca-4648-a265-dfab1163cd59',
+      paymentRequestId: 'bf88b9c9-f9ec-4d45-ada6-b224d4425860',
+      contractId: 'd4ab3d2f-d8a6-4515-a4b5-5b62ae889200',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: 'd4ab3d2f-d8a6-4515-a4b5-5b62ae889200',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: 'bf88b9c9-f9ec-4d45-ada6-b224d4425860',
+      contractId: 'd4ab3d2f-d8a6-4515-a4b5-5b62ae889200',
+      paymentCode: 'FDS9HV58PS',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-11-19T03:35:00.000Z',
+      fingerprint: '0fe6c9ac404b42897d31185f88ddfc289b6bb19995bc26ee8c2e46618772a2d3',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDAQQNY6NC' ],
+      chosenCode: 'FDAQQNY6NC',
+      paymentRequestFound: true,
+      paymentRequestId: '25005442-146b-4386-9106-b7271f870f27',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '6cfff80c-709b-4e60-bfdf-6e26da6e2d82',
+      paymentRequestId: '25005442-146b-4386-9106-b7271f870f27',
+      contractId: 'e55070e3-0c11-4cee-b77b-2670125df3db',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: 'e55070e3-0c11-4cee-b77b-2670125df3db',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: '25005442-146b-4386-9106-b7271f870f27',
+      contractId: 'e55070e3-0c11-4cee-b77b-2670125df3db',
+      paymentCode: 'FDAQQNY6NC',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:06:00.000Z',
+      fingerprint: 'ec50d8c3dad4bad6dddbc25fa494472d90e91e1b0808287c3913bbf1d6c47dac',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDW73KHMPA' ],
+      chosenCode: 'FDW73KHMPA',
+      paymentRequestFound: true,
+      paymentRequestId: 'e1a67f34-8c4d-421d-9524-cf5466d554f2',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: false, reason: 'FUTURE_TRANSACTION' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED] {
+      recordId: '997c1040-828a-499b-a56f-2acbf593dad6',
+      reason: 'FUTURE_TRANSACTION',
+      outcome: 'REVIEW_REQUIRED'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:588:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '8f7ff52b5e3c66b539561dff946eca988c58c8dac30679885f8f848a6d5ca720',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FD33Z25NLP' ],
+      chosenCode: 'FD33Z25NLP',
+      paymentRequestFound: true,
+      paymentRequestId: 'fafe81f9-3e70-4cb4-b7cf-844f1f5dec98',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '6297a12a-ab84-40af-a2e9-02e4fa9a5244',
+      paymentRequestId: 'fafe81f9-3e70-4cb4-b7cf-844f1f5dec98',
+      contractId: '5008e8f9-fcf5-47a1-8165-31700e3377f7',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '5008e8f9-fcf5-47a1-8165-31700e3377f7',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: 'fafe81f9-3e70-4cb4-b7cf-844f1f5dec98',
+      contractId: '5008e8f9-fcf5-47a1-8165-31700e3377f7',
+      paymentCode: 'FD33Z25NLP',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '475735d8e01e604621625b9ccbbe72705fbe96d3bfbf63e3537a7101ecfba011',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDQ9YJEXAE' ],
+      chosenCode: 'FDQ9YJEXAE',
+      paymentRequestFound: true,
+      paymentRequestId: 'dcc97a44-0326-472c-beca-267bbbf838e7',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '32e4f86c-2f23-409e-992d-3244fb5099ec',
+      paymentRequestId: 'dcc97a44-0326-472c-beca-267bbbf838e7',
+      contractId: 'b14ed98e-f193-4840-acd9-9cd0c24736c0',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: 'b14ed98e-f193-4840-acd9-9cd0c24736c0',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: 'dcc97a44-0326-472c-beca-267bbbf838e7',
+      contractId: 'b14ed98e-f193-4840-acd9-9cd0c24736c0',
+      paymentCode: 'FDQ9YJEXAE',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:15:00.000Z',
+      fingerprint: 'f6293c42fcde68cfdc194d15a67ba8817f6117b0cb89abbd3c679a0ac952e852',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FD4YXESVQE' ],
+      chosenCode: 'FD4YXESVQE',
+      paymentRequestFound: true,
+      paymentRequestId: 'c02f7cdf-7ba4-42c3-9df6-f5deb206c72f',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '3f494691-e159-4551-9602-5d7682e5e758',
+      paymentRequestId: 'c02f7cdf-7ba4-42c3-9df6-f5deb206c72f',
+      contractId: '534c7c3d-f98d-4ec0-b931-2bd6235961ea',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '534c7c3d-f98d-4ec0-b931-2bd6235961ea',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: 'c02f7cdf-7ba4-42c3-9df6-f5deb206c72f',
+      contractId: '534c7c3d-f98d-4ec0-b931-2bd6235961ea',
+      paymentCode: 'FD4YXESVQE',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '9a60c959142fa10872b0d873ed8949d6f14c2af3f281174e5786a78cea3280a6',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDNUX4JUQU' ],
+      chosenCode: 'FDNUX4JUQU',
+      paymentRequestFound: true,
+      paymentRequestId: '6c1b5e48-3475-4d60-b720-cbe95b194b73',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: false, reason: 'CANCELLED_REQUEST' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED] {
+      recordId: 'cbe6b7b1-9b3f-4b06-9cd4-e49f707f44ef',
+      reason: 'CANCELLED_REQUEST',
+      outcome: 'REVIEW_REQUIRED'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:588:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '6d9c1ae9b8b988a249b7cfd920249f1a98ad56bf18e3d1ec6451035a5fde4cfe',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDHUPAPJY2' ],
+      chosenCode: 'FDHUPAPJY2',
+      paymentRequestFound: true,
+      paymentRequestId: '91772b44-04ce-4f7e-8152-4c48fefa7ec6',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '61530799-c474-4fe6-bafe-99a9de95a78c',
+      paymentRequestId: '91772b44-04ce-4f7e-8152-4c48fefa7ec6',
+      contractId: 'dc96a1bf-53bf-415f-933d-d64b82a20177',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: 'dc96a1bf-53bf-415f-933d-d64b82a20177',
+      status: 'PENDING',
+      activated: false,
+      blockingReasons: [ 'DOCTOR_VERIFICATION_REQUIRED' ]
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'bcebe75eb7169ec907378c687a9e2c854a368d71b759f533c09dfad11748547e',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '2',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '993a3736ed93b3f5436f4caf46c1e71557528b643d314781a644521462079f8f',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+          at async Promise.all (index 0)
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDEGK238D4' ],
+      chosenCode: 'FDEGK238D4',
+      paymentRequestFound: true,
+      paymentRequestId: '981883c3-af3d-40ea-b484-d4b15bb3594b',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+          at async Promise.all (index 0)
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+          at async Promise.all (index 0)
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: 'a1b0c389-93f8-4507-9e8f-24ba9bb00e96',
+      paymentRequestId: '981883c3-af3d-40ea-b484-d4b15bb3594b',
+      contractId: '79729cab-86dd-4022-b5b0-88b9c64fbf86',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+          at async Promise.all (index 0)
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '79729cab-86dd-4022-b5b0-88b9c64fbf86',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+          at async Promise.all (index 0)
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: '981883c3-af3d-40ea-b484-d4b15bb3594b',
+      contractId: '79729cab-86dd-4022-b5b0-88b9c64fbf86',
+      paymentCode: 'FDEGK238D4',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+          at async Promise.all (index 0)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '2' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+          at async Promise.all (index 1)
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDLGPWFV3Z' ],
+      chosenCode: 'FDLGPWFV3Z',
+      paymentRequestFound: true,
+      paymentRequestId: 'be3abae2-504a-4ccd-aa85-00c1a0baa9a9',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+          at async Promise.all (index 1)
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+          at async Promise.all (index 1)
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '6c02c25a-f58a-4fe7-95ca-72a7b815d5ed',
+      paymentRequestId: 'be3abae2-504a-4ccd-aa85-00c1a0baa9a9',
+      contractId: '912b59f8-4a69-4d99-b589-b8a432fba23c',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+          at async Promise.all (index 1)
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '912b59f8-4a69-4d99-b589-b8a432fba23c',
+      status: 'PENDING',
+      activated: false,
+      blockingReasons: [ 'FAMILY_ALREADY_HAS_ACTIVE_CONTRACT' ]
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+          at async Promise.all (index 1)
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'd748d7ee318ead8d1b31650929e6b9b13b741149981b230a2be471d8447d0d0d',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FD6T68U4RU' ],
+      chosenCode: 'FD6T68U4RU',
+      paymentRequestFound: true,
+      paymentRequestId: '000cac66-91c7-4a4d-9b6e-b3136fdfdf2b',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '37929b54-e7ce-4d25-b925-3395f918e945',
+      paymentRequestId: '000cac66-91c7-4a4d-9b6e-b3136fdfdf2b',
+      contractId: '9f5504e0-93e1-4ded-a445-bf0fd47734c2',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '9f5504e0-93e1-4ded-a445-bf0fd47734c2',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: '000cac66-91c7-4a4d-9b6e-b3136fdfdf2b',
+      contractId: '9f5504e0-93e1-4ded-a445-bf0fd47734c2',
+      paymentCode: 'FD6T68U4RU',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'a4ee18b179d9244843ebaf3041a9fee6e67f4a5dd31d51e262cf35107562e550',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDADSFCCP9' ],
+      chosenCode: 'FDADSFCCP9',
+      paymentRequestFound: true,
+      paymentRequestId: 'e8d6abd9-1e74-44cd-87f7-e87923b26012',
+      expectedAmount: 150000,
+      receivedAmount: 1
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: false, reason: 'AMOUNT_MISMATCH' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED] {
+      recordId: '72cdcbaf-b9de-4c04-b0bb-4dec56e95f0d',
+      reason: 'AMOUNT_MISMATCH',
+      outcome: 'REVIEW_REQUIRED'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:588:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'e20c64542ab400729c45b329bbed06cb5ca0815bae5531d95ac5c52a53e10687',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDQYZ5F5ZR' ],
+      chosenCode: 'FDQYZ5F5ZR',
+      paymentRequestFound: true,
+      paymentRequestId: '51534767-dd2e-4701-9149-afa98f432491',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '26697083-9601-4fdb-aba4-ef4b79a4fda7',
+      paymentRequestId: '51534767-dd2e-4701-9149-afa98f432491',
+      contractId: '89829f69-fba8-420c-91ad-882894b19ad6',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '89829f69-fba8-420c-91ad-882894b19ad6',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: '51534767-dd2e-4701-9149-afa98f432491',
+      contractId: '89829f69-fba8-420c-91ad-882894b19ad6',
+      paymentCode: 'FDQYZ5F5ZR',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '6caf40d1c2eb429ce532cddff810b2a1aa05201f90e900df85d0937dc8d81174',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FD6WKVTMD6' ],
+      chosenCode: 'FD6WKVTMD6',
+      paymentRequestFound: true,
+      paymentRequestId: '86592c04-9bcc-4e3f-9559-83c80dabda53',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '217232f4-1ab3-468a-b856-4b9239636bb4',
+      paymentRequestId: '86592c04-9bcc-4e3f-9559-83c80dabda53',
+      contractId: '32a8484b-fb00-4b42-aafd-6003ee96ed7e',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '32a8484b-fb00-4b42-aafd-6003ee96ed7e',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: '86592c04-9bcc-4e3f-9559-83c80dabda53',
+      contractId: '32a8484b-fb00-4b42-aafd-6003ee96ed7e',
+      paymentCode: 'FD6WKVTMD6',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '3320315038e30745bb67a0eb4d11e6c95c3b9728f04e8caff046abc168901536',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDJR2XQNAG' ],
+      chosenCode: 'FDJR2XQNAG',
+      paymentRequestFound: true,
+      paymentRequestId: 'e28f5ec0-4988-4731-b035-9b4847f84040',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '088bb86b-80df-4f9b-9274-3f0bc110ddba',
+      paymentRequestId: 'e28f5ec0-4988-4731-b035-9b4847f84040',
+      contractId: '8135e85f-4f4a-49fb-b6d4-b8d889763537',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '8135e85f-4f4a-49fb-b6d4-b8d889763537',
+      status: 'PENDING',
+      activated: false,
+      blockingReasons: [ 'DOCTOR_VERIFICATION_REQUIRED' ]
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'f9d62671367698d5425ea6f3b828ad8e61da13c218b73780fa5da5ef394218b0',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FD8JNUVEFW' ],
+      chosenCode: 'FD8JNUVEFW',
+      paymentRequestFound: true,
+      paymentRequestId: '91e783c8-c3e0-472b-8ae8-da1ffb78cb2c',
+      expectedAmount: 150000,
+      receivedAmount: 150001
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: false, reason: 'AMOUNT_MISMATCH' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED] {
+      recordId: '4d63f027-9788-4975-b1f5-9d6dca02d25c',
+      reason: 'AMOUNT_MISMATCH',
+      outcome: 'REVIEW_REQUIRED'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:588:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:20:00.000Z',
+      fingerprint: 'dcdefcb2dfbb5a0ed4b086f4ced48d2785481b5b91214b136de1742a9fab9bb6',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDCTT7SDPJ' ],
+      chosenCode: 'FDCTT7SDPJ',
+      paymentRequestFound: true,
+      paymentRequestId: '0d9d2df0-7eb2-4283-8f96-7ce7f3b3e551',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '65066850-6dce-4ddd-b273-72c35c0cc1d9',
+      paymentRequestId: '0d9d2df0-7eb2-4283-8f96-7ce7f3b3e551',
+      contractId: '49e25918-2b99-4a2d-bd92-42cc9cd4d248',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '49e25918-2b99-4a2d-bd92-42cc9cd4d248',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: '0d9d2df0-7eb2-4283-8f96-7ce7f3b3e551',
+      contractId: '49e25918-2b99-4a2d-bd92-42cc9cd4d248',
+      paymentCode: 'FDCTT7SDPJ',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-26T17:50:00.000Z',
+      fingerprint: 'b4234678266df886d19f39261e84c56d2fbfc40e42a29796bb1fc39f8a0b182e',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FD4P62KGV9' ],
+      chosenCode: 'FD4P62KGV9',
+      paymentRequestFound: true,
+      paymentRequestId: 'c25728ac-a0fa-495a-a3a1-1694b15c0503',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: 'bf0b0610-35da-4920-86d1-0aa202f87134',
+      paymentRequestId: 'c25728ac-a0fa-495a-a3a1-1694b15c0503',
+      contractId: '5eb07e72-1738-4869-b770-7a69f325c608',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '5eb07e72-1738-4869-b770-7a69f325c608',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: 'c25728ac-a0fa-495a-a3a1-1694b15c0503',
+      contractId: '5eb07e72-1738-4869-b770-7a69f325c608',
+      paymentCode: 'FD4P62KGV9',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '5d204cbdc5409edf7fc154df58b16a2df3b50c17041ccfafcfb36feedf41fbde',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDLEVGPQ5U' ],
+      chosenCode: 'FDLEVGPQ5U',
+      paymentRequestFound: true,
+      paymentRequestId: '7964c709-36fe-457b-a291-39dc7f3b34dc',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: 'b93cdbab-6f02-4b16-8459-797a28eefb4e',
+      paymentRequestId: '7964c709-36fe-457b-a291-39dc7f3b34dc',
+      contractId: '71d36de2-06d5-46f0-8378-10f5496fcfac',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '71d36de2-06d5-46f0-8378-10f5496fcfac',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: '7964c709-36fe-457b-a291-39dc7f3b34dc',
+      contractId: '71d36de2-06d5-46f0-8378-10f5496fcfac',
+      paymentCode: 'FDLEVGPQ5U',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '7e7329bb11dca9a74270408b3b6d0302f7e513339c971bd3aec70b13c8a41f07',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FD1234567890ABCDEF1234567890ABCDEF' ],
+      chosenCode: 'FD1234567890ABCDEF1234567890ABCDEF',
+      paymentRequestFound: true,
+      paymentRequestId: '27110fc1-e0f1-48c6-b159-7b8a27d1a7e5',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '0d0545db-722e-40c9-83d5-185d5083fec9',
+      paymentRequestId: '27110fc1-e0f1-48c6-b159-7b8a27d1a7e5',
+      contractId: 'c4cf1128-e757-4db2-b8ba-1627ea668415',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: 'c4cf1128-e757-4db2-b8ba-1627ea668415',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: '27110fc1-e0f1-48c6-b159-7b8a27d1a7e5',
+      contractId: 'c4cf1128-e757-4db2-b8ba-1627ea668415',
+      paymentCode: 'FD1234567890ABCDEF1234567890ABCDEF',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'eb77482ea518fd44720e1c5dde47d5e29e7e7c577d246f564bc1db8426ded7af',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [],
+      chosenCode: null,
+      paymentRequestFound: false,
+      paymentRequestId: null,
+      expectedAmount: null,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: false, reason: 'MISSING_CODE' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP09][WEBHOOK_TRANSACTION_REVIEW_REQUIRED] {
+      recordId: 'a13e11cc-b5b7-4795-aede-e72cd78e9cb1',
+      reason: 'MISSING_CODE',
+      outcome: 'REVIEW_REQUIRED'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:588:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'aaccaf13505f1484016194d6849761bf2a4541f68805e534da24de5d862e37ed',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDC6V8AH4F' ],
+      chosenCode: 'FDC6V8AH4F',
+      paymentRequestFound: true,
+      paymentRequestId: 'ecfe4fe4-834a-42e3-b7ec-3842f36c642e',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '8f928743-e98e-4232-9edb-42e0a5c4b684',
+      paymentRequestId: 'ecfe4fe4-834a-42e3-b7ec-3842f36c642e',
+      contractId: '13598e06-b0c4-4e4d-bac3-7189fa03d5d4',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '13598e06-b0c4-4e4d-bac3-7189fa03d5d4',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: 'ecfe4fe4-834a-42e3-b7ec-3842f36c642e',
+      contractId: '13598e06-b0c4-4e4d-bac3-7189fa03d5d4',
+      paymentCode: 'FDC6V8AH4F',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: 'sepay-v2:80d02912-dd25-47a1-ad6b-5ac710cd56aa',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '336ebf33b0239868f45b3af750fb525b5176d0fb062d4c7f90cde2a967e7d45e',
+      env: 'TEST',
+      source: 'SEPAY_API'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] {
+      isDuplicate: false,
+      sepayId: 'sepay-v2:80d02912-dd25-47a1-ad6b-5ac710cd56aa'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: 'sepay-v2:7731c598-e564-4e27-8403-6baf3cbffdce',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '1f9d0f474a8034debfe06a6e21225ae9643071a10d9885d4f254344461ab194d',
+      env: 'TEST',
+      source: 'SEPAY_API'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] {
+      isDuplicate: false,
+      sepayId: 'sepay-v2:7731c598-e564-4e27-8403-6baf3cbffdce'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDNX4PFXPM' ],
+      chosenCode: 'FDNX4PFXPM',
+      paymentRequestFound: true,
+      paymentRequestId: '951fa6cd-a120-46a9-8da1-5218cc725bab',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '58f10f10-1812-4e6f-b925-bac256426ad3',
+      paymentRequestId: '951fa6cd-a120-46a9-8da1-5218cc725bab',
+      contractId: '41520b85-4ede-4ed3-9b64-6a462ef9a27b',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '41520b85-4ede-4ed3-9b64-6a462ef9a27b',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: '951fa6cd-a120-46a9-8da1-5218cc725bab',
+      contractId: '41520b85-4ede-4ed3-9b64-6a462ef9a27b',
+      paymentCode: 'FDNX4PFXPM',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '7924ddcecb7aed44b067bd5baedb8b0019e94f79758b7f8e22caaec878dbdf73',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: 'a74f9113a0849b64754d1fde828688a6063714219ac659eb1f26263741027db3',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FD2QL2TGGV' ],
+      chosenCode: 'FD2QL2TGGV',
+      paymentRequestFound: true,
+      paymentRequestId: '7a9057f6-1f9b-4f80-8afd-118e640b9def',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: '92ad3a70-03bc-4887-a594-d7ed966f5cbd',
+      paymentRequestId: '7a9057f6-1f9b-4f80-8afd-118e640b9def',
+      contractId: 'ee8ee7ab-d712-455d-9a7c-007a30f1d42f',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: 'ee8ee7ab-d712-455d-9a7c-007a30f1d42f',
+      status: 'PENDING',
+      activated: false,
+      blockingReasons: [ 'DOCTOR_VERIFICATION_REQUIRED' ]
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [DEBUG_CP05][WEBHOOK_SERVICE_START] {
+      sepayId: '1',
+      parsedDate: '2026-10-27T01:00:00.000Z',
+      fingerprint: '677b72db6654afb17636f26d82d93879f4acd2a9041bac3a71c71d28f5df5044',
+      env: 'TEST',
+      source: 'WEBHOOK'
+    }
+
+      at PaymentTestService.handleIncomingTransaction (src/modules/payments/services/impl/payments.service.impl.ts:447:13)
+
+  console.log
+    [DEBUG_CP06][WEBHOOK_IDEMPOTENT_CHECK] { isDuplicate: false, sepayId: '1' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:482:15
+
+  console.log
+    [DEBUG_CP07][WEBHOOK_EXTRACT_PAYMENT_CODE] {
+      extractedCodes: [ 'FDLQDW8JMP' ],
+      chosenCode: 'FDLQDW8JMP',
+      paymentRequestFound: true,
+      paymentRequestId: '957f1873-46bd-4608-8b12-cb4ede563748',
+      expectedAmount: 150000,
+      receivedAmount: 150000
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:563:15
+
+  console.log
+    [DEBUG_CP08][WEBHOOK_RECONCILIATION_RESULT] { matched: true, reason: 'NONE (VALID_MATCH)' }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:577:15
+
+  console.log
+    [DEBUG_CP10][WEBHOOK_TRANSACTION_MATCHED] {
+      recordId: 'c7c307b5-3ad1-4817-8ff9-cd7f3fba74a6',
+      paymentRequestId: '957f1873-46bd-4608-8b12-cb4ede563748',
+      contractId: '787ce99c-7b0c-4fc0-98df-5cd604147409',
+      addendumId: undefined
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:612:15
+
+  console.log
+    [DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT] {
+      contractId: '787ce99c-7b0c-4fc0-98df-5cd604147409',
+      status: 'ACTIVE',
+      activated: true,
+      blockingReasons: []
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:627:15
+
+  console.log
+    [AUTO_ACTIVATION][WEBHOOK] {
+      paymentId: '957f1873-46bd-4608-8b12-cb4ede563748',
+      contractId: '787ce99c-7b0c-4fc0-98df-5cd604147409',
+      paymentCode: 'FDLQDW8JMP',
+      amountVnd: 150000,
+      reason: 'time_check_skipped_auto_activation'
+    }
+
+      at src/modules/payments/services/impl/payments.service.impl.ts:634:17
+
+node : (node:3052) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+At line:1 char:56
++ ... c-backend"; node --experimental-vm-modules ./node_modules/jest/bin/je ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:3052) Exp...nge at any time:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL src/modules/payments/__tests__/payments.service.spec.ts
+  ΓùÅ PaymentsServiceImpl (simulation) ΓÇ║ does not match transfers older than the 5-minute tolerance before the 
+request was created
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "BEFORE_REQUEST"
+    Received: null
+
+    [0m [90m 400 |[39m       })[33m,[39m
+     [90m 401 |[39m     )[33m;[39m
+    [31m[1m>[22m[39m[90m 402 |[39m     expect(result[33m.[39mtransaction[33m.[39mreason)[33m.[39mtoBe([33m
+TransactionReason[39m[33m.[39m[33mBEFORE_REQUEST[39m)[33m;[39m
+     [90m     |[39m                                       [31m[1m^[22m[39m
+     [90m 403 |[39m   })[33m;[39m
+     [90m 404 |[39m
+     [90m 405 |[39m   it([32m'matches MBBank transfers whose seconds are truncated to :00 in the same minute and 
+clamps invoice paidAt'[39m[33m,[39m [36masync[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (src/modules/payments/__tests__/payments.service.spec.ts:402:39)
+
+  ΓùÅ PaymentsServiceImpl (simulation) ΓÇ║ does not auto-accept an old code when a newer attempt already exists
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "SUPERSEDED_REQUEST"
+    Received: null
+
+    [0m [90m 462 |[39m     now [33m=[39m [36mnew[39m [33mDate[39m(now[33m.[39mgetTime() [33m+[39m 
+[35m16[39m [33m*[39m [35m60[39m_000)[33m;[39m
+     [90m 463 |[39m     [36mawait[39m service[33m.[39mcreateVietQRPayment(old[33m.[39mcontractId)[33m;[39m
+    [31m[1m>[22m[39m[90m 464 |[39m     expect(([36mawait[39m 
+service[33m.[39mhandleVietQRWebhook(dto))[33m.[39mtransaction[33m.[39mreason)[33m.[39mtoBe(
+     [90m     |[39m                                                                         [31m[1m^[22m[39m
+     [90m 465 |[39m       [33mTransactionReason[39m[33m.[39m[33mSUPERSEDED_REQUEST[39m[33m,[39m
+     [90m 466 |[39m     )[33m;[39m
+     [90m 467 |[39m   })[33m;[39m[0m
+
+      at Object.<anonymous> (src/modules/payments/__tests__/payments.service.spec.ts:464:73)
+
+  ΓùÅ PaymentsServiceImpl (simulation) ΓÇ║ flags funds received at or after the request deadline
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "LATE_PAYMENT"
+    Received: null
+
+    [0m [90m 471 |[39m     now [33m=[39m [36mnew[39m [33mDate[39m(payment[33m.[39mexpiresAt)[33m;[39m
+     [90m 472 |[39m     [36mconst[39m result [33m=[39m [36mawait[39m 
+service[33m.[39mhandleVietQRWebhook(payload(payment))[33m;[39m
+    [31m[1m>[22m[39m[90m 473 |[39m     expect(result[33m.[39mtransaction[33m.[39mreason)[33m.[39mtoBe([33m
+TransactionReason[39m[33m.[39m[33mLATE_PAYMENT[39m)[33m;[39m
+     [90m     |[39m                                       [31m[1m^[22m[39m
+     [90m 474 |[39m   })[33m;[39m
+     [90m 475 |[39m
+     [90m 476 |[39m   it([32m'does not activate a cancelled request and never implements automatic 
+refunds'[39m[33m,[39m [36masync[39m () [33m=>[39m {[0m
+
+      at Object.<anonymous> (src/modules/payments/__tests__/payments.service.spec.ts:473:39)
+
+Test Suites: 1 failed, 1 total
+Tests:       3 failed, 52 passed, 55 total
+Snapshots:   0 total
+Time:        0.498 s, estimated 1 s
+Ran all test suites matching src/modules/payments/__tests__/payments.service.spec.ts.
