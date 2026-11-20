@@ -3,12 +3,10 @@ FROM node:24-bookworm-slim AS builder
 
 WORKDIR /app
 
-# Cài đặt OpenSSL cần thiết cho Prisma + Chromium cho Puppeteer
+# Cài đặt OpenSSL cần thiết cho Prisma generate
 RUN apt-get update -y && \
-    apt-get install -y --no-install-recommends openssl chromium fonts-dejavu-core fonts-liberation && \
+    apt-get install -y --no-install-recommends openssl && \
     rm -rf /var/lib/apt/lists/*
-
-ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 COPY package*.json ./
 COPY prisma ./prisma/
@@ -17,34 +15,27 @@ RUN npm ci
 
 COPY . .
 
-RUN npx prisma generate
-RUN npm run build
+RUN npx prisma generate && \
+    npm run build && \
+    npm prune --omit=dev && \
+    npm cache clean --force
 
-# Stage 2: Runner
+# Stage 2: Runner (Slim Node.js — PDF render tách sang Browserless sidecar)
 FROM node:24-bookworm-slim AS runner
 
 WORKDIR /app
 
-# Cài đặt OpenSSL cho Prisma runtime + Chromium + fonts cho Puppeteer
+# Cài đặt OpenSSL cho Prisma runtime
 RUN apt-get update -y && \
-    apt-get install -y --no-install-recommends openssl chromium fonts-dejavu-core fonts-liberation && \
+    apt-get install -y --no-install-recommends openssl && \
     rm -rf /var/lib/apt/lists/*
-
-ENV CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 ENV NODE_ENV=production
 ENV PORT=4000
 
 COPY package*.json ./
 COPY prisma ./prisma/
-
-# Cài đặt production dependencies (bcryptjs là pure JS)
-RUN npm ci --omit=dev
-
-# Mang theo engine da generate, khong tai binary khi khoi dong container.
-COPY --from=builder /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY scripts/docker-entrypoint.sh /app/scripts/docker-entrypoint.sh
 RUN chmod +x /app/scripts/docker-entrypoint.sh
