@@ -14,6 +14,7 @@ interface MemoryState {
   contracts: Map<string, BillingContract>;
   requests: Map<string, PaymentRequest>;
   transactions: Map<string, PaymentTransaction>;
+  paymentOverrides: Array<Parameters<PaymentsSession['recordPaymentOverride']>[0]>;
 }
 
 // Bản mô phỏng transaction, không phải database bền vững hoặc khóa giữa nhiều server.
@@ -24,6 +25,7 @@ export class InMemoryPaymentsRepository implements PaymentsRepository {
     contracts: new Map(),
     requests: new Map(),
     transactions: new Map(),
+    paymentOverrides: [],
   };
   private queue: Promise<void> = Promise.resolve();
 
@@ -101,10 +103,35 @@ class MemorySession implements PaymentsSession {
     this.state.requests.set(request.id, structuredClone(request));
   }
 
+  async recordPaymentOverride(entry: Parameters<PaymentsSession['recordPaymentOverride']>[0]) {
+    this.state.paymentOverrides.push(structuredClone(entry));
+  }
+
   async findTransaction(
     providerId: string,
   ): Promise<PaymentTransaction | null> {
-    return structuredClone(this.state.transactions.get(providerId) ?? null);
+    const item = [...this.state.transactions.values()].find(
+      (transaction) => transaction.providerTransactionId === providerId,
+    );
+    return structuredClone(item ?? null);
+  }
+
+  async findTransactionByWebhookId(
+    id: string,
+  ): Promise<PaymentTransaction | null> {
+    const item = [...this.state.transactions.values()].find(
+      (transaction) =>
+        transaction.sepayWebhookTransactionId === id ||
+        transaction.providerTransactionId === id,
+    );
+    return structuredClone(item ?? null);
+  }
+
+  async findTransactionByApiId(id: string): Promise<PaymentTransaction | null> {
+    const item = [...this.state.transactions.values()].find(
+      (transaction) => transaction.sepayApiTransactionId === id,
+    );
+    return structuredClone(item ?? null);
   }
 
   async findTransactionByReference(
@@ -116,17 +143,90 @@ class MemorySession implements PaymentsSession {
     return structuredClone(item ?? null);
   }
 
+  async findTransactionByBankIdentity(
+    accountNumber: string,
+    referenceCode: string,
+  ): Promise<PaymentTransaction | null> {
+    const item = [...this.state.transactions.values()].find(
+      (transaction) =>
+        transaction.accountNumber === accountNumber &&
+        transaction.referenceCode === referenceCode,
+    );
+    return structuredClone(item ?? null);
+  }
+
+  async findLatestTransactionByRequestId(
+    paymentRequestId: string,
+  ): Promise<PaymentTransaction | null> {
+    const item = [...this.state.transactions.values()]
+      .filter(
+        (transaction) =>
+          transaction.paymentRequestId === paymentRequestId &&
+          transaction.outcome === 'REVIEW_REQUIRED',
+      )
+      .sort((a, b) => Date.parse(b.receivedAt) - Date.parse(a.receivedAt))[0];
+    return structuredClone(item ?? null);
+  }
+
   async listTransactions(): Promise<PaymentTransaction[]> {
-    return structuredClone([...this.state.transactions.values()]);
+    return structuredClone([...this.state.transactions.values()]).map((item) => {
+      const rawContent =
+        item.rawPayload?.content ?? item.rawPayload?.transaction_content;
+      const transferContent =
+        item.transferContent ??
+        (typeof rawContent === 'string' && rawContent.trim()
+          ? rawContent.trim()
+          : null);
+      const req = item.paymentRequestId
+        ? this.state.requests.get(item.paymentRequestId)
+        : undefined;
+      const contract = req ? this.state.contracts.get(req.contractId) : undefined;
+      return {
+        ...item,
+        transferContent,
+        contractNumber: item.contractNumber ?? contract?.id ?? null,
+        payerName: item.payerName ?? contract?.payerDisplayName ?? null,
+        payerPhoneLast4: item.payerPhoneLast4 ?? null,
+      };
+    });
   }
 
   async saveTransaction(transaction: PaymentTransaction): Promise<void> {
-    if (this.state.transactions.has(transaction.providerTransactionId)) {
+    if (
+      [...this.state.transactions.values()].some(
+        (item) =>
+          item.providerTransactionId === transaction.providerTransactionId ||
+          (transaction.sepayWebhookTransactionId &&
+            item.sepayWebhookTransactionId ===
+              transaction.sepayWebhookTransactionId) ||
+          (transaction.sepayApiTransactionId &&
+            item.sepayApiTransactionId === transaction.sepayApiTransactionId),
+      )
+    ) {
       throw new ConflictException('Provider transaction already recorded');
     }
     this.state.transactions.set(
       transaction.providerTransactionId,
       structuredClone(transaction),
     );
+  }
+
+  async linkReconciledTransaction(
+    id: string,
+    data: {
+      sepayWebhookTransactionId?: string;
+      sepayApiTransactionId?: string;
+      reconciliationRunId?: string;
+      reconciledAt?: string;
+    },
+  ): Promise<PaymentTransaction> {
+    const entry = [...this.state.transactions.entries()].find(
+      ([, transaction]) => transaction.id === id,
+    );
+    if (!entry) throw new ConflictException('Transaction does not exist');
+    const [key, transaction] = entry;
+    const updated = { ...transaction, ...data };
+    this.state.transactions.set(key, structuredClone(updated));
+    return structuredClone(updated);
   }
 }

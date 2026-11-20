@@ -1,10 +1,16 @@
 import {
   BadRequestException,
-  Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../../core/database/prisma.service';
+import { DoctorClinicalTier } from '@prisma/client';
+import {
+  computeQuotaMetrics,
+  countActiveAndHeldMap,
+} from '../../../contracts/pricing/doctor-quota.helper';
+import { inferDoctorClinicalTier } from '../../../doctors/utils/doctor-clinical-tier.util';
 import { IPublicService } from '../interfaces/public.service.interface';
 import {
   PortalOverviewResponseDto,
@@ -18,15 +24,189 @@ import { LookupHealthcareFacilitiesDto } from '../../dtos/lookup-facilities.dto'
 import { PublicFacilitiesResponseDto } from '../../dtos/public-facilities-response.dto';
 import { LookupDoctorDirectoryDto } from '../../dtos/lookup-doctors.dto';
 import { PublicDoctorsResponseDto } from '../../dtos/public-doctors-response.dto';
+import {
+  PublicDoctorDetailDto,
+  DoctorCareModelDto,
+  PublicDoctorReviewPreviewItemDto,
+} from '../../dtos/public-doctor-detail.dto';
+import {
+  LookupDoctorReviewsQueryDto,
+  PublicDoctorReviewsResponseDto,
+  PublicDoctorReviewItemDto,
+} from '../../dtos/public-doctor-reviews.dto';
 import { SubmitConsultationRequestDto } from '../../dtos/submit-consultation-request.dto';
 import { ConsultationRequestResponseDto } from '../../dtos/consultation-request-response.dto';
+import {
+  PublicBankItemDto,
+  PublicBanksResponseDto,
+} from '../../dtos/public-banks-response.dto';
+
+const VIETQR_BANKS_API_URL = 'https://api.vietqr.io/v2/banks';
+const VIETQR_BANKS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const VIETQR_BANKS_TIMEOUT_MS = 5000;
+
+const FALLBACK_VIETQR_BANKS: PublicBankItemDto[] = [
+  {
+    id: 43,
+    name: 'Ngân hàng TMCP Ngoại thương Việt Nam',
+    code: 'VCB',
+    bin: '970436',
+    shortName: 'Vietcombank',
+    logo: 'https://api.vietqr.io/img/VCB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 17,
+    name: 'Ngân hàng TMCP Công thương Việt Nam',
+    code: 'ICB',
+    bin: '970415',
+    shortName: 'VietinBank',
+    logo: 'https://api.vietqr.io/img/ICB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 4,
+    name: 'Ngân hàng TMCP Đầu tư và Phát triển Việt Nam',
+    code: 'BIDV',
+    bin: '970418',
+    shortName: 'BIDV',
+    logo: 'https://api.vietqr.io/img/BIDV.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 42,
+    name: 'Ngân hàng Nông nghiệp và Phát triển Nông thôn Việt Nam',
+    code: 'VBA',
+    bin: '970405',
+    shortName: 'Agribank',
+    logo: 'https://api.vietqr.io/img/VBA.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 38,
+    name: 'Ngân hàng TMCP Kỹ thương Việt Nam',
+    code: 'TCB',
+    bin: '970407',
+    shortName: 'Techcombank',
+    logo: 'https://api.vietqr.io/img/TCB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 21,
+    name: 'Ngân hàng TMCP Quân đội',
+    code: 'MB',
+    bin: '970422',
+    shortName: 'MBBank',
+    logo: 'https://api.vietqr.io/img/MB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 2,
+    name: 'Ngân hàng TMCP Á Châu',
+    code: 'ACB',
+    bin: '970416',
+    shortName: 'ACB',
+    logo: 'https://api.vietqr.io/img/ACB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 47,
+    name: 'Ngân hàng TMCP Việt Nam Thịnh Vượng',
+    code: 'VPB',
+    bin: '970432',
+    shortName: 'VPBank',
+    logo: 'https://api.vietqr.io/img/VPB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 39,
+    name: 'Ngân hàng TMCP Tiên Phong',
+    code: 'TPB',
+    bin: '970423',
+    shortName: 'TPBank',
+    logo: 'https://api.vietqr.io/img/TPB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 36,
+    name: 'Ngân hàng TMCP Sài Gòn Thương Tín',
+    code: 'STB',
+    bin: '970403',
+    shortName: 'Sacombank',
+    logo: 'https://api.vietqr.io/img/STB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 12,
+    name: 'Ngân hàng TMCP Phát triển Thành phố Hồ Chí Minh',
+    code: 'HDB',
+    bin: '970437',
+    shortName: 'HDBank',
+    logo: 'https://api.vietqr.io/img/HDB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 45,
+    name: 'Ngân hàng TMCP Quốc tế Việt Nam',
+    code: 'VIB',
+    bin: '970441',
+    shortName: 'VIB',
+    logo: 'https://api.vietqr.io/img/VIB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 35,
+    name: 'Ngân hàng TMCP Sài Gòn - Hà Nội',
+    code: 'SHB',
+    bin: '970443',
+    shortName: 'SHB',
+    logo: 'https://api.vietqr.io/img/SHB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 22,
+    name: 'Ngân hàng TMCP Hàng Hải Việt Nam',
+    code: 'MSB',
+    bin: '970426',
+    shortName: 'MSB',
+    logo: 'https://api.vietqr.io/img/MSB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+  {
+    id: 26,
+    name: 'Ngân hàng TMCP Phương Đông',
+    code: 'OCB',
+    bin: '970448',
+    shortName: 'OCB',
+    logo: 'https://api.vietqr.io/img/OCB.png',
+    transferSupported: 1,
+    lookupSupported: 1,
+  },
+];
 
 @Injectable()
 export class PublicServiceImpl implements IPublicService {
+  private readonly logger = new Logger(PublicServiceImpl.name);
+  private bankCache: { items: PublicBankItemDto[]; fetchedAtMs: number } | null =
+    null;
+  private bankFetchInFlight: Promise<PublicBankItemDto[]> | null = null;
+
   constructor(
     private readonly prisma: PrismaService,
-    @Inject('REDIS_CLIENT')
-    private readonly redisClient: any,
   ) {}
 
   async getPublicPortalOverview(): Promise<PortalOverviewResponseDto> {
@@ -220,6 +400,10 @@ export class PublicServiceImpl implements IPublicService {
         basePrice: Number(pkg.basePrice),
         periodicVisitsQuota: pkg.periodicVisitsQuota,
         telehealthQuota: pkg.telehealthQuota,
+        videoQuotaPolicy: pkg.videoQuotaPolicy,
+        homeVisitUnitPriceVnd: pkg.homeVisitUnitPrice
+          ? Number(pkg.homeVisitUnitPrice)
+          : undefined,
         maxMembers: pkg.maxMembers,
         includedMembers: pkg.includedMembers,
         additionalMemberMonthlyPrice: Number(pkg.additionalMemberMonthlyPrice),
@@ -253,6 +437,10 @@ export class PublicServiceImpl implements IPublicService {
       basePrice: Number(pkg.basePrice),
       periodicVisitsQuota: pkg.periodicVisitsQuota,
       telehealthQuota: pkg.telehealthQuota,
+      videoQuotaPolicy: pkg.videoQuotaPolicy,
+      homeVisitUnitPriceVnd: pkg.homeVisitUnitPrice
+        ? Number(pkg.homeVisitUnitPrice)
+        : undefined,
       maxMembers: pkg.maxMembers,
       includedMembers: pkg.includedMembers,
       additionalMemberMonthlyPrice: Number(pkg.additionalMemberMonthlyPrice),
@@ -265,11 +453,12 @@ export class PublicServiceImpl implements IPublicService {
         clinicalServices: [
           'Khám lâm sàng tổng quát toàn diện định kỳ tại nhà',
           'Đo dấu hiệu sinh tồn chuẩn y tế (Huyết áp, Nhịp tim, SpO2, Thân nhiệt)',
-          'Xét nghiệm đường huyết mao mạch và kiểm tra sức khỏe tại chỗ',
+          'Theo dõi chỉ số và tư vấn trong phạm vi chuyên môn; xét nghiệm ngoài gói',
           'Cập nhật và theo dõi Hồ sơ sức khỏe điện tử (EHR) liên tục',
           'Kê đơn thuốc điện tử chuẩn Thông tư 04/2022/TT-BYT',
         ],
-        emergencySupport: 'Đường dây nóng hỗ trợ điều phối y tế gia đình 24/7',
+        emergencySupport:
+          'Theo lịch và giờ làm việc đã thống nhất; không phải dịch vụ cấp cứu 24/7',
       },
       sampleTerms: {
         rescheduleNoticeHours:
@@ -367,12 +556,23 @@ export class PublicServiceImpl implements IPublicService {
       where.facilityId = dto.facilityId;
     }
 
+    if (dto.city?.trim()) {
+      where.facility = {
+        ...where.facility,
+        address: { contains: dto.city.trim(), mode: 'insensitive' },
+      };
+    }
+
     if (dto.specialty?.trim()) {
       where.specialty = { contains: dto.specialty.trim(), mode: 'insensitive' };
     }
 
     if (dto.minExperienceYears !== undefined) {
       where.experienceYears = { gte: dto.minExperienceYears };
+    }
+
+    if (dto.clinicalTier) {
+      where.clinicalTier = dto.clinicalTier;
     }
 
     const orderBy = {
@@ -383,14 +583,15 @@ export class PublicServiceImpl implements IPublicService {
       this.prisma.doctor.count({ where }),
       this.prisma.doctor.findMany({
         where,
-        skip,
-        take: limit,
+        skip: dto.onlyAvailable ? 0 : skip,
+        take: dto.onlyAvailable ? Math.max(limit * 3, 50) : limit,
         select: {
           id: true,
           doctorName: true,
           specialty: true,
           academicTitle: true,
           experienceYears: true,
+          clinicalTier: true,
           bio: true,
           ratingAvg: true,
           totalReviews: true,
@@ -404,24 +605,47 @@ export class PublicServiceImpl implements IPublicService {
               hotline: true,
             },
           },
+          user: {
+            select: {
+              avatarUrl: true,
+            },
+          },
         },
         orderBy,
       }),
     ]);
 
+    const activeHeldMap =
+      typeof this.prisma.medicalContract?.findMany === 'function'
+        ? await countActiveAndHeldMap(
+            this.prisma,
+            doctors.map((d) => d.id),
+          )
+        : new Map<string, number>();
+
+    let mappedItems = doctors.map((doc) =>
+      this.mapPublicDoctorListItem(
+        doc,
+        activeHeldMap.get(doc.id) ?? doc.activePanelCount ?? 0,
+      ),
+    );
+
+    if (dto.onlyAvailable) {
+      const available = mappedItems.filter((item) => !item.isQuotaFull);
+      mappedItems = available.slice(skip, skip + limit);
+      return {
+        items: mappedItems,
+        meta: {
+          total: available.length,
+          page,
+          limit,
+          totalPages: Math.ceil(available.length / limit) || 1,
+        },
+      };
+    }
+
     return {
-      items: doctors.map((doc) => ({
-        id: doc.id,
-        doctorName: doc.doctorName,
-        specialty: doc.specialty,
-        academicTitle: doc.academicTitle,
-        experienceYears: doc.experienceYears,
-        bio: doc.bio,
-        ratingAvg: Number(doc.ratingAvg),
-        totalReviews: doc.totalReviews,
-        isAvailable: doc.activePanelCount < doc.maxPanelCapacity,
-        facility: doc.facility,
-      })),
+      items: mappedItems,
       meta: {
         total,
         page,
@@ -474,31 +698,104 @@ export class PublicServiceImpl implements IPublicService {
     };
   }
 
-  async getPublicDoctorDetail(id: string): Promise<any> {
-    const doctor = await this.prisma.doctor.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        doctorName: true,
-        specialty: true,
-        academicTitle: true,
-        experienceYears: true,
-        bio: true,
-        ratingAvg: true,
-        totalReviews: true,
-        activePanelCount: true,
-        maxPanelCapacity: true,
-        onboardingStatus: true,
-        facility: {
-          select: {
-            id: true,
-            facilityName: true,
-            address: true,
-            hotline: true,
+  async getPublicDoctorDetail(id: string): Promise<PublicDoctorDetailDto> {
+    const [doctor, packages, careItems, reviewRows] = await Promise.all([
+      this.prisma.doctor.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          doctorName: true,
+          academicTitle: true,
+          specialty: true,
+          experienceYears: true,
+          clinicalTier: true,
+          bio: true,
+          ratingAvg: true,
+          totalReviews: true,
+          activePanelCount: true,
+          maxPanelCapacity: true,
+          onboardingStatus: true,
+          user: { select: { avatarUrl: true } },
+          facility: {
+            select: {
+              id: true,
+              facilityName: true,
+              address: true,
+              verificationStatus: true,
+            },
+          },
+          credentials: {
+            where: { platformApproved: true },
+            select: {
+              id: true,
+              credentialType: true,
+              issuingAuthority: true,
+              issueDate: true,
+              platformApproved: true,
+            },
+          },
+          treatedCases: {
+            where: { status: 'APPROVED' },
+            orderBy: [{ approvedAt: 'desc' }, { createdAt: 'desc' }],
+            select: { id: true, summary: true },
+          },
+          _count: {
+            select: {
+              encounters: { where: { encounterStatus: 'COMPLETED' } },
+              reviews: true,
+            },
           },
         },
-      },
-    });
+      }),
+      this.prisma.servicePackage.findMany({
+        where: {
+          status: 'ACTIVE',
+          deletedAt: null,
+        },
+        orderBy: {
+          basePrice: 'asc',
+        },
+        take: 6,
+      }),
+      this.prisma.platformCareItem.findMany({
+        where: { isActive: true },
+        orderBy: { sortOrder: 'asc' },
+        select: {
+          id: true,
+          category: true,
+          title: true,
+          description: true,
+          icon: true,
+          sortOrder: true,
+        },
+      }),
+      this.prisma.doctorReview.findMany({
+        where: { doctorId: id, reviewComment: { not: null } },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          ratingStars: true,
+          reviewComment: true,
+          createdAt: true,
+          encounter: {
+            select: {
+              contract: {
+                select: {
+                  servicePackage: { select: { packageName: true } },
+                },
+              },
+            },
+          },
+          familyUnit: {
+            select: {
+              homeAddress: true,
+              representativeUser: { select: { fullName: true } },
+            },
+          },
+        },
+      }),
+    ]);
 
     if (!doctor || doctor.onboardingStatus !== 'ACTIVE') {
       throw new NotFoundException(
@@ -506,17 +803,371 @@ export class PublicServiceImpl implements IPublicService {
       );
     }
 
+    const specLower = (doctor.specialty || '').toLowerCase();
+    let specialtyKey = 'general';
+    if (specLower.includes('nhi') || specLower.includes('pediatric')) {
+      specialtyKey = 'pediatric';
+    } else if (
+      specLower.includes('tim') ||
+      specLower.includes('lão') ||
+      specLower.includes('geriatric')
+    ) {
+      specialtyKey = 'geriatric';
+    }
+
+    const totalReviews = doctor.totalReviews ?? doctor._count?.reviews ?? 0;
+    const ratingAvg = totalReviews > 0 ? Number(doctor.ratingAvg) : null;
+
+    const formattedCarePackages = packages.map((pkg) => {
+      const priceNum = Number(pkg.basePrice);
+      const monthly = Math.round(priceNum / (pkg.durationMonths || 1));
+      return {
+        id: pkg.id,
+        packageCode: pkg.packageCode,
+        packageName: pkg.packageName,
+        durationMonths: pkg.durationMonths,
+        basePrice: priceNum,
+        formattedPrice: `${priceNum.toLocaleString('vi-VN')}đ`,
+        monthlyPrice: `${monthly.toLocaleString('vi-VN')}đ/tháng`,
+        periodicVisitsQuota: pkg.periodicVisitsQuota,
+        telehealthQuota: pkg.telehealthQuota,
+        includedMembers: pkg.includedMembers,
+        maxMembers: pkg.maxMembers,
+        additionalMemberMonthlyPrice: Number(pkg.additionalMemberMonthlyPrice),
+        highlight: pkg.description || undefined,
+        features: [
+          `${pkg.periodicVisitsQuota} lượt bác sĩ trực tiếp thăm khám tại nhà`,
+          `${pkg.telehealthQuota} lượt tư vấn video Telehealth 24/7`,
+          'Bác sĩ phụ trách chính & lập phác đồ điều trị gia đình',
+          'Hồ sơ bệnh án điện tử (EHR) lưu trữ trọn đời',
+        ],
+      };
+    });
+
+    const reviewItems = reviewRows
+      .filter((row) => (row.reviewComment || '').trim().length > 0)
+      .map((row) => this.mapReviewRow(row));
+
+    const heldMap =
+      typeof this.prisma.medicalContract?.findMany === 'function'
+        ? await countActiveAndHeldMap(this.prisma, [doctor.id])
+        : new Map<string, number>();
+    const activeAndHeldCount =
+      heldMap.get(doctor.id) ?? doctor.activePanelCount ?? 0;
+    const quota = computeQuotaMetrics(doctor.maxPanelCapacity, activeAndHeldCount);
+    const clinicalTier: DoctorClinicalTier =
+      (doctor as any).clinicalTier ??
+      inferDoctorClinicalTier(doctor.experienceYears, doctor.academicTitle);
+    const hasActiveFacility =
+      Boolean(doctor.facility) &&
+      (doctor.facility?.verificationStatus === undefined ||
+        doctor.facility.verificationStatus === 'ACTIVE');
+
+    let juniorAlternatives:
+      | Array<{
+          id: string;
+          doctorName: string;
+          specialty: string;
+          academicTitle: string | null;
+          experienceYears: number;
+          clinicalTier: DoctorClinicalTier;
+          bio: string | null;
+          ratingAvg: number;
+          totalReviews: number;
+          isAvailable: boolean;
+          activePanelCount: number;
+          maxPanelCapacity: number;
+          remainingSlots: number;
+          isQuotaFull: boolean;
+          avatarUrl: string | null;
+          facility: {
+            id: string;
+            facilityName: string;
+            address: string;
+            hotline: string;
+          } | null;
+        }>
+      | undefined;
+    let lowerPricePackages: typeof formattedCarePackages | undefined;
+
+    if (quota.isQuotaFull) {
+      lowerPricePackages = formattedCarePackages.slice(0, 3);
+      if (typeof this.prisma.doctor?.findMany === 'function') {
+        const juniorRows = await this.prisma.doctor.findMany({
+          where: {
+            id: { not: doctor.id },
+            onboardingStatus: 'ACTIVE',
+            clinicalTier: 'JUNIOR',
+            facility: { verificationStatus: 'ACTIVE' },
+          },
+          select: {
+            id: true,
+            doctorName: true,
+            specialty: true,
+            academicTitle: true,
+            experienceYears: true,
+            clinicalTier: true,
+            bio: true,
+            ratingAvg: true,
+            totalReviews: true,
+            activePanelCount: true,
+            maxPanelCapacity: true,
+            facility: {
+              select: {
+                id: true,
+                facilityName: true,
+                address: true,
+                hotline: true,
+              },
+            },
+            user: {
+              select: {
+                avatarUrl: true,
+              },
+            },
+          },
+          orderBy: [{ ratingAvg: 'desc' }, { experienceYears: 'desc' }],
+          take: 20,
+        });
+
+        const juniorHeldMap =
+          typeof this.prisma.medicalContract?.findMany === 'function'
+            ? await countActiveAndHeldMap(
+                this.prisma,
+                juniorRows.map((j) => j.id),
+              )
+            : new Map<string, number>();
+
+        juniorAlternatives = juniorRows
+          .map((j) =>
+            this.mapPublicDoctorListItem(
+              j,
+              juniorHeldMap.get(j.id) ?? j.activePanelCount ?? 0,
+            ),
+          )
+          .filter((j) => !j.isQuotaFull)
+          .sort((a, b) => {
+            const sameSpecA =
+              a.specialty.toLowerCase() === doctor.specialty.toLowerCase()
+                ? 1
+                : 0;
+            const sameSpecB =
+              b.specialty.toLowerCase() === doctor.specialty.toLowerCase()
+                ? 1
+                : 0;
+            if (sameSpecA !== sameSpecB) return sameSpecB - sameSpecA;
+            return b.remainingSlots - a.remainingSlots;
+          })
+          .slice(0, 4);
+      } else {
+        juniorAlternatives = [];
+      }
+    }
+
     return {
       id: doctor.id,
       doctorName: doctor.doctorName,
-      specialty: doctor.specialty,
       academicTitle: doctor.academicTitle,
-      experienceYears: doctor.experienceYears,
+      specialty: doctor.specialty,
+      specialtyKey,
+      avatarUrl: doctor.user?.avatarUrl ?? null,
       bio: doctor.bio,
-      ratingAvg: Number(doctor.ratingAvg),
-      totalReviews: doctor.totalReviews,
-      isAvailable: doctor.activePanelCount < doctor.maxPanelCapacity,
-      facility: doctor.facility,
+      isVerified:
+        doctor.onboardingStatus === 'ACTIVE' && doctor.credentials.length > 0,
+      isAvailable: !quota.isQuotaFull && hasActiveFacility,
+      clinicalTier,
+      remainingSlots: quota.remainingSlots,
+      isQuotaFull: quota.isQuotaFull,
+      panel: {
+        activeCount: quota.activeAndHeldCount,
+        maxCapacity: quota.maxCapacity,
+      },
+      ...(juniorAlternatives ? { juniorAlternatives } : {}),
+      ...(lowerPricePackages ? { lowerPricePackages } : {}),
+      stats: {
+        experienceYears: doctor.experienceYears,
+        ratingAvg,
+        totalReviews,
+        completedEncounters: doctor._count?.encounters ?? 0,
+      },
+      facility: doctor.facility
+        ? {
+            id: doctor.facility.id,
+            facilityName: doctor.facility.facilityName,
+            address: doctor.facility.address,
+            verificationStatus: doctor.facility.verificationStatus,
+          }
+        : null,
+      credentials: doctor.credentials.map((credential) => ({
+        id: credential.id,
+        type: credential.credentialType,
+        typeLabel: this.credentialTypeLabel(credential.credentialType),
+        issuingAuthority: credential.issuingAuthority,
+        issueYear: credential.issueDate
+          ? new Date(credential.issueDate).getFullYear()
+          : 0,
+        verified: credential.platformApproved,
+      })),
+      treatedCases: doctor.treatedCases.map((item) => ({
+        id: item.id,
+        summary: item.summary,
+      })),
+      careModel: this.buildCareModel(careItems),
+      carePackages: formattedCarePackages,
+      reviews: {
+        ratingAvg,
+        totalReviews,
+        items: reviewItems,
+      },
+    };
+  }
+
+  async getPublicCareModel(): Promise<DoctorCareModelDto> {
+    const items = await this.prisma.platformCareItem.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+      select: {
+        id: true,
+        category: true,
+        title: true,
+        description: true,
+        icon: true,
+        sortOrder: true,
+      },
+    });
+
+    return this.buildCareModel(items);
+  }
+
+  private mapPublicDoctorListItem(doc: any, activeAndHeldCount: number) {
+    const quota = computeQuotaMetrics(doc.maxPanelCapacity, activeAndHeldCount);
+    const clinicalTier: DoctorClinicalTier =
+      doc.clinicalTier ??
+      inferDoctorClinicalTier(doc.experienceYears, doc.academicTitle);
+    return {
+      id: doc.id,
+      doctorName: doc.doctorName,
+      specialty: doc.specialty,
+      academicTitle: doc.academicTitle,
+      experienceYears: doc.experienceYears,
+      clinicalTier,
+      bio: doc.bio,
+      ratingAvg: Number(doc.ratingAvg),
+      totalReviews: doc.totalReviews,
+      isAvailable: !quota.isQuotaFull,
+      activePanelCount: quota.activeAndHeldCount,
+      maxPanelCapacity: quota.maxCapacity,
+      remainingSlots: quota.remainingSlots,
+      isQuotaFull: quota.isQuotaFull,
+      avatarUrl: doc.user?.avatarUrl || null,
+      facility: doc.facility,
+    };
+  }
+
+  private buildCareModel(
+    items: Array<{
+      id: string;
+      category: string;
+      title: string;
+      description: string;
+      icon: string | null;
+      sortOrder: number;
+    }>,
+  ): DoctorCareModelDto {
+    const mapItem = (item: (typeof items)[number]) => ({
+      id: item.id,
+      category: item.category,
+      title: item.title,
+      description: item.description,
+      icon: item.icon,
+      sortOrder: item.sortOrder,
+    });
+
+    return {
+      serviceModes: items
+        .filter((item) => item.category === 'SERVICE_MODE')
+        .map(mapItem),
+      commitments: items
+        .filter((item) => item.category === 'COMMITMENT')
+        .map(mapItem),
+    };
+  }
+
+  private credentialTypeLabel(type: string): string {
+    switch (type) {
+      case 'PRACTICE_LICENSE_CCHN':
+        return 'Chứng chỉ hành nghề';
+      case 'FAMILY_MEDICINE_CERT':
+        return 'Chứng nhận Y học gia đình';
+      case 'DEGREE':
+        return 'Bằng cấp chuyên môn';
+      default:
+        return 'Chứng chỉ chuyên môn';
+    }
+  }
+
+  private maskPatientName(fullName?: string | null): string {
+    const trimmed = (fullName || '').trim();
+    if (!trimmed) {
+      return 'Hội viên gia đình';
+    }
+
+    const tokens = trimmed.split(/\s+/).filter(Boolean);
+    if (tokens.length === 1) {
+      return `${tokens[0].charAt(0).toUpperCase()}.`;
+    }
+
+    const [first, ...rest] = tokens;
+    const initials = rest
+      .map((token) => `${token.charAt(0).toUpperCase()}.`)
+      .join(' ');
+
+    return `${first} ${initials}`.trim();
+  }
+
+  private extractDistrict(homeAddress?: string | null): string | null {
+    if (!homeAddress) {
+      return null;
+    }
+
+    const parts = homeAddress
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    if (parts.length === 0) {
+      return null;
+    }
+
+    return parts.length >= 2 ? parts[parts.length - 2] : parts[0];
+  }
+
+  private mapReviewRow(row: {
+    id: string;
+    ratingStars: number;
+    reviewComment: string | null;
+    createdAt: Date;
+    encounter?: {
+      contract?: {
+        servicePackage?: { packageName: string } | null;
+      } | null;
+    } | null;
+    familyUnit?: {
+      homeAddress?: string | null;
+      representativeUser?: { fullName?: string | null } | null;
+    } | null;
+  }): PublicDoctorReviewPreviewItemDto {
+    return {
+      id: row.id,
+      patientDisplayName: this.maskPatientName(
+        row.familyUnit?.representativeUser?.fullName,
+      ),
+      ratingStars: row.ratingStars,
+      comment: row.reviewComment,
+      packageName:
+        row.encounter?.contract?.servicePackage?.packageName ?? null,
+      district: this.extractDistrict(row.familyUnit?.homeAddress),
+      reviewedAt: row.createdAt,
     };
   }
 
@@ -541,26 +1192,6 @@ export class PublicServiceImpl implements IPublicService {
     const ticketId = `CRQ-${timestampPart}-${randomPart}`;
     const submittedAt = new Date();
 
-    if (this.redisClient) {
-      await this.redisClient.set(
-        `consultation:request:${ticketId}`,
-        JSON.stringify({
-          ticketId,
-          fullName: dto.fullName,
-          phone: dto.phone,
-          email: dto.email,
-          address: dto.address || null,
-          preferredPackageId: dto.preferredPackageId || null,
-          healthNeeds: dto.healthNeeds,
-          familyMemberCount: dto.familyMemberCount,
-          status: 'RECEIVED',
-          submittedAt: submittedAt.toISOString(),
-        }),
-        'EX',
-        30 * 86400,
-      );
-    }
-
     await this.prisma.auditLog.create({
       data: {
         action: 'CONSULTATION_REQUEST_SUBMITTED',
@@ -579,5 +1210,196 @@ export class PublicServiceImpl implements IPublicService {
         'Yêu cầu tư vấn của bạn đã được tiếp nhận thành công. Đội ngũ bác sĩ và nhân viên y tế FamiDoc sẽ liên hệ tư vấn trong thời gian sớm nhất.',
       submittedAt,
     };
+  }
+
+  async getDoctorReviews(
+    id: string,
+    query: LookupDoctorReviewsQueryDto,
+  ): Promise<PublicDoctorReviewsResponseDto> {
+    const doctor = await this.prisma.doctor.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        onboardingStatus: true,
+      },
+    });
+
+    if (!doctor || doctor.onboardingStatus !== 'ACTIVE') {
+      throw new NotFoundException(
+        'Không tìm thấy bác sĩ hoặc bác sĩ chưa được kích hoạt',
+      );
+    }
+
+    const page = Math.max(1, query.page || 1);
+    const limit = Math.min(50, Math.max(1, query.limit || 5));
+    const skip = (page - 1) * limit;
+
+    const where: any = {
+      doctorId: id,
+    };
+
+    if (query.rating) {
+      where.ratingStars = query.rating;
+    }
+
+    const [total, reviews] = await Promise.all([
+      this.prisma.doctorReview.count({ where }),
+      this.prisma.doctorReview.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          ratingStars: true,
+          reviewComment: true,
+          createdAt: true,
+          encounter: {
+            select: {
+              contract: {
+                select: {
+                  servicePackage: { select: { packageName: true } },
+                },
+              },
+            },
+          },
+          familyUnit: {
+            select: {
+              homeAddress: true,
+              representativeUser: { select: { fullName: true } },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const items: PublicDoctorReviewItemDto[] = reviews.map((r) => ({
+      id: r.id,
+      patientDisplayName: this.maskPatientName(
+        r.familyUnit?.representativeUser?.fullName,
+      ),
+      ratingStars: r.ratingStars,
+      comment: r.reviewComment,
+      packageName:
+        r.encounter?.contract?.servicePackage?.packageName ?? null,
+      district: this.extractDistrict(r.familyUnit?.homeAddress),
+      createdAt: r.createdAt,
+    }));
+
+    return {
+      items,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit) || 1,
+      },
+    };
+  }
+
+  async getSupportedBanks(): Promise<PublicBanksResponseDto> {
+    const now = Date.now();
+    if (
+      this.bankCache &&
+      now - this.bankCache.fetchedAtMs < VIETQR_BANKS_CACHE_TTL_MS
+    ) {
+      return {
+        source: 'cache',
+        updatedAt: new Date(this.bankCache.fetchedAtMs).toISOString(),
+        items: this.bankCache.items,
+      };
+    }
+
+    try {
+      const items = await this.fetchAndCacheBanks();
+      return {
+        source: 'vietqr',
+        updatedAt: new Date(this.bankCache?.fetchedAtMs ?? now).toISOString(),
+        items,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Không thể tải danh sách ngân hàng từ VietQR API: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      if (this.bankCache) {
+        return {
+          source: 'cache',
+          updatedAt: new Date(this.bankCache.fetchedAtMs).toISOString(),
+          items: this.bankCache.items,
+        };
+      }
+      return {
+        source: 'fallback',
+        updatedAt: new Date(now).toISOString(),
+        items: FALLBACK_VIETQR_BANKS,
+      };
+    }
+  }
+
+  private async fetchAndCacheBanks(): Promise<PublicBankItemDto[]> {
+    if (!this.bankFetchInFlight) {
+      this.bankFetchInFlight = this.requestBanksFromVietQr().finally(() => {
+        this.bankFetchInFlight = null;
+      });
+    }
+    return this.bankFetchInFlight;
+  }
+
+  private async requestBanksFromVietQr(): Promise<PublicBankItemDto[]> {
+    const response = await fetch(VIETQR_BANKS_API_URL, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(VIETQR_BANKS_TIMEOUT_MS),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const payload = (await response.json()) as {
+      code?: string;
+      data?: Array<Record<string, unknown>>;
+    };
+    const rawItems = Array.isArray(payload?.data) ? payload.data : [];
+    const normalized = rawItems
+      .map((raw, index): PublicBankItemDto | null => {
+        const bin = String(raw.bin ?? '').trim();
+        const code = String(raw.code ?? '').trim();
+        const name = String(raw.name ?? '').trim();
+        if (!bin || !code || !name) return null;
+        const shortName = String(
+          raw.shortName ?? raw.short_name ?? code,
+        ).trim();
+        const logo = String(raw.logo ?? '').trim();
+        return {
+          id: Number(raw.id) || index + 1,
+          name,
+          code,
+          bin,
+          shortName: shortName || code,
+          logo,
+          transferSupported: Number(
+            raw.transferSupported ?? raw.isTransfer ?? 1,
+          ),
+          lookupSupported: Number(raw.lookupSupported ?? 0),
+        };
+      })
+      .filter((item): item is PublicBankItemDto => item !== null)
+      .sort((a, b) => {
+        if (a.transferSupported !== b.transferSupported) {
+          return b.transferSupported - a.transferSupported;
+        }
+        return a.shortName.localeCompare(b.shortName, 'vi');
+      });
+
+    if (normalized.length === 0) {
+      throw new Error('VietQR trả về danh sách ngân hàng rỗng');
+    }
+
+    this.bankCache = {
+      items: normalized,
+      fetchedAtMs: Date.now(),
+    };
+    return normalized;
   }
 }

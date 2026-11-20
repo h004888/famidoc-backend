@@ -62,7 +62,7 @@ export class SearchPublicPackagesDto {
   maxPrice?: number;
 
   @ApiPropertyOptional({
-    description: 'Số lượng thành viên tối thiểu cần được bảo hiểm trong gói',
+    description: 'Số thành viên cần được gói chăm sóc phục vụ',
     example: 4,
   })
   @IsOptional()

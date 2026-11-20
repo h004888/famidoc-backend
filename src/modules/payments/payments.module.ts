@@ -9,6 +9,9 @@ import { PaymentsServiceImpl } from './services/impl/payments.service.impl';
 import { PaymentsRepositoryImpl } from './repositories/impl/payments.repository.impl';
 import { PAYMENTS_REPOSITORY_TOKEN } from './repositories/interfaces/payments.repository.interface';
 import { SePayWebhookController } from './controllers/sepay-webhook.controller';
+import { SePayApiClient } from './sepay/sepay-api.client';
+import { SePayReconciliationConfig } from './sepay/sepay-reconciliation.config';
+import { SePayWebhookEvents, SePayWebhookExceptionFilter } from './sepay/sepay-webhook-events';
 
 @Module({
   imports: [AuthAccessModule],
@@ -19,9 +22,19 @@ import { SePayWebhookController } from './controllers/sepay-webhook.controller';
     PaymentsClock,
     PaymentsConfig,
     SePayWebhookGuard,
+    SePayWebhookEvents,
+    SePayWebhookExceptionFilter,
+    SePayApiClient,
+    SePayReconciliationConfig,
     // Dùng Invoice và MedicalContract của schema chung; dữ liệu không mất khi restart.
     { provide: PAYMENTS_REPOSITORY_TOKEN, useClass: PaymentsRepositoryImpl },
   ],
-  exports: [PaymentsServiceImpl, PAYMENTS_SERVICE_TOKEN],
+  exports: [
+    PaymentsServiceImpl,
+    PAYMENTS_SERVICE_TOKEN,
+    PaymentsConfig,
+    SePayApiClient,
+    SePayReconciliationConfig,
+  ],
 })
 export class PaymentsModule {}

@@ -45,7 +45,10 @@ export class CarePackagesServiceImpl {
 
   // Quản trị được lọc theo trạng thái; quyền truy cập do guard ở controller kiểm tra.
   listAdmin(query: AdminListCarePackagesDto) {
-    return this.repository.list(query.page, query.limit, query.status);
+    return this.repository.list(query.page, query.limit, query.status, {
+      excludeDemo: true,
+      ascendingPrice: true,
+    });
   }
 
   async getPublic(id: string): Promise<CarePackage> {
@@ -60,8 +63,32 @@ export class CarePackagesServiceImpl {
   async quote(id: string, dto: QuoteCarePackageDto): Promise<CarePackageQuote> {
     // Luôn lấy giá/quyền lợi từ phiên bản ACTIVE trong kho, không nhận giá client tự gửi.
     const carePackage = await this.getPublic(id);
-    // Chỉ tính mua mới trọn kỳ; chưa tính thêm người giữa kỳ, gia hạn hay nâng gói.
-    return calculateCarePackageQuote(carePackage, dto.memberCount);
+    if (dto.memberCount > carePackage.maxMembers) {
+      const candidates = await this.repository.list(
+        1,
+        100,
+        CarePackageStatus.ACTIVE,
+      );
+      throw new BadRequestException({
+        message: 'Số người vượt trần gói đang chọn.',
+        code: 'PACKAGE_MEMBER_LIMIT',
+        maxMembers: carePackage.maxMembers,
+        requestedMembers: dto.memberCount,
+        suggestHigherPackage: true,
+        suggestedPackages: candidates.items
+          .filter((p) => p.maxMembers >= dto.memberCount && p.id !== id)
+          .sort((a, b) => a.durationMonths - b.durationMonths)
+          .map((p) => ({
+            id: p.id,
+            name: p.name,
+            durationMonths: p.durationMonths,
+            maxMembers: p.maxMembers,
+            priceVnd: p.priceVnd,
+          })),
+      });
+    }
+    // Báo giá không thu tiền và không tự chọn gói khác khi vượt trần.
+    return calculateCarePackageQuote(carePackage, dto.memberCount, dto);
   }
 
   // Tra cứu nội bộ mọi trạng thái; module gọi vẫn phải tự kiểm tra quyền người dùng.
@@ -90,11 +117,9 @@ export class CarePackagesServiceImpl {
 
   async update(id: string, dto: UpdateCarePackageDto): Promise<CarePackage> {
     const current = await this.getAdmin(id);
-    // Không sửa giá/quyền lợi bản đã công bố để giữ điều khoản của phiên bản cũ.
-    if (current.status !== CarePackageStatus.DRAFT) {
-      throw new ConflictException(
-        'Published terms are immutable; create a new version',
-      );
+    // Cho phép admin chỉnh sửa trực tiếp gói dịch vụ theo yêu cầu
+    if (current.status === CarePackageStatus.DEPRECATED) {
+      throw new ConflictException('Cannot edit a deprecated package');
     }
     // Chỉ lấy trường thực sự được gửi; undefined không được xóa giá trị đang lưu.
     // Giữ lại số 0 và chuỗi rỗng vì đây có thể là giá trị cập nhật hợp lệ.
@@ -133,6 +158,8 @@ export class CarePackagesServiceImpl {
       name,
       description,
       durationMonths,
+      videoQuotaPolicy,
+      homeVisitUnitPriceVnd,
       priceVnd,
       includedMembers,
       maxMembers,
@@ -145,6 +172,8 @@ export class CarePackagesServiceImpl {
       name,
       description,
       durationMonths,
+      videoQuotaPolicy,
+      homeVisitUnitPriceVnd,
       priceVnd,
       includedMembers,
       maxMembers,

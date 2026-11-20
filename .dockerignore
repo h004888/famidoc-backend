@@ -4,6 +4,21 @@ dist
 .env
 .tdd
 npm-debug.log
+logs
+data
+docs
+test
+coverage
+scripts/doc-tools
+*.md
+openapi.json
+test-output.txt
+.agents
+.claude
+compose.local.yml
+jest.config.ts
+.oxlintrc.json
+.prettierrc
 
 # Khong dua bat ky file env cuc bo/test va bi mat nao vao image.
 .env*

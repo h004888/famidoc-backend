@@ -18,6 +18,8 @@ export interface CarePackageQuotas {
 
 // Điều khoản có thể chỉnh ở DRAFT hoặc sao chép sang phiên bản mới.
 export interface CarePackageTerms {
+  videoQuotaPolicy?: 'FIXED' | 'CONTRACT'; // Gói năm chốt số lượt cụ thể trước khi ký.
+  homeVisitUnitPriceVnd?: number;
   name: string;
   description: string;
   durationMonths: number;

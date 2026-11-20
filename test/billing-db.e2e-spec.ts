@@ -33,11 +33,11 @@ import { demoIds, seedDemo } from '../prisma/seed';
       await app.init();
       db = app.get(PrismaService);
     }
-    async function login(identifier: string) {
+    async function login(email: string) {
       const res = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
-        .send({ identifier, password })
-        .expect(201);
+        .send({ email, password })
+        .expect(200);
       expect(res.body.user).not.toHaveProperty('passwordHash');
       return `Bearer ${res.body.accessToken}`;
     }
@@ -110,11 +110,11 @@ import { demoIds, seedDemo } from '../prisma/seed';
       await app?.close();
     });
 
-    it('creates exactly 30 business tables and all foreign keys validate', async () => {
+    it('creates exactly 33 business tables and all foreign keys validate', async () => {
       const count = await db.$queryRaw<
         { count: bigint }[]
       >`SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename <> '_prisma_migrations'`;
-      expect(Number(count[0].count)).toBe(30);
+      expect(Number(count[0].count)).toBe(33);
       const invalid =
         await db.$queryRaw`SELECT conname FROM pg_constraint WHERE NOT convalidated AND connamespace='public'::regnamespace`;
       expect(invalid).toEqual([]);
@@ -124,7 +124,7 @@ import { demoIds, seedDemo } from '../prisma/seed';
       expect(await db.user.count()).toBe(5);
       expect(await db.medicalContract.count()).toBe(2);
     });
-    it('publishes 1/3/12 month packages with the documented prices', async () => {
+    it('preserves 1/3/12-month legacy fixture prices for old signed contracts', async () => {
       const { body } = await request(app.getHttpServer())
         .get('/api/v1/care-packages')
         .expect(200);
@@ -524,7 +524,7 @@ import { demoIds, seedDemo } from '../prisma/seed';
       await request(app.getHttpServer())
         .post('/api/v1/auth/logout')
         .set('Authorization', family)
-        .expect(201);
+        .expect(200);
       await request(app.getHttpServer())
         .get('/api/v1/users/profile')
         .set('Authorization', family)

@@ -10,6 +10,7 @@ export class NotificationsRepositoryImpl implements INotificationsRepository {
     const where = {
       userId,
       ...(query.unreadOnly === 'true' ? { isRead: false } : {}),
+      ...(query.type ? { type: query.type } : {}),
     };
     // Một snapshot DB cho danh sách và số lượng, tránh lệch trang khi có thông báo mới.
     const [items, total, unreadCount] = await this.prisma.$transaction(

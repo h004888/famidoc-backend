@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -9,6 +10,7 @@ import { CarePackagesServiceImpl } from '../../care-packages/services/impl/care-
 import { QuotaPeriod } from '../../care-packages/entities/care-package.entity';
 import { InMemoryCarePackagesRepository } from '../../care-packages/repositories/impl/in-memory-care-packages.repository';
 import type { SePayWebhookDto } from '../dtos/sepay-webhook.dto';
+import type { SePayApiTransaction } from '../sepay/sepay-api.types';
 import {
   BillingContractStatus,
   PaymentRequestStatus,
@@ -134,6 +136,29 @@ describe('PaymentsServiceImpl (simulation)', () => {
     };
   }
 
+  function apiTransaction(
+    payment: PaymentRequest,
+    overrides: Partial<SePayApiTransaction> = {},
+  ): SePayApiTransaction {
+    return {
+      id: randomUUID(),
+      transaction_date: now.toISOString(),
+      account_number: payment.expectedAccountNumber,
+      amount_in: payment.amountVnd,
+      amount_out: 0,
+      accumulated: payment.amountVnd,
+      transaction_content: payment.transferContent ?? payment.paymentCode,
+      reference_number: 'TEST_REF_1',
+      code: payment.paymentCode,
+      bank_brand_name: payment.expectedGateway,
+      bank_account_id: randomUUID(),
+      va_id: null,
+      webhook_success: 1,
+      transfer_type: 'in',
+      ...overrides,
+    };
+  }
+
   it('fails closed when simulation is not explicitly enabled', async () => {
     delete process.env.PAYMENTS_MODE;
     await expect(
@@ -178,8 +203,8 @@ describe('PaymentsServiceImpl (simulation)', () => {
     ]);
     expect(a.id).toBe(b.id);
     expect(a.amountVnd).toBe(150_000);
-    expect(a.paymentCode).toMatch(/^FD[0-9]{6}$/);
-    expect(a.transferContent).toBe(`NGUYEN HOAI NAM - ${a.paymentCode}`);
+    expect(a.paymentCode).toMatch(/^FD(?=[2-9A-HJ-NP-Z]*[2-9])[2-9A-HJ-NP-Z]{8}$/);
+    expect(a.transferContent).toBe(`${a.paymentCode} TT FAMIDOC NGUYEN HOAI NAM`);
     expect(Date.parse(a.expiresAt) - Date.parse(a.createdAt)).toBe(15 * 60_000);
   });
 
@@ -193,6 +218,26 @@ describe('PaymentsServiceImpl (simulation)', () => {
     expect(
       (await service.getContract(contract.id)).packageSnapshot.package.version,
     ).toBe(1);
+  });
+
+  it('keeps the Admin adjustment when a payer requests a new code after expiry', async () => {
+    const old = await pendingPayment();
+    const payer = { id: randomUUID(), role: 'FAMILY_REP' as const, familyUnitId: old.familyId };
+    const admin = { id: randomUUID(), role: 'ADMIN' as const, familyUnitId: null };
+    const input = {
+      contractId: old.contractId, amountVnd: 155000, transferDescription: 'THU PHI MOI', reason: 'Điều chỉnh tiền thu.',
+    };
+    expect(() => service.createAdminPaymentRequest(input, payer)).toThrow('Chỉ Admin');
+    const adjusted = await service.createAdminPaymentRequest(input, admin);
+    expect(adjusted.id).not.toBe(old.id);
+    expect((await service.getPaymentStatus(old.id)).status).toBe(PaymentRequestStatus.CANCELLED);
+    expect((await service.createAdminPaymentRequest(input, admin)).id).toBe(adjusted.id);
+    expect((await service.createVietQRPayment(old.contractId, undefined, payer)).id).toBe(adjusted.id);
+    now = new Date(now.getTime() + 16 * 60_000);
+    const next = await service.createVietQRPayment(old.contractId, undefined, payer);
+    expect(next.amountVnd).toBe(155000);
+    expect(next.paymentCode).not.toBe(adjusted.paymentCode);
+    expect(next.transferContent).toBe(`${next.paymentCode} THU PHI MOI`);
   });
 
   it('expires a request and allocates a different code for its next attempt', async () => {
@@ -347,14 +392,45 @@ describe('PaymentsServiceImpl (simulation)', () => {
     );
   });
 
-  it('does not match transfers from before the request was created', async () => {
+  it('activates on before-tolerance transfer when amount and code match (time check skipped)', async () => {
     const payment = await pendingPayment();
     const result = await service.handleVietQRWebhook(
       payload(payment, {
-        transactionDate: bankDate(new Date(now.getTime() - 1000)),
+        transactionDate: bankDate(new Date(now.getTime() - 360_000)),
       }),
     );
-    expect(result.transaction.reason).toBe(TransactionReason.BEFORE_REQUEST);
+    expect(result.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    expect(result.activation?.activated).toBe(true);
+  });
+
+  it('matches MBBank transfers whose seconds are truncated to :00 in the same minute and clamps invoice paidAt', async () => {
+    now = new Date('2026-11-19T03:36:22.699Z');
+    const payment = await pendingPayment();
+    now = new Date('2026-11-19T03:36:54.131Z');
+    const result = await service.handleVietQRWebhook(
+      payload(payment, {
+        transactionDate: '2026-11-19 10:36:00',
+      }),
+    );
+    expect(result.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    expect(result.transaction.reason).toBeNull();
+    expect(result.transaction.transactionAt).toBe('2026-11-19T03:36:00.000Z');
+    const status = await service.getPaymentStatus(payment.id);
+    expect(status.status).toBe(PaymentRequestStatus.PAID);
+    expect(status.paidAt).toBe(payment.createdAt);
+  });
+
+  it('matches transfers across a minute boundary within the 5-minute clock-skew tolerance', async () => {
+    now = new Date('2026-11-19T03:36:02.000Z');
+    const payment = await pendingPayment();
+    now = new Date('2026-11-19T03:36:05.000Z');
+    const result = await service.handleVietQRWebhook(
+      payload(payment, {
+        transactionDate: '2026-11-19 10:35:00',
+      }),
+    );
+    expect(result.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    expect(result.activation?.activated).toBe(true);
   });
 
   it('flags a transaction timestamp too far in the future', async () => {
@@ -381,21 +457,22 @@ describe('PaymentsServiceImpl (simulation)', () => {
     expect(result.activation?.activated).toBe(true);
   });
 
-  it('does not auto-accept an old code when a newer attempt already exists', async () => {
+  it('activates on superseaded old code when amount and code match (time check skipped)', async () => {
     const old = await pendingPayment();
     const dto = payload(old);
     now = new Date(now.getTime() + 16 * 60_000);
     await service.createVietQRPayment(old.contractId);
-    expect((await service.handleVietQRWebhook(dto)).transaction.reason).toBe(
-      TransactionReason.SUPERSEDED_REQUEST,
-    );
+    const result = await service.handleVietQRWebhook(dto);
+    expect(result.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    expect(result.activation?.activated).toBe(true);
   });
 
-  it('flags funds received at or after the request deadline', async () => {
+  it('activates on late payment when amount and code match (time check skipped)', async () => {
     const payment = await pendingPayment();
     now = new Date(payment.expiresAt);
     const result = await service.handleVietQRWebhook(payload(payment));
-    expect(result.transaction.reason).toBe(TransactionReason.LATE_PAYMENT);
+    expect(result.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    expect(result.activation?.activated).toBe(true);
   });
 
   it('does not activate a cancelled request and never implements automatic refunds', async () => {
@@ -575,9 +652,108 @@ describe('PaymentsServiceImpl (simulation)', () => {
     expect(url.searchParams.get('bank')).toBe(payment.expectedGateway);
     expect(url.searchParams.get('amount')).toBe('150000');
     expect(url.searchParams.get('des')).toBe(
-      `NGUYEN HOAI NAM - ${payment.paymentCode}`,
+      `${payment.paymentCode} TT FAMIDOC NGUYEN HOAI NAM`,
     );
+    expect(url.searchParams.get('template')).toBe('qronly');
     expect(result.status).toBe(PaymentRequestStatus.PENDING);
+  });
+
+  it('surfaces activation state on a paid request: activated when the contract is active', async () => {
+    const payment = await pendingPayment();
+    await service.handleVietQRWebhook(payload(payment));
+    const status = await service.getPaymentStatus(payment.id);
+    expect(status.status).toBe(PaymentRequestStatus.PAID);
+    expect(status.activation).toEqual({
+      activated: true,
+      blockingReasons: [],
+    });
+  });
+
+  it('surfaces blocking reasons when a paid request is not yet activated', async () => {
+    // Mã cấp khi hợp đồng đã sẵn sàng, sau đó điều kiện thay đổi trước khi tiền vào.
+    const contract = await readyContract();
+    const payment = await service.createVietQRPayment(contract.id);
+    await service.updateDemoRequirements(contract.id, {
+      doctorVerified: false,
+    });
+    const result = await service.handleVietQRWebhook(payload(payment));
+    expect(result.activation?.activated).toBe(false);
+    const status = await service.getPaymentStatus(payment.id);
+    expect(status.status).toBe(PaymentRequestStatus.PAID);
+    expect(status.activation?.activated).toBe(false);
+    expect(status.activation?.blockingReasons).toContain(
+      'DOCTOR_VERIFICATION_REQUIRED',
+    );
+  });
+
+  it('surfaces the latest reviewed transaction on a pending request', async () => {
+    const payment = await pendingPayment();
+    await service.handleVietQRWebhook(
+      payload(payment, { transferAmount: payment.amountVnd + 1 }),
+    );
+    const status = await service.getPaymentStatus(payment.id);
+    expect(status.status).toBe(PaymentRequestStatus.PENDING);
+    expect(status.latestTransaction?.outcome).toBe(
+      TransactionOutcome.REVIEW_REQUIRED,
+    );
+    expect(status.latestTransaction?.reason).toBe(
+      TransactionReason.AMOUNT_MISMATCH,
+    );
+    expect(status.latestTransaction?.amountVnd).toBe(payment.amountVnd + 1);
+  });
+
+  it('activates on late payment when amount and code match (time check skipped)', async () => {
+    const payment = await pendingPayment();
+    now = new Date(Date.parse(payment.expiresAt) + 60_000);
+    const result = await service.handleVietQRWebhook(
+      payload(payment, {
+        transactionDate: '2026-10-27 08:20:00',
+      }),
+    );
+    expect(result.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    expect(result.activation?.activated).toBe(true);
+    expect((await service.getPaymentStatus(payment.id)).status).toBe(
+      PaymentRequestStatus.PAID,
+    );
+  });
+
+  it('activates on before-request payment when amount and code match (time check skipped)', async () => {
+    const payment = await pendingPayment();
+    // Giao dịch xảy ra 10 phút TRƯỚC khi mã được tạo
+    const pastDate = new Date(Date.parse(payment.createdAt) - 600_000);
+    const transactionDate = pastDate.toISOString().replace('T', ' ').slice(0, 19);
+    const result = await service.handleVietQRWebhook(
+      payload(payment, {
+        transactionDate,
+      }),
+    );
+    expect(result.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    expect(result.activation?.activated).toBe(true);
+    expect((await service.getPaymentStatus(payment.id)).status).toBe(
+      PaymentRequestStatus.PAID,
+    );
+  });
+
+  it('activates on superseaded request when amount and code match (time check skipped)', async () => {
+    // Tạo 2 payment requests: mã cũ (attempt 1) và mã mới (attempt 2)
+    const contract = await readyContract();
+    const familyId = contract.familyId;
+    const addendumId = contract.addendumId;
+
+    // Mã cũ (attempt 1)
+    const oldPayment = await service.createVietQRPayment(contract.id, addendumId);
+    // Tạo mã mới (attempt 2) — sẽ thay thế mã cũ
+    const newPayment = await service.createVietQRPayment(contract.id, addendumId);
+
+    // Giao dịch vào mã CŨ (oldPayment.paymentCode) nhưng đúng số tiền
+    const result = await service.handleVietQRWebhook(
+      payload(oldPayment, {
+        // Sử dụng paymentCode của mã cũ
+      }),
+    );
+    // Mã cũ vẫn được MATCHED vì đã bỏ qua SUPERSEDED_REQUEST
+    expect(result.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    expect(result.activation?.activated).toBe(true);
   });
 
   it('continues matching an existing 32-character code when SePay extracts only its first 24 characters', async () => {
@@ -615,7 +791,105 @@ describe('PaymentsServiceImpl (simulation)', () => {
     });
     const result = await service.getPaymentStatus(payment.id);
     expect(result.transferContent).toBe(
-      `NGUYEN HOAI NAM - ${payment.paymentCode}`,
+      `${payment.paymentCode} TT FAMIDOC NGUYEN HOAI NAM`,
     );
+  });
+
+  it('links the API v2 UUID to a transaction already received by webhook', async () => {
+    const payment = await pendingPayment();
+    await service.handleVietQRWebhook(payload(payment));
+    const remote = apiTransaction(payment);
+    const result = await service.handleSePayApiTransaction(
+      remote,
+      randomUUID(),
+    );
+    expect(result).toMatchObject({ duplicate: true, linked: true });
+    expect(result.transaction.sepayApiTransactionId).toBe(remote.id);
+    expect(result.transaction.reconciledAt).not.toBeNull();
+    expect((await service.listTransactions({ page: 1, limit: 20 })).total).toBe(
+      1,
+    );
+  });
+
+  it('backfills a missed webhook from API v2 and deduplicates a late webhook', async () => {
+    const payment = await pendingPayment();
+    const remote = apiTransaction(payment);
+    const backfilled = await service.handleSePayApiTransaction(
+      remote,
+      randomUUID(),
+    );
+    expect(backfilled).toMatchObject({ duplicate: false, linked: false });
+    expect(backfilled.transaction.outcome).toBe(TransactionOutcome.MATCHED);
+    const lateWebhook = await service.handleVietQRWebhook(payload(payment));
+    expect(lateWebhook.duplicate).toBe(true);
+    expect((await service.listTransactions({ page: 1, limit: 20 })).total).toBe(
+      1,
+    );
+  });
+
+  describe('recheckActivation', () => {
+    it('allows the owner FAMILY_REP to recheck a PAID request and activates once requirements are met', async () => {
+      const payment = await pendingPayment();
+      await service.updateDemoRequirements(payment.contractId, {
+        doctorVerified: false,
+      });
+      await service.handleVietQRWebhook(payload(payment));
+      const owner = {
+        id: randomUUID(),
+        role: 'FAMILY_REP' as const,
+        familyUnitId: payment.familyId,
+      };
+      const blocked = await service.recheckActivation(payment.id, owner);
+      expect(blocked.activated).toBe(false);
+      expect(blocked.blockingReasons).toContain('DOCTOR_VERIFICATION_REQUIRED');
+
+      await repository.transaction(async (session) => {
+        const contract = (await session.findContract(payment.contractId))!;
+        contract.requirements.doctorVerified = true;
+        await session.saveContract(contract);
+      });
+      const activated = await service.recheckActivation(payment.id, owner);
+      expect(activated.activated).toBe(true);
+      expect(activated.blockingReasons).toEqual([]);
+      expect((await service.getContract(payment.contractId)).status).toBe(
+        BillingContractStatus.ACTIVE,
+      );
+    });
+
+    it('rejects FAMILY_REP from another family or on an unpaid request with ForbiddenException', async () => {
+      const payment = await pendingPayment();
+      const owner = {
+        id: randomUUID(),
+        role: 'FAMILY_REP' as const,
+        familyUnitId: payment.familyId,
+      };
+      await expect(
+        service.recheckActivation(payment.id, owner),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      await service.handleVietQRWebhook(payload(payment));
+      const otherFamily = {
+        id: randomUUID(),
+        role: 'FAMILY_REP' as const,
+        familyUnitId: randomUUID(),
+      };
+      await expect(
+        service.recheckActivation(payment.id, otherFamily),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('keeps ADMIN able to recheck activation for any family or status', async () => {
+      const payment = await pendingPayment();
+      const admin = {
+        id: randomUUID(),
+        role: 'ADMIN' as const,
+        familyUnitId: null,
+      };
+      const pendingResult = await service.recheckActivation(payment.id, admin);
+      expect(pendingResult.activated).toBe(false);
+      expect(pendingResult.blockingReasons).toContain(
+        'VERIFIED_PAYMENT_REQUIRED',
+      );
+    });
   });
 });

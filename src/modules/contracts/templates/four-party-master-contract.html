@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Hợp đồng cung cấp dịch vụ chăm sóc sức khỏe gia đình 4 bên - FamiDoc</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm 18mm 16mm;
+    }
+    body {
+      font-family: 'DejaVu Serif', 'Liberation Serif', 'Times New Roman', serif;
+      font-size: 11pt;
+      line-height: 1.48;
+      color: #111827;
+      margin: 0;
+      padding: 0;
+    }
+    .doc-container {
+      max-width: 100%;
+    }
+    .header-quoc-hieu {
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .header-quoc-hieu .country {
+      font-size: 11.5pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .header-quoc-hieu .motto {
+      font-size: 11pt;
+      font-weight: bold;
+      margin-top: 2px;
+      text-decoration: underline;
+    }
+    .title-block {
+      text-align: center;
+      margin: 16px 0 12px 0;
+    }
+    .title-block h1 {
+      font-size: 14pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      line-height: 1.35;
+      margin: 0 auto 8px auto;
+      max-width: 165mm;
+      word-break: keep-all;
+      overflow-wrap: normal;
+      hyphens: none;
+    }
+    .meta-row {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px 32px;
+      font-size: 11pt;
+      align-items: center;
+      border-top: 1px solid #d1d5db;
+      border-bottom: 1px solid #d1d5db;
+      padding: 6px 8px;
+      background-color: #f9fafb;
+    }
+    .section-title {
+      font-size: 11pt;
+      font-weight: bold;
+      text-transform: uppercase;
+      margin: 14px 0 6px 0;
+      border-bottom: 1px solid #d1d5db;
+      padding-bottom: 2px;
+    }
+    .legal-basis ul {
+      margin: 4px 0 8px 18px;
+      padding: 0;
+    }
+    .legal-basis li {
+      margin-bottom: 3px;
+    }
+    .glossary-box {
+      border: 1px solid #cbd5e1;
+      background-color: #f9fafb;
+      padding: 8px 10px;
+      margin: 6px 0;
+      border-radius: 4px;
+    }
+    .party-box {
+      border: 1px solid #e5e7eb;
+      background-color: #f9fafb;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      border-radius: 4px;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .party-heading {
+      font-weight: bold;
+      margin-bottom: 4px;
+      color: #0f172a;
+    }
+    .field-line {
+      margin: 3px 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    .field-label {
+      font-weight: bold;
+    }
+    .inline-field {
+      display: inline-block;
+      border-bottom: 1px dotted #94a3b8;
+      vertical-align: middle;
+    }
+    .pricing-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0;
+      font-size: 10.5pt;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .pricing-table th,
+    .pricing-table td {
+      border: 1px solid #cbd5e1;
+      padding: 6px 8px;
+      text-align: left;
+      vertical-align: middle;
+    }
+    .pricing-table th {
+      background-color: #f1f5f9;
+      font-weight: bold;
+      width: 42%;
+    }
+    .pricing-table .formula {
+      font-family: 'DejaVu Serif', 'Liberation Serif', 'Times New Roman', serif;
+    }
+    p {
+      margin: 5px 0;
+      text-align: justify;
+    }
+    .clause-item {
+      margin: 5px 0;
+      padding-left: 22px;
+      text-indent: -22px;
+      text-align: justify;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .clause-item.sub {
+      padding-left: 44px;
+      text-indent: -22px;
+      margin-top: 3px;
+    }
+    .additional-terms-box {
+      border: 1px solid #cbd5e1;
+      padding: 8px;
+      min-height: 54px;
+      background-color: #ffffff;
+      margin: 6px 0;
+    }
+    .signature-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 14px;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .signature-card {
+      border: 1px solid #cbd5e1;
+      padding: 10px;
+      border-radius: 4px;
+      text-align: center;
+      background-color: #fafafa;
+      min-height: 160px;
+      display: flex;
+      flex-direction: column;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .signature-card .sig-title {
+      font-weight: bold;
+      font-size: 10.5pt;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    .signature-card .sig-sub {
+      font-size: 9.5pt;
+      color: #475569;
+      margin-bottom: 8px;
+    }
+    .signature-card .sig-space {
+      min-height: 90px;
+      flex: 1 1 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .signature-card .sig-note {
+      font-size: 9pt;
+      color: #334155;
+      border-top: 1px dotted #94a3b8;
+      padding-top: 4px;
+      margin-top: 6px;
+    }
+    .sig-footer-note {
+      font-size: 9.5pt;
+      color: #334155;
+      margin-top: 8px;
+      text-align: justify;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+  </style>
+</head>
+<body>
+  <div class="doc-container">
+    <div class="header-quoc-hieu">
+      <div class="country">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+      <div class="motto">Độc lập - Tự do - Hạnh phúc</div>
+    </div>
+
+    <div class="title-block">
+      <h1>HỢP ĐỒNG CUNG CẤP DỊCH VỤ CHĂM SÓC SỨC KHỎE GIA ĐÌNH (4 BÊN)</h1>
+      <div class="meta-row">
+        <span>
+          <strong>Số hợp đồng:</strong>
+          {{contract_number}}
+        </span>
+        <span>
+          <strong>Ngày lập:</strong>
+          {{created_date_vi}}
+        </span>
+      </div>
+    </div>
+
+    <div class="legal-basis">
+      <div class="section-title">CĂN CỨ PHÁP LÝ</div>
+      <ul>
+        <li>Bộ luật Dân sự số 91/2015/QH13 ngày 24/11/2015 (Điều 513, 517, 519, 520 về Hợp đồng dịch vụ);</li>
+        <li>Luật Khám bệnh, chữa bệnh số 15/2023/QH15 ngày 09/01/2023 (Điều 80 về khám bệnh, chữa bệnh từ xa) và Nghị định 96/2023/NĐ-CP ngày 30/12/2023 (Điều 39, Điều 87);</li>
+        <li>Thông tư 21/2019/TT-BYT ngày 21/08/2019 hướng dẫn thí điểm về hoạt động y học gia đình (Điều 3, Điều 4) và Thông tư 32/2023/TT-BYT ngày 31/12/2023 (Phụ lục V, Phụ lục IX);</li>
+        <li>Luật Giao dịch điện tử số 20/2023/QH15 ngày 22/06/2023 (Điều 22, 23, 34–38 về chữ ký điện tử chuyên dùng và hợp đồng điện tử);</li>
+        <li>Luật Bảo vệ quyền lợi người tiêu dùng số 19/2023/QH15 ngày 20/06/2023 (Điều 23, Điều 25 về hợp đồng theo mẫu);</li>
+        <li>Luật Bảo vệ dữ liệu cá nhân số 91/2025/QH15 và Nghị định 13/2023/NĐ-CP về bảo vệ dữ liệu cá nhân (Điều 2, Điều 11);</li>
+        <li>Nhu cầu và sự tự nguyện thỏa thuận của bốn (04) Bên thông qua Nền tảng FamiDoc.</li>
+      </ul>
+    </div>
+
+    <p>
+      Hôm nay, thông qua hệ thống ký kết điện tử FamiDoc tại <strong>https://sign.famidoc.online</strong>, bốn (04) Bên dưới đây cùng thống nhất giao kết Hợp đồng với các nội dung sau:
+    </p>
+
+    <div class="section-title">GIẢI THÍCH THUẬT NGỮ</div>
+    <div class="glossary-box">
+      <div class="clause-item"><strong>ACTIVE (Đang hiệu lực):</strong> Trạng thái Hợp đồng đã đủ bốn (04) chữ ký và Bên A đã hoàn tất thanh toán; từ thời điểm này dịch vụ chính thức được cung cấp và thời hạn gói được tính.</div>
+      <div class="clause-item"><strong>PENDING_PAYMENT (Chờ thanh toán):</strong> Trạng thái Hợp đồng đã đủ bốn (04) chữ ký nhưng Bên A chưa hoàn tất thanh toán trong thời hạn quy định tại Điều 3.</div>
+      <div class="clause-item"><strong>memberCount (Số suất thành viên):</strong> Tổng số suất thành viên (người thuộc hộ gia đình của Bên A) mà Bên A đăng ký mua, tối đa đúng bằng số suất ghi tại Mục 2.1 của Hợp đồng.</div>
+      <div class="clause-item"><strong>Tư vấn từ xa (telemedicine):</strong> Việc khám bệnh, tư vấn, theo dõi và hướng dẫn chăm sóc từ xa giữa Bên C với thành viên của Bên A qua Nền tảng FamiDoc, tuân thủ Điều 80 Luật Khám bệnh, chữa bệnh số 15/2023/QH15 và Nghị định 96/2023/NĐ-CP.</div>
+    </div>
+
+    <div class="section-title">ĐIỀU 1. THÔNG TIN CÁC BÊN THAM GIA</div>
+
+    <div class="party-box">
+      <div class="party-heading">1. BÊN A (Bên sử dụng dịch vụ - Đại diện Hộ gia đình)</div>
+      <div class="field-line">
+        <span class="field-label">Họ và tên:</span>
+        {{party_a_name}}
+      </div>
+      <div class="field-line">
+        <span class="field-label">Địa chỉ liên hệ / chăm sóc tại nhà:</span>
+        {{party_a_address}}
+      </div>
+      <div class="field-line">
+        <span class="field-label">Điện thoại:</span>
+        {{party_a_phone}}
+        <span class="field-label">Email tài khoản:</span>
+        {{party_a_email}}
+      </div>
+    </div>
+
+    <div class="party-box">
+      <div class="party-heading">2. BÊN B (Cơ sở khám bệnh, chữa bệnh chủ quản)</div>
+      <div class="field-line">
+        <span class="field-label">Tên cơ sở y tế:</span>
+        {{party_b_facility_name}}
+      </div>
+      <div class="field-line">
+        <span class="field-label">Giấy phép hoạt động KBCB số:</span>
+        {{party_b_license_number}}
+        <span class="field-label">Địa chỉ trụ sở:</span>
+        {{party_b_address}}
+      </div>
+      <div class="field-line">
+        <span class="field-label">Người đại diện:</span>
+        {{party_b_representative}}
+        <span class="field-label">Liên hệ:</span>
+        {{party_b_contact}}
+      </div>
+    </div>
+
+    <div class="party-box">
+      <div class="party-heading">3. BÊN C (Bác sĩ Gia đình trực tiếp phụ trách chuyên môn)</div>
+      <div class="field-line">
+        <span class="field-label">Họ và tên bác sĩ:</span>
+        {{party_c_doctor_name}}
+        <span class="field-label">Số CCHN/GPHN:</span>
+        {{party_c_license_number}}
+      </div>
+      <div class="field-line">
+        <span class="field-label">Chuyên khoa phụ trách:</span>
+        {{party_c_specialty}}
+        <span class="field-label">Email/Liên hệ:</span>
+        {{party_c_contact}}
+      </div>
+    </div>
+
+    <div class="party-box">
+      <div class="party-heading">4. BÊN D (Bên cung cấp nền tảng công nghệ &amp; trung gian kết nối)</div>
+      <div class="field-line">
+        <span class="field-label">Tên doanh nghiệp:</span>
+        {{party_d_company_name}}
+        <span class="field-label">Mã số DN:</span>
+        {{party_d_tax_code}}
+      </div>
+      <div class="field-line">
+        <span class="field-label">Địa chỉ trụ sở:</span>
+        {{party_d_address}}
+        <span class="field-label">Người đại diện:</span>
+        {{party_d_representative}}
+      </div>
+      <div class="field-line">
+        <span class="field-label">Email / Hotline hỗ trợ:</span>
+        {{party_d_contact}}
+      </div>
+    </div>
+
+    <div class="section-title">ĐIỀU 2. ĐỐI TƯỢNG HỢP ĐỒNG, GÓI DỊCH VỤ VÀ SỐ SUẤT THÀNH VIÊN</div>
+
+    <div class="clause-item">
+      <strong>2.1. Thông tin gói dịch vụ và định mức:</strong> Các Bên thống nhất nội dung gói dịch vụ và định mức quyền lợi như sau:
+    </div>
+    <table class="pricing-table">
+      <tr>
+        <th>Gói dịch vụ đăng ký</th>
+        <td>
+          {{package_name}} (Mã: {{package_code}})
+        </td>
+      </tr>
+      <tr>
+        <th>Chu kỳ &amp; thời hạn gói</th>
+        <td>
+          {{billing_cycle_label}} — Thời hạn: {{duration_days}} ngày kể từ ngày kích hoạt (ACTIVE)
+        </td>
+      </tr>
+      <tr>
+        <th>Phạm vi định mức quyền lợi</th>
+        <td>
+          {{package_entitlements_summary}}
+        </td>
+      </tr>
+      <tr>
+        <th>Số suất thành viên (memberCount)</th>
+        <td>
+          {{member_count}} thành viên (Gói chuẩn bao gồm sẵn: {{included_members}} thành viên)
+        </td>
+      </tr>
+    </table>
+
+    <div class="clause-item">
+      <strong>2.2. Chi tiết giá trị thanh toán:</strong> Giá trị thanh toán được xác định rõ ràng theo công thức sau:
+    </div>
+    <table class="pricing-table">
+      <tr>
+        <th>Giá gốc gói dịch vụ (chưa gồm phụ phí thành viên bổ sung)</th>
+        <td>{{base_price_vnd}} VNĐ</td>
+      </tr>
+      <tr>
+        <th>Phụ phí thành viên bổ sung — Công thức: [Số suất bổ sung] x [Đơn giá mỗi suất] = [Tổng phụ phí]</th>
+        <td>
+          <span class="formula">
+            {{extra_members}} suất x {{extra_member_unit_price_vnd}} VNĐ/suất = <strong>{{extra_member_total_vnd}} VNĐ</strong>
+          </span>
+        </td>
+      </tr>
+      <tr>
+        <th>TỔNG GIÁ TRỊ THANH TOÁN (Giá gốc + Tổng phụ phí thành viên bổ sung)</th>
+        <td><strong>{{total_price_vnd}} VNĐ</strong></td>
+      </tr>
+    </table>
+
+    <div class="clause-item">
+      <strong>2.3. Cơ chế định danh thành viên (trước hoặc sau kích hoạt):</strong>
+      Bên A được lựa chọn khai báo danh sách bệnh nhân tương ứng (<em>patientIds</em>) của các suất thành viên <strong>ngay tại thời điểm giao kết Hợp đồng này</strong> hoặc <strong>bổ sung/cập nhật sau khi Hợp đồng được kích hoạt (ACTIVE)</strong>, nhưng tổng số không được vượt quá đúng số <em>memberCount</em> nêu tại Mục 2.1. Ngay khi Hợp đồng có đủ bốn (04) chữ ký và Bên A hoàn tất thanh toán, Bên B và Bên C có nghĩa vụ <strong>tiếp nhận hồ sơ các thành viên được định danh trong vòng 24 giờ</strong> kể từ khi Bên A khai báo trên Nền tảng FamiDoc. Trường hợp Bên B hoặc Bên C từ chối tiếp nhận vì lý do chuyên môn hoặc vì vượt quá định mức an toàn, họ phải thông báo rõ ràng bằng thông điệp dữ liệu trên FamiDoc và <strong>hoàn trả 100% giá trị phần bị từ chối trong vòng 03 ngày làm việc</strong> kể từ ngày tiếp nhận lý do từ chối. Trường hợp tăng thêm suất thành viên hoặc nâng cấp gói vượt hạn mức, các Bên giao kết Phụ lục hợp đồng điện tử riêng.
+    </div>
+
+    <div class="section-title">ĐIỀU 3. PHƯƠNG THỨC, THỜI HẠN THANH TOÁN VÀ KÍCH HOẠT</div>
+    <div class="clause-item">
+      <strong>3.1. Phương thức thanh toán:</strong> Chuyển khoản định danh qua VietQR hiển thị trên hệ thống FamiDoc ngay sau khi hoàn tất đủ bốn (04) chữ ký trên Hợp đồng này.
+    </div>
+    <div class="clause-item">
+      <strong>3.2. Thời hạn thanh toán:</strong> Trong vòng
+      {{payment_window_hours}}
+      giờ kể từ khi Hợp đồng chuyển sang trạng thái Chờ thanh toán (PENDING_PAYMENT). Quá thời hạn trên mà chưa thanh toán, yêu cầu giao kết tự động hủy và không phát sinh phạt vi phạm đối với Bên A.
+    </div>
+    <div class="clause-item">
+      <strong>3.3. Thời điểm có hiệu lực dịch vụ:</strong> Ngay tại thời điểm hệ thống Bên D ghi nhận giao dịch thanh toán thành công (trạng thái ACTIVE).
+    </div>
+
+    <div class="section-title">ĐIỀU 4. PHẠM VI CHUYÊN MÔN, ĐỊA ĐIỂM VÀ AN TOÀN Y KHOA</div>
+    <div class="clause-item">
+      <strong>4.1. Địa điểm và phương thức cung cấp:</strong> Tư vấn/khám chữa bệnh từ xa qua nền tảng FamiDoc tuân thủ Điều 80 Luật Khám bệnh, chữa bệnh 15/2023/QH15 và Nghị định 96/2023/NĐ-CP; khám, theo dõi ban đầu và chăm sóc tại nhà trong phạm vi {{service_area}} tuân thủ Thông tư 21/2019/TT-BYT và Thông tư 32/2023/TT-BYT.
+    </div>
+    <div class="clause-item">
+      <strong>4.2. Giới hạn phụ trách hộ gia đình:</strong> Bên B và Bên C bảo đảm mỗi bác sĩ gia đình không nhận phụ trách vượt quá hạn mức an toàn tối đa 30 hộ gia đình đang hoạt động tại cùng một thời điểm.
+    </div>
+    <div class="clause-item">
+      <strong>4.3. Lưu ý cấp cứu y khoa:</strong> Dịch vụ bác sĩ gia đình không thay thế dịch vụ cấp cứu 115 hoặc hồi sức tích cực. Khi phát hiện dấu hiệu đe dọa tính mạng, Bên C hướng dẫn sơ cứu ban đầu và điều phối chuyển tuyến cấp cứu kịp thời.
+    </div>
+
+    <div class="section-title">ĐIỀU 5. QUYỀN VÀ NGHĨA VỤ CÁC BÊN</div>
+    <div class="clause-item">
+      <strong>5.1. Bên A:</strong> Được cung cấp dịch vụ đúng số suất thành viên, đúng định mức và bác sĩ phụ trách; có quyền khiếu nại, yêu cầu giảm giá dịch vụ hoặc bồi thường theo Điều 519 Bộ luật Dân sự 2015 nếu dịch vụ không đạt chất lượng đã thỏa thuận; có nghĩa vụ cung cấp trung thực thông tin sức khỏe thành viên sau kích hoạt và thanh toán đúng thỏa thuận.
+    </div>
+    <div class="clause-item">
+      <strong>5.2. Bên B (Cơ sở y tế):</strong>
+      <div class="clause-item sub">
+        <strong>5.2.a.</strong> Chịu trách nhiệm pháp lý cơ sở chủ quản đối với giấy phép hoạt động KBCB, hạ tầng khám chữa bệnh từ xa và phân công Bên C; khi cần bố trí bác sĩ thay thế tương đương phải thông báo và được sự đồng ý của Bên A theo Điều 517 Bộ luật Dân sự 2015.
+      </div>
+      <div class="clause-item sub">
+        <strong>5.2.b.</strong> Bên B cam kết duy trì bảo hiểm trách nhiệm nghề nghiệp khám bệnh, chữa bệnh (KBCB) còn hiệu lực trong suốt thời hạn Hợp đồng và <strong>chịu trách nhiệm liên đới bồi thường</strong> cho Bên A khi thiệt hại phát sinh từ lỗi chuyên môn của Bên C trong quá trình cung cấp dịch vụ thuộc phạm vi Hợp đồng, không loại trừ quyền yêu cầu bồi thường trực tiếp của Bên A theo Điều 519 Bộ luật Dân sự 2015.
+      </div>
+    </div>
+    <div class="clause-item">
+      <strong>5.3. Bên C (Bác sĩ phụ trách):</strong>
+      <div class="clause-item sub">
+        <strong>5.3.a.</strong> Trực tiếp thực hiện thăm khám, tư vấn, lập kế hoạch theo dõi cho các thành viên hộ Bên A; chịu trách nhiệm chuyên môn về chẩn đoán, chỉ định, kê đơn và bảo mật tuyệt đối hồ sơ bệnh án.
+      </div>
+      <div class="clause-item sub">
+        <strong>5.3.b.</strong> Bên C có nghĩa vụ <strong>ghi nhận tức thời</strong> trên Nền tảng FamiDoc mọi kết quả đánh giá lâm sàng, hoạt động sơ cứu và các chỉ định chuyển tuyến của mình dưới dạng <strong>thông điệp dữ liệu điện tử</strong> có dấu thời gian, bảo đảm truy vết được đầy đủ trên hồ sơ sức khỏe điện tử của thành viên thuộc hộ Bên A.
+      </div>
+    </div>
+    <div class="clause-item">
+      <strong>5.4. Bên D (Nền tảng FamiDoc):</strong> Bảo đảm vận hành hạ tầng công nghệ, lưu trữ hồ sơ điện tử và đối soát thanh toán minh bạch; không can thiệp chuyên môn y khoa; không loại trừ trách nhiệm pháp lý đối với lỗi hệ thống hoặc bảo mật thuộc phạm vi nền tảng (tuân thủ Điều 25 Luật 19/2023/QH15).
+    </div>
+
+    <div class="section-title">ĐIỀU 6. BẢO VỆ DỮ LIỆU CÁ NHÂN VÀ DỮ LIỆU SỨC KHỎE NHẠY CẢM</div>
+    <div class="clause-item">
+      <strong>6.1. Thông báo dữ liệu nhạy cảm:</strong> Theo Luật Bảo vệ dữ liệu cá nhân 91/2025/QH15 và Khoản 4 Điều 2 Nghị định 13/2023/NĐ-CP, thông tin tình trạng sức khỏe, chỉ số sinh tồn và hồ sơ bệnh án của Bên A và thành viên là <strong>DỮ LIỆU CÁ NHÂN NHẠY CẢM</strong>.
+    </div>
+    <div class="clause-item">
+      <strong>6.2. Sự đồng ý rõ ràng (Điều 11 Nghị định 13/2023/NĐ-CP):</strong> Bên A tự nguyện đồng ý để Bên B, Bên C và Bên D xử lý dữ liệu nhằm mục đích duy nhất: (i) cung cấp dịch vụ y tế gia đình; (ii) lưu trữ hồ sơ sức khỏe điện tử theo luật định; (iii) thanh toán và hỗ trợ khách hàng. Nghiêm cấm mua bán, chuyển giao trái phép cho bên thứ ba.
+    </div>
+    <div class="clause-item">
+      <strong>6.3. An toàn &amp; quyền chủ thể dữ liệu:</strong> Bên D áp dụng mã hóa, phân quyền nghiêm ngặt và nghĩa vụ thông báo/khắc phục sự cố rò rỉ trong 72 giờ; Bên A có quyền truy cập, chỉnh sửa, rút lại đồng ý hoặc yêu cầu xóa dữ liệu theo quy định pháp luật.
+    </div>
+
+    <div class="section-title">ĐIỀU 7. THỜI HẠN, CHẤM DỨT HỢP ĐỒNG, HOÀN TRẢ VÀ BẤT KHẢ KHÁNG</div>
+    <div class="clause-item">
+      <strong>7.1. Thời hạn &amp; Không tự động gia hạn:</strong> Hợp đồng có hiệu lực đúng số ngày quy định tại Điều 2 kể từ thời điểm ACTIVE và <strong>KHÔNG tự động gia hạn hoặc tự động trừ tiền</strong> nếu Bên A chưa xác nhận đồng ý trước khi hết hạn (tuân thủ Khoản 13 Điều 25 Luật 19/2023/QH15).
+    </div>
+    <div class="clause-item">
+      <strong>7.2. Đơn phương chấm dứt trước hạn &amp; Công thức hoàn tiền cố định (Điều 520 BLDS 2015, Điều 25 Luật 19/2023/QH15):</strong>
+      Bên B, C, D không được đơn phương tăng giá hay sửa đổi bất lợi trong kỳ hạn hợp đồng đang hiệu lực; nếu có điều chỉnh chính sách chung bắt buộc, phải báo trước để Bên A lựa chọn chấm dứt và nhận hoàn trả. Bên A có quyền đơn phương chấm dứt bằng thông báo trước ít nhất 07 ngày. Khi Bên A đơn phương chấm dứt trước hạn, giá trị hoàn trả được tính theo <strong>công thức cố định khóa trên văn bản Hợp đồng</strong>: <strong>[Tổng giá trị thanh toán] trừ đi [Giá trị các lượt khám tại nhà hoặc tư vấn từ xa thực tế đã hoàn thành tính theo đơn giá niêm yết công khai của từng lượt lẻ]</strong>. Việc hoàn trả <strong>không áp dụng bất kỳ khoản phí phạt hay phụ phí hành chính nào</strong> đối với Bên A và được thực hiện <strong>trong vòng 05 ngày làm việc</strong> kể từ ngày Hợp đồng chấm dứt.
+    </div>
+    <div class="clause-item">
+      <strong>7.3. Bất khả kháng:</strong> Thiên tai, dịch bệnh theo công bố cơ quan nhà nước hoặc sự cố hạ tầng diện rộng làm gián đoạn dịch vụ sẽ được gia hạn bù thời gian tương ứng hoặc thỏa thuận phương án bảo đảm quyền lợi Bên A.
+    </div>
+
+    <div class="section-title">ĐIỀU 8. ĐIỀU KHOẢN BỔ SUNG / THỎA THUẬN ĐẶC THÙ</div>
+    <div class="additional-terms-box">
+      {{additional_terms}}
+    </div>
+
+    <div class="section-title">ĐIỀU 9. CÔNG NHẬN CHỮ KÝ ĐIỆN TỬ VÀ TRÌNH TỰ KÝ KẾT TRÊN DOCUMENSO</div>
+    <div class="clause-item">
+      <strong>9.1. Thỏa thuận công nhận chữ ký điện tử chuyên dùng:</strong> Căn cứ Khoản 2 Điều 22, Điều 23 và Điều 34–38 Luật Giao dịch điện tử 20/2023/QH15, bốn (04) Bên thống nhất công nhận chữ ký điện tử thực hiện trên hệ thống ký kết Documenso của FamiDoc (<code>https://sign.famidoc.online</code>) kết hợp xác thực tài khoản đăng nhập từng Bên, nhật ký kiểm toán điện tử (IP, dấu thời gian UTC+7, email xác nhận) và mã băm toàn vẹn tài liệu (SHA-256) là điều kiện kiểm tra hiệu lực chữ ký điện tử chuyên dùng, có giá trị pháp lý tương đương chữ ký tay và con dấu (nếu có).
+    </div>
+    <div class="clause-item">
+      <strong>9.2. Trình tự ký kết 2 pha:</strong> (1) Bên A (Đại diện Hộ gia đình) kiểm tra nội dung và ký đầu tiên trên Documenso; (2) Ngay sau khi Bên A hoàn tất ký, hệ thống mở khóa đồng thời cho Bên B, Bên C và Bên D xem xét và ký song song không phụ thuộc thứ tự giữa ba bên. Hợp đồng chỉ chuyển sang bước thanh toán khi đủ 04 chữ ký xác nhận.
+    </div>
+
+    <div class="section-title">ĐIỀU 10. GIẢI QUYẾT TRANH CHẤP VÀ HIỆU LỰC CHUNG</div>
+    <div class="clause-item">
+      <strong>10.1. Giải quyết tranh chấp:</strong> Ưu tiên thương lượng, hòa giải trong vòng 15 ngày kể từ ngày phát sinh khiếu nại; nếu không đạt thỏa thuận, Bên A có quyền lựa chọn giải quyết tranh chấp tại <strong>Trọng tài Thương mại theo thủ tục rút gọn</strong> tại tổ chức trọng tài được thành lập theo pháp luật Việt Nam, hoặc yêu cầu <strong>Tòa án nhân dân có thẩm quyền</strong> tại Việt Nam giải quyết (không hạn chế quyền khởi kiện của Bên A); việc lựa chọn một trong hai hình thức không làm mất quyền khiếu nại với cơ quan bảo vệ quyền lợi người tiêu dùng.
+    </div>
+    <div class="clause-item">
+      <strong>10.2. Hiệu lực văn bản điện tử:</strong> Hợp đồng lập bằng tiếng Việt dạng thông điệp dữ liệu điện tử lưu trữ toàn vẹn trên FamiDoc và bản PDF hoàn chỉnh xuất từ Documenso, có giá trị pháp lý như nhau cho cả 04 Bên.
+    </div>
+
+    <div class="section-title">ĐIỀU 11. ĐIỀU KHOẢN CHUNG</div>
+    <div class="clause-item">
+      <strong>11.1. Ngôn ngữ ưu tiên:</strong> Hợp đồng này được lập bằng tiếng Việt. Trong trường hợp có bản dịch sang ngôn ngữ khác, bản tiếng Việt luôn là bản có giá trị ưu tiên cao nhất trong việc giải thích các điều khoản.
+    </div>
+    <div class="clause-item">
+      <strong>11.2. Tính độc lập từng phần:</strong> Nếu một hoặc nhiều điều khoản của Hợp đồng bị tuyên là vô hiệu, không thể thi hành hoặc trái pháp luật, điều khoản đó chỉ bị vô hiệu trong phạm vi tối thiểu cần thiết; các điều khoản còn lại vẫn giữ nguyên hiệu lực và tiếp tục được các Bên thực hiện đầy đủ.
+    </div>
+    <div class="clause-item">
+      <strong>11.3. Thông báo và liên hệ chính thức:</strong> Mọi thông báo, khiếu nại, yêu cầu hoặc thỏa thuận liên quan đến Hợp đồng phải được gửi bằng thông điệp dữ liệu qua Nền tảng FamiDoc hoặc qua email chính thức của các Bên đã khai báo tại Điều 1; thời điểm gửi tính từ thời điểm hệ thống xác nhận đã giao thành công. Bên D hỗ trợ kỹ thuật qua email <strong>support@famidoc.online</strong>.
+    </div>
+
+    <div class="signature-grid">
+      <div class="signature-card">
+        <div class="sig-title">ĐẠI DIỆN BÊN A</div>
+        <div class="sig-sub">Đại diện Hộ gia đình (Ký đầu tiên)</div>
+        <div class="sig-space">
+          <p style="font-family: monospace; font-size: 2px; color: #ffffff; margin: 4px 0;">[[SIG_FAMILY_REP]]</p>
+        </div>
+        <div class="sig-note">Ký và đối chiếu Chứng thư xác thực</div>
+      </div>
+      <div class="signature-card">
+        <div class="sig-title">ĐẠI DIỆN BÊN B</div>
+        <div class="sig-sub">Cơ sở khám bệnh, chữa bệnh (Ký song song sau Bên A)</div>
+        <div class="sig-space">
+          <p style="font-family: monospace; font-size: 2px; color: #ffffff; margin: 4px 0;">[[SIG_HEALTHCARE_FACILITY]]</p>
+        </div>
+        <div class="sig-note">Ký và đối chiếu Chứng thư xác thực</div>
+      </div>
+      <div class="signature-card">
+        <div class="sig-title">ĐẠI DIỆN BÊN C</div>
+        <div class="sig-sub">Bác sĩ Gia đình phụ trách (Ký song song sau Bên A)</div>
+        <div class="sig-space">
+          <p style="font-family: monospace; font-size: 2px; color: #ffffff; margin: 4px 0;">[[SIG_ASSIGNED_DOCTOR]]</p>
+        </div>
+        <div class="sig-note">Ký và đối chiếu Chứng thư xác thực</div>
+      </div>
+      <div class="signature-card">
+        <div class="sig-title">ĐẠI DIỆN BÊN D</div>
+        <div class="sig-sub">Nền tảng FamiDoc (Ký song song sau Bên A)</div>
+        <div class="sig-space">
+          <p style="font-family: monospace; font-size: 2px; color: #ffffff; margin: 4px 0;">[[SIG_ADMIN]]</p>
+        </div>
+        <div class="sig-note">Ký và đối chiếu Chứng thư xác thực</div>
+      </div>
+    </div>
+    <p class="sig-footer-note">
+      <strong>Lưu ý đối chiếu:</strong> Chữ ký điện tử của từng Bên được thực hiện trên hệ thống Documenso và đối chiếu với <strong>Chứng thư xác thực</strong> tương ứng của Bên ký (danh tính, email xác thực và nhật ký kiểm toán điện tử); thông tin Chứng thư được lưu cùng bản PDF Hợp đồng làm bằng chứng hiệu lực theo Luật Giao dịch điện tử 20/2023/QH15.
+    </p>
+  </div>
+</body>
+</html>

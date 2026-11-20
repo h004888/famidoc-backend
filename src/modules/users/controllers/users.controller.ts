@@ -18,6 +18,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
+import { AllowOnboarding } from '../../../core/auth/allow-onboarding.decorator';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
 import { UpdateProfileDto } from '../dtos/update-profile.dto';
 import {
@@ -29,6 +30,7 @@ import {
 @ApiBearerAuth('JWT-auth')
 @Controller(['api/v1/users', 'api/v1/me'])
 @UseGuards(JwtAuthGuard)
+@AllowOnboarding()
 @UsePipes(
   new ValidationPipe({
     whitelist: true,
@@ -49,7 +51,15 @@ export class UsersController {
     return this.service.getCurrentUserProfile(req.user.id);
   }
 
+  // PATCH và PUT dùng hai handler rõ ràng; chồng decorator sẽ chỉ đăng ký một HTTP method.
   @Patch('profile')
+  updateUserProfilePartial(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    return this.service.updateUserProfile(req.user.id, dto);
+  }
+
   @Put('profile')
   @ApiOperation({ summary: 'Cập nhật thông tin hồ sơ cá nhân' })
   @ApiBody({ type: UpdateProfileDto })

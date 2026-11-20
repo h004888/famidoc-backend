@@ -1,6 +1,6 @@
-# Hướng Dẫn Tích Hợp Dokploy với GitHub Container Registry (GHCR)
+# Hướng Dẫn Tích Hợp Dokploy với GitHub Container Registry (GHCR) & Browserless Sidecar
 
-Tài liệu này hướng dẫn cách kết nối ứng dụng `famidoc-backend` trên Dokploy với GitHub Actions qua image registry `ghcr.io/h004888/famidoc-backend`.
+Tài liệu này hướng dẫn cách kết nối ứng dụng `famidoc-backend` trên Dokploy với GitHub Actions qua image registry `ghcr.io/h004888/famidoc-backend` và tách Chromium sang container sidecar dùng chung.
 
 ---
 
@@ -8,56 +8,81 @@ Tài liệu này hướng dẫn cách kết nối ứng dụng `famidoc-backend`
 
 - **Dokploy Application ID**: `swj73osF0TmNE9lbBTkQU`
 - **Tên Service**: `famidoc-backend`
-- **Docker Image**: `ghcr.io/h004888/famidoc-backend:latest` (hoặc `:dev`)
+- **Docker Image**:
+  - Nhánh `dev`: `ghcr.io/h004888/famidoc-backend:dev`
+  - Nhánh `main`: `ghcr.io/h004888/famidoc-backend:latest`
 - **Container Port**: `4000`
 - **Biến môi trường bổ sung (Environment Variables)**:
   ```env
   PORT=4000
   NODE_ENV=production
   AUTO_MIGRATE=true
+  PUPPETEER_BROWSER_WS_ENDPOINT=ws://chromium-renderer:3000?token=<TOKEN>
   ```
 
 ---
 
-## 2. Các Bước Cấu Hình Trên Dokploy
+## 2. Thiết Lập Browserless Chromium Sidecar Trên Dokploy
 
-### Cách A: Cấu hình qua giao diện Dokploy Dashboard
-1. Truy cập vào Dashboard Dokploy của bạn (`http://160.191.242.45:3000`).
-2. Điều hướng vào Project **famidoc** > Environment **production** > Application **famidoc-backend**.
-3. Tại tab **Provider / Source**:
-   - Chuyển Source Type từ **GitHub** sang **Docker**.
-   - Nhập **Docker Image**: `ghcr.io/h004888/famidoc-backend:latest`
-   - Nếu package GitHub ở chế độ Private:
-     - **Username**: `h004888`
-     - **Password**: GitHub Personal Access Token (PAT classic) với quyền `read:packages`.
-     - **Registry URL**: `ghcr.io`
-   - Nếu package GitHub ở chế độ Public: có thể để trống username/password.
-4. Tại tab **Deployments**:
-   - Tắt tính năng tự động deploy theo Git commit nếu trước đó đã bật (để tránh Dokploy build lại code bằng Dockerfile trên VPS).
-   - Sao chép đường dẫn **Deploy Webhook URL** (Dạng: `http://160.191.242.45:3000/api/deploy/...` hoặc token deploy).
+1. Tạo **Compose Service** tên `chromium-renderer` trong cùng environment `production` trên Dokploy.
+2. Sử dụng image `ghcr.io/browserless/chromium:latest` gắn vào mạng nội bộ `dokploy-network` (không mở port public ra Internet):
+   ```yaml
+   services:
+     chromium-renderer:
+       image: ghcr.io/browserless/chromium:latest
+       container_name: chromium-renderer
+       restart: unless-stopped
+       environment:
+         TOKEN: "<TOKEN>"
+         CONCURRENT: "3"
+         QUEUED: "10"
+         TIMEOUT: "60000"
+         HEALTH: "true"
+       networks:
+         - dokploy-network
+
+   networks:
+     dokploy-network:
+       external: true
+   ```
+3. Cập nhật `PUPPETEER_BROWSER_WS_ENDPOINT=ws://chromium-renderer:3000?token=<TOKEN>` vào Environment Variables của `famidoc-backend`.
 
 ---
 
-## 3. Cấu Hình GitHub Secrets
+## 3. Chuyển `famidoc-backend` Sang Docker Provider (GHCR) Trên Dokploy
 
-Truy cập repository GitHub: `https://github.com/h004888/famidoc-backend/settings/secrets/actions`
-Thêm Secret sau:
+1. Điều hướng vào Project **famidoc** > Environment **production** > Application **famidoc-backend**.
+2. Tại tab **Provider / Source**:
+   - Chuyển Source Type từ **GitHub** sang **Docker**.
+   - Nhập **Docker Image**: `ghcr.io/h004888/famidoc-backend:dev` (cho môi trường `dev`) hoặc `ghcr.io/h004888/famidoc-backend:latest` (cho `main`).
+   - **Registry URL**: `ghcr.io` kèm **Username** và GitHub PAT (`read:packages`) nếu package ở chế độ Private.
+3. Tại tab **Deployments / Advanced**:
+   - Tắt **Auto Deploy** theo Git commit và tắt **Clean Cache** để VPS không bao giờ clone & build lại code bằng Dockerfile.
+   - Sao chép **Deploy Webhook URL** để lưu vào GitHub Secrets.
+
+---
+
+## 4. Cấu Hình GitHub Secrets
+
+Truy cập `https://github.com/h004888/famidoc-backend/settings/secrets/actions` và thêm:
 
 | Tên Secret | Giá trị |
 |---|---|
-| `DOKPLOY_DEPLOY_WEBHOOK_URL` | Dán Webhook Redeploy URL đã lấy từ Dokploy ở bước trên |
-
-> **Lưu ý bảo mật:**
-> - Tuyệt đối không commit token hoặc webhook URL trực tiếp vào source code.
-> - GitHub Actions sử dụng biến tích hợp `${{ secrets.GITHUB_TOKEN }}` để tự động build và push image lên GHCR mà không cần tạo thêm token thủ công cho CI.
+| `DOKPLOY_DEPLOY_WEBHOOK_URL` | Webhook Redeploy URL lấy từ Dokploy |
 
 ---
 
-## 4. Xác Thực Sau Triển Khai
+## 5. Bảo Trì Dung Lượng VPS (Docker Log Rotation & Cleanup)
 
-Khi workflow GitHub Actions chạy thành công:
-1. Job `quality-check` kiểm tra lint, test, build thành công (100% PASS).
-2. Job `build-and-deploy` đóng gói image và đẩy lên `ghcr.io/h004888/famidoc-backend:latest`.
-3. GitHub Actions gửi request POST tới `DOKPLOY_DEPLOY_WEBHOOK_URL`.
-4. Dokploy kéo image mới từ GHCR về và khởi động container trong vòng vài giây mà không làm tiêu tốn CPU/RAM của VPS.
-5. Kiểm tra trạng thái endpoint: `curl https://api.160.191.242.45.traefik.me/health` trả về `{"status":"ok", ...}`.
+1. Cấu hình log rotation cho Docker tại `/etc/docker/daemon.json` trên VPS:
+   ```json
+   {
+     "log-driver": "json-file",
+     "log-opts": {
+       "max-size": "10m",
+       "max-file": "3"
+     }
+   }
+   ```
+2. Bật `enableDockerCleanup` và `cleanupCacheApplications` trong Dokploy Server Settings.
+3. Kiểm tra trạng thái sau triển khai: `curl https://api.famidoc.online/health` trả về `{"status":"ok", ...}`.

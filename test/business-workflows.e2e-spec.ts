@@ -5,6 +5,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/core/database/prisma.service';
+import { StorageService } from '../src/core/services/storage.service';
 import { demoIds, seedDemo } from '../prisma/seed';
 import {
   namScenarioIds,
@@ -17,6 +18,8 @@ import {
     let app: INestApplication, db: PrismaService;
     const tokens: Record<string, string> = {};
     const password = 'TestingOnly_Password_2026';
+    const legalScan = Buffer.from('%PDF-1.7\nTest legal scan\n');
+    const mail = new Map<string, string>();
     let complaintId: string,
       memberAddendumId: string,
       quotaAddendumId: string,
@@ -97,7 +100,19 @@ import {
       });
       const module = await Test.createTestingModule({
         imports: [AppModule],
-      }).compile();
+      })
+        .overrideProvider(StorageService)
+        .useValue({
+          objectExists: async (key: string) => [
+            `${demoIds.admin}/settlements/demo-proof.pdf`,
+            `${demoIds.otherUser}/complaints/demo-proof.pdf`,
+          ].includes(key) || key.startsWith(`${demoIds.admin}/settlements/`) && key.endsWith('/uploaded-proof.pdf'),
+          uploadFile: async (_file: Express.Multer.File, folder: string) => `${folder}/uploaded-proof.pdf`,
+          downloadFile: async (_key: string) => ({ bytes: legalScan, contentType: 'application/pdf' }),
+        })
+        .overrideProvider('MAILER_SERVICE')
+        .useValue({ sendMail: async (message: { to: string; text: string }) => { mail.set(message.to, message.text); } })
+        .compile();
       app = module.createNestApplication({ rawBody: true });
       app.useGlobalPipes(
         new ValidationPipe({
@@ -123,14 +138,155 @@ import {
       for (const name of ['admin', 'facility', 'doctor', 'family', 'family2']) {
         const res = await request(app.getHttpServer())
           .post('/api/v1/auth/login')
-          .send({ identifier: `${name}@demo.famidoc.invalid`, password })
-          .expect(201);
+          .send({ email: `${name}@demo.famidoc.invalid`, password })
+          .expect(200);
         tokens[name] = 'Bearer ' + res.body.accessToken;
       }
     }, 120000);
     afterAll(async () => {
       await app?.close();
     });
+    it('shares a prescription only with the confirmed family recipient and prevents duplicates', async () => {
+      const patient = await db.patient.findFirstOrThrow({ where: { familyId: demoIds.otherFamily } });
+      const visit = await db.encounter.create({
+        data: {
+          contractId: active,
+          patientId: patient.id,
+          doctorId: demoIds.doctor,
+          category: 'AD_HOC_ON_DEMAND',
+          encounterType: 'FACILITY_VISIT',
+          encounterStatus: 'CONFIRMED',
+          scheduledDate: new Date('2026-10-15T00:00:00.000Z'),
+          scheduledTime: new Date('1970-01-01T08:00:00.000Z'),
+        },
+      });
+      const visits = await call('get', '/api/v1/prescriptions/encounters', 'doctor');
+      expect(visits.body.items).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: visit.id, recipient: expect.objectContaining({ id: demoIds.otherUser }) }),
+      ]));
+      const endpoint = `/api/v1/prescriptions/encounters/${visit.id}`;
+      const payload = {
+        recipientUserId: demoIds.otherUser,
+        recipientAuthorized: true,
+        exam: {
+          chiefComplaint: 'Lý do khám thử',
+          clinicalFindings: 'Kết quả thử',
+          icd10Code: 'Z00.0',
+          icd10Diagnosis: 'Khám tổng quát',
+          treatmentPlan: 'Kế hoạch thử',
+        },
+        details: [{
+          medicationName: 'Thuốc mẫu', strength: 'Hàm lượng mẫu', administrationRoute: 'Đường dùng mẫu',
+          dosage: 'Liều mẫu', frequency: 'Tần suất mẫu', quantity: 6, unit: 'Đơn vị', durationDays: 3,
+        }],
+        instructions: 'Lời dặn kiểm thử',
+      };
+      await call('post', endpoint, 'family2', payload, 403);
+      await call('post', endpoint, 'doctor', { ...payload, recipientAuthorized: false }, 400);
+      await call('post', endpoint, 'doctor', { ...payload, recipientUserId: demoIds.familyUser }, 409);
+      const created = await call('post', endpoint, 'doctor', payload, 201);
+      await call('post', endpoint, 'doctor', payload, 409);
+
+      const detail = '/api/v1/prescriptions/' + created.body.id;
+      await call('get', detail, 'family', undefined, 404);
+      const received = await call('get', detail, 'family2');
+      expect(received.body).toMatchObject({
+        id: created.body.id,
+        patient: { id: patient.id },
+        hasSignature: false,
+        instructions: payload.instructions,
+        details: [expect.objectContaining(payload.details[0])],
+      });
+      const history = await call('get', `/api/v1/prescriptions?patientId=${patient.id}`, 'family2');
+      expect(history.body.items).toEqual([expect.objectContaining({ id: created.body.id })]);
+      const notifications = await call('get', '/api/v1/notifications?type=PRESCRIPTION_SHARED', 'family2');
+      expect(notifications.body.items).toEqual([expect.objectContaining({ referenceId: created.body.id, isRead: false })]);
+      await call('patch', `/api/v1/notifications/${notifications.body.items[0].id}/read`, 'family2');
+      const remaining = await call('get', '/api/v1/notifications?unreadOnly=true&type=PRESCRIPTION_SHARED', 'family2');
+      expect(remaining.body.items).toEqual([]);
+    }, 30000);
+
+    it('keeps medical books scoped to the member, shows prior pages and confirms visits with or without a prescription', async () => {
+      const patientId = '50000000-0000-4000-8000-000000000005';
+      const otherMemberId = '50000000-0000-4000-8000-000000000006';
+      const base = '/api/v1/medical-books';
+      const roster = await call('get', `${base}/families`, 'doctor');
+      const family = roster.body.items.find((entry: { id: string }) => entry.id === demoIds.otherFamily);
+      expect(family.members).toEqual(expect.arrayContaining([expect.objectContaining({ id: patientId })]));
+      expect(family.members).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: otherMemberId })]));
+      const patientScope = `${base}/families/${demoIds.otherFamily}/patients/${patientId}`;
+      await call('get', `${patientScope}/visits`, 'family', undefined, 404);
+      const exam = {
+        chiefComplaint: 'Lý do thử', clinicalFindings: 'Kết quả thử',
+        icd10Code: 'Z00.0', icd10Diagnosis: 'Nội dung thử', treatmentPlan: 'Theo dõi thử',
+      };
+      const firstVisit = namScenarioIds.completedEncounter;
+      const firstPage = `${base}/visits/${firstVisit}`;
+      await call('get', firstPage, 'family2', undefined, 404);
+      const confirm = `${firstPage}/confirm`;
+      await call('post', confirm, 'family2', { patientId, confirmed: true, exam }, 403);
+      await call('post', confirm, 'doctor', { patientId: otherMemberId, confirmed: true, exam }, 404);
+      await call('post', confirm, 'doctor', { patientId, confirmed: false, exam }, 400);
+      await call('post', confirm, 'doctor', { patientId, confirmed: true, exam: { ...exam, chiefComplaint: '   ' } }, 400);
+      await call('post', confirm, 'doctor', { patientId, confirmed: true, exam }, 201);
+      await call('post', confirm, 'doctor', { patientId, confirmed: true, exam }, 409);
+      await call('get', firstPage, 'family', undefined, 404);
+      const familyPage = await call('get', firstPage, 'family2');
+      expect(familyPage.body).toMatchObject({ id: firstVisit, patient: { id: patientId }, isFinalized: true, prescription: null, exam });
+      expect(await db.auditLog.count({ where: { action: 'CONFIRM_VISIT_RECORD', actorUserId: demoIds.doctorUser } })).toBe(1);
+
+      const second = await db.encounter.create({ data: {
+        contractId: active, patientId, doctorId: demoIds.doctor,
+        category: 'AD_HOC_ON_DEMAND', encounterType: 'FACILITY_VISIT', encounterStatus: 'COMPLETED',
+        scheduledDate: new Date('2026-10-14T00:00:00Z'), scheduledTime: new Date('1970-01-01T08:00:00Z'),
+      } });
+      const secondPage = `${base}/visits/${second.id}`;
+      const prescription = {
+        recipientUserId: demoIds.otherUser, recipientAuthorized: true,
+        details: [{ medicationName: 'Thuốc mẫu', strength: 'Hàm lượng mẫu', administrationRoute: 'Đường dùng mẫu', dosage: 'Liều mẫu', frequency: 'Tần suất mẫu', quantity: 6, unit: 'Đơn vị', durationDays: 3 }],
+      };
+      await call('post', `${secondPage}/confirm`, 'doctor', { patientId, confirmed: true, exam, prescription: { ...prescription, details: [] } }, 400);
+      await call('post', `${secondPage}/confirm`, 'doctor', { patientId, confirmed: true, exam, prescription: { ...prescription, recipientUserId: demoIds.familyUser } }, 409);
+      expect(await db.clinicalEmr.count({ where: { encounterId: second.id } })).toBe(0);
+      await call('post', `${secondPage}/confirm`, 'doctor', { patientId, confirmed: true, exam, prescription }, 201);
+      const history = await call('get', `${patientScope}/visits`, 'family2');
+      expect(history.body.items.map((entry: { id: string }) => entry.id)).toEqual([firstVisit, second.id]);
+      expect((await call('get', secondPage, 'family2')).body.prescription.details).toEqual([expect.objectContaining(prescription.details[0])]);
+      const otherHistory = await call('get', `${base}/families/${demoIds.otherFamily}/patients/${otherMemberId}/visits`, 'family2');
+      expect(otherHistory.body.items).toEqual([]);
+    }, 30000);
+
+    it('accepts private medical book documents only from the owning family and downloads within scope', async () => {
+      const patientId = '50000000-0000-4000-8000-000000000005';
+      const anotherMember = '50000000-0000-4000-8000-000000000006';
+      const folder = `/api/v1/medical-books/families/${demoIds.otherFamily}/patients`;
+      const endpoint = `${folder}/${patientId}/documents`;
+      const upload = (who: string, buffer: Buffer, date = '2026-11-18') => request(app.getHttpServer())
+        .post(endpoint)
+        .set('Authorization', tokens[who])
+        .field('documentName', 'Phiếu thử')
+        .field('documentType', 'LAB_RESULT')
+        .field('recordedDate', date)
+        .attach('file', buffer, 'result.pdf');
+      await upload('doctor', legalScan).expect(403);
+      await upload('family', legalScan).expect(404);
+      await upload('family2', Buffer.from('Not PDF')).expect(400);
+      await upload('family2', legalScan, '2026-02-30').expect(400);
+      const uploaded = await upload('family2', legalScan).expect(201);
+      expect(uploaded.body).toMatchObject({ fileUrl: null, downloadAvailable: true, documentName: 'Phiếu thử' });
+      await call('get', endpoint, 'family', undefined, 404);
+      const documents = await call('get', endpoint, 'family2');
+      expect(documents.body).toEqual(expect.arrayContaining([expect.objectContaining({ id: uploaded.body.id, fileUrl: null })]));
+      const empty = await call('get', `${folder}/${anotherMember}/documents`, 'family2');
+      expect(empty.body).toEqual([]);
+      const download = `${endpoint}/${uploaded.body.id}/file`;
+      await call('get', download, 'family', undefined, 404);
+      const response = await call('get', download, 'family2');
+      expect(response.headers['content-type']).toMatch(/application\/pdf/);
+      expect(response.headers['cache-control']).toBe('private, no-store');
+      expect(response.body).toEqual(legalScan);
+    }, 30000);
+
     it('keeps all user/notification APIs private and returns the correct actor', async () => {
       const profile = await call('get', '/api/v1/users/profile');
       expect(profile.body.id).toBe(demoIds.otherUser);
@@ -153,6 +309,81 @@ import {
         { role: 'ADMIN' },
         400,
       );
+    });
+    it('requires a bearer token for VietQR creation and status', async () => {
+      await call('post', '/api/v1/payments/vietqr', 'anonymous', { contractId: active }, 401);
+      await call('get', `/api/v1/payments/${active}/status`, 'anonymous', undefined, 401);
+    });
+
+    it('serves live Admin data and enforces audited account access changes', async () => {
+      await call('get', '/api/v1/admin/overview', 'family2', undefined, 403);
+      const overview = await call('get', '/api/v1/admin/overview?period=weekly', 'admin');
+      expect(overview.body.series).toHaveLength(7);
+      expect(overview.body.activeContracts).toBe(0);
+      const demoOverview = await call('get', '/api/v1/admin/overview?period=weekly&environment=TEST', 'admin');
+      expect(demoOverview.body.facilities).toBeGreaterThan(0);
+      expect(demoOverview.body.activeContracts).toBeGreaterThan(0);
+
+      const users = await call('get', '/api/v1/admin/users?role=FAMILY_REP&limit=1', 'admin');
+      expect(users.body.total).toBeGreaterThan(1);
+      expect(users.body.items).toHaveLength(1);
+      expect(users.body.items[0].passwordHash).toBeUndefined();
+
+      const path = `/api/v1/admin/users/${demoIds.otherUser}/status`;
+      await call('patch', path, 'family2', { status: 'SUSPENDED', reason: 'Tạm khóa kiểm thử' }, 403);
+      await call('patch', path, 'admin', { status: 'SUSPENDED', reason: 'Tạm khóa kiểm thử' });
+      try {
+        await call('get', '/api/v1/users/profile', 'family2', undefined, 403);
+        const audit = await call('get', `/api/v1/admin/audit-logs?resourceName=users&resourceId=${demoIds.otherUser}`, 'admin');
+        expect(audit.body.items[0]).toMatchObject({
+          action: 'ADMIN_SUSPEND_USER',
+          details: { previousStatus: 'ACTIVE', status: 'SUSPENDED', reason: 'Tạm khóa kiểm thử' },
+        });
+      } finally {
+        await call('patch', path, 'admin', { status: 'ACTIVE', reason: 'Khôi phục kiểm thử' });
+      }
+      await call('get', '/api/v1/users/profile', 'family2');
+    });
+
+    it('stores, reviews and resubmits an actual facility legal document', async () => {
+      const email = 'onboarding@demo.famidoc.invalid';
+      const created = await call('post', '/api/v1/facilities/register', 'anonymous', {
+        facilityName: 'DEMO - Phòng khám kiểm thử pháp lý',
+        representativeName: 'Đại diện kiểm thử',
+        email,
+        phone: '0905887711',
+        address: '26 Đường kiểm thử, Hà Nội',
+      }, 201);
+      const id = created.body.id;
+      const base = `/api/v1/admin/facilities/${id}`;
+      await call('patch', `${base}/approve-account`, 'admin', { approved: true });
+      const issuedPassword = /Mật khẩu khởi tạo: (\S+)/.exec(mail.get(email) ?? '')?.[1];
+      expect(issuedPassword).toBeTruthy();
+      expect(issuedPassword).not.toBe('FamiDoc@Facility2026');
+      await call('post', `${base}/resend-invite`, 'admin', undefined, 201);
+      const login = await request(app.getHttpServer()).post('/api/v1/auth/login').send({ email, password: issuedPassword }).expect(200);
+      tokens.onboarding = 'Bearer ' + login.body.accessToken;
+      const profile = {
+        licenseNumber: '90078/BYT-GPHĐ', taxCode: '0120987656', hotline: '19001199',
+        bankName: 'Ngân hàng kiểm thử', bankAccountNumber: '3087856235',
+        bankAccountHolder: 'PHONG KHAM KIEM THU', licenseIssuer: 'Sở Y tế', licenseDate: '2025-02-12',
+      };
+      let upload = request(app.getHttpServer())
+        .put('/api/v1/facilities/me/legal-profile').set('Authorization', tokens.onboarding);
+      for (const [key, value] of Object.entries(profile)) upload = upload.field(key, value);
+      const submitted = await upload.attach('file', legalScan, 'license.pdf').expect(200);
+      expect(submitted.body).toMatchObject({ hasLegalDocument: true, licenseIssuer: 'Sở Y tế' });
+      expect(submitted.body.legalDocumentKey).toBeUndefined();
+
+      await call('get', `${base}/legal-document`, 'onboarding', undefined, 403);
+      await call('get', `${base}/legal-document`, 'admin');
+      await call('patch', `${base}/verify-legal`, 'admin', { approved: false, rejectionReason: 'Cần đối chiếu lại bản scan.' });
+      const rejected = await call('get', base, 'admin');
+      expect(rejected.body.legalRejectionReason).toBe('Cần đối chiếu lại bản scan.');
+      const resubmitted = await call('put', '/api/v1/facilities/me/legal-profile', 'onboarding', profile);
+      expect(resubmitted.body).toMatchObject({ hasLegalDocument: true, legalRejectionReason: null });
+      const verified = await call('patch', `${base}/verify-legal`, 'admin', { approved: true });
+      expect(verified.body.verificationStatus).toBe('ACTIVE');
     });
     it('allows one review for a completed encounter of the family', async () => {
       await call(
@@ -232,6 +463,18 @@ import {
         },
         400,
       );
+      await call(
+        'post',
+        '/api/v1/complaints',
+        'family2',
+        {
+          contractId: active,
+          category: 'DOCTOR_ABSENT',
+          description: 'DEMO - Bác sĩ không đến đúng hẹn.',
+          evidenceKeys: [`${demoIds.otherUser}/complaints/missing.pdf`],
+        },
+        400,
+      );
       const item = await call(
         'post',
         '/api/v1/complaints',
@@ -241,11 +484,13 @@ import {
           encounterId: namScenarioIds.completedEncounter,
           category: 'MISSED_VISIT',
           description: 'DEMO - Cần kiểm tra chất lượng dịch vụ.',
+          evidenceKeys: [`${demoIds.otherUser}/complaints/demo-proof.pdf`],
         },
         201,
       );
       complaintId = item.body.id;
       expect(item.body.targetUserId).toBe(demoIds.doctorUser);
+      expect(item.body.evidenceAttachments).toEqual([`${demoIds.otherUser}/complaints/demo-proof.pdf`]);
       const reverse = await call(
         'post',
         '/api/v1/complaints',
@@ -260,6 +505,12 @@ import {
       expect(reverse.body.targetUserId).toBe(demoIds.otherUser);
     });
     it('restricts complaint detail and requires facility verification before Admin resolution', async () => {
+      await call('get', '/api/v1/admin/complaints', 'facility', undefined, 403);
+      await call('get', '/api/v1/facilities/me/complaints', 'family2', undefined, 403);
+      const adminQueue = await call('get', '/api/v1/admin/complaints?status=SUBMITTED', 'admin');
+      const facilityQueue = await call('get', '/api/v1/facilities/me/complaints?status=SUBMITTED', 'facility');
+      expect(adminQueue.body.items).toEqual(expect.arrayContaining([expect.objectContaining({ id: complaintId })]));
+      expect(facilityQueue.body.items).toEqual(expect.arrayContaining([expect.objectContaining({ id: complaintId })]));
       await call(
         'get',
         '/api/v1/complaints/' + complaintId,
@@ -833,11 +1084,53 @@ import {
         paidAt: new Date().toISOString(),
         evidenceKey: `${demoIds.admin}/settlements/demo-proof.pdf`,
       };
+      const reviewPath = `/api/v1/finance/settlements/${item.id}/review`;
+      const review = { environment: 'TEST', reviewVersion: item.reviewVersion, action: 'CONFIRM' };
+      await call('patch', reviewPath, 'admin', review, 403);
+      await call('post', '/api/v1/finance/settlements/monthly', 'admin', confirmation, 409);
+
+      const disputed = await call('patch', reviewPath, 'facility', {
+        ...review,
+        action: 'REPORT_DISCREPANCY',
+        reason: 'Cần kiểm tra số hóa đơn trong kỳ.',
+      });
+      expect(disputed.body.reviewStatus).toBe('DISPUTED');
+      expect(disputed.body.reviewDisputeReason).toContain('số hóa đơn');
+      await call('post', '/api/v1/finance/settlements/monthly', 'admin', confirmation, 409);
+      const reopened = await call('post', '/api/v1/finance/settlements/monthly', 'admin', {
+        ...dto,
+        settlementId: item.id,
+        action: 'REOPEN_REVIEW',
+        reviewVersion: item.reviewVersion,
+      }, 201);
+      expect(reopened.body.reviewStatus).toBe('PENDING');
+      await call('patch', reviewPath, 'facility', review, 409);
+      const confirmed = await call('patch', reviewPath, 'facility', {
+        ...review,
+        reviewVersion: reopened.body.reviewVersion,
+      });
+      expect(confirmed.body.reviewStatus).toBe('CONFIRMED');
+      expect(confirmed.body.disbursementStatus).toBe('FAILED');
+
+      const evidencePath = `/api/v1/finance/settlements/${item.id}/evidence?environment=TEST`;
+      const uploaded = await request(app.getHttpServer()).post(evidencePath)
+        .set('Authorization', tokens.admin)
+        .attach('file', Buffer.from('%PDF-1.7\n'), { filename: 'proof.pdf', contentType: 'application/pdf' })
+        .expect(201);
+      expect(uploaded.body.evidenceKey).toBe(`${demoIds.admin}/settlements/${item.id}/uploaded-proof.pdf`);
+      confirmation.evidenceKey = uploaded.body.evidenceKey;
       await call(
         'post',
         '/api/v1/finance/settlements/monthly',
         'admin',
         { ...confirmation, amountPaidVnd: 1 },
+        400,
+      );
+      await call(
+        'post',
+        '/api/v1/finance/settlements/monthly',
+        'admin',
+        { ...confirmation, evidenceKey: `${demoIds.admin}/settlements/missing.pdf` },
         400,
       );
       const settled = await call(
@@ -976,15 +1269,49 @@ import {
         expect(url.searchParams.get('des')).toBe(payment.body.transferContent);
         expect(payment.body.transferContent).toMatch(/ - FD[0-9]{6}$/);
         expect(payment.body.paymentCode).toMatch(/^FD[0-9]{6}$/);
+        const adjustment = {
+          contractId: live.id,
+          amountVnd: 2840000,
+          transferDescription: 'THU PHI DIEU CHINH',
+          reason: 'Điều chỉnh cho bài kiểm thử local.',
+        };
+        await call('post', '/api/v1/payments/vietqr', 'family', adjustment, 400);
+        await call('post', '/api/v1/payments/admin/requests', 'family', adjustment, 403);
+        const adjusted = await call('post', '/api/v1/payments/admin/requests', 'admin', adjustment, 201);
+        expect(adjusted.body.paymentCode).not.toBe(payment.body.paymentCode);
+        expect(adjusted.body.transferContent).toBe(`THU PHI DIEU CHINH ${adjusted.body.paymentCode}`);
+        expect(new URL(adjusted.body.qrUrl).searchParams.get('amount')).toBe('2840000');
+        expect((await db.invoice.findUniqueOrThrow({ where: { id: payment.body.id } })).paymentStatus).toBe('CANCELLED');
+        const fromRegularFlow = await call('post', '/api/v1/payments/vietqr', 'admin', { contractId: live.id }, 201);
+        expect(fromRegularFlow.body.id).toBe(adjusted.body.id);
+        expect(await db.auditLog.findFirst({
+          where: { action: 'ADMIN_ADJUST_PAYMENT_REQUEST', resourceId: adjusted.body.id },
+        })).toMatchObject({ details: { previousAmountVnd: 2850000, amountVnd: 2840000, reason: adjustment.reason } });
+
         // Chỉ phát dữ liệu URL, tuyệt đối không tải QR hay gửi lệnh chuyển tiền trong test.
-        await pay(payment.body, {
+        const wrong = await pay(adjusted.body, {
+          gateway: 'Vietcombank',
+          accountNumber: '1234567890',
+          transferAmount: payment.body.amountVnd,
+        });
+        const matched = await pay(adjusted.body, {
           gateway: 'Vietcombank',
           accountNumber: '1234567890',
         });
+        await call('get', '/api/v1/payments/webhook-events', 'family', undefined, 403);
+        const log = await call('get', '/api/v1/payments/webhook-events?environment=LIVE', 'admin');
+        expect(log.body.items).toEqual(expect.arrayContaining([
+          expect.objectContaining({ providerTransactionId: String(wrong.payload.id), status: 'ERROR', httpStatus: 200, resultCode: 'AMOUNT_MISMATCH' }),
+          expect.objectContaining({ providerTransactionId: String(matched.payload.id), status: 'SUCCESS', httpStatus: 200, resultCode: 'MATCHED' }),
+        ]));
+        const denied = await call('get', '/api/v1/payments/webhook-events?environment=TEST&status=ERROR', 'admin');
+        expect(denied.body.items).toEqual(expect.arrayContaining([
+          expect.objectContaining({ status: 'ERROR', httpStatus: 401, resultCode: 'INVALID_API_KEY' }),
+        ]));
         expect(
           (
             await db.invoice.findUniqueOrThrow({
-              where: { id: payment.body.id },
+              where: { id: adjusted.body.id },
             })
           ).environment,
         ).toBe('LIVE');

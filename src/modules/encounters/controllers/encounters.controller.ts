@@ -1,0 +1,216 @@
+import {
+  Body,
+  Controller,
+  Get,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UseGuards,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
+import { Roles, RolesGuard } from '../../../core/auth/roles.guard';
+import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
+import { ResponseMessage } from '../../../core/decorators/response-message.decorator';
+import {
+  ENCOUNTERS_SERVICE_TOKEN,
+  type IEncountersService,
+} from '../services/interfaces/encounters.service.interface';
+import { CreatePeriodicEncounterDto } from '../dtos/create-periodic-encounter.dto';
+import { CreateAdHocEncounterDto } from '../dtos/create-adhoc-encounter.dto';
+import { FinalizeEncounterDto } from '../dtos/finalize-encounter.dto';
+import { ConfirmEncounterDto } from '../dtos/confirm-encounter.dto';
+import { RequestRescheduleDto } from '../dtos/request-reschedule.dto';
+import { DoctorRescheduleReviewDto } from '../dtos/doctor-reschedule-review.dto';
+import { CreateDoctorShiftDto } from '../dtos/create-doctor-shift.dto';
+import { ListEncountersQueryDto } from '../dtos/list-encounters-query.dto';
+
+@ApiTags('Encounters & Examination Scheduling')
+@ApiBearerAuth('JWT-auth')
+@Controller('api/v1/encounters')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@UsePipes(
+  new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: true,
+  }),
+)
+export class EncountersController {
+  constructor(
+    @Inject(ENCOUNTERS_SERVICE_TOKEN)
+    private readonly service: IEncountersService,
+  ) {}
+
+  @Post('periodic')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({
+    summary: 'Bác sĩ phụ trách lên lộ trình khám định kỳ dựa trên gói dịch vụ và hồ sơ sức khỏe',
+  })
+  @ApiBody({ type: CreatePeriodicEncounterDto })
+  @ApiResponse({ status: 201, description: 'Đề xuất lịch khám định kỳ thành công' })
+  @ApiResponse({ status: 400, description: 'Hạn ngạch gói đã hết hoặc dữ liệu không hợp lệ' })
+  @ResponseMessage('Đề xuất lịch khám định kỳ thành công')
+  createPeriodicEncounter(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: CreatePeriodicEncounterDto,
+  ) {
+    return this.service.createPeriodicEncounter(req.user, dto);
+  }
+
+  @Post('ad-hoc')
+  @Roles('FAMILY_REP', 'ADMIN')
+  @ApiOperation({
+    summary: 'Đại diện gia đình gửi yêu cầu khám đột xuất (Ad-hoc) tới bác sĩ phụ trách',
+  })
+  @ApiBody({ type: CreateAdHocEncounterDto })
+  @ApiResponse({ status: 201, description: 'Gửi yêu cầu khám đột xuất thành công' })
+  @ResponseMessage('Gửi yêu cầu khám đột xuất thành công')
+  createAdHocEncounter(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: CreateAdHocEncounterDto,
+  ) {
+    return this.service.createAdHocEncounter(req.user, dto);
+  }
+
+  @Patch(':id/finalize')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({
+    summary: 'Bác sĩ rà soát và chốt lịch khám cùng hình thức khám gửi gia đình duyệt',
+  })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám (Encounter)' })
+  @ApiBody({ type: FinalizeEncounterDto })
+  @ApiResponse({ status: 200, description: 'Chốt lịch khám đề xuất thành công' })
+  @ResponseMessage('Chốt lịch khám đề xuất thành công')
+  finalizeEncounter(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: FinalizeEncounterDto,
+  ) {
+    return this.service.finalizeEncounter(req.user, id, dto);
+  }
+
+  @Patch(':id/confirm')
+  @Roles('FAMILY_REP', 'ADMIN')
+  @ApiOperation({
+    summary: 'Gia đình xác nhận đồng ý lịch khám & đối chiếu ca trực CSYT để đồng bộ lịch',
+  })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám' })
+  @ApiBody({ type: ConfirmEncounterDto })
+  @ApiResponse({ status: 200, description: 'Đồng bộ lịch khám thành công hoặc phát cảnh báo xung đột ca trực' })
+  @ResponseMessage('Xác nhận lịch khám thành công')
+  confirmEncounter(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: ConfirmEncounterDto,
+  ) {
+    return this.service.confirmEncounter(req.user, id, dto);
+  }
+
+  @Post(':id/reschedule')
+  @Roles('FAMILY_REP', 'ADMIN')
+  @ApiOperation({
+    summary: 'Gia đình đề xuất đổi lịch khám sang khung giờ thay thế (Kiểm tra điều kiện trước >= 4 giờ)',
+  })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám' })
+  @ApiBody({ type: RequestRescheduleDto })
+  @ApiResponse({ status: 200, description: 'Tiếp nhận yêu cầu dời lịch và thông báo tới bác sĩ' })
+  @ApiResponse({ status: 400, description: 'Từ chối tự động do thời gian báo trước dưới 4 giờ' })
+  @ResponseMessage('Gửi yêu cầu dời lịch khám thành công')
+  requestReschedule(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: RequestRescheduleDto,
+  ) {
+    return this.service.requestReschedule(req.user, id, dto);
+  }
+
+  @Patch(':id/reschedule-review')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({
+    summary: 'Bác sĩ phản hồi yêu cầu dời lịch: Đồng ý hoặc Đề xuất khung giờ thay thế',
+  })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám' })
+  @ApiBody({ type: DoctorRescheduleReviewDto })
+  @ApiResponse({ status: 200, description: 'Phản hồi dời lịch thành công' })
+  @ResponseMessage('Phản hồi yêu cầu dời lịch thành công')
+  reviewReschedule(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: DoctorRescheduleReviewDto,
+  ) {
+    return this.service.reviewReschedule(req.user, id, dto);
+  }
+
+  @Post('shifts')
+  @Roles('HEALTHCARE_FACILITY', 'ADMIN')
+  @ApiOperation({
+    summary: 'Cơ sở Y tế phân bổ ca trực nội viện cho bác sĩ (phục vụ cân bằng tải)',
+  })
+  @ApiBody({ type: CreateDoctorShiftDto })
+  @ApiResponse({ status: 201, description: 'Tạo ca trực cho bác sĩ thành công' })
+  @ResponseMessage('Tạo ca trực cho bác sĩ thành công')
+  createDoctorShift(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: CreateDoctorShiftDto,
+  ) {
+    return this.service.createDoctorShift(req.user, dto);
+  }
+
+  @Get('timetable/doctor')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({ summary: 'Lấy thời khóa biểu lịch khám của bác sĩ' })
+  @ResponseMessage('Lấy thời khóa biểu bác sĩ thành công')
+  getDoctorTimetable(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: ListEncountersQueryDto,
+  ) {
+    return this.service.getDoctorTimetable(req.user, query);
+  }
+
+  @Get('timetable/family')
+  @Roles('FAMILY_REP', 'ADMIN')
+  @ApiOperation({ summary: 'Lấy thời khóa biểu lịch khám của hộ gia đình' })
+  @ResponseMessage('Lấy thời khóa biểu gia đình thành công')
+  getFamilyTimetable(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: ListEncountersQueryDto,
+  ) {
+    return this.service.getFamilyTimetable(req.user, query);
+  }
+
+  @Get('facility/schedule-board')
+  @Roles('HEALTHCARE_FACILITY', 'ADMIN')
+  @ApiOperation({
+    summary: 'CSYT giám sát bảng điều phối ca trực nội viện và lịch khám ngoại viện của bác sĩ',
+  })
+  @ResponseMessage('Lấy bảng điều phối ca trực thành công')
+  getFacilityScheduleBoard(
+    @Req() req: AuthenticatedRequest,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+  ) {
+    return this.service.getFacilityScheduleBoard(req.user, fromDate, toDate);
+  }
+
+  @Get(':id')
+  @Roles('DOCTOR', 'FAMILY_REP', 'HEALTHCARE_FACILITY', 'ADMIN')
+  @ApiOperation({ summary: 'Xem thông tin chi tiết một buổi khám' })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám' })
+  @ResponseMessage('Lấy thông tin buổi khám thành công')
+  getEncounterDetail(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.service.getEncounterDetail(req.user, id);
+  }
+}

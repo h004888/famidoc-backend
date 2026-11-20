@@ -27,7 +27,11 @@ export function calculateHomeVisitAddendum(
     throw new ConflictException(
       'This contract has no supported home-visit price',
     );
-  const unitPrice = terms.pricing.basePriceVnd / quota;
+  // Giá gốc và phụ thu đã khóa trong hợp đồng; không đọc bảng giá hiện hành.
+  const unitPrice =
+    (terms.pricing.homeVisitUnitPriceVnd ??
+      terms.pricing.basePriceVnd / quota) +
+    (terms.pricing.doctorSurchargePerVisitVnd ?? 0);
   if (!Number.isSafeInteger(unitPrice))
     throw new ConflictException(
       'Configure an explicit whole-VND home-visit unit price',

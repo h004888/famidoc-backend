@@ -1,6 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsEnum,
   IsInt,
   IsOptional,
@@ -9,6 +10,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import { DoctorClinicalTier } from '@prisma/client';
 import { SortOrder } from './search-public-packages.dto';
 
 export enum DoctorSortBy {
@@ -43,6 +45,14 @@ export class LookupDoctorDirectoryDto {
   specialty?: string;
 
   @ApiPropertyOptional({
+    description: 'Lọc theo tỉnh/thành phố của cơ sở y tế',
+    example: 'Hà Nội',
+  })
+  @IsOptional()
+  @IsString()
+  city?: string;
+
+  @ApiPropertyOptional({
     description: 'Số năm kinh nghiệm tối thiểu',
     example: 5,
   })
@@ -51,6 +61,23 @@ export class LookupDoctorDirectoryDto {
   @IsInt()
   @Min(0)
   minExperienceYears?: number;
+
+  @ApiPropertyOptional({
+    description: 'Lọc theo phân hạng bác sĩ (JUNIOR, STANDARD, SENIOR)',
+    enum: DoctorClinicalTier,
+  })
+  @IsOptional()
+  @IsEnum(DoctorClinicalTier)
+  clinicalTier?: DoctorClinicalTier;
+
+  @ApiPropertyOptional({
+    description: 'Chỉ hiển thị bác sĩ còn slot tiếp nhận hộ gia đình',
+    example: true,
+  })
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  onlyAvailable?: boolean;
 
   @ApiPropertyOptional({
     description: 'Trang hiện tại (bắt đầu từ 1)',

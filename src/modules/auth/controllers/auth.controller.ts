@@ -1,4 +1,11 @@
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
+import { AllowOnboarding } from '../../../core/auth/allow-onboarding.decorator';
+import { ApiStandardResponse } from '../../../core/decorators/api-standard-response.decorator';
+import { ResponseMessage } from '../../../core/decorators/response-message.decorator';
+import {
+  RegisterInitiateDataDto,
+  LoginDataDto,
+} from '../dtos/auth-responses.dto';
 import {
   Body,
   Controller,
@@ -11,6 +18,8 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+
+
 import {
   ApiBearerAuth,
   ApiBody,
@@ -24,6 +33,8 @@ import { RegisterFamilyRepDto } from '../dtos/register-family-rep.dto';
 import { VerifyEmailOtpDto } from '../dtos/verify-email-otp.dto';
 import { ResendEmailOtpDto } from '../dtos/resend-email-otp.dto';
 import { LoginDto } from '../dtos/login.dto';
+import { RefreshTokenDto } from '../dtos/refresh-token.dto';
+import { LogoutDto } from '../dtos/logout.dto';
 import { ForgotPasswordDto } from '../dtos/forgot-password.dto';
 import { ResetPasswordDto } from '../dtos/reset-password.dto';
 import { ChangePasswordDto } from '../dtos/change-password.dto';
@@ -59,33 +70,23 @@ export class AuthController {
   }
 
   @Post('register-representative')
+  @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
       'Đăng ký tài khoản Người đại diện gia đình (Family Representative)',
   })
   @ApiBody({ type: RegisterFamilyRepDto })
-  @ApiResponse({
+  @ApiStandardResponse({
+    type: RegisterInitiateDataDto,
     status: 201,
-    description: 'Gửi OTP thành công đến email đăng ký',
+    description: 'Khởi tạo đăng ký thành công, gửi mã OTP đến email',
   })
-  @ApiResponse({
-    status: 400,
-    description: 'Dữ liệu không hợp lệ hoặc đã tồn tại',
-  })
-  registerFamilyRepresentative(@Body() dto: RegisterFamilyRepDto) {
+  async registerFamilyRepresentative(
+    @Body() dto: RegisterFamilyRepDto,
+  ) {
     return this.authService.registerFamilyRepresentative(dto);
   }
 
-  @Post('register')
-  @ApiOperation({ summary: 'Alias đăng ký tài khoản Người đại diện gia đình' })
-  @ApiBody({ type: RegisterFamilyRepDto })
-  @ApiResponse({
-    status: 201,
-    description: 'Gửi OTP thành công đến email đăng ký',
-  })
-  registerFamilyRep(@Body() dto: RegisterFamilyRepDto) {
-    return this.authService.registerFamilyRepresentative(dto);
-  }
 
   @Post('verify-email-otp')
   @ApiOperation({ summary: 'Xác thực OTP đăng ký tài khoản qua email' })
@@ -115,10 +116,12 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Đăng nhập hệ thống (Email/SĐT và mật khẩu)' })
+  @ApiOperation({ summary: 'Đăng nhập hệ thống (Email và mật khẩu)' })
   @ApiBody({ type: LoginDto })
-  @ApiResponse({
-    status: 200,
+  @ResponseMessage('Đăng nhập thành công')
+  @ApiStandardResponse({
+    type: LoginDataDto,
+    status: HttpStatus.OK,
     description: 'Đăng nhập thành công, trả về JWT Access Token',
   })
   @ApiResponse({ status: 401, description: 'Sai tên đăng nhập hoặc mật khẩu' })
@@ -127,10 +130,34 @@ export class AuthController {
     description: 'Tài khoản bị tạm khóa 30 phút do sai quá 5 lần',
   })
   login(@Body() dto: LoginDto, @Req() req: any) {
-    return this.authService.login(dto, req?.ip);
+    return this.authService.login(
+      dto,
+      req?.ip,
+      req?.headers?.['user-agent'],
+    );
+  }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Gia hạn cặp Access/Refresh Token từ PostgreSQL' })
+  @ApiBody({ type: RefreshTokenDto })
+  @ResponseMessage('Gia hạn phiên đăng nhập thành công')
+  @ApiStandardResponse({
+    type: LoginDataDto,
+    status: HttpStatus.OK,
+    description: 'Cấp mới cặp Access Token & Refresh Token',
+  })
+  @ApiResponse({ status: 401, description: 'Refresh token không hợp lệ hoặc đã thu hồi' })
+  refresh(@Body() dto: RefreshTokenDto, @Req() req: any) {
+    return this.authService.refresh(
+      dto,
+      req?.ip,
+      req?.headers?.['user-agent'],
+    );
   }
 
   @UseGuards(JwtAuthGuard)
+  @AllowOnboarding()
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
@@ -144,9 +171,13 @@ export class AuthController {
     status: 401,
     description: 'Chưa xác thực hoặc token không hợp lệ',
   })
-  logout(@Req() req: any) {
+  logout(@Req() req: any, @Body() dto?: LogoutDto) {
     const authHeader = req?.headers?.authorization || '';
-    return this.authService.logout(req?.user?.id, authHeader);
+    return this.authService.logout(
+      req?.user?.id,
+      authHeader,
+      dto?.refreshToken,
+    );
   }
 
   @Post('forgot-password')
@@ -179,6 +210,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @AllowOnboarding()
   @Patch('change-password')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Đổi mật khẩu cho người dùng hiện tại' })

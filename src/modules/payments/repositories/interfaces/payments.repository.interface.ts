@@ -22,13 +22,39 @@ export interface PaymentsSession {
     addendumId?: string,
   ): Promise<PaymentRequest[]>;
   saveRequest(request: PaymentRequest): Promise<void>;
+  recordPaymentOverride(entry: {
+    actorId: string;
+    clientIp: string;
+    request: PaymentRequest;
+    previous: PaymentRequest | null;
+    originalAmountVnd: number;
+    reason: string;
+  }): Promise<void>;
   findTransaction(
     providerId: string,
     environment?: 'TEST' | 'LIVE',
   ): Promise<PaymentTransaction | null>;
+  findTransactionByWebhookId(id: string): Promise<PaymentTransaction | null>;
+  findTransactionByApiId(id: string): Promise<PaymentTransaction | null>;
   findTransactionByReference(key: string): Promise<PaymentTransaction | null>;
+  findTransactionByBankIdentity(
+    accountNumber: string,
+    referenceCode: string,
+  ): Promise<PaymentTransaction | null>;
+  findLatestTransactionByRequestId(
+    paymentRequestId: string,
+  ): Promise<PaymentTransaction | null>;
   listTransactions(): Promise<PaymentTransaction[]>;
   saveTransaction(transaction: PaymentTransaction): Promise<void>;
+  linkReconciledTransaction(
+    id: string,
+    data: {
+      sepayWebhookTransactionId?: string;
+      sepayApiTransactionId?: string;
+      reconciliationRunId?: string;
+      reconciledAt?: string;
+    },
+  ): Promise<PaymentTransaction>;
 }
 
 export const PAYMENTS_REPOSITORY_TOKEN = Symbol('IPaymentsRepository');

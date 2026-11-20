@@ -4,7 +4,7 @@ interface SignableContract {
   contractNumber: string;
   familyId: string;
   facilityId: string;
-  doctorId: string;
+  doctorId: string | null;
   billingSnapshot: unknown;
   startDate: Date;
   endDate: Date;

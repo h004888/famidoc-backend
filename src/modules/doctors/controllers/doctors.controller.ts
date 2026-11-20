@@ -9,14 +9,21 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Req,
+  Res,
+  UploadedFiles,
   UseGuards,
+  UseInterceptors,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
   ApiOperation,
   ApiParam,
   ApiResponse,
@@ -30,12 +37,24 @@ import { SubmitDoctorCredentialsDto } from '../dtos/submit-credentials.dto';
 import {
   FacilityVerifyCredentialsDto,
   PlatformApproveCredentialsDto,
+  ReviewDoctorCredentialsDto,
 } from '../dtos/verify-credentials.dto';
 import { DoctorResponseDto } from '../dtos/doctor-response.dto';
+import { ListDoctorsQueryDto } from '../dtos/list-doctors-query.dto';
 import {
   DOCTORS_SERVICE_TOKEN,
   type IDoctorsService,
+  type UploadedDoctorCredentialFiles,
 } from '../services/interfaces/doctors.service.interface';
+
+const CREDENTIAL_UPLOAD_FIELDS = [
+  { name: 'cchnFile', maxCount: 1 },
+  { name: 'practiceLicenseFile', maxCount: 1 },
+  { name: 'degreeFile', maxCount: 1 },
+  { name: 'familyMedicineFile', maxCount: 1 },
+  { name: 'familyMedicineCertFile', maxCount: 1 },
+  { name: 'files', maxCount: 5 },
+];
 
 @ApiTags('Doctors Management')
 @ApiBearerAuth('JWT-auth')
@@ -57,36 +76,50 @@ export class DoctorsController {
   @Put('me/credentials')
   @Roles('DOCTOR')
   @AllowOnboarding()
+  @UseInterceptors(
+    FileFieldsInterceptor(CREDENTIAL_UPLOAD_FIELDS, {
+      limits: { fileSize: 10 * 1024 * 1024, files: 5 },
+    }),
+  )
+  @ApiConsumes('multipart/form-data', 'application/json')
   @ApiOperation({
     summary:
-      'Bác sĩ tải lên hồ sơ văn bằng, chứng chỉ hành nghề của chính mình (UC-21 alias)',
+      'Bác sĩ tải lên hồ sơ chuyên môn và đủ 3 loại văn bằng/chứng chỉ (UC-21)',
   })
   @ApiBody({ type: SubmitDoctorCredentialsDto })
   @ApiResponse({
     status: 200,
-    description: 'Nộp hồ sơ chứng chỉ thành công.',
+    description: 'Nộp hồ sơ chứng chỉ thành công, chuyển sang chờ CSYT duyệt cấp 1.',
     type: DoctorResponseDto,
   })
   submitMyCredentials(
     @Req() req: AuthenticatedRequest,
     @Body() dto: SubmitDoctorCredentialsDto,
+    @UploadedFiles() files?: UploadedDoctorCredentialFiles,
   ): Promise<DoctorResponseDto> {
     return this.service.submitDoctorCredentials(
       req.user,
       'me',
       dto,
       req.ip ?? 'unknown',
+      files,
     );
   }
 
   @Put(':id/credentials')
   @Roles('DOCTOR', 'ADMIN')
   @AllowOnboarding()
+  @UseInterceptors(
+    FileFieldsInterceptor(CREDENTIAL_UPLOAD_FIELDS, {
+      limits: { fileSize: 10 * 1024 * 1024, files: 5 },
+    }),
+  )
+  @ApiConsumes('multipart/form-data', 'application/json')
   @ApiOperation({
     summary:
       'Bác sĩ tải lên hồ sơ văn bằng, chứng chỉ hành nghề (STT 16 - UC-21)',
     description:
-      'Bác sĩ nộp chứng chỉ hành nghề khám chữa bệnh (CCHN), chứng chỉ đào tạo Y học gia đình và văn bằng chuyên môn.',
+      'Bác sĩ cập nhật thông tin chuyên môn và nộp đủ 3 tệp scan PDF/PNG/JPEG: CCHN, Bằng tốt nghiệp chuyên môn và Chứng chỉ Y học gia đình.',
   })
   @ApiParam({ name: 'id', description: 'UUID của hồ sơ Bác sĩ' })
   @ApiBody({ type: SubmitDoctorCredentialsDto })
@@ -100,13 +133,59 @@ export class DoctorsController {
     @Req() req: AuthenticatedRequest,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() dto: SubmitDoctorCredentialsDto,
+    @UploadedFiles() files?: UploadedDoctorCredentialFiles,
   ): Promise<DoctorResponseDto> {
     return this.service.submitDoctorCredentials(
       req.user,
       id,
       dto,
       req.ip ?? 'unknown',
+      files,
     );
+  }
+
+  @Get('me/credentials/:credentialId/file')
+  @Roles('DOCTOR')
+  @AllowOnboarding()
+  @ApiOperation({ summary: 'Bác sĩ xem lại tệp chứng chỉ đã tải lên của chính mình' })
+  async getMyCredentialFile(
+    @Req() req: AuthenticatedRequest,
+    @Param('credentialId', new ParseUUIDPipe({ version: '4' }))
+    credentialId: string,
+    @Res() res: Response,
+  ) {
+    const { bytes, contentType } = await this.service.getDoctorCredentialFile(
+      req.user,
+      'me',
+      credentialId,
+    );
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', 'inline');
+    res.send(bytes);
+  }
+
+  @Get(':id/credentials/:credentialId/file')
+  @Roles('DOCTOR', 'HEALTHCARE_FACILITY', 'ADMIN')
+  @AllowOnboarding()
+  @ApiOperation({
+    summary:
+      'Tải hoặc xem trực tiếp tệp văn bằng/chứng chỉ của bác sĩ từ SeaweedFS S3',
+  })
+  async getDoctorCredentialFile(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('credentialId', new ParseUUIDPipe({ version: '4' }))
+    credentialId: string,
+    @Res() res: Response,
+  ) {
+    const { bytes, contentType } = await this.service.getDoctorCredentialFile(
+      req.user,
+      id,
+      credentialId,
+    );
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', 'inline');
+    res.send(bytes);
   }
 
   @Patch(':id/credentials/facility-approve')
@@ -172,6 +251,7 @@ export class DoctorsController {
       'Tier 1: CSYT thẩm định cấp 1; Tier 2: Quản trị viên phê duyệt kích hoạt cấp 2.',
   })
   @ApiParam({ name: 'id', description: 'UUID của hồ sơ Bác sĩ' })
+  @ApiBody({ type: ReviewDoctorCredentialsDto })
   @ApiResponse({
     status: 200,
     description: 'Thẩm định hồ sơ thành công.',
@@ -180,14 +260,7 @@ export class DoctorsController {
   reviewDoctorCredentials(
     @Req() req: AuthenticatedRequest,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
-    @Body()
-    body: {
-      tier: number;
-      approved?: boolean;
-      rejectionReason?: string;
-      verificationNotes?: string;
-      backgroundCheckConsent?: boolean;
-    },
+    @Body() body: ReviewDoctorCredentialsDto,
   ): Promise<DoctorResponseDto> {
     if (body.tier === 1) {
       return this.service.approveDoctorCredentialsByFacility(
@@ -216,6 +289,44 @@ export class DoctorsController {
     throw new BadRequestException(
       'Cấp thẩm định (tier) không hợp lệ (phải là 1 hoặc 2)',
     );
+  }
+
+  @Get('me')
+  @Roles('DOCTOR')
+  @AllowOnboarding()
+  @ApiOperation({
+    summary: 'Bác sĩ xem thông tin hồ sơ của chính mình',
+    description:
+      'Bác sĩ đăng nhập xem thông tin tài khoản, đơn vị y tế liên kết, tiến trình thẩm định và danh sách chứng chỉ đã nộp.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Thông tin chi tiết hồ sơ bác sĩ.',
+    type: DoctorResponseDto,
+  })
+  getMyDoctorProfile(
+    @Req() req: AuthenticatedRequest,
+  ): Promise<DoctorResponseDto> {
+    return this.service.getDoctorProfile(req.user, 'me');
+  }
+
+  @Get()
+  @Roles('ADMIN', 'HEALTHCARE_FACILITY')
+  @ApiOperation({
+    summary:
+      'Xem danh sách Bác sĩ trên hệ thống (Lọc theo trạng thái thẩm định)',
+    description:
+      'Quản trị viên (hoặc CSYT) xem danh sách bác sĩ, có thể lọc theo ?onboardingStatus=FACILITY_VERIFIED để tìm các bác sĩ đang chờ Quản trị viên duyệt Cấp 2.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách bác sĩ kèm phân trang.',
+  })
+  listDoctors(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: ListDoctorsQueryDto,
+  ) {
+    return this.service.listDoctors(req.user, query);
   }
 
   @Get(':id')

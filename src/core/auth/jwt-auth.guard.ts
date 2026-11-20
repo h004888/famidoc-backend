@@ -2,15 +2,12 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
-  Inject,
   Injectable,
   Optional,
-  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
-import type Redis from 'ioredis';
 import { PrismaService } from '../database/prisma.service';
 import type { AuthenticatedRequest } from './authenticated-request';
 import { ALLOW_ONBOARDING_KEY } from './allow-onboarding.decorator';
@@ -28,7 +25,6 @@ export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly jwt: JwtService,
     private readonly prisma: PrismaService,
-    @Inject('REDIS_CLIENT') private readonly redis: Redis,
     @Optional() private readonly reflector?: Reflector,
   ) {}
 
@@ -52,56 +48,55 @@ export class JwtAuthGuard implements CanActivate {
     } catch {
       throw new UnauthorizedException('Invalid or expired access token');
     }
-    // Token đã logout phải bị chặn. Redis lỗi thì đóng quyền truy cập, không bỏ qua blacklist.
-    let revoked: string | null;
-    try {
-      const [blacklist, passwordChangedAt] = await this.redis.mget(
-        `blacklist:${claims.jti || match[1]}`,
-        `token:revoked:${claims.sub}`,
-      );
-      // Thu hồi toàn bộ token cũ khi đổi mật khẩu, thống nhất với module auth mới pull.
-      revoked =
-        blacklist ||
-        (passwordChangedAt && claims.iat <= Number(passwordChangedAt)
-          ? 'password-changed'
-          : null);
-    } catch {
-      throw new ServiceUnavailableException(
-        'Token revocation service unavailable',
-      );
+
+    if (claims && typeof (claims as any).sid === 'string') {
+      const session = await (this.prisma as any).authSession?.findUnique?.({
+        where: { id: (claims as any).sid },
+        select: { revokedAt: true, expiresAt: true },
+      });
+      if (!session || session.revokedAt || session.expiresAt <= new Date()) {
+        throw new UnauthorizedException('Session has been revoked');
+      }
     }
-    if (revoked) throw new UnauthorizedException('Access token revoked');
+
     const user = await this.prisma.user.findUnique({
       where: { id: claims.sub },
-      select: {
-        id: true,
-        role: true,
-        status: true,
-        familyUnit: { select: { id: true } },
+      include: {
+        familyUnit: {
+          select: { id: true },
+        },
+        healthcareFacility: {
+          select: { id: true, verificationStatus: true },
+        },
       },
     });
-    if (!user) throw new UnauthorizedException('Account not found');
-
-    const allowOnboarding = Boolean(
-      this.reflector?.getAllAndOverride<boolean>(ALLOW_ONBOARDING_KEY, [
-        context.getHandler(),
-        context.getClass(),
-      ]),
+    if (!user)
+      throw new UnauthorizedException('User account no longer exists');
+    if (user.status === 'SUSPENDED' || user.status === 'LOCKED')
+      throw new ForbiddenException('Account has been suspended');
+    const allowOnboarding = this.reflector?.getAllAndOverride<boolean>(
+      ALLOW_ONBOARDING_KEY,
+      [context.getHandler(), context.getClass()],
     );
-
-    const isPendingDoctorOnboarding =
-      allowOnboarding &&
-      user.role === 'DOCTOR' &&
-      (user.status === 'PENDING' || user.status === 'ACTIVE') &&
-      claims.scope === 'ONBOARDING_ONLY';
-
-    if (
-      (!isPendingDoctorOnboarding && user.status !== 'ACTIVE') ||
-      (!isPendingDoctorOnboarding && claims.scope === 'ONBOARDING_ONLY')
-    ) {
-      throw new ForbiddenException('Account is not active for this operation');
+    if (user.status === 'PENDING' && !allowOnboarding) {
+      if (user.role === 'DOCTOR') {
+        throw new ForbiddenException(
+          'Tài khoản Bác sĩ chưa được thẩm định phê duyệt hồ sơ chuyên môn.',
+        );
+      }
+      throw new ForbiddenException(
+        'Tài khoản chưa hoàn tất kích hoạt onboarding.',
+      );
     }
-    // Dùng vai trò/gia đình từ DB hiện tại, không tin familyId hoặc role do client gửi.
+    if (
+      user.role === 'HEALTHCARE_FACILITY' &&
+      user.healthcareFacility?.verificationStatus !== 'ACTIVE' &&
+      !allowOnboarding
+    ) {
+      throw new ForbiddenException(
+        'Cơ sở y tế chưa hoàn tất thẩm định hồ sơ pháp lý (ACTIVE). Vui lòng nộp hồ sơ pháp lý để kích hoạt tài khoản.',
+      );
+    }
     request.user = {
       id: user.id,
       role: user.role,

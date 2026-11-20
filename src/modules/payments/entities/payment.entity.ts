@@ -57,6 +57,7 @@ export interface PaymentRequest {
   attempt: number; // Tăng mỗi lần cấp mã mới; không tái sử dụng mã hết hạn.
   paymentCode: string;
   transferContent?: string; // Nội dung QR đã chốt: tên tài khoản không dấu + mã thanh toán riêng.
+  adminTransferDescription?: string;
   amountVnd: number;
   currency: 'VND';
   qrUrl?: string | null;
@@ -109,6 +110,15 @@ export interface PaymentTransaction {
   receivedAt: string;
   outcome: TransactionOutcome;
   reason: TransactionReason | null;
+  sepayWebhookTransactionId?: string | null;
+  sepayApiTransactionId?: string | null;
+  ingestionSource?: 'WEBHOOK' | 'SEPAY_API';
+  reconciledAt?: string | null;
+  reconciliationRunId?: string | null;
+  transferContent?: string | null;
+  contractNumber?: string | null;
+  payerName?: string | null;
+  payerPhoneLast4?: string | null;
   rawPayload?: Record<string, unknown>;
 }
 
@@ -117,6 +127,28 @@ export interface ActivationResult {
   status: BillingContractStatus;
   activated: boolean;
   blockingReasons: string[];
+}
+
+// Trạng thái kích hoạt tính tại thời điểm tra cứu (read-only, không ghi DB).
+export interface PaymentActivationState {
+  activated: boolean;
+  blockingReasons: string[];
+}
+
+// Giao dịch gần nhất liên quan yêu cầu thanh toán, bề mặt hóa cho gia đình khi bị soát xét.
+export interface PaymentLatestTransaction {
+  id: string;
+  outcome: TransactionOutcome;
+  reason: TransactionReason | null;
+  referenceCode: string | null;
+  amountVnd: number;
+  receivedAt: string;
+}
+
+// Mở rộng PaymentRequest với trạng thái sau thanh toán; chỉ getPaymentStatus gắn các trường này.
+export interface PaymentRequestStatusView extends PaymentRequest {
+  activation?: PaymentActivationState | null;
+  latestTransaction?: PaymentLatestTransaction | null;
 }
 
 export interface PaymentTransactionResult {

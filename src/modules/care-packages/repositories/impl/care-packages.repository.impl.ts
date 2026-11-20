@@ -15,9 +15,12 @@ import {
   type CarePackage,
   type CarePackageTerms,
 } from '../../entities/care-package.entity';
-import type {
-  CarePackagesPage,
-  CarePackagesRepository,
+import {
+  DEMO_CARE_PACKAGE_CODES,
+  DEMO_CARE_PACKAGE_IDS,
+  type CarePackagesListOptions,
+  type CarePackagesPage,
+  type CarePackagesRepository,
 } from '../interfaces/care-packages.repository.interface';
 import { validateCarePackageTerms } from '../../validate-care-package-terms';
 
@@ -29,6 +32,10 @@ function toEntity(row: ServicePackage): CarePackage {
     name: row.packageName,
     description: row.description,
     durationMonths: row.durationMonths,
+    videoQuotaPolicy: row.videoQuotaPolicy as 'FIXED' | 'CONTRACT',
+    homeVisitUnitPriceVnd: row.homeVisitUnitPrice
+      ? moneyToNumber(row.homeVisitUnitPrice)
+      : undefined,
     priceVnd: moneyToNumber(row.basePrice),
     includedMembers: row.includedMembers,
     maxMembers: row.maxMembers,
@@ -55,6 +62,8 @@ function termsData(terms: CarePackageTerms) {
     packageName: terms.name,
     description: terms.description,
     durationMonths: terms.durationMonths,
+    videoQuotaPolicy: terms.videoQuotaPolicy ?? 'FIXED',
+    homeVisitUnitPrice: terms.homeVisitUnitPriceVnd ?? null,
     basePrice: terms.priceVnd,
     includedMembers: terms.includedMembers,
     maxMembers: terms.maxMembers,
@@ -73,15 +82,25 @@ export class CarePackagesRepositoryImpl implements CarePackagesRepository {
     page: number,
     limit: number,
     status?: CarePackageStatus,
+    options?: CarePackagesListOptions,
   ): Promise<CarePackagesPage> {
     return serializable(this.prisma, async (tx) => {
-      const where = { status };
+      const where: Prisma.ServicePackageWhereInput = { status };
+      if (options?.excludeDemo) {
+        where.id = { notIn: DEMO_CARE_PACKAGE_IDS };
+        where.lineageCode = { notIn: DEMO_CARE_PACKAGE_CODES };
+      }
+      const orderBy: Prisma.ServicePackageOrderByWithRelationInput[] = [
+        { lineageCode: 'asc' },
+        { version: 'desc' },
+      ];
+      if (options?.ascendingPrice) orderBy.unshift({ basePrice: 'asc' });
       const total = await tx.servicePackage.count({ where });
       const rows = await tx.servicePackage.findMany({
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: [{ lineageCode: 'asc' }, { version: 'desc' }],
+        orderBy,
       });
       return { items: rows.map(toEntity), total, page, limit };
     });
@@ -139,8 +158,8 @@ export class CarePackagesRepositoryImpl implements CarePackagesRepository {
   ): Promise<CarePackage> {
     return serializable(this.prisma, async (tx) => {
       const row = await this.requireRow(tx, id);
-      if (row.status !== 'DRAFT')
-        throw new ConflictException('Published terms are immutable');
+      if (row.status === 'DEPRECATED')
+        throw new ConflictException('Cannot edit a deprecated package');
       const merged = { ...toEntity(row), ...changes };
       validateCarePackageTerms(merged);
       return toEntity(

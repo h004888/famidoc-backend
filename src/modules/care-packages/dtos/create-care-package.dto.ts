@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsDefined,
@@ -23,18 +23,33 @@ const trimString = ({ value }: { value: unknown }): unknown =>
 // Ba hạn mức dùng chung cho nhóm người được gói phục vụ, không tính riêng từng người.
 export class CarePackageQuotasDto {
   // Số lượt video: cho phép 0; trần 100.000 là giới hạn kỹ thuật, chưa phải bảng quyền lợi.
+  @ApiProperty({
+    description: 'Số lượt khám tư vấn video trực tuyến',
+    example: 10,
+    default: 0,
+  })
   @IsInt()
   @Min(0)
   @Max(100_000)
   videoConsultations: number;
 
   // Số lượt khám tại nhà trong chu kỳ cấu hình của gói.
+  @ApiProperty({
+    description: 'Số lượt bác sĩ đến khám tận nơi tại nhà',
+    example: 4,
+    default: 0,
+  })
   @IsInt()
   @Min(0)
   @Max(100_000)
   homeVisits: number;
 
   // Khám tại cơ sở ngoài phạm vi gói hiện tại; giữ field cũ tương thích response.
+  @ApiProperty({
+    description: 'Số lượt khám tại cơ sở y tế (mặc định 0)',
+    example: 0,
+    default: 0,
+  })
   @IsInt()
   @Min(0)
   @Max(0)
@@ -42,6 +57,24 @@ export class CarePackageQuotasDto {
 }
 
 export class CarePackageTermsDto {
+  @ApiPropertyOptional({
+    enum: ['FIXED', 'CONTRACT'],
+    description:
+      'FIXED cho gói 1/3/6 tháng; CONTRACT cho quota năm được chốt khi ký.',
+  })
+  @ValidateIf((_o, v) => v !== undefined)
+  @IsIn(['FIXED', 'CONTRACT'])
+  videoQuotaPolicy?: 'FIXED' | 'CONTRACT';
+  @ApiPropertyOptional({
+    minimum: 1,
+    description:
+      'Đơn giá một lần khám tại nhà của cả gia đình, chưa có phụ thu bác sĩ.',
+  })
+  @ValidateIf((_o, v) => v !== undefined)
+  @IsInt()
+  @Min(1)
+  @Max(9_999_999_999)
+  homeVisitUnitPriceVnd?: number;
   // Tên không được rỗng sau khi loại khoảng trắng đầu/cuối.
   @Transform(trimString)
   @IsString()
@@ -55,10 +88,10 @@ export class CarePackageTermsDto {
   @Length(0, 2000)
   description?: string;
 
-  // Ba kỳ hạn theo bảng giá mới: dùng thử 1 tháng, quý 3 tháng và năm 12 tháng.
+  // Bốn kỳ hạn của catalog 05/11/2026.
   @IsInt()
   @Min(1)
-  @IsIn([1, 3, 12])
+  @IsIn([1, 3, 6, 12])
   durationMonths: number;
 
   // Giá trọn kỳ cho số người cơ bản, là số nguyên VND dương, không phải giá mỗi tháng.
@@ -70,13 +103,13 @@ export class CarePackageTermsDto {
   // Số người được phục vụ trong giá cơ bản; không phải giới hạn cây gia đình.
   @IsInt()
   @Min(1)
-  @Max(6)
+  @Max(10)
   includedMembers: number;
 
   // Tổng số người tối đa sau khi bổ sung; service kiểm tra không thấp hơn includedMembers.
   @IsInt()
   @Min(1)
-  @Max(6)
+  @Max(10)
   maxMembers: number;
 
   // Đơn giá thêm một người/tháng; 0 cho phép miễn phí khi vẫn được thêm người.

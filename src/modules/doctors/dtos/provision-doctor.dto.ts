@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsEmail,
   IsInt,
@@ -12,6 +12,10 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import {
+  normalizeVietnameseMobilePhone,
+  VN_MOBILE_PHONE_REGEX,
+} from '../utils/vietnamese-phone.util';
 
 export class ProvisionDoctorDto {
   @ApiProperty({
@@ -26,8 +30,11 @@ export class ProvisionDoctorDto {
     description: 'Số điện thoại của bác sĩ (định dạng Việt Nam)',
     example: '0912345678',
   })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? normalizeVietnameseMobilePhone(value) : value,
+  )
   @IsNotEmpty({ message: 'Số điện thoại không được để trống' })
-  @Matches(/(84|0[3|5|7|8|9])+([0-9]{8})\b/, {
+  @Matches(VN_MOBILE_PHONE_REGEX, {
     message: 'Số điện thoại không đúng định dạng di động Việt Nam',
   })
   phone!: string;
@@ -59,14 +66,16 @@ export class ProvisionDoctorDto {
   @IsString()
   academicTitle?: string;
 
-  @ApiProperty({
-    description: 'Số năm kinh nghiệm hành nghề lâm sàng',
-    example: 8,
+  @ApiPropertyOptional({
+    description: 'Số năm kinh nghiệm hành nghề lâm sàng (mặc định 0 nếu bác sĩ tự cập nhật sau)',
+    example: 0,
+    default: 0,
   })
+  @IsOptional()
   @Type(() => Number)
   @IsInt({ message: 'Số năm kinh nghiệm phải là số nguyên' })
   @Min(0, { message: 'Số năm kinh nghiệm không thể âm' })
-  experienceYears!: number;
+  experienceYears?: number = 0;
 
   @ApiPropertyOptional({
     description: 'Tóm tắt tiểu sử chuyên môn và định hướng khám chữa bệnh',
@@ -79,7 +88,7 @@ export class ProvisionDoctorDto {
 
   @ApiPropertyOptional({
     description:
-      'UUID của cơ sở y tế trực thuộc (bắt buộc đối với Admin; nếu CSYT gọi thì hệ thống tự động suy diễn)',
+      'UUID của cơ sở y tế trực thuộc (hệ thống tự động suy diễn theo tài khoản Cơ sở y tế đang đăng nhập)',
     example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
   @IsOptional()

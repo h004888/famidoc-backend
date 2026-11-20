@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  HttpCode,
+  HttpStatus,
   Inject,
   Get,
   Param,
@@ -19,7 +21,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { CreatePaymentRequestDto } from '../dtos/create-payment-request.dto';
+import { AdminPaymentRequestDto, CreatePaymentRequestDto } from '../dtos/create-payment-request.dto';
 import { ListTransactionsDto } from '../dtos/list-transactions.dto';
 import { paymentsValidationPipe } from '../payments-validation.pipe';
 import {
@@ -29,6 +31,7 @@ import {
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../../../core/auth/roles.guard';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
+import { SePayWebhookEvents, SePayWebhookEventsQuery } from '../sepay/sepay-webhook-events';
 
 @ApiTags('Payments')
 @ApiBearerAuth('JWT-auth')
@@ -39,13 +42,14 @@ import type { AuthenticatedRequest } from '../../../core/auth/authenticated-requ
 export class PaymentsController {
   constructor(
     @Inject(PAYMENTS_SERVICE_TOKEN) private readonly service: IPaymentsService,
+    private readonly webhookEvents: SePayWebhookEvents,
   ) {}
 
   // Giữ route cũ để không phá client; route vietqr khớp bảng phân công API của Nam.
   @Post(['vietqr', 'requests'])
   @ApiOperation({ summary: 'Tạo mã QR thanh toán VietQR cho hợp đồng hoặc phụ lục' })
   @ApiBody({ type: CreatePaymentRequestDto })
-  @ApiResponse({ status: 201, description: 'Tạo yêu cầu thanh toán VietQR thành công, trả về chuỗi qrDataUrl và transferContent' })
+  @ApiResponse({ status: 201, description: 'Tạo yêu cầu thanh toán VietQR thành công, trả về qrUrl và transferContent' })
   @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ hoặc trạng thái hợp đồng không được phép thanh toán' })
   createVietQRPayment(
     @Body() dto: CreatePaymentRequestDto,
@@ -58,10 +62,17 @@ export class PaymentsController {
     );
   }
 
+  @Post('admin/requests')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Cấp mã thu tiền với số tiền và mô tả do Admin điều chỉnh' })
+  createAdminPayment(@Body() dto: AdminPaymentRequestDto, @Req() req: AuthenticatedRequest) {
+    return this.service.createAdminPaymentRequest(dto, req.user, req.ip);
+  }
+
   @Get([':paymentId/status', 'requests/:paymentId'])
   @ApiOperation({ summary: 'Kiểm tra trạng thái thanh toán của hóa đơn/yêu cầu' })
   @ApiParam({ name: 'paymentId', description: 'UUID của yêu cầu thanh toán (invoice id)' })
-  @ApiResponse({ status: 200, description: 'Trạng thái thanh toán (PENDING, PAID, EXPIRED, CANCELLED)' })
+  @ApiResponse({ status: 200, description: 'Trạng thái thanh toán (PENDING, PAID, EXPIRED, CANCELLED), kèm activation khi PAID chưa kích hoạt và latestTransaction khi đang soát xét' })
   @ApiResponse({ status: 404, description: 'Không tìm thấy yêu cầu thanh toán' })
   getPaymentStatus(
     @Param('paymentId', new ParseUUIDPipe({ version: '4' })) paymentId: string,
@@ -83,17 +94,17 @@ export class PaymentsController {
   }
 
   @Post('requests/:id/recheck-activation')
-  @Roles('ADMIN')
-  @ApiOperation({ summary: 'Admin kích hoạt bù hợp đồng/phụ lục nếu webhook bị sót' })
+  @HttpCode(HttpStatus.OK)
+  @Roles('FAMILY_REP', 'ADMIN')
+  @ApiOperation({ summary: 'Kích hoạt bù hợp đồng/phụ lục nếu webhook bị sót; family chủ hộ tự kiểm tra được khi đã PAID' })
   @ApiParam({ name: 'id', description: 'UUID của yêu cầu thanh toán' })
-  @ApiResponse({ status: 200, description: 'Kích hoạt lại dịch vụ thành công' })
-  @ApiResponse({ status: 403, description: 'Chỉ ADMIN mới có quyền thực hiện' })
+  @ApiResponse({ status: 200, description: 'Trả về kết quả kích hoạt: activated và blockingReasons (nếu chưa đủ điều kiện)' })
+  @ApiResponse({ status: 403, description: 'Family chỉ được recheck hóa đơn PAID của chính hộ mình' })
   async recheckPaymentActivation(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Req() req: AuthenticatedRequest,
   ) {
-    const payment = await this.service.getPaymentStatus(id, req.user);
-    return this.service.tryActivate(payment.contractId, payment.addendumId);
+    return this.service.recheckActivation(id, req.user);
   }
 
   @Get('transactions')
@@ -103,5 +114,12 @@ export class PaymentsController {
   @ApiResponse({ status: 403, description: 'Chỉ ADMIN mới có quyền truy cập' })
   listTransactions(@Query() query: ListTransactionsDto) {
     return this.service.listTransactions(query);
+  }
+
+  @Get('webhook-events')
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Nhật ký tiếp nhận webhook SePay, bao gồm lỗi từ chối và lỗi đối chiếu' })
+  listWebhookEvents(@Query() query: SePayWebhookEventsQuery) {
+    return this.webhookEvents.list(query);
   }
 }

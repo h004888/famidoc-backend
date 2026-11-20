@@ -1,0 +1,4167 @@
+{
+  "totalApis": 89,
+  "stats": {
+    "fullCompliant": 4,
+    "runtimeOkSwaggerLegacy": 85,
+    "validBypass": 0,
+    "needsAttention": 0,
+    "withStrongDto": 89
+  },
+  "endpoints": [
+    {
+      "module": "app",
+      "controller": "AppController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\app.controller.ts",
+      "methodName": "getHello",
+      "httpMethod": "GET",
+      "routePath": "/",
+      "summary": "Kiểm tra trạng thái máy chủ ứng dụng",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Trả về chuỗi chào mừng Hello World"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "core",
+      "controller": "HealthController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\core\\health\\health.controller.ts",
+      "methodName": "check",
+      "httpMethod": "GET",
+      "routePath": "/health",
+      "summary": "Kiểm tra trạng thái sẵn sàng của dịch vụ",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Dịch vụ đang hoạt động ổn định"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "auth",
+      "controller": "AuthController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\auth\\controllers\\auth.controller.ts",
+      "methodName": "registerFamilyRepresentative",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/auth/register-representative",
+      "summary": "Đăng ký tài khoản Người đại diện gia đình (Family Representative)",
+      "hasApiStandardResponse": true,
+      "apiStandardResponseOptions": {
+        "type": "RegisterInitiateDataDto",
+        "status": 201,
+        "description": "Khởi tạo đăng ký thành công, gửi mã OTP đến email"
+      },
+      "legacyApiResponses": [],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "httpStatusCode": 201,
+      "params": [
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "RegisterFamilyRepDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "FULL_COMPLIANT",
+      "issues": [],
+      "recommendations": []
+    },
+    {
+      "module": "auth",
+      "controller": "AuthController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\auth\\controllers\\auth.controller.ts",
+      "methodName": "verifyEmailOtp",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/auth/verify-email-otp",
+      "summary": "Xác thực OTP đăng ký tài khoản qua email",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Xác thực OTP thành công, tài khoản đã được kích hoạt"
+        },
+        {
+          "status": 401,
+          "description": "OTP không hợp lệ hoặc đã hết hạn"
+        }
+      ],
+      "errorResponsesDocumented": [
+        401
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "VerifyEmailOtpDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "auth",
+      "controller": "AuthController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\auth\\controllers\\auth.controller.ts",
+      "methodName": "resendEmailOtp",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/auth/resend-email-otp",
+      "summary": "Gửi lại OTP qua email (có cooldown 60s)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Đã gửi lại mã OTP thành công"
+        },
+        {
+          "status": 429,
+          "description": "Vui lòng chờ hết thời gian giãn cách trước khi gửi lại"
+        }
+      ],
+      "errorResponsesDocumented": [
+        429
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "ResendEmailOtpDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "auth",
+      "controller": "AuthController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\auth\\controllers\\auth.controller.ts",
+      "methodName": "login",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/auth/login",
+      "summary": "Đăng nhập hệ thống (Email và mật khẩu)",
+      "hasApiStandardResponse": true,
+      "apiStandardResponseOptions": {
+        "type": "LoginDataDto",
+        "description": "Đăng nhập thành công, trả về JWT Access Token"
+      },
+      "legacyApiResponses": [
+        {
+          "status": 401,
+          "description": "Sai tên đăng nhập hoặc mật khẩu"
+        },
+        {
+          "status": 403,
+          "description": "Tài khoản bị tạm khóa 30 phút do sai quá 5 lần"
+        }
+      ],
+      "errorResponsesDocumented": [
+        401,
+        403
+      ],
+      "hasBypassTransform": false,
+      "responseMessage": "Đăng nhập thành công",
+      "httpStatusCode": 200,
+      "params": [
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "LoginDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "any",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": true
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "FULL_COMPLIANT",
+      "issues": [],
+      "recommendations": []
+    },
+    {
+      "module": "auth",
+      "controller": "AuthController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\auth\\controllers\\auth.controller.ts",
+      "methodName": "logout",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/auth/logout",
+      "summary": "Đăng xuất và thu hồi Access Token",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Đăng xuất thành công"
+        },
+        {
+          "status": 204,
+          "description": "Đăng xuất thành công (No Content)"
+        },
+        {
+          "status": 401,
+          "description": "Chưa xác thực hoặc token không hợp lệ"
+        }
+      ],
+      "errorResponsesDocumented": [
+        401
+      ],
+      "hasBypassTransform": false,
+      "httpStatusCode": 200,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "any",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": true
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "auth",
+      "controller": "AuthController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\auth\\controllers\\auth.controller.ts",
+      "methodName": "forgotPassword",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/auth/forgot-password",
+      "summary": "Yêu cầu OTP đặt lại mật khẩu",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Đã gửi OTP khôi phục mật khẩu nếu email tồn tại"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "ForgotPasswordDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "auth",
+      "controller": "AuthController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\auth\\controllers\\auth.controller.ts",
+      "methodName": "resetPassword",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/auth/reset-password",
+      "summary": "Đặt lại mật khẩu mới bằng OTP",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Đặt lại mật khẩu thành công"
+        },
+        {
+          "status": 400,
+          "description": "Dữ liệu không hợp lệ hoặc không tìm thấy người dùng"
+        },
+        {
+          "status": 401,
+          "description": "OTP không hợp lệ hoặc đã hết hạn"
+        }
+      ],
+      "errorResponsesDocumented": [
+        400,
+        401
+      ],
+      "hasBypassTransform": false,
+      "httpStatusCode": 200,
+      "params": [
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "ResetPasswordDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "auth",
+      "controller": "AuthController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\auth\\controllers\\auth.controller.ts",
+      "methodName": "changePassword",
+      "httpMethod": "PATCH",
+      "routePath": "/api/v1/auth/change-password",
+      "summary": "Đổi mật khẩu cho người dùng hiện tại",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Đổi mật khẩu thành công"
+        },
+        {
+          "status": 400,
+          "description": "Mật khẩu hiện tại không đúng hoặc trùng mật khẩu cũ"
+        },
+        {
+          "status": 401,
+          "description": "Chưa xác thực"
+        }
+      ],
+      "errorResponsesDocumented": [
+        400,
+        401
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "any",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": true
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "ChangePasswordDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "care-packages",
+      "controller": "AdminCarePackagesController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\care-packages\\controllers\\admin-care-packages.controller.ts",
+      "methodName": "list",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/admin/care-packages",
+      "summary": "Quản trị viên xem danh sách các gói chăm sóc (mọi trạng thái)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Danh sách gói chăm sóc cho Admin"
+        },
+        {
+          "status": 403,
+          "description": "Chỉ ADMIN mới có quyền truy cập"
+        }
+      ],
+      "errorResponsesDocumented": [
+        403
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "query",
+          "source": "Query",
+          "typeName": "AdminListCarePackagesDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": true,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200, isPaginated: true })"
+      ]
+    },
+    {
+      "module": "care-packages",
+      "controller": "AdminCarePackagesController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\care-packages\\controllers\\admin-care-packages.controller.ts",
+      "methodName": "get",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/admin/care-packages/:id",
+      "summary": "Xem chi tiết gói chăm sóc (bao gồm bản nháp/ngừng bán)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Chi tiết gói chăm sóc"
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy gói"
+        }
+      ],
+      "errorResponsesDocumented": [
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "care-packages",
+      "controller": "AdminCarePackagesController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\care-packages\\controllers\\admin-care-packages.controller.ts",
+      "methodName": "create",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/admin/care-packages",
+      "summary": "Tạo gói chăm sóc mới ở trạng thái DRAFT",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Tạo gói chăm sóc thành công"
+        },
+        {
+          "status": 400,
+          "description": "Dữ liệu không hợp lệ"
+        }
+      ],
+      "errorResponsesDocumented": [
+        400
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "CreateCarePackageDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "care-packages",
+      "controller": "AdminCarePackagesController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\care-packages\\controllers\\admin-care-packages.controller.ts",
+      "methodName": "update",
+      "httpMethod": "PATCH",
+      "routePath": "/api/v1/admin/care-packages/:id",
+      "summary": "Chỉnh sửa thông tin gói chăm sóc bản nháp",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Cập nhật thành công"
+        },
+        {
+          "status": 400,
+          "description": "Không thể sửa gói đã xuất bản hoặc đã ngừng bán"
+        }
+      ],
+      "errorResponsesDocumented": [
+        400
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "UpdateCarePackageDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "care-packages",
+      "controller": "AdminCarePackagesController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\care-packages\\controllers\\admin-care-packages.controller.ts",
+      "methodName": "createVersion",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/admin/care-packages/:id/versions",
+      "summary": "Tạo phiên bản kế tiếp (next version) từ gói hiện tại",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Tạo phiên bản mới thành công ở trạng thái DRAFT"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "care-packages",
+      "controller": "AdminCarePackagesController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\care-packages\\controllers\\admin-care-packages.controller.ts",
+      "methodName": "publish",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/admin/care-packages/:id/publish",
+      "summary": "Xuất bản gói chăm sóc ra công khai (chuyển sang ACTIVE)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Xuất bản gói thành công"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "care-packages",
+      "controller": "AdminCarePackagesController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\care-packages\\controllers\\admin-care-packages.controller.ts",
+      "methodName": "retire",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/admin/care-packages/:id/retire",
+      "summary": "Ngừng cung cấp gói chăm sóc (chuyển sang RETIRED)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Ngừng cung cấp gói thành công"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "care-packages",
+      "controller": "CarePackagesController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\care-packages\\controllers\\care-packages.controller.ts",
+      "methodName": "list",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/care-packages",
+      "summary": "Lấy danh mục các gói chăm sóc sức khỏe đang hoạt động (ACTIVE)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Danh sách các gói chăm sóc công khai"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "query",
+          "source": "Query",
+          "typeName": "ListCarePackagesDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": true,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200, isPaginated: true })"
+      ]
+    },
+    {
+      "module": "care-packages",
+      "controller": "CarePackagesController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\care-packages\\controllers\\care-packages.controller.ts",
+      "methodName": "get",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/care-packages/:id",
+      "summary": "Xem chi tiết phiên bản gói chăm sóc theo ID",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Chi tiết gói chăm sóc"
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy gói chăm sóc"
+        }
+      ],
+      "errorResponsesDocumented": [
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "care-packages",
+      "controller": "CarePackagesController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\care-packages\\controllers\\care-packages.controller.ts",
+      "methodName": "quote",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/care-packages/:id/quote",
+      "summary": "Tính báo giá gói chăm sóc theo số lượng thành viên",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Báo giá chi tiết đã tính toán"
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy gói chăm sóc"
+        }
+      ],
+      "errorResponsesDocumented": [
+        404
+      ],
+      "hasBypassTransform": false,
+      "httpStatusCode": 200,
+      "params": [
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "QuoteCarePackageDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "complaints",
+      "controller": "ComplaintsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\complaints\\controllers\\complaints.controller.ts",
+      "methodName": "submitIncidentComplaint",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/complaints",
+      "summary": "Gửi khiếu nại sự cố liên quan đến dịch vụ hoặc bác sĩ",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Gửi khiếu nại thành công"
+        },
+        {
+          "status": 400,
+          "description": "Dữ liệu không hợp lệ"
+        }
+      ],
+      "errorResponsesDocumented": [
+        400
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "SubmitIncidentComplaintDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "complaints",
+      "controller": "ComplaintsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\complaints\\controllers\\complaints.controller.ts",
+      "methodName": "getComplaintDetail",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/complaints/:id",
+      "summary": "Xem thông tin chi tiết của một khiếu nại",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Thông tin chi tiết khiếu nại"
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy khiếu nại"
+        }
+      ],
+      "errorResponsesDocumented": [
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "complaints",
+      "controller": "ComplaintsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\complaints\\controllers\\complaints.controller.ts",
+      "methodName": "resolveComplaint",
+      "httpMethod": "PATCH",
+      "routePath": "/api/v1/complaints/:id/resolve",
+      "summary": "Giải quyết / cập nhật kết quả xử lý khiếu nại",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Cập nhật giải quyết khiếu nại thành công"
+        },
+        {
+          "status": 400,
+          "description": "Trạng thái khiếu nại không hợp lệ để xử lý"
+        }
+      ],
+      "errorResponsesDocumented": [
+        400
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "ResolveComplaintDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "initiateFourPartyContract",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/contracts/four-party",
+      "summary": "Khởi tạo hợp đồng dịch vụ y tế 4 bên ban đầu (STT 28 - UC-16, SD-16)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Tạo bản thảo hợp đồng dịch vụ y tế 4 bên thành công."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "CreateMedicalContractDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "initiateFourPartyContract",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/contracts/medical",
+      "summary": "Khởi tạo hợp đồng dịch vụ y tế 4 bên ban đầu (STT 28 - UC-16, SD-16)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Tạo bản thảo hợp đồng dịch vụ y tế 4 bên thành công."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "CreateMedicalContractDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "signFourPartyContract",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/contracts/four-party/:id/sign",
+      "summary": "Ký số điện tử hợp đồng y tế 4 bên ban đầu (STT 29 - UC-16, SD-16)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Ký số thành công."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "SignContractChangeDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "signFourPartyContract",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/contracts/medical/:id/sign",
+      "summary": "Ký số điện tử hợp đồng y tế 4 bên ban đầu (STT 29 - UC-16, SD-16)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Ký số thành công."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "SignContractChangeDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "assignDoctorToPackage",
+      "httpMethod": "PATCH",
+      "routePath": "/api/v1/contracts/:id/assign-doctor",
+      "summary": "Phân công / Điều chuyển bác sĩ gia đình phụ trách hợp đồng (STT 30 - UC-23, SD-23)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Phân công bác sĩ cho hợp đồng thành công."
+        },
+        {
+          "status": 400,
+          "description": "Bác sĩ không hợp lệ hoặc không thuộc cơ sở y tế này."
+        },
+        {
+          "status": 403,
+          "description": "Không có quyền phân công bác sĩ cho hợp đồng của cơ sở y tế khác."
+        },
+        {
+          "status": 409,
+          "description": "Bác sĩ đã đạt giới hạn tối đa 30 hộ gia đình (CFG-01, BR-04) hoặc hợp đồng đã kết thúc."
+        }
+      ],
+      "errorResponsesDocumented": [
+        400,
+        403,
+        409
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "AssignDoctorToPackageDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "listMedicalContracts",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/contracts/medical",
+      "summary": "Xem danh sách hợp đồng dịch vụ y tế 4 bên theo vai trò",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Danh sách hợp đồng y tế phân trang thành công."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "query",
+          "source": "Query",
+          "typeName": "ListMedicalContractsQueryDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": true,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200, isPaginated: true })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "findMedicalContractById",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/contracts/medical/:id",
+      "summary": "Xem chi tiết hợp đồng dịch vụ y tế 4 bên",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Chi tiết hợp đồng y tế 4 bên."
+        },
+        {
+          "status": 403,
+          "description": "Không có quyền truy cập hợp đồng này."
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy hợp đồng y tế."
+        }
+      ],
+      "errorResponsesDocumented": [
+        403,
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": true,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200, isPaginated: true })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "getCareNeedsSummary",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/contracts/medical/:id/care-summary",
+      "summary": "Tóm tắt nhu cầu chăm sóc sức khỏe của các thành viên trong hợp đồng",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Báo cáo tổng hợp nhu cầu chăm sóc sức khỏe."
+        },
+        {
+          "status": 403,
+          "description": "Bác sĩ không được phân công hoặc không có quyền truy cập hợp đồng này."
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy hợp đồng y tế."
+        }
+      ],
+      "errorResponsesDocumented": [
+        403,
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "getContractDocument",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/contracts/medical/:id/document",
+      "summary": "Kết xuất văn bản bản sao hợp đồng dịch vụ y tế điện tử 4 bên",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Bản sao văn bản hợp đồng điện tử 4 bên kèm chữ ký số."
+        },
+        {
+          "status": 403,
+          "description": "Không có quyền truy cập văn bản hợp đồng này."
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy hợp đồng y tế."
+        }
+      ],
+      "errorResponsesDocumented": [
+        403,
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "createStaffingContract",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/contracts/staffing",
+      "summary": "Thiết lập hợp đồng cung ứng nhân lực y tế B2B (STT 13 - UC-15)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Tạo hợp đồng nhân lực B2B thành công, chờ ký xác nhận."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "CreateStaffingContractDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "signStaffingContract",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/contracts/staffing/:id/sign",
+      "summary": "Ký số điện tử hợp đồng cung ứng nhân lực B2B (STT 14 - UC-15)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Ký số thành công, hợp đồng đã được kích hoạt có hiệu lực."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "SignStaffingContractDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "listStaffingContracts",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/contracts/staffing",
+      "summary": "Xem danh sách hợp đồng cung ứng nhân lực B2B",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Danh sách hợp đồng cung ứng nhân lực."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "query",
+          "source": "Query",
+          "typeName": "ListStaffingContractsDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": true,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200, isPaginated: true })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "getStaffingContract",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/contracts/staffing/:id",
+      "summary": "Xem chi tiết hợp đồng cung ứng nhân lực B2B",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Chi tiết hợp đồng cung ứng nhân lực."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "createContractAddendum",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/contracts/:id/addendums",
+      "summary": "Tạo phụ lục hợp đồng (thay đổi thành viên hoặc dịch vụ)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Tạo phụ lục hợp đồng thành công"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "CreateContractAddendumDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "createPackageUpgradeContract",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/contracts/:id/upgrade",
+      "summary": "Tạo yêu cầu nâng cấp gói chăm sóc cho hợp đồng",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Tạo yêu cầu nâng cấp thành công"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "CreatePackageUpgradeDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "terminateContract",
+      "httpMethod": "PATCH",
+      "routePath": "/api/v1/contracts/:id/terminate",
+      "summary": "Chấm dứt/hủy hợp đồng chăm sóc sức khỏe",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Chấm dứt hợp đồng thành công"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "TerminateContractDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "requestTermination",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/contracts/:id/termination",
+      "summary": "Gửi yêu cầu chấm dứt hợp đồng (UC-19 alias)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Tiếp nhận yêu cầu chấm dứt hợp đồng"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "RequestTerminationDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "decideTermination",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/contracts/terminations/:id/decision",
+      "summary": "Phê duyệt/từ chối hoặc đồng thuận chấm dứt hợp đồng (UC-19 alias)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Quyết định chấm dứt hợp đồng thành công"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "DecideTerminationDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "getContractChangeTerms",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/contracts/:id/terms",
+      "summary": "Xem các điều khoản thay đổi của hợp đồng nâng cấp",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Nội dung điều khoản và mã hash hợp đồng"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "getAddendumTerms",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/contracts/:id/addendums/:addendumId/terms",
+      "summary": "Xem điều khoản chi tiết của phụ lục hợp đồng",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Nội dung điều khoản phụ lục"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "addendumId",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "signContractAddendum",
+      "httpMethod": "PUT",
+      "routePath": "/api/v1/contracts/:id/addendums/:addendumId/sign",
+      "summary": "Ký xác nhận phụ lục hợp đồng",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Ký phụ lục thành công"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "addendumId",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "SignContractChangeDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "contracts",
+      "controller": "ContractsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\contracts\\controllers\\contracts.controller.ts",
+      "methodName": "signUpgradedContract",
+      "httpMethod": "PUT",
+      "routePath": "/api/v1/contracts/:id/sign-upgrade",
+      "summary": "Ký xác nhận hợp đồng nâng cấp gói chăm sóc",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Ký hợp đồng nâng cấp thành công"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "SignContractChangeDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "doctors",
+      "controller": "DoctorsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\doctors\\controllers\\doctors.controller.ts",
+      "methodName": "submitMyCredentials",
+      "httpMethod": "PUT",
+      "routePath": "/api/v1/doctors/me/credentials",
+      "summary": "Bác sĩ tải lên hồ sơ văn bằng, chứng chỉ hành nghề của chính mình (UC-21 alias)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Nộp hồ sơ chứng chỉ thành công."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "SubmitDoctorCredentialsDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "doctors",
+      "controller": "DoctorsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\doctors\\controllers\\doctors.controller.ts",
+      "methodName": "submitDoctorCredentials",
+      "httpMethod": "PUT",
+      "routePath": "/api/v1/doctors/:id/credentials",
+      "summary": "Bác sĩ tải lên hồ sơ văn bằng, chứng chỉ hành nghề (STT 16 - UC-21)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Nộp hồ sơ chứng chỉ thành công, chuyển sang chờ CSYT duyệt cấp 1."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "SubmitDoctorCredentialsDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "doctors",
+      "controller": "DoctorsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\doctors\\controllers\\doctors.controller.ts",
+      "methodName": "approveDoctorCredentialsByFacility",
+      "httpMethod": "PATCH",
+      "routePath": "/api/v1/doctors/:id/credentials/facility-approve",
+      "summary": "Cơ sở y tế thẩm định hồ sơ bác sĩ - Cấp 1 (STT 17 - UC-22)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Thẩm định cấp 1 thành công."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "FacilityVerifyCredentialsDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "doctors",
+      "controller": "DoctorsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\doctors\\controllers\\doctors.controller.ts",
+      "methodName": "approveDoctorCredentialsByPlatform",
+      "httpMethod": "PATCH",
+      "routePath": "/api/v1/doctors/:id/credentials/platform-approve",
+      "summary": "Quản trị viên Nền tảng phê duyệt cấp chứng nhận - Cấp 2 (STT 18 - UC-22)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Phê duyệt cấp 2 thành công, bác sĩ đã được kích hoạt ACTIVE."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "PlatformApproveCredentialsDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "doctors",
+      "controller": "DoctorsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\doctors\\controllers\\doctors.controller.ts",
+      "methodName": "reviewDoctorCredentials",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/doctors/credentials/:id/review",
+      "summary": "Thẩm định hồ sơ chứng chỉ bác sĩ hợp nhất 2 cấp (UC-22)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Thẩm định hồ sơ thành công."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "body",
+          "source": "Body",
+          "typeName": "ReviewDoctorCredentialsDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "doctors",
+      "controller": "DoctorsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\doctors\\controllers\\doctors.controller.ts",
+      "methodName": "getDoctorProfile",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/doctors/:id",
+      "summary": "Xem chi tiết hồ sơ bác sĩ",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Thông tin hồ sơ bác sĩ."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "doctors",
+      "controller": "FacilitiesDoctorsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\doctors\\controllers\\facilities-doctors.controller.ts",
+      "methodName": "provisionDoctorAccount",
+      "httpMethod": "POST",
+      "routePath": "/['api/v1/facilities/doctors', 'api/v1/facilities']/:id/doctors",
+      "summary": "Cơ sở y tế khởi tạo tài khoản Bác sĩ trực thuộc (STT 15 - UC-20)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Khởi tạo tài khoản bác sĩ thành công."
+        },
+        {
+          "status": 409,
+          "description": "Email hoặc số điện thoại của bác sĩ đã tồn tại trên hệ thống."
+        }
+      ],
+      "errorResponsesDocumented": [
+        409
+      ],
+      "hasBypassTransform": false,
+      "httpStatusCode": 201,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "ProvisionDoctorDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 201 })"
+      ]
+    },
+    {
+      "module": "finance",
+      "controller": "FinanceController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\finance\\controllers\\finance.controller.ts",
+      "methodName": "getRevenueAnalytics",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/finance/analytics",
+      "summary": "Báo cáo phân tích doanh thu và tỷ lệ phân chia",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Dữ liệu phân tích doanh thu"
+        },
+        {
+          "status": 403,
+          "description": "Chỉ ADMIN hoặc HEALTHCARE_FACILITY mới có quyền truy cập"
+        }
+      ],
+      "errorResponsesDocumented": [
+        403
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "query",
+          "source": "Query",
+          "typeName": "RevenueAnalyticsQueryDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": true,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200, isPaginated: true })"
+      ]
+    },
+    {
+      "module": "finance",
+      "controller": "FinanceController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\finance\\controllers\\finance.controller.ts",
+      "methodName": "executeMonthlySettlement",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/finance/settlements/monthly",
+      "summary": "Thực thi quyết toán doanh thu định kỳ hàng tháng cho cơ sở y tế",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Quyết toán doanh thu thành công"
+        },
+        {
+          "status": 403,
+          "description": "Chỉ ADMIN mới có quyền thực hiện"
+        }
+      ],
+      "errorResponsesDocumented": [
+        403
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "MonthlySettlementDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "notifications",
+      "controller": "NotificationsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\notifications\\controllers\\notifications.controller.ts",
+      "methodName": "runExpiryReminders",
+      "httpMethod": "POST",
+      "routePath": "/['api/v1/notifications', 'api/v1/me/notifications']/reminders/run",
+      "summary": "Admin chạy nhắc hết hạn trước 15 ngày; không tạo thông báo trùng",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "notifications",
+      "controller": "NotificationsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\notifications\\controllers\\notifications.controller.ts",
+      "methodName": "getUserNotifications",
+      "httpMethod": "GET",
+      "routePath": "/['api/v1/notifications', 'api/v1/me/notifications']",
+      "summary": "Lấy danh sách thông báo của người dùng hiện tại",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Danh sách thông báo người dùng"
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "query",
+          "source": "Query",
+          "typeName": "ListNotificationsDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": true,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200, isPaginated: true })"
+      ]
+    },
+    {
+      "module": "notifications",
+      "controller": "NotificationsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\notifications\\controllers\\notifications.controller.ts",
+      "methodName": "markNotificationAsRead",
+      "httpMethod": "PATCH",
+      "routePath": "/['api/v1/notifications', 'api/v1/me/notifications']/:id/read",
+      "summary": "Đánh dấu thông báo đã đọc theo ID",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Đã đánh dấu thông báo đọc thành công"
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy thông báo"
+        }
+      ],
+      "errorResponsesDocumented": [
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "patients",
+      "controller": "PatientsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\patients\\controllers\\patients.controller.ts",
+      "methodName": "createPatient",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/patients",
+      "summary": "Thêm hồ sơ thành viên gia đình (bệnh nhân)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Tạo hồ sơ bệnh nhân thành công"
+        },
+        {
+          "status": 400,
+          "description": "Dữ liệu không hợp lệ"
+        },
+        {
+          "status": 403,
+          "description": "Không có quyền thao tác"
+        }
+      ],
+      "errorResponsesDocumented": [
+        400,
+        403
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "CreatePatientDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "patients",
+      "controller": "PatientsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\patients\\controllers\\patients.controller.ts",
+      "methodName": "listFamilyMembers",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/patients",
+      "summary": "Lấy danh sách thành viên trong hộ gia đình",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Danh sách thành viên"
+        },
+        {
+          "status": 403,
+          "description": "Không có quyền truy cập"
+        }
+      ],
+      "errorResponsesDocumented": [
+        403
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": true,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200, isPaginated: true })"
+      ]
+    },
+    {
+      "module": "patients",
+      "controller": "PatientsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\patients\\controllers\\patients.controller.ts",
+      "methodName": "getPatientById",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/patients/:id",
+      "summary": "Xem chi tiết hồ sơ bệnh nhân kèm tiền sử dị ứng và tài liệu",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Chi tiết hồ sơ bệnh nhân"
+        },
+        {
+          "status": 403,
+          "description": "Không có quyền truy cập hồ sơ của gia đình khác"
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy hồ sơ bệnh nhân"
+        }
+      ],
+      "errorResponsesDocumented": [
+        403,
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "patients",
+      "controller": "PatientsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\patients\\controllers\\patients.controller.ts",
+      "methodName": "updatePatient",
+      "httpMethod": "PUT",
+      "routePath": "/api/v1/patients/:id",
+      "summary": "Cập nhật thông tin hồ sơ bệnh nhân",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Cập nhật hồ sơ bệnh nhân thành công"
+        },
+        {
+          "status": 403,
+          "description": "Không có quyền chỉnh sửa hồ sơ ngoài gia đình"
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy hồ sơ bệnh nhân"
+        }
+      ],
+      "errorResponsesDocumented": [
+        403,
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "UpdatePatientDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "patients",
+      "controller": "PatientsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\patients\\controllers\\patients.controller.ts",
+      "methodName": "addAllergy",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/patients/:id/allergies",
+      "summary": "Khai báo dị ứng thuốc, thực phẩm hoặc môi trường cho bệnh nhân",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Khai báo dị ứng thành công"
+        },
+        {
+          "status": 403,
+          "description": "Không có quyền khai báo cho bệnh nhân ngoài gia đình"
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy hồ sơ bệnh nhân"
+        }
+      ],
+      "errorResponsesDocumented": [
+        403,
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "CreateAllergyDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "patients",
+      "controller": "PatientsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\patients\\controllers\\patients.controller.ts",
+      "methodName": "listAllergies",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/patients/:id/allergies",
+      "summary": "Lấy danh sách tiền sử dị ứng của bệnh nhân",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Danh sách tiền sử dị ứng"
+        },
+        {
+          "status": 403,
+          "description": "Không có quyền xem dị ứng ngoài gia đình"
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy hồ sơ bệnh nhân"
+        }
+      ],
+      "errorResponsesDocumented": [
+        403,
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": true,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200, isPaginated: true })"
+      ]
+    },
+    {
+      "module": "patients",
+      "controller": "PatientsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\patients\\controllers\\patients.controller.ts",
+      "methodName": "addDocument",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/patients/:id/documents",
+      "summary": "Đính kèm tài liệu y tế ban đầu (xét nghiệm, kết quả chẩn đoán hình ảnh...)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Đính kèm tài liệu y tế thành công"
+        },
+        {
+          "status": 403,
+          "description": "Không có quyền đính kèm cho bệnh nhân ngoài gia đình"
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy hồ sơ bệnh nhân"
+        }
+      ],
+      "errorResponsesDocumented": [
+        403,
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "CreatePatientDocumentDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "patients",
+      "controller": "PatientsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\patients\\controllers\\patients.controller.ts",
+      "methodName": "listDocuments",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/patients/:id/documents",
+      "summary": "Lấy danh sách tài liệu y tế của bệnh nhân",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Danh sách tài liệu y tế"
+        },
+        {
+          "status": 403,
+          "description": "Không có quyền xem tài liệu ngoài gia đình"
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy hồ sơ bệnh nhân"
+        }
+      ],
+      "errorResponsesDocumented": [
+        403,
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": true,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200, isPaginated: true })"
+      ]
+    },
+    {
+      "module": "payments",
+      "controller": "PaymentsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\payments\\controllers\\payments.controller.ts",
+      "methodName": "createVietQRPayment",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/payments/vietqr",
+      "summary": "Tạo mã QR thanh toán VietQR cho hợp đồng hoặc phụ lục",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Tạo yêu cầu thanh toán VietQR thành công, trả về chuỗi qrDataUrl và transferContent"
+        },
+        {
+          "status": 400,
+          "description": "Dữ liệu không hợp lệ hoặc trạng thái hợp đồng không được phép thanh toán"
+        }
+      ],
+      "errorResponsesDocumented": [
+        400
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "CreatePaymentRequestDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "payments",
+      "controller": "PaymentsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\payments\\controllers\\payments.controller.ts",
+      "methodName": "createVietQRPayment",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/payments/requests",
+      "summary": "Tạo mã QR thanh toán VietQR cho hợp đồng hoặc phụ lục",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Tạo yêu cầu thanh toán VietQR thành công, trả về chuỗi qrDataUrl và transferContent"
+        },
+        {
+          "status": 400,
+          "description": "Dữ liệu không hợp lệ hoặc trạng thái hợp đồng không được phép thanh toán"
+        }
+      ],
+      "errorResponsesDocumented": [
+        400
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "CreatePaymentRequestDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "payments",
+      "controller": "PaymentsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\payments\\controllers\\payments.controller.ts",
+      "methodName": "getPaymentStatus",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/payments/:paymentId/status",
+      "summary": "Kiểm tra trạng thái thanh toán của hóa đơn/yêu cầu",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Trạng thái thanh toán (PENDING, PAID, EXPIRED, CANCELLED)"
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy yêu cầu thanh toán"
+        }
+      ],
+      "errorResponsesDocumented": [
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "paymentId",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "payments",
+      "controller": "PaymentsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\payments\\controllers\\payments.controller.ts",
+      "methodName": "getPaymentStatus",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/payments/requests/:paymentId",
+      "summary": "Kiểm tra trạng thái thanh toán của hóa đơn/yêu cầu",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Trạng thái thanh toán (PENDING, PAID, EXPIRED, CANCELLED)"
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy yêu cầu thanh toán"
+        }
+      ],
+      "errorResponsesDocumented": [
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "paymentId",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "payments",
+      "controller": "PaymentsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\payments\\controllers\\payments.controller.ts",
+      "methodName": "cancel",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/payments/requests/:id/cancel",
+      "summary": "Hủy yêu cầu thanh toán",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Hủy yêu cầu thanh toán thành công"
+        },
+        {
+          "status": 400,
+          "description": "Yêu cầu thanh toán không ở trạng thái cho phép hủy"
+        }
+      ],
+      "errorResponsesDocumented": [
+        400
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "payments",
+      "controller": "PaymentsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\payments\\controllers\\payments.controller.ts",
+      "methodName": "recheckPaymentActivation",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/payments/requests/:id/recheck-activation",
+      "summary": "Admin kích hoạt bù hợp đồng/phụ lục nếu webhook bị sót",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Kích hoạt lại dịch vụ thành công"
+        },
+        {
+          "status": 403,
+          "description": "Chỉ ADMIN mới có quyền thực hiện"
+        }
+      ],
+      "errorResponsesDocumented": [
+        403
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "payments",
+      "controller": "PaymentsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\payments\\controllers\\payments.controller.ts",
+      "methodName": "listTransactions",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/payments/transactions",
+      "summary": "Admin tra cứu danh sách các giao dịch thanh toán",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Danh sách lịch sử giao dịch"
+        },
+        {
+          "status": 403,
+          "description": "Chỉ ADMIN mới có quyền truy cập"
+        }
+      ],
+      "errorResponsesDocumented": [
+        403
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "query",
+          "source": "Query",
+          "typeName": "ListTransactionsDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": true,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200, isPaginated: true })"
+      ]
+    },
+    {
+      "module": "payments",
+      "controller": "SePayWebhookController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\payments\\controllers\\sepay-webhook.controller.ts",
+      "methodName": "handleVietQRWebhook",
+      "httpMethod": "POST",
+      "routePath": "/webhooks/sepay/test",
+      "summary": "Nhận và xử lý IPN Webhook tự động từ cổng thanh toán SePay",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Đã nhận và xử lý giao dịch thành công"
+        },
+        {
+          "status": 401,
+          "description": "Xác thực webhook API Key hoặc chữ ký HMAC không hợp lệ"
+        }
+      ],
+      "errorResponsesDocumented": [
+        401
+      ],
+      "hasBypassTransform": false,
+      "httpStatusCode": 200,
+      "params": [
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "SePayWebhookDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "payments",
+      "controller": "SePayWebhookController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\payments\\controllers\\sepay-webhook.controller.ts",
+      "methodName": "handleVietQRWebhook",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/payments/webhook/vietqr",
+      "summary": "Nhận và xử lý IPN Webhook tự động từ cổng thanh toán SePay",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Đã nhận và xử lý giao dịch thành công"
+        },
+        {
+          "status": 401,
+          "description": "Xác thực webhook API Key hoặc chữ ký HMAC không hợp lệ"
+        }
+      ],
+      "errorResponsesDocumented": [
+        401
+      ],
+      "hasBypassTransform": false,
+      "httpStatusCode": 200,
+      "params": [
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "SePayWebhookDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "public",
+      "controller": "PublicController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\public\\controllers\\public.controller.ts",
+      "methodName": "getPublicPortalOverview",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/public/portal-overview",
+      "summary": "Lấy thông tin tổng quan trang chủ Public Portal (STT 7 - UC-06)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Lấy thông tin tổng quan thành công."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "public",
+      "controller": "PublicController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\public\\controllers\\public.controller.ts",
+      "methodName": "getPublicPortalOverview",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/public/overview",
+      "summary": "Lấy thông tin tổng quan trang chủ Public Portal (STT 7 - UC-06)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Lấy thông tin tổng quan thành công."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "public",
+      "controller": "PublicController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\public\\controllers\\public.controller.ts",
+      "methodName": "searchPublicPackages",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/public/packages",
+      "summary": "Tìm kiếm và lọc danh mục gói chăm sóc sức khỏe công khai (STT 8 - UC-07)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Danh sách các gói chăm sóc sức khỏe thỏa mãn điều kiện lọc."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "query",
+          "source": "Query",
+          "typeName": "SearchPublicPackagesDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "public",
+      "controller": "PublicController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\public\\controllers\\public.controller.ts",
+      "methodName": "getPublicPackageDetail",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/public/packages/:id",
+      "summary": "Xem chi tiết gói chăm sóc sức khỏe công khai theo ID (STT 9 - UC-07)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Chi tiết gói chăm sóc sức khỏe."
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy gói chăm sóc sức khỏe hoặc gói đã ngừng áp dụng."
+        }
+      ],
+      "errorResponsesDocumented": [
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "public",
+      "controller": "PublicController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\public\\controllers\\public.controller.ts",
+      "methodName": "lookupHealthcareFacilities",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/public/facilities",
+      "summary": "Tra cứu danh bạ cơ sở y tế đối tác công khai (STT 10 - UC-08)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Danh sách các cơ sở y tế đối tác thỏa mãn điều kiện lọc."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "query",
+          "source": "Query",
+          "typeName": "LookupHealthcareFacilitiesDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "public",
+      "controller": "PublicController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\public\\controllers\\public.controller.ts",
+      "methodName": "lookupHealthcareFacilities",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/public/directory",
+      "summary": "Tra cứu danh bạ cơ sở y tế đối tác công khai (STT 10 - UC-08)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Danh sách các cơ sở y tế đối tác thỏa mãn điều kiện lọc."
+        }
+      ],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "query",
+          "source": "Query",
+          "typeName": "LookupHealthcareFacilitiesDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "public",
+      "controller": "PublicController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\public\\controllers\\public.controller.ts",
+      "methodName": "getPublicFacilityDetail",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/public/facilities/:id",
+      "summary": "Xem chi tiết cơ sở y tế công khai theo ID (UC-08)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Chi tiết cơ sở y tế."
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy cơ sở y tế hoặc cơ sở y tế chưa được kích hoạt."
+        }
+      ],
+      "errorResponsesDocumented": [
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "public",
+      "controller": "PublicController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\public\\controllers\\public.controller.ts",
+      "methodName": "lookupDoctorDirectory",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/public/doctors",
+      "summary": "Tra cứu danh bạ bác sĩ gia đình công khai (STT 11 - UC-08)",
+      "hasApiStandardResponse": true,
+      "apiStandardResponseOptions": {
+        "type": "PublicDoctorItemDto",
+        "isPaginated": true,
+        "description": "Danh sách các bác sĩ gia đình thỏa mãn điều kiện lọc."
+      },
+      "legacyApiResponses": [],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "responseMessage": "Tra cứu danh bạ bác sĩ gia đình thành công",
+      "params": [
+        {
+          "name": "query",
+          "source": "Query",
+          "typeName": "LookupDoctorDirectoryDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "FULL_COMPLIANT",
+      "issues": [],
+      "recommendations": []
+    },
+    {
+      "module": "public",
+      "controller": "PublicController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\public\\controllers\\public.controller.ts",
+      "methodName": "getPublicDoctorDetail",
+      "httpMethod": "GET",
+      "routePath": "/api/v1/public/doctors/:id",
+      "summary": "Xem chi tiết bác sĩ gia đình công khai theo ID (UC-08)",
+      "hasApiStandardResponse": true,
+      "apiStandardResponseOptions": {
+        "type": "PublicDoctorItemDto",
+        "status": 200,
+        "description": "Chi tiết hồ sơ bác sĩ."
+      },
+      "legacyApiResponses": [
+        {
+          "status": 400,
+          "description": "ID bác sĩ không đúng định dạng UUID v4."
+        },
+        {
+          "status": 404,
+          "description": "Không tìm thấy bác sĩ hoặc bác sĩ chưa được kích hoạt."
+        }
+      ],
+      "errorResponsesDocumented": [
+        400,
+        404
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "id",
+          "source": "Param",
+          "typeName": "string",
+          "isStrongDto": false,
+          "isPrimitive": true,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "FULL_COMPLIANT",
+      "issues": [],
+      "recommendations": []
+    },
+    {
+      "module": "public",
+      "controller": "PublicController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\public\\controllers\\public.controller.ts",
+      "methodName": "submitConsultationRequest",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/public/consultation-requests",
+      "summary": "Gửi yêu cầu tư vấn gói dịch vụ chăm sóc gia đình (STT 12 - UC-09)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Tiếp nhận yêu cầu tư vấn thành công."
+        },
+        {
+          "status": 400,
+          "description": "Dữ liệu đầu vào không hợp lệ hoặc gói dịch vụ chỉ định không tồn tại."
+        }
+      ],
+      "errorResponsesDocumented": [
+        400
+      ],
+      "hasBypassTransform": false,
+      "httpStatusCode": 201,
+      "params": [
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "SubmitConsultationRequestDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "Request",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 201 })"
+      ]
+    },
+    {
+      "module": "public",
+      "controller": "PublicController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\public\\controllers\\public.controller.ts",
+      "methodName": "submitConsultationRequest",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/public/inquiries",
+      "summary": "Gửi yêu cầu tư vấn gói dịch vụ chăm sóc gia đình (STT 12 - UC-09)",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Tiếp nhận yêu cầu tư vấn thành công."
+        },
+        {
+          "status": 400,
+          "description": "Dữ liệu đầu vào không hợp lệ hoặc gói dịch vụ chỉ định không tồn tại."
+        }
+      ],
+      "errorResponsesDocumented": [
+        400
+      ],
+      "hasBypassTransform": false,
+      "httpStatusCode": 201,
+      "params": [
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "SubmitConsultationRequestDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "Request",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 201 })"
+      ]
+    },
+    {
+      "module": "reviews",
+      "controller": "ReviewsController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\reviews\\controllers\\reviews.controller.ts",
+      "methodName": "submitDoctorReview",
+      "httpMethod": "POST",
+      "routePath": "/api/v1/reviews/doctors",
+      "summary": "Người đại diện gia đình gửi đánh giá và nhận xét cho bác sĩ",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 201,
+          "description": "Gửi đánh giá bác sĩ thành công"
+        },
+        {
+          "status": 400,
+          "description": "Dữ liệu đánh giá không hợp lệ hoặc không có quyền đánh giá"
+        }
+      ],
+      "errorResponsesDocumented": [
+        400
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "SubmitDoctorReviewDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "users",
+      "controller": "UsersController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\users\\controllers\\users.controller.ts",
+      "methodName": "getCurrentUserProfile",
+      "httpMethod": "GET",
+      "routePath": "/['api/v1/users', 'api/v1/me']/profile",
+      "summary": "Lấy thông tin hồ sơ của người dùng hiện tại",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Lấy thông tin hồ sơ thành công"
+        },
+        {
+          "status": 401,
+          "description": "Chưa xác thực"
+        }
+      ],
+      "errorResponsesDocumented": [
+        401
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "users",
+      "controller": "UsersController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\users\\controllers\\users.controller.ts",
+      "methodName": "updateUserProfilePartial",
+      "httpMethod": "PATCH",
+      "routePath": "/['api/v1/users', 'api/v1/me']/profile",
+      "summary": "",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [],
+      "errorResponsesDocumented": [],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "UpdateProfileDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    },
+    {
+      "module": "users",
+      "controller": "UsersController",
+      "controllerPath": "C:\\Users\\ADMIN\\Downloads\\famidoc\\famidoc-backend\\src\\modules\\users\\controllers\\users.controller.ts",
+      "methodName": "updateUserProfile",
+      "httpMethod": "PUT",
+      "routePath": "/['api/v1/users', 'api/v1/me']/profile",
+      "summary": "Cập nhật thông tin hồ sơ cá nhân",
+      "hasApiStandardResponse": false,
+      "legacyApiResponses": [
+        {
+          "status": 200,
+          "description": "Cập nhật hồ sơ thành công"
+        },
+        {
+          "status": 400,
+          "description": "Dữ liệu không hợp lệ"
+        },
+        {
+          "status": 401,
+          "description": "Chưa xác thực"
+        }
+      ],
+      "errorResponsesDocumented": [
+        400,
+        401
+      ],
+      "hasBypassTransform": false,
+      "params": [
+        {
+          "name": "req",
+          "source": "Req",
+          "typeName": "AuthenticatedRequest",
+          "isStrongDto": false,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        },
+        {
+          "name": "dto",
+          "source": "Body",
+          "typeName": "UpdateProfileDto",
+          "isStrongDto": true,
+          "isPrimitive": false,
+          "isUntypedOrAny": false
+        }
+      ],
+      "isPaginatedLikely": false,
+      "overallStatus": "RUNTIME_OK_SWAGGER_LEGACY",
+      "issues": [
+        "Missing @ApiStandardResponse decorator in Swagger doc."
+      ],
+      "recommendations": [
+        "Add @ApiStandardResponse({ type: ..., status: 200 })"
+      ]
+    }
+  ]
+}

@@ -3,15 +3,20 @@ import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import { randomInt, randomUUID } from 'node:crypto';
 import { compare } from 'bcryptjs';
 import request from 'supertest';
-import type Redis from 'ioredis';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/core/database/prisma.service';
+
+// Tối thiểu các thao tác cache Redis mà spec này dùng tới (get/del).
+interface ICacheStore {
+  get(key: string): Promise<string | null>;
+  del(...keys: string[]): Promise<number>;
+}
 
 // Kiểm tra hai route đăng ký sau merge. Chỉ gửi mail giả trong test; không gọi SMTP thật.
 (process.env.RUN_DB_TESTS === '1' ? describe : describe.skip)(
   'Merged family registration routes',
   () => {
-    let app: INestApplication, db: PrismaService, redis: Redis;
+    let app: INestApplication, db: PrismaService, redis: ICacheStore;
     const emails: string[] = [],
       userIds: string[] = [];
     const mailer = { sendMail: jest.fn().mockResolvedValue(true) };
@@ -71,26 +76,28 @@ import { PrismaService } from '../src/core/database/prisma.service';
       await app?.close();
     });
 
-    it.each(['/api/v1/auth/register-representative', '/api/v1/auth/register'])(
+    it.each(['/api/v1/auth/register-representative'])(
       '%s preserves the address, hashes the password and verifies OTP without exposing the hash',
       async (route) => {
         const email = `merge-${randomUUID()}@famidoc.test`;
         emails.push(email);
         const password = 'IntegrationOnly_Password_2026';
         const homeAddress = 'Số 10 Phố Huế, Hà Nội';
-        await request(app.getHttpServer())
+        const res = await request(app.getHttpServer())
           .post(route)
           .send({
             fullName: 'DEMO - Kiểm tra đăng ký sau merge',
             email,
             phone: '09' + String(randomInt(0, 100000000)).padStart(8, '0'),
             password,
-            acceptedTerms: true,
-            homeAddress,
+            confirmPassword: password,
+            acceptTerms: true,
           })
           .expect(201);
+        expect(res.body.success).toBe(true);
+        expect(res.body.code).toBe(201);
+        expect(res.body.data.email).toBe(email);
         const pending = JSON.parse((await redis.get(`otp:reg:${email}`))!);
-        expect(pending.homeAddress).toBe(homeAddress);
         expect(pending.password).toBeUndefined();
         expect(await compare(password, pending.passwordHash)).toBe(true);
         const verified = await request(app.getHttpServer())

@@ -66,6 +66,7 @@ function requestEntity(
     attempt: row.attempt,
     paymentCode: row.invoiceCode,
     transferContent: row.transferContent ?? row.invoiceCode,
+    adminTransferDescription: row.adminTransferDescription ?? undefined,
     amountVnd: moneyToNumber(row.totalPayable),
     currency: 'VND',
     expectedAccountNumber: row.expectedAccountNumber,
@@ -77,7 +78,37 @@ function requestEntity(
     acceptedTransactionId: row.acceptedTransactionId,
   };
 }
-function transactionEntity(row: TransactionRow): PaymentTransaction {
+function transactionEntity(
+  row: TransactionRow & {
+    invoice?: {
+      contract?: {
+        contractNumber?: string | null;
+        familyUnit?: {
+          representativeUser?: {
+            fullName?: string | null;
+            phone?: string | null;
+          } | null;
+        } | null;
+      } | null;
+    } | null;
+  },
+): PaymentTransaction {
+  const payload =
+    row.webhookPayload &&
+    typeof row.webhookPayload === 'object' &&
+    !Array.isArray(row.webhookPayload)
+      ? (row.webhookPayload as Record<string, unknown>)
+      : null;
+  const rawContent = payload?.content ?? payload?.transaction_content;
+  const transferContent =
+    typeof rawContent === 'string' && rawContent.trim()
+      ? rawContent.trim()
+      : null;
+  const contractNumber = row.invoice?.contract?.contractNumber ?? null;
+  const rep = row.invoice?.contract?.familyUnit?.representativeUser;
+  const payerName = rep?.fullName ?? null;
+  const phone = rep?.phone ?? null;
+  const payerPhoneLast4 = phone && phone.length >= 4 ? phone.slice(-4) : null;
   return {
     id: row.id,
     environment: row.environment as 'TEST' | 'LIVE',
@@ -95,6 +126,15 @@ function transactionEntity(row: TransactionRow): PaymentTransaction {
     receivedAt: row.createdAt.toISOString(),
     outcome: row.outcome as TransactionOutcome,
     reason: row.reason as TransactionReason | null,
+    sepayWebhookTransactionId: row.sepayWebhookTransactionId,
+    sepayApiTransactionId: row.sepayApiTransactionId,
+    ingestionSource: row.ingestionSource as 'WEBHOOK' | 'SEPAY_API',
+    reconciledAt: row.reconciledAt?.toISOString() ?? null,
+    reconciliationRunId: row.reconciliationRunId,
+    transferContent,
+    contractNumber,
+    payerName,
+    payerPhoneLast4,
   };
 }
 @Injectable()
@@ -186,10 +226,13 @@ class PrismaPaymentsSession implements PaymentsSession {
         ),
         adminSigned: signature('ADMIN'),
         facilitySigned: signature('HEALTHCARE_FACILITY', row.facility.userId),
-        doctorSigned: signature('ASSIGNED_DOCTOR', row.doctor.userId),
+        doctorSigned: row.doctor
+          ? signature('ASSIGNED_DOCTOR', row.doctor.userId)
+          : false,
         facilityId: row.facilityId,
         doctorId: row.doctorId,
-        doctorVerified:
+        doctorVerified: Boolean(
+          row.doctor &&
           row.doctor.onboardingStatus === 'ACTIVE' &&
           row.doctor.user.status === 'ACTIVE' &&
           row.facility.verificationStatus === 'ACTIVE' &&
@@ -197,7 +240,10 @@ class PrismaPaymentsSession implements PaymentsSession {
           row.familyUnit.status === 'ACTIVE' &&
           row.doctor.facilityId === row.facilityId &&
           !!staffing,
-        panelCapacityAvailable: activeCount < row.doctor.maxPanelCapacity,
+        ),
+        panelCapacityAvailable: Boolean(
+          row.doctor && activeCount < row.doctor.maxPanelCapacity,
+        ),
         familyCoverageComplete:
           (await this.tx.patient.count({
             where: { familyId: row.familyId, status: 'ACTIVE' },
@@ -234,6 +280,7 @@ class PrismaPaymentsSession implements PaymentsSession {
       },
     });
     if (!item || item.contractId !== id) return null;
+    if (!row.doctor || !row.doctorId) return null;
     const roles = {
       FAMILY_REP: row.familyUnit.representativeUserId,
       HEALTHCARE_FACILITY: row.facility.userId,
@@ -334,6 +381,11 @@ class PrismaPaymentsSession implements PaymentsSession {
         throw new ConflictException('Activation requirements changed');
       if (old.endDate <= new Date())
         throw new ConflictException('Signed contract term has expired');
+      if (!old.doctorId) {
+        throw new ConflictException(
+          'Contract does not have an assigned doctor',
+        );
+      }
       await this.tx.doctor.update({
         where: { id: old.doctorId },
         data: {
@@ -401,6 +453,7 @@ class PrismaPaymentsSession implements PaymentsSession {
         environment: item.environment,
         invoiceCode: item.paymentCode,
         transferContent: item.transferContent ?? item.paymentCode,
+        adminTransferDescription: item.adminTransferDescription,
         attempt: item.attempt,
         grossAmount: item.amountVnd,
         vatAmount: 0,
@@ -421,6 +474,26 @@ class PrismaPaymentsSession implements PaymentsSession {
       },
     });
   }
+  async recordPaymentOverride(entry: Parameters<PaymentsSession['recordPaymentOverride']>[0]) {
+    await this.tx.auditLog.create({ data: {
+      actorUserId: entry.actorId,
+      clientIp: entry.clientIp,
+      action: 'ADMIN_ADJUST_PAYMENT_REQUEST',
+      resourceName: 'Invoice',
+      resourceId: entry.request.id,
+      details: {
+        contractId: entry.request.contractId,
+        addendumId: entry.request.addendumId ?? null,
+        environment: entry.request.environment,
+        originalAmountVnd: entry.originalAmountVnd,
+        previousRequestId: entry.previous?.id ?? null,
+        previousAmountVnd: entry.previous?.amountVnd ?? entry.originalAmountVnd,
+        amountVnd: entry.request.amountVnd,
+        transferContent: entry.request.transferContent ?? entry.request.paymentCode,
+        reason: entry.reason,
+      },
+    } });
+  }
   async findTransaction(
     gatewayTransactionId: string,
     environment: 'TEST' | 'LIVE' = this.environment,
@@ -432,6 +505,26 @@ class PrismaPaymentsSession implements PaymentsSession {
     });
     return row ? transactionEntity(row) : null;
   }
+  async findTransactionByWebhookId(id: string) {
+    const row = await this.tx.paymentTransaction.findFirst({
+      where: {
+        environment: this.environment,
+        OR: [{ sepayWebhookTransactionId: id }, { gatewayTransactionId: id }],
+      },
+    });
+    return row ? transactionEntity(row) : null;
+  }
+  async findTransactionByApiId(id: string) {
+    const row = await this.tx.paymentTransaction.findUnique({
+      where: {
+        environment_sepayApiTransactionId: {
+          environment: this.environment,
+          sepayApiTransactionId: id,
+        },
+      },
+    });
+    return row ? transactionEntity(row) : null;
+  }
   async findTransactionByReference(bankReferenceKey: string) {
     const row = await this.tx.paymentTransaction.findFirst({
       where: { bankReferenceKey, environment: this.environment },
@@ -439,10 +532,61 @@ class PrismaPaymentsSession implements PaymentsSession {
     });
     return row ? transactionEntity(row) : null;
   }
+  async findTransactionByBankIdentity(
+    accountNumber: string,
+    referenceCode: string,
+  ) {
+    const row = await this.tx.paymentTransaction.findFirst({
+      where: {
+        environment: this.environment,
+        accountNumber,
+        referenceCode,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return row ? transactionEntity(row) : null;
+  }
+  // Giao dịch soát xét gần nhất gắn với một yêu cầu thanh toán: tiền đã vào nhưng chưa đủ
+  // điều kiện đối soát tự động (LATE_PAYMENT, WRONG_ACCOUNT...), dùng để bề mặt hóa cho gia đình.
+  async findLatestTransactionByRequestId(
+    paymentRequestId: string,
+  ): Promise<PaymentTransaction | null> {
+    const row = await this.tx.paymentTransaction.findFirst({
+      where: {
+        environment: this.environment,
+        invoiceId: paymentRequestId,
+        outcome: 'REVIEW_REQUIRED',
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 1,
+    });
+    return row ? transactionEntity(row) : null;
+  }
   async listTransactions() {
     return (
       await this.tx.paymentTransaction.findMany({
         where: { environment: this.environment },
+        include: {
+          invoice: {
+            select: {
+              contract: {
+                select: {
+                  contractNumber: true,
+                  familyUnit: {
+                    select: {
+                      representativeUser: {
+                        select: {
+                          fullName: true,
+                          phone: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       })
     ).map(transactionEntity);
@@ -469,7 +613,33 @@ class PrismaPaymentsSession implements PaymentsSession {
         referenceCode: item.referenceCode,
         outcome: item.outcome,
         reason: item.reason,
+        sepayWebhookTransactionId: item.sepayWebhookTransactionId,
+        sepayApiTransactionId: item.sepayApiTransactionId,
+        ingestionSource: item.ingestionSource ?? 'WEBHOOK',
+        reconciledAt: item.reconciledAt,
+        reconciliationRunId: item.reconciliationRunId,
       },
     });
+  }
+  async linkReconciledTransaction(
+    id: string,
+    data: {
+      sepayWebhookTransactionId?: string;
+      sepayApiTransactionId?: string;
+      reconciliationRunId?: string;
+      reconciledAt?: string;
+    },
+  ) {
+    return transactionEntity(
+      await this.tx.paymentTransaction.update({
+        where: { id },
+        data: {
+          sepayWebhookTransactionId: data.sepayWebhookTransactionId,
+          sepayApiTransactionId: data.sepayApiTransactionId,
+          reconciliationRunId: data.reconciliationRunId,
+          reconciledAt: data.reconciledAt,
+        },
+      }),
+    );
   }
 }

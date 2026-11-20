@@ -4,6 +4,7 @@ import { RegisterFamilyRepDto } from '../../dtos/register-family-rep.dto';
 import { VerifyEmailOtpDto } from '../../dtos/verify-email-otp.dto';
 import { ResendEmailOtpDto } from '../../dtos/resend-email-otp.dto';
 import { LoginDto } from '../../dtos/login.dto';
+import { RefreshTokenDto } from '../../dtos/refresh-token.dto';
 import { ForgotPasswordDto } from '../../dtos/forgot-password.dto';
 import { ResetPasswordDto } from '../../dtos/reset-password.dto';
 import { ChangePasswordDto } from '../../dtos/change-password.dto';
@@ -26,13 +27,23 @@ export interface IAuthService {
   registerFamilyRepresentative(
     dto: RegisterFamilyRepDto,
   ): Promise<RegisterInitiateResponse>;
-  registerFamilyRep(
-    dto: RegisterFamilyRepDto,
-  ): Promise<RegisterInitiateResponse>;
   resendEmailOtp(dto: ResendEmailOtpDto): Promise<ApiResponseMessage>;
   verifyEmailOtp(dto: VerifyEmailOtpDto): Promise<AuthEntity>;
-  login(dto: LoginDto, clientIp?: string): Promise<LoginSuccessResponse>;
-  logout(userId: string, token: string): Promise<ApiResponseMessage>;
+  login(
+    dto: LoginDto,
+    clientIp?: string,
+    userAgent?: string,
+  ): Promise<LoginSuccessResponse>;
+  refresh(
+    dto: RefreshTokenDto,
+    clientIp?: string,
+    userAgent?: string,
+  ): Promise<LoginSuccessResponse>;
+  logout(
+    userId: string,
+    token: string,
+    refreshToken?: string,
+  ): Promise<ApiResponseMessage>;
   forgotPassword(dto: ForgotPasswordDto): Promise<ApiResponseMessage>;
   requestForgotPassword(dto: ForgotPasswordDto): Promise<ApiResponseMessage>;
   resetPassword(dto: ResetPasswordDto): Promise<ApiResponseMessage>;

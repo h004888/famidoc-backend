@@ -21,6 +21,8 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { ApiStandardResponse } from '../../../core/decorators/api-standard-response.decorator';
+import { ResponseMessage } from '../../../core/decorators/response-message.decorator';
 import type { IPublicService } from '../services/interfaces/public.service.interface';
 import { PUBLIC_SERVICE_TOKEN } from '../services/interfaces/public.service.interface';
 import { PortalOverviewResponseDto } from '../dtos/portal-overview-response.dto';
@@ -30,9 +32,22 @@ import { PublicPackageDetailDto } from '../dtos/public-package-detail.dto';
 import { LookupHealthcareFacilitiesDto } from '../dtos/lookup-facilities.dto';
 import { PublicFacilitiesResponseDto } from '../dtos/public-facilities-response.dto';
 import { LookupDoctorDirectoryDto } from '../dtos/lookup-doctors.dto';
-import { PublicDoctorsResponseDto } from '../dtos/public-doctors-response.dto';
+import {
+  PublicDoctorItemDto,
+  PublicDoctorsResponseDto,
+} from '../dtos/public-doctors-response.dto';
+import {
+  PublicDoctorDetailDto,
+  DoctorCareModelDto,
+} from '../dtos/public-doctor-detail.dto';
+import {
+  LookupDoctorReviewsQueryDto,
+  PublicDoctorReviewItemDto,
+  PublicDoctorReviewsResponseDto,
+} from '../dtos/public-doctor-reviews.dto';
 import { SubmitConsultationRequestDto } from '../dtos/submit-consultation-request.dto';
 import { ConsultationRequestResponseDto } from '../dtos/consultation-request-response.dto';
+import { PublicBanksResponseDto } from '../dtos/public-banks-response.dto';
 
 @ApiTags('Public Portal')
 @Controller('api/v1/public')
@@ -159,15 +174,31 @@ export class PublicController {
     description:
       'Cho phép tìm kiếm và tra cứu hồ sơ bác sĩ theo họ tên, chuyên khoa, số năm kinh nghiệm, cơ sở y tế trực thuộc và trạng thái khả dụng tiếp nhận hộ gia đình.',
   })
-  @ApiResponse({
-    status: 200,
+  @ResponseMessage('Tra cứu danh bạ bác sĩ gia đình thành công')
+  @ApiStandardResponse({
+    type: PublicDoctorItemDto,
+    isPaginated: true,
     description: 'Danh sách các bác sĩ gia đình thỏa mãn điều kiện lọc.',
-    type: PublicDoctorsResponseDto,
   })
   async lookupDoctorDirectory(
     @Query() query: LookupDoctorDirectoryDto,
   ): Promise<PublicDoctorsResponseDto> {
     return this.publicService.lookupDoctorDirectory(query);
+  }
+
+  @Get('care-model')
+  @ApiOperation({
+    summary: 'Lấy phạm vi chăm sóc chung của nền tảng (hình thức khám và cam kết)',
+    description:
+      'Trả về các hình thức khám và cam kết dịch vụ đang áp dụng thống nhất cho mọi bác sĩ gia đình.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lấy nội dung chăm sóc nền tảng thành công.',
+    type: DoctorCareModelDto,
+  })
+  async getPublicCareModel(): Promise<DoctorCareModelDto> {
+    return this.publicService.getPublicCareModel();
   }
 
   @Get('doctors/:id')
@@ -181,9 +212,14 @@ export class PublicController {
     description: 'UUID của bác sĩ',
     example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
-  @ApiResponse({
+  @ApiStandardResponse({
+    type: PublicDoctorDetailDto,
     status: 200,
     description: 'Chi tiết hồ sơ bác sĩ.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'ID bác sĩ không đúng định dạng UUID v4.',
   })
   @ApiResponse({
     status: 404,
@@ -191,8 +227,56 @@ export class PublicController {
   })
   async getPublicDoctorDetail(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
-  ): Promise<any> {
+  ): Promise<PublicDoctorDetailDto> {
     return this.publicService.getPublicDoctorDetail(id);
+  }
+
+  @Get('doctors/:id/reviews')
+  @ApiOperation({
+    summary: 'Lấy danh sách đánh giá của bác sĩ có phân trang (UC-08)',
+    description:
+      'Cho phép xem danh sách nhận xét, phản hồi thực tế từ các hộ gia đình đã đăng ký bác sĩ phụ trách với hỗ trợ phân trang và lọc theo số sao.',
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'UUID của bác sĩ',
+    example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+  })
+  @ResponseMessage('Lấy danh sách đánh giá bác sĩ thành công')
+  @ApiStandardResponse({
+    type: PublicDoctorReviewItemDto,
+    isPaginated: true,
+    description: 'Danh sách đánh giá của bác sĩ kèm phân trang.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'ID bác sĩ không đúng định dạng UUID v4.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy bác sĩ hoặc bác sĩ chưa được kích hoạt.',
+  })
+  async getDoctorReviews(
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Query() query: LookupDoctorReviewsQueryDto,
+  ): Promise<PublicDoctorReviewsResponseDto> {
+    return this.publicService.getDoctorReviews(id, query);
+  }
+
+  @Get('banks')
+  @ApiOperation({
+    summary: 'Lấy danh sách ngân hàng hỗ trợ VietQR',
+    description:
+      'Proxy tới VietQR Banks API (https://api.vietqr.io/v2/banks) kèm cache 24 giờ và fallback khi API ngoài gián đoạn.',
+  })
+  @ResponseMessage('Lấy danh sách ngân hàng VietQR thành công')
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách ngân hàng chuẩn VietQR kèm mã BIN, mã viết tắt và logo.',
+    type: PublicBanksResponseDto,
+  })
+  async getSupportedBanks(): Promise<PublicBanksResponseDto> {
+    return this.publicService.getSupportedBanks();
   }
 
   @Post(['consultation-requests', 'inquiries'])

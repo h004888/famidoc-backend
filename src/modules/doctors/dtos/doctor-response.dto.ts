@@ -1,5 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { DoctorCredentialType, DoctorOnboardingStatus } from '@prisma/client';
+import {
+  DoctorClinicalTier,
+  DoctorCredentialType,
+  DoctorOnboardingStatus,
+} from '@prisma/client';
 
 export class DoctorCredentialResponseDto {
   @ApiProperty({ example: '3fa85f64-5717-4562-b3fc-2c963f66afa6' })
@@ -66,6 +70,12 @@ export class DoctorResponseDto {
   @ApiProperty({ example: '3fa85f64-5717-4562-b3fc-2c963f66afa6' })
   facilityId!: string;
 
+  @ApiPropertyOptional({ example: 'bs.nguyenvanan@famidoc.vn' })
+  email?: string;
+
+  @ApiPropertyOptional({ example: '0912345678' })
+  phone?: string;
+
   @ApiProperty({ example: 'BS. CKI Nguyễn Văn An' })
   doctorName!: string;
 
@@ -79,6 +89,12 @@ export class DoctorResponseDto {
   experienceYears!: number;
 
   @ApiPropertyOptional({
+    enum: DoctorClinicalTier,
+    example: DoctorClinicalTier.STANDARD,
+  })
+  clinicalTier?: DoctorClinicalTier;
+
+  @ApiPropertyOptional({
     example: 'Chuyên gia Y học gia đình với 8 năm kinh nghiệm.',
     nullable: true,
   })
@@ -89,6 +105,24 @@ export class DoctorResponseDto {
 
   @ApiProperty({ example: 30, description: 'Hạn mức tối đa số hộ gia đình' })
   maxPanelCapacity!: number;
+
+  @ApiPropertyOptional({
+    example: 2,
+    description: 'Tổng số hộ đang ACTIVE và giữ chỗ PENDING_*',
+  })
+  activeAndHeldCount?: number;
+
+  @ApiPropertyOptional({
+    example: 28,
+    description: 'Số slot hộ gia đình còn trống',
+  })
+  remainingSlots?: number;
+
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Bác sĩ đã kín slot hay chưa',
+  })
+  isQuotaFull?: boolean;
 
   @ApiProperty({ example: 5.0, description: 'Điểm đánh giá trung bình' })
   ratingAvg!: number;
@@ -102,6 +136,12 @@ export class DoctorResponseDto {
   })
   onboardingStatus!: DoctorOnboardingStatus;
 
+  @ApiPropertyOptional({ nullable: true })
+  rejectionReason?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  credentialsSubmittedAt?: Date | null;
+
   @ApiProperty({ example: '2026-01-01T00:00:00.000Z' })
   createdAt!: Date;
 
@@ -113,4 +153,16 @@ export class DoctorResponseDto {
 
   @ApiPropertyOptional({ type: [DoctorCredentialResponseDto] })
   credentials?: DoctorCredentialResponseDto[];
+
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Trạng thái gửi email thông tin đăng nhập khi khởi tạo bác sĩ đơn lẻ',
+  })
+  mailSent?: boolean;
+
+  @ApiPropertyOptional({
+    example: 'Tài khoản đã được tạo nhưng gửi email thông tin đăng nhập thất bại',
+    description: 'Cảnh báo nếu gửi email thông tin đăng nhập thất bại',
+  })
+  mailWarning?: string;
 }

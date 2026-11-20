@@ -40,6 +40,7 @@ export async function activateAddendumRights(
   )
     throw new ConflictException('The contract is not currently serving');
   if (
+    !parent.doctor ||
     parent.doctor.onboardingStatus !== 'ACTIVE' ||
     parent.doctor.facilityId !== parent.facilityId ||
     parent.facility.verificationStatus !== 'ACTIVE' ||
@@ -116,7 +117,7 @@ export async function activateAddendumRights(
       !Number.isSafeInteger(added) ||
       added < 1 ||
       expectedCount !== parent.memberCount ||
-      newCount > Math.min(6, terms.members?.maxCount ?? 6) ||
+      newCount > (terms.members?.maxCount ?? 6) ||
       newCount < familyCount ||
       (details.newMemberCount !== undefined &&
         details.newMemberCount !== newCount)

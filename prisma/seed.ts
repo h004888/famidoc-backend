@@ -149,7 +149,8 @@ export async function seedDemo(prisma: PrismaClient, password: string) {
           },
         });
       }
-      // Nguồn: bảng giá Drive 01_Bang_gia, 03_Them_nguoi. Giá đề xuất, chưa phải bảng giá thương mại.
+      // Fixture cũ để kiểm tra hợp đồng đã ký không bị đổi quyền lợi. Không dùng làm catalog mới.
+      // Catalog 05/11/2026 được xuất bản thành phiên bản mới trong migration 20261105000100.
       const packages = [
         {
           suffix: 1,

@@ -6,13 +6,8 @@ import { PrismaService } from '../../../core/database/prisma.service';
 describe('PublicServiceImpl', () => {
   let service: PublicServiceImpl;
   let prismaService: any;
-  let redisClient: any;
 
   beforeEach(async () => {
-    redisClient = {
-      set: jest.fn().mockResolvedValue('OK'),
-      get: jest.fn(),
-    };
 
     prismaService = {
       healthcareFacility: {
@@ -50,6 +45,12 @@ describe('PublicServiceImpl', () => {
       familyUnit: {
         count: jest.fn().mockResolvedValue(150),
       },
+      platformCareItem: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      doctorReview: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       auditLog: {
         create: jest.fn().mockResolvedValue({ id: 1n }),
       },
@@ -61,10 +62,6 @@ describe('PublicServiceImpl', () => {
         {
           provide: PrismaService,
           useValue: prismaService,
-        },
-        {
-          provide: 'REDIS_CLIENT',
-          useValue: redisClient,
         },
       ],
     }).compile();
@@ -399,7 +396,7 @@ describe('PublicServiceImpl', () => {
       expect(result.items[0].ratingAvg).toBe(4.9);
       expect(typeof result.items[0].ratingAvg).toBe('number');
       expect(result.items[0].isAvailable).toBe(true);
-      expect(result.items[0].facility.facilityName).toBe('Phòng khám Hà Nội');
+      expect(result.items[0].facility!.facilityName).toBe('Phòng khám Hà Nội');
 
       expect(prismaService.doctor.findMany).toHaveBeenCalledWith({
         where: { onboardingStatus: 'ACTIVE' },
@@ -476,12 +473,6 @@ describe('PublicServiceImpl', () => {
       expect(prismaService.servicePackage.findUnique).toHaveBeenCalledWith({
         where: { id: 'pkg-valid-id' },
       });
-      expect(redisClient.set).toHaveBeenCalledWith(
-        expect.stringContaining(`consultation:request:${result.ticketId}`),
-        expect.stringContaining('Nguyễn Văn Minh'),
-        'EX',
-        30 * 86400,
-      );
       expect(prismaService.auditLog.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           action: 'CONSULTATION_REQUEST_SUBMITTED',
@@ -503,7 +494,6 @@ describe('PublicServiceImpl', () => {
       expect(result.ticketId).toMatch(/^CRQ-/);
       expect(result.status).toBe('RECEIVED');
       expect(prismaService.servicePackage.findUnique).not.toHaveBeenCalled();
-      expect(redisClient.set).toHaveBeenCalled();
       expect(prismaService.auditLog.create).toHaveBeenCalled();
     });
 
@@ -570,6 +560,8 @@ describe('PublicServiceImpl', () => {
         activePanelCount: 15,
         maxPanelCapacity: 30,
         onboardingStatus: 'ACTIVE',
+        credentials: [],
+        treatedCases: [],
         facility: {
           id: 'fac-1',
           facilityName: 'Phòng khám Đa khoa Quốc tế',
@@ -582,7 +574,8 @@ describe('PublicServiceImpl', () => {
       expect(result).toBeDefined();
       expect(result.id).toBe('doc-1');
       expect(result.isAvailable).toBe(true);
-      expect(result.ratingAvg).toBe(4.8);
+      expect(result.reviews.ratingAvg).toBe(4.8);
+      expect(result.stats.ratingAvg).toBe(4.8);
     });
 
     it('should throw NotFoundException if doctor does not exist or not ACTIVE', async () => {
@@ -591,6 +584,77 @@ describe('PublicServiceImpl', () => {
       await expect(
         (service as any).getPublicDoctorDetail('doc-none'),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('getSupportedBanks', () => {
+    const originalFetch = global.fetch;
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+      jest.restoreAllMocks();
+    });
+
+    it('fetches from VietQR API, normalizes, caches for 24h, and serves from cache on repeat calls', async () => {
+      const fetchMock = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          code: '00',
+          data: [
+            {
+              id: 2,
+              name: 'Ngân hàng TMCP Á Châu',
+              code: 'ACB',
+              bin: '970416',
+              short_name: 'ACB',
+              logo: 'https://api.vietqr.io/img/ACB.png',
+              isTransfer: 1,
+              lookupSupported: 1,
+            },
+            {
+              id: 99,
+              name: 'Ngân hàng Không Chuyển Khoản',
+              code: 'NOCB',
+              bin: '999999',
+              shortName: 'NoTransfer',
+              logo: '',
+              transferSupported: 0,
+              lookupSupported: 0,
+            },
+          ],
+        }),
+      });
+      global.fetch = fetchMock as any;
+
+      const first = await service.getSupportedBanks();
+      expect(first.source).toBe('vietqr');
+      expect(first.items).toHaveLength(2);
+      expect(first.items[0]).toMatchObject({
+        code: 'ACB',
+        bin: '970416',
+        shortName: 'ACB',
+        transferSupported: 1,
+      });
+      expect(first.items[1].transferSupported).toBe(0);
+
+      const second = await service.getSupportedBanks();
+      expect(second.source).toBe('cache');
+      expect(second.items).toEqual(first.items);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('falls back to built-in major Vietnamese banks when upstream fails and no cache exists', async () => {
+      global.fetch = jest
+        .fn()
+        .mockRejectedValue(new Error('Network timeout')) as any;
+
+      const result = await service.getSupportedBanks();
+
+      expect(result.source).toBe('fallback');
+      expect(result.items.length).toBeGreaterThanOrEqual(10);
+      expect(result.items.some((b) => b.bin === '970436' && b.code === 'VCB')).toBe(
+        true,
+      );
     });
   });
 });

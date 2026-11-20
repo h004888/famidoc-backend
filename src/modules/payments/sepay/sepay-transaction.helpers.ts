@@ -2,24 +2,43 @@ import {
   BadRequestException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { createHash } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 import type { SePayWebhookDto } from '../dtos/sepay-webhook.dto';
 
-export function createPaymentCode(number: number): string {
-  if (!Number.isSafeInteger(number) || number < 1 || number > 999999)
-    throw new ServiceUnavailableException(
-      'Six-digit payment codes exhausted; extend the code format before accepting more payments',
-    );
-  // DB cấp số tăng dần cho từng lần thanh toán, kể cả khi nhiều server cùng tạo QR.
-  // Không dùng mã cố định theo tài khoản vì một gia đình có thể trả nhiều hóa đơn.
-  return 'FD' + String(number).padStart(6, '0');
+export interface FingerprintTransaction {
+  providerTransactionId: string;
+  gateway: string;
+  accountNumber: string;
+  transactionDate: string;
+  transferType: 'in' | 'out';
+  transferAmount: number;
+  code?: string | null;
+  content: string;
+  referenceCode?: string;
+  subAccount?: string | null;
+}
+
+const SAFE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+const SAFE_DIGITS = '23456789';
+
+export function createPaymentCode(): string {
+  // Sinh mã ngẫu nhiên không tuần tự: FD + 8 ký tự an toàn (bỏ 0/O/1/I), bắt buộc có ít nhất 1 chữ số.
+  const chars = Array.from(
+    { length: 8 },
+    () => SAFE_ALPHABET[randomInt(SAFE_ALPHABET.length)],
+  );
+  if (!chars.some((ch) => SAFE_DIGITS.includes(ch))) {
+    chars[randomInt(chars.length)] = SAFE_DIGITS[randomInt(SAFE_DIGITS.length)];
+  }
+  return 'FD' + chars.join('');
 }
 
 export function buildTransferContent(
   name: string | undefined,
   code: string,
 ): string {
-  // App ngân hàng dùng tên không dấu; mã FD luôn giữ nguyên ở cuối, không bị cắt cùng tên dài.
+  // Đặt mã FD ở đầu theo mẫu <MA> TT FAMIDOC <TEN> (<= 50 ký tự, không dấu) để không bị cắt đuôi.
+  const prefix = `${code} TT FAMIDOC`;
   const normalized = (name ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -29,11 +48,12 @@ export function buildTransferContent(
     .replace(/\s+/g, ' ')
     .trim();
   // Nếu tên tự chứa chuỗi giống mã thanh toán, tách FD ra để không bị hiểu thành hai hóa đơn.
+  const maxNameLength = Math.max(0, 50 - prefix.length - 1);
   const displayName = normalized
     .replace(/\bFD(?=[A-Z0-9]+\b)/g, 'F D')
-    .slice(0, 36)
+    .slice(0, maxNameLength)
     .trim();
-  return displayName ? `${displayName} - ${code}` : code;
+  return displayName ? `${prefix} ${displayName}` : prefix;
 }
 
 export function parseSePayDate(value: string): Date {
@@ -51,12 +71,14 @@ export function parseSePayDate(value: string): Date {
   return date;
 }
 
-export function extractPaymentCodes(dto: SePayWebhookDto): string[] {
-  // Nhận mã mới FD + 6 chữ số và mã cũ 24/32 ký tự; phải là mã trọn vẹn trong nội dung.
+export function extractPaymentCodes(
+  dto: Pick<SePayWebhookDto, 'content' | 'code'>,
+): string[] {
+  // Nhận mã mới FD + 8 ký tự (có ít nhất 1 chữ số), mã FD + 6 chữ số và mã cũ 24/32 hex.
   const codes = new Set<string>();
   const content = dto.content.toUpperCase();
   const pattern =
-    /(?:^|[^A-Z0-9])(FD(?:[A-F0-9]{32}|[A-F0-9]{24}|[0-9]{6}))(?=$|[^A-Z0-9])/g;
+    /(?:^|[^A-Z0-9])(FD(?:[A-F0-9]{32}|[A-F0-9]{24}|(?=[A-Z0-9]*[0-9])[A-Z0-9]{8}|[0-9]{6}))(?=$|[^A-Z0-9])/g;
   for (const match of content.matchAll(pattern)) codes.add(match[1]);
   const provided = dto.code?.trim().toUpperCase();
   // Khi SePay chỉ trích 24 ký tự từ mã cũ 32 ký tự, dùng mã đầy đủ trong content.
@@ -65,7 +87,9 @@ export function extractPaymentCodes(dto: SePayWebhookDto): string[] {
     provided && content.includes(provided) && !codes.has(provided);
   if (
     provided &&
-    /^FD(?:[A-F0-9]{24}|[A-F0-9]{32}|[0-9]{6})$/.test(provided) &&
+    /^FD(?:[A-F0-9]{24}|[A-F0-9]{32}|(?=[A-Z0-9]*[0-9])[A-Z0-9]{8}|[0-9]{6})$/.test(
+      provided,
+    ) &&
     !embedded
   )
     codes.add(provided);
@@ -74,9 +98,26 @@ export function extractPaymentCodes(dto: SePayWebhookDto): string[] {
 }
 
 export function transactionFingerprint(dto: SePayWebhookDto): string {
+  return bankTransactionFingerprint({
+    providerTransactionId: String(dto.id),
+    gateway: dto.gateway,
+    accountNumber: dto.accountNumber,
+    transactionDate: dto.transactionDate,
+    transferType: dto.transferType,
+    transferAmount: dto.transferAmount,
+    code: dto.code,
+    content: dto.content,
+    referenceCode: dto.referenceCode,
+    subAccount: dto.subAccount,
+  });
+}
+
+export function bankTransactionFingerprint(
+  dto: FingerprintTransaction,
+): string {
   // Không đưa timestamp chữ ký vào fingerprint: mỗi lần retry có thể được ký lại.
   const fields = [
-    dto.id,
+    dto.providerTransactionId,
     dto.gateway.trim().toUpperCase(),
     dto.accountNumber,
     dto.transactionDate,
