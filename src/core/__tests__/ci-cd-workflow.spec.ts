@@ -26,4 +26,13 @@ describe('GitHub Actions CI/CD Workflow Contract', () => {
     expect(content).toContain('ghcr.io');
     expect(content).toContain('DOKPLOY_DEPLOY_WEBHOOK_URL');
   });
+
+  it('không được chứa bug skip webhook, phải tách tag dev/main, có health smoke check và dọn GHCR', () => {
+    const content = fs.readFileSync(workflowPath, 'utf8');
+    expect(content).not.toContain("env.DOKPLOY_WEBHOOK != ''");
+    expect(content).toContain("type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}");
+    expect(content).toContain("type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}");
+    expect(content).toContain('/health');
+    expect(content).toContain('actions/delete-package-versions');
+  });
 });

@@ -5,10 +5,12 @@ import {
   Optional,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import type { Browser, LaunchOptions } from 'puppeteer-core';
+import type { Browser, ConnectOptions, LaunchOptions } from 'puppeteer-core';
 
 export type PuppeteerLaunchFn = (options?: LaunchOptions) => Promise<Browser>;
 export const PUPPETEER_LAUNCHER_TOKEN = Symbol('PUPPETEER_LAUNCHER_TOKEN');
+export type PuppeteerConnectFn = (options: ConnectOptions) => Promise<Browser>;
+export const PUPPETEER_CONNECTOR_TOKEN = Symbol('PUPPETEER_CONNECTOR_TOKEN');
 
 /**
  * ContractPdfRendererService — hàng đợi tuần tự hóa (mutex concurrency = 1)
@@ -26,19 +28,40 @@ export class ContractPdfRendererService {
   private _browser: Browser | null = null;
   private readonly launchOptions: string[];
   private readonly launcher?: PuppeteerLaunchFn;
+  private readonly connector?: PuppeteerConnectFn;
 
   constructor(
     @Optional()
     @Inject(PUPPETEER_LAUNCHER_TOKEN)
     launcher?: PuppeteerLaunchFn,
+    @Optional()
+    @Inject(PUPPETEER_CONNECTOR_TOKEN)
+    connector?: PuppeteerConnectFn,
   ) {
     this.launcher = launcher;
+    this.connector = connector;
     this.launchOptions = [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
     ];
+  }
+
+  private resolveWsEndpoint(): string | undefined {
+    const raw = process.env.PUPPETEER_BROWSER_WS_ENDPOINT?.trim();
+    return raw ? raw : undefined;
+  }
+
+  private async connectRemoteBrowser(
+    browserWSEndpoint: string,
+  ): Promise<Browser> {
+    if (this.connector) {
+      return this.connector({ browserWSEndpoint });
+    }
+
+    const puppeteer = await import('puppeteer-core');
+    return puppeteer.default.connect({ browserWSEndpoint });
   }
 
   private async launchBrowser(): Promise<Browser> {
@@ -60,13 +83,16 @@ export class ContractPdfRendererService {
   }
 
   /**
-   * Kết nối Chromium (hoặc tái sử dụng nếu đang mở).
+   * Kết nối Chromium (ưu tiên Remote Browserless WebSocket nếu có, fallback Chromium cục bộ).
    */
   async connect(): Promise<Browser> {
     if (this._browser) {
       return this._browser;
     }
-    this._browser = await this.launchBrowser();
+    const wsEndpoint = this.resolveWsEndpoint();
+    this._browser = wsEndpoint
+      ? await this.connectRemoteBrowser(wsEndpoint)
+      : await this.launchBrowser();
     return this._browser;
   }
 
