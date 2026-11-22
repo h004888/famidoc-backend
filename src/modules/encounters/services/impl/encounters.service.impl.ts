@@ -295,13 +295,7 @@ export class EncountersServiceImpl implements IEncountersService {
         }
       }
 
-      const updateData: Prisma.EncounterUncheckedUpdateInput = {
-        proposedBy: 'DOCTOR',
-        proposedDate: null,
-        proposedTime: null,
-        conflictAlert: false,
-        conflictDetails: null,
-      };
+      const updateData: Prisma.EncounterUncheckedUpdateInput = {};
       if (dto.encounterType) updateData.encounterType = dto.encounterType;
       if (dto.scheduledDate) updateData.scheduledDate = parseDateOnly(dto.scheduledDate);
       if (dto.scheduledTime) updateData.scheduledTime = parseTimeToDate(dto.scheduledTime);
@@ -1005,9 +999,9 @@ export class EncountersServiceImpl implements IEncountersService {
         await session.createNotification({
           userId: contract.doctor.user.id,
           title: 'Khung lịch khám định kỳ mới cần duyệt',
-          message: `Hệ thống đã tự động tính toán ${createdList.length} mốc khám định kỳ cho hợp đồng ${contract.contractNumber}. Vui lòng kiểm tra và duyệt lịch.`,
+          content: `Hệ thống đã tự động tính toán ${createdList.length} mốc khám định kỳ cho hợp đồng ${contract.contractNumber}. Vui lòng kiểm tra và duyệt lịch.`,
           type: 'APPOINTMENT_REMINDER',
-          channel: 'IN_APP',
+          referenceId: contractId,
         });
       }
 
@@ -1060,9 +1054,9 @@ export class EncountersServiceImpl implements IEncountersService {
         await session.createNotification({
           userId: contract.familyUnit.representativeUser.id,
           title: 'Bác sĩ đã chốt kế hoạch khám định kỳ',
-          message: `Bác sĩ ${contract.doctor?.user?.fullName || ''} đã chốt khung lịch khám định kỳ ${updated.length} lần trong năm cho gia đình. Vui lòng xem chi tiết lịch hẹn.`,
+          content: `Bác sĩ ${contract.doctor?.user?.fullName || ''} đã chốt khung lịch khám định kỳ ${updated.length} lần trong năm cho gia đình. Vui lòng xem chi tiết lịch hẹn.`,
           type: 'APPOINTMENT_REMINDER',
-          channel: 'IN_APP',
+          referenceId: contractId,
         });
       }
 

@@ -118,7 +118,7 @@ export function extractExcelCellText(value: ExcelJS.CellValue): string {
     }
     if ('richText' in value && Array.isArray(value.richText)) {
       return value.richText
-        .map((part) => part?.text ?? '')
+        .map((part: any) => part?.text ?? '')
         .join('')
         .trim();
     }
@@ -165,7 +165,7 @@ export async function buildDoctorImportTemplateWorkbookBuffer(): Promise<Buffer>
 
   const headerRow = sheet.getRow(1);
   headerRow.height = 26;
-  headerRow.eachCell((cell) => {
+  headerRow.eachCell((cell: ExcelJS.Cell) => {
     cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
     cell.fill = {
       type: 'pattern',
@@ -212,7 +212,7 @@ export async function buildDoctorImportTemplateWorkbookBuffer(): Promise<Buffer>
   ];
 
   const guideHeader = guideSheet.getRow(1);
-  guideHeader.eachCell((cell) => {
+  guideHeader.eachCell((cell: ExcelJS.Cell) => {
     cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
     cell.fill = {
       type: 'pattern',
@@ -309,7 +309,7 @@ export async function parseDoctorsExcelBuffer(
 
   const headerRow = worksheet.getRow(1);
   const columnMap = new Map<number, MappedColumnField>();
-  headerRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+  headerRow.eachCell({ includeEmpty: false }, (cell: ExcelJS.Cell, colNumber: number) => {
     const text = extractExcelCellText(cell.value);
     const normalized = normalizeHeaderKey(text);
     const mappedField = HEADER_ALIASES[normalized];
