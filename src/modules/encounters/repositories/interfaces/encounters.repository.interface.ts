@@ -38,6 +38,7 @@ export const ENCOUNTER_INCLUDE = {
       facility: true,
     },
   },
+  telehealthSession: true,
 } as const;
 
 export type EncounterDetail = Prisma.EncounterGetPayload<{

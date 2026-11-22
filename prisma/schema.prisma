@@ -872,9 +872,30 @@ model TelehealthSession {
   isFallbackChat      Boolean   @default(false) @map("is_fallback_chat")
 
   // Relations
-  encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  encounter Encounter           @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  messages  TelehealthMessage[]
 
   @@map("telehealth_sessions")
+}
+
+model TelehealthMessage {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId           String   @map("session_id") @db.Uuid
+  senderUserId        String   @map("sender_user_id") @db.Uuid
+  senderRole          String   @map("sender_role") @db.VarChar(20)
+  senderName          String   @map("sender_name") @db.VarChar(150)
+  content             String?  @db.Text
+  attachmentKey       String?  @map("attachment_key") @db.VarChar(500)
+  attachmentName      String?  @map("attachment_name") @db.VarChar(255)
+  attachmentMimeType  String?  @map("attachment_mime_type") @db.VarChar(100)
+  attachmentSizeBytes Int?     @map("attachment_size_bytes")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  session TelehealthSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt], map: "idx_telehealth_messages_session_created")
+  @@map("telehealth_messages")
 }
 
 // =========================================================================
