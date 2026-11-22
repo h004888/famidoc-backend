@@ -236,6 +236,15 @@ describe('DoctorMatchingService & Admin Queue (Tasks 4.1 & 4.2)', () => {
       }),
     );
     expect(mailerMock.sendMail).toHaveBeenCalledTimes(1);
+    expect(mailerMock.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'family@famidoc.vn',
+        subject:
+          'FamiDoc - Đã tiếp nhận yêu cầu tìm bác sĩ vào hàng chờ điều phối',
+        text: expect.stringContaining('Gói Đồng Hành'),
+        html: expect.stringContaining('Gói Đồng Hành'),
+      }),
+    );
   });
 
   it('skips Jev call and creates queue request when zero candidates pass SQL pre-filter', async () => {
@@ -334,5 +343,14 @@ describe('DoctorMatchingService & Admin Queue (Tasks 4.1 & 4.2)', () => {
       }),
     );
     expect(mailerMock.sendMail).toHaveBeenCalledTimes(1);
+    expect(mailerMock.sendMail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: 'family@famidoc.vn',
+        subject:
+          'FamiDoc - Đã phân công bác sĩ gia đình, mời xác nhận hợp đồng',
+        text: expect.stringContaining('BS. B (Nhiều slot trống)'),
+        html: expect.stringContaining('BS. B (Nhiều slot trống)'),
+      }),
+    );
   });
 });

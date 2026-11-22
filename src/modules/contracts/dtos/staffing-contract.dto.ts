@@ -328,7 +328,7 @@ export class StaffingFacilitySummaryDto {
 }
 
 export class StaffingPlatformLegalDto {
-  @ApiProperty({ example: 'Nền tảng Y tế Gia đình FamiDoc' })
+  @ApiProperty({ example: 'FamiDoc - Nền tảng quản lý bác sĩ gia đình và chăm sóc sức khỏe' })
   companyName!: string;
 
   @ApiProperty({ example: '0109998888' })
