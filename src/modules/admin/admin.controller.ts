@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../../core/auth/roles.guard';
 import type { AuthenticatedRequest } from '../../core/auth/authenticated-request';
-import { AdminAccountStatusDto, AdminAuditQuery, AdminComplaintsQuery, AdminOverviewQuery, AdminUsersQuery, ComplaintsQuery } from './admin.dto';
+import { AdminAccountStatusDto, AdminAuditQuery, AdminComplaintsQuery, AdminOverviewQuery, AdminUpdateDoctorPanelCapacityDto, AdminUsersQuery, ComplaintsQuery } from './admin.dto';
 import { AdminService } from './admin.service';
 
 @ApiTags('Admin')
@@ -56,6 +56,16 @@ export class AdminController {
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ) {
     return this.service.resendFacilityInvite(req.user, id, req.ip);
+  }
+
+  @Patch('doctors/:id/panel-capacity')
+  @ApiOperation({ summary: 'Quản trị viên chỉnh sửa trực tiếp hạn mức hộ gia đình của bác sĩ' })
+  updateDoctorPanelCapacity(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: AdminUpdateDoctorPanelCapacityDto,
+  ) {
+    return this.service.updateDoctorPanelCapacity(req.user, id, dto, req.ip);
   }
 }
 

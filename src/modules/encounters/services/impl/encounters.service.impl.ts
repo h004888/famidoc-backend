@@ -18,10 +18,16 @@ import type { CreateAdHocEncounterDto } from '../../dtos/create-adhoc-encounter.
 import type { FinalizeEncounterDto } from '../../dtos/finalize-encounter.dto';
 import type { ConfirmEncounterDto } from '../../dtos/confirm-encounter.dto';
 import type { RequestRescheduleDto } from '../../dtos/request-reschedule.dto';
-import type { DoctorRescheduleReviewDto } from '../../dtos/doctor-reschedule-review.dto';
-import type { CreateDoctorShiftDto } from '../../dtos/create-doctor-shift.dto';
+import type { DecideRescheduleRequestDto } from '../../dtos/decide-reschedule-request.dto';
 import type { ListEncountersQueryDto } from '../../dtos/list-encounters-query.dto';
-import { EncounterCategory, EncounterStatus, EncounterType, Prisma } from '@prisma/client';
+import {
+  EncounterCategory,
+  EncounterStatus,
+  EncounterType,
+  EncounterVisitScope,
+  Prisma,
+  RescheduleDecision,
+} from '@prisma/client';
 
 export const APPOINTMENT_DURATION_MINUTES = 45;
 export const RESCHEDULE_MIN_NOTICE_HOURS = 4;
@@ -131,10 +137,26 @@ export class EncountersServiceImpl implements IEncountersService {
         throw new BadRequestException('Contract has no assigned doctor');
       }
 
-      const isMember = await session.isPatientInContract(dto.patientId, contract.id);
-      if (!isMember) {
-        throw new BadRequestException('Patient is not a covered member of this contract');
+      const requestedPatientIds = Array.from(
+        new Set(dto.patientIds?.length ? dto.patientIds : dto.patientId ? [dto.patientId] : []),
+      );
+      for (const pid of requestedPatientIds) {
+        const isMember = await session.isPatientInContract(pid, contract.id);
+        if (!isMember) {
+          throw new BadRequestException('Patient is not a covered member of this contract');
+        }
       }
+
+      const visitScope =
+        dto.visitScope ??
+        (requestedPatientIds.length === 1 ? EncounterVisitScope.INDIVIDUAL : EncounterVisitScope.FAMILY);
+
+      const participantIds =
+        requestedPatientIds.length > 0
+          ? requestedPatientIds
+          : visitScope === EncounterVisitScope.FAMILY
+            ? contract.members.map((m) => m.patientId)
+            : [];
 
       // Check quota
       if (dto.encounterType === EncounterType.HOME_VISIT && contract.remainingHomeVisits <= 0) {
@@ -149,15 +171,21 @@ export class EncountersServiceImpl implements IEncountersService {
 
       const encounter = await session.createEncounter({
         contractId: contract.id,
-        patientId: dto.patientId,
         doctorId,
         encounterType: dto.encounterType,
         category: EncounterCategory.PERIODIC_ROUTINE,
+        visitScope,
         scheduledDate,
         scheduledTime,
-        proposedBy: 'DOCTOR',
         encounterStatus: EncounterStatus.REQUESTED,
         cancelReason: dto.notes ?? null,
+        ...(participantIds.length > 0
+          ? {
+              participants: {
+                create: participantIds.map((patientId) => ({ patientId })),
+              },
+            }
+          : {}),
       });
 
       await session.createAuditLog(actor.id, 'CREATE_PERIODIC_ENCOUNTER', encounter.id);
@@ -189,10 +217,25 @@ export class EncountersServiceImpl implements IEncountersService {
         throw new ForbiddenException('You are not the representative of this contract');
       }
 
-      const isMember = await session.isPatientInContract(dto.patientId, contract.id);
-      if (!isMember) {
-        throw new BadRequestException('Patient is not a covered member of this contract');
+      const requestedPatientIds = Array.from(
+        new Set(dto.patientIds?.length ? dto.patientIds : dto.patientId ? [dto.patientId] : []),
+      );
+      for (const pid of requestedPatientIds) {
+        const isMember = await session.isPatientInContract(pid, contract.id);
+        if (!isMember) {
+          throw new BadRequestException('Patient is not a covered member of this contract');
+        }
       }
+      const visitScope =
+        dto.visitScope ??
+        (requestedPatientIds.length === 1 ? EncounterVisitScope.INDIVIDUAL : EncounterVisitScope.FAMILY);
+      if (requestedPatientIds.length === 0 && visitScope !== EncounterVisitScope.FAMILY) {
+        throw new BadRequestException('At least one patientId is required for ad-hoc encounter');
+      }
+      const participantIds =
+        requestedPatientIds.length > 0
+          ? requestedPatientIds
+          : contract.members.map((m) => m.patientId);
       if (!contract.doctorId) {
         throw new BadRequestException('No attending doctor assigned to this contract');
       }
@@ -202,15 +245,21 @@ export class EncountersServiceImpl implements IEncountersService {
 
       const encounter = await session.createEncounter({
         contractId: contract.id,
-        patientId: dto.patientId,
         doctorId: contract.doctorId,
         encounterType: dto.encounterType,
         category: EncounterCategory.AD_HOC_ON_DEMAND,
+        visitScope,
         scheduledDate,
         scheduledTime,
-        proposedBy: 'FAMILY_REP',
         encounterStatus: EncounterStatus.REQUESTED,
         cancelReason: dto.reason,
+        ...(participantIds.length > 0
+          ? {
+              participants: {
+                create: participantIds.map((patientId) => ({ patientId })),
+              },
+            }
+          : {}),
       });
 
       await session.createAuditLog(actor.id, 'CREATE_ADHOC_ENCOUNTER', encounter.id);
@@ -294,83 +343,30 @@ export class EncountersServiceImpl implements IEncountersService {
         throw new BadRequestException('To propose an alternative time, please use the reschedule endpoint');
       }
 
-      if (encounter.proposedBy === 'FAMILY_REP') {
-        throw new BadRequestException('Schedule is awaiting doctor review before family confirmation');
-      }
-
-      const targetDate =
-        encounter.proposedBy === 'DOCTOR' && encounter.proposedDate
-          ? encounter.proposedDate
-          : encounter.scheduledDate;
-      const targetTime =
-        encounter.proposedBy === 'DOCTOR' && encounter.proposedTime
-          ? encounter.proposedTime
-          : encounter.scheduledTime;
-
-      // Check for conflicts between examination schedule and healthcare facility duty shifts
-      const conflictResult = await this.checkDutyShiftConflicts(
+      // Check for conflicts with other confirmed/in-progress encounters on the platform
+      const conflictResult = await this.checkEncounterSlotConflict(
         session,
         encounter.doctorId,
-        targetDate,
-        targetTime,
+        encounter.scheduledDate,
+        encounter.scheduledTime,
         encounter.id,
       );
 
       if (conflictResult.hasConflict) {
-        // Record conflict alert, notify doctor and facility
-        await session.updateEncounter(encounterId, {
-          conflictAlert: true,
-          conflictDetails: conflictResult.reason,
-        });
-
-        // Alert doctor
-        if (encounter.doctor.user?.id) {
-          await session.createNotification({
-            userId: encounter.doctor.user.id,
-            title: 'CẢNH BÁO: Xung đột ca trực tại CSYT',
-            content: `Lịch khám ngày ${targetDate.toISOString().slice(0, 10)} bị xung đột: ${conflictResult.reason}`,
-            type: 'ENCOUNTER_DUTY_SHIFT_CONFLICT',
-            referenceId: encounter.id,
-          });
-        }
-
-        // Alert healthcare facility
-        if (encounter.contract.facility.user?.id) {
-          await session.createNotification({
-            userId: encounter.contract.facility.user.id,
-            title: 'CẢNH BÁO ĐIỀU PHỐI: Trùng ca trực bác sĩ',
-            content: `Bác sĩ ${encounter.doctor.doctorName} có lịch khám ngoại viện trùng ca trực CSYT: ${conflictResult.reason}`,
-            type: 'ENCOUNTER_DUTY_SHIFT_CONFLICT',
-            referenceId: encounter.id,
-          });
-        }
-
-        return {
-          status: 'CONFLICT_ALERT',
-          message: 'Scheduling conflict detected with Healthcare Facility duty shifts. Alert sent to Doctor and Facility.',
-          conflictDetails: conflictResult.reason,
-          encounter: await session.findEncounter(encounterId),
-        };
+        throw new ConflictException(conflictResult.reason);
       }
 
       // No conflict -> Save finalized schedule and synchronize across all three parties
       await session.decrementContractQuota(encounter.contractId, encounter.encounterType);
 
       const confirmedEncounter = await session.updateEncounter(encounterId, {
-        scheduledDate: targetDate,
-        scheduledTime: targetTime,
-        proposedDate: null,
-        proposedTime: null,
-        proposedBy: null,
         encounterStatus: EncounterStatus.CONFIRMED,
-        conflictAlert: false,
-        conflictDetails: null,
       });
 
       await session.createAuditLog(actor.id, 'CONFIRM_ENCOUNTER', encounterId);
 
       // Synchronize notifications across Doctor, Family, and Facility
-      const targetDateStr = targetDate.toISOString().slice(0, 10);
+      const targetDateStr = encounter.scheduledDate.toISOString().slice(0, 10);
       const notifications: Prisma.NotificationUncheckedCreateInput[] = [
         {
           userId: encounter.contract.familyUnit.representativeUserId,
@@ -382,21 +378,25 @@ export class EncountersServiceImpl implements IEncountersService {
       ];
 
       if (encounter.doctor.user?.id) {
+        const patientLabel =
+          encounter.participants.length > 0
+            ? encounter.participants.map((p) => p.patient.fullName).join(', ')
+            : `hộ gia đình (${encounter.contract.familyUnit.representativeUser.fullName})`;
         notifications.push({
           userId: encounter.doctor.user.id,
           title: 'Gia đình đã xác nhận lịch khám',
-          content: `Lịch khám cho bệnh nhân ${encounter.patient.fullName} ngày ${targetDateStr} đã được xác nhận.`,
+          content: `Lịch khám ngày ${targetDateStr} cho ${patientLabel} đã được xác nhận thành công.`,
           type: 'ENCOUNTER_CONFIRMED',
           referenceId: encounter.id,
         });
       }
 
-      if (encounter.contract.facility.user?.id) {
+      if (encounter.contract.facility?.userId) {
         notifications.push({
-          userId: encounter.contract.facility.user.id,
-          title: 'Đồng bộ lịch khám ngoại viện bác sĩ',
-          content: `Bác sĩ ${encounter.doctor.doctorName} có lịch khám xác nhận ngày ${targetDateStr}.`,
-          type: 'ENCOUNTER_SYNC_FACILITY',
+          userId: encounter.contract.facility.userId,
+          title: 'Đồng bộ lịch khám gia đình',
+          content: `Bác sĩ ${encounter.doctor.doctorName} có lịch khám đã xác nhận vào ngày ${targetDateStr}.`,
+          type: 'ENCOUNTER_CONFIRMED',
           referenceId: encounter.id,
         });
       }
@@ -408,16 +408,26 @@ export class EncountersServiceImpl implements IEncountersService {
   }
 
   async requestReschedule(actor: AuthenticatedUser, encounterId: string, dto: RequestRescheduleDto) {
-    if (!['FAMILY_REP', 'ADMIN'].includes(actor.role)) {
-      throw new ForbiddenException('Only the family representative or admin can request reschedule');
+    if (!['FAMILY_REP', 'DOCTOR', 'ADMIN'].includes(actor.role)) {
+      throw new ForbiddenException('Only family representative, assigned doctor, or admin can request reschedule');
     }
 
     return this.repository.transaction(async (session) => {
       const encounter = await session.findEncounter(encounterId);
       if (!encounter) throw new NotFoundException('Encounter not found');
 
+      if (encounter.encounterStatus !== EncounterStatus.CONFIRMED) {
+        throw new BadRequestException('Only CONFIRMED encounters can be rescheduled');
+      }
+
       if (actor.role === 'FAMILY_REP' && encounter.contract.familyUnit.representativeUserId !== actor.id) {
         throw new ForbiddenException('You are not authorized to reschedule this encounter');
+      }
+      if (actor.role === 'DOCTOR') {
+        const doc = await session.findDoctorByUserId(actor.id);
+        if (!doc || doc.id !== encounter.doctorId) {
+          throw new ForbiddenException('You are not the assigned doctor for this encounter');
+        }
       }
 
       if (encounter.rescheduleCount >= MAX_RESCHEDULE_COUNT) {
@@ -426,19 +436,22 @@ export class EncountersServiceImpl implements IEncountersService {
         );
       }
 
+      const existingPending = await session.findPendingRescheduleRequestByEncounter(encounterId);
+      if (existingPending) {
+        throw new ConflictException('This encounter already has a pending reschedule request');
+      }
+
       // Check remaining time before examination (4-hour SLA rule)
       const scheduledDateTime = combineDateAndTime(encounter.scheduledDate, encounter.scheduledTime);
       const now = new Date();
       const diffHours = (scheduledDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
       if (diffHours < RESCHEDULE_MIN_NOTICE_HOURS) {
-        // Automatically reject the rescheduling request due to insufficient advance notice
         await session.createAuditLog(actor.id, 'RESCHEDULE_REJECTED_UNDER_4H', encounterId);
-
         await session.createNotification({
-          userId: encounter.contract.familyUnit.representativeUserId,
+          userId: actor.id,
           title: 'Yêu cầu đổi lịch bị từ chối do không đủ thời gian báo trước',
-          content: `Yêu cầu đổi lịch phải được gửi trước ít nhất 4 giờ. Vui lòng liên hệ Hotline hỗ trợ để được can thiệp khẩn cấp.`,
+          content: 'Yêu cầu đổi lịch phải được gửi trước ít nhất 4 giờ. Vui lòng liên hệ Hotline hỗ trợ để được can thiệp khẩn cấp.',
           type: 'RESCHEDULE_REJECTED_UNDER_4H',
           referenceId: encounter.id,
         });
@@ -448,206 +461,274 @@ export class EncountersServiceImpl implements IEncountersService {
         );
       }
 
-      // Receive rescheduling request and notify doctor
       const proposedDate = parseDateOnly(dto.proposedDate);
       const proposedTime = parseTimeToDate(dto.proposedTime);
 
-      const updated = await session.updateEncounter(encounterId, {
+      const conflict = await this.checkEncounterSlotConflict(
+        session,
+        encounter.doctorId,
         proposedDate,
         proposedTime,
-        proposedBy: 'FAMILY_REP',
-        rescheduleReason: dto.rescheduleReason,
-        rescheduleCount: { increment: 1 },
+        encounter.id,
+      );
+      if (conflict.hasConflict) {
+        throw new ConflictException(conflict.reason);
+      }
+
+      const requestedByRole = actor.role === 'DOCTOR' ? 'DOCTOR' : 'FAMILY_REP';
+      const request = await session.createRescheduleRequest({
+        encounterId: encounter.id,
+        requestedByRole,
+        requestedByUserId: actor.id,
+        proposedDate,
+        proposedTime,
+        reason: dto.rescheduleReason,
+        familyDecision: requestedByRole === 'FAMILY_REP' ? RescheduleDecision.APPROVED : RescheduleDecision.PENDING,
+        familyDecidedBy: requestedByRole === 'FAMILY_REP' ? actor.id : null,
+        familyDecidedAt: requestedByRole === 'FAMILY_REP' ? now : null,
+        doctorDecision: requestedByRole === 'DOCTOR' ? RescheduleDecision.APPROVED : RescheduleDecision.PENDING,
+        doctorDecidedBy: requestedByRole === 'DOCTOR' ? actor.id : null,
+        doctorDecidedAt: requestedByRole === 'DOCTOR' ? now : null,
+        facilityDecision: RescheduleDecision.PENDING,
+        status: 'PENDING',
       });
 
-      await session.createAuditLog(actor.id, 'REQUEST_RESCHEDULE', encounterId);
+      await session.createAuditLog(actor.id, 'REQUEST_RESCHEDULE', request.id);
 
-      if (encounter.doctor.user?.id) {
-        await session.createNotification({
-          userId: encounter.doctor.user.id,
-          title: 'Gia đình yêu cầu đổi lịch khám',
-          content: `Gia đình đề xuất đổi sang ngày ${dto.proposedDate} lúc ${dto.proposedTime}. Lý do: ${dto.rescheduleReason}`,
+      const notifications: Prisma.NotificationUncheckedCreateInput[] = [];
+      if (requestedByRole === 'FAMILY_REP') {
+        if (encounter.doctor.user?.id) {
+          notifications.push({
+            userId: encounter.doctor.user.id,
+            title: 'Gia đình yêu cầu đổi lịch khám',
+            content: `Gia đình đề xuất đổi sang ngày ${dto.proposedDate} lúc ${dto.proposedTime}. Lý do: ${dto.rescheduleReason}`,
+            type: 'ENCOUNTER_RESCHEDULE_REQUESTED',
+            referenceId: encounter.id,
+          });
+        }
+      } else {
+        notifications.push({
+          userId: encounter.contract.familyUnit.representativeUserId,
+          title: 'Bác sĩ yêu cầu đổi lịch khám',
+          content: `Bác sĩ đề xuất đổi sang ngày ${dto.proposedDate} lúc ${dto.proposedTime}. Lý do: ${dto.rescheduleReason}`,
           type: 'ENCOUNTER_RESCHEDULE_REQUESTED',
           referenceId: encounter.id,
         });
       }
 
-      return updated;
+      if (encounter.contract.facility.user?.id) {
+        notifications.push({
+          userId: encounter.contract.facility.user.id,
+          title: 'Yêu cầu đổi lịch khám cần CSYT phê duyệt',
+          content: `${requestedByRole === 'FAMILY_REP' ? 'Gia đình' : 'Bác sĩ'} đề xuất đổi lịch khám sang ngày ${dto.proposedDate} lúc ${dto.proposedTime}.`,
+          type: 'ENCOUNTER_RESCHEDULE_REQUESTED',
+          referenceId: encounter.id,
+        });
+      }
+
+      await session.createNotifications(notifications);
+      return request;
     });
   }
 
-  async reviewReschedule(actor: AuthenticatedUser, encounterId: string, dto: DoctorRescheduleReviewDto) {
-    if (!['DOCTOR', 'ADMIN'].includes(actor.role)) {
-      throw new ForbiddenException('Only the assigned doctor or admin can review reschedule requests');
+  async decideRescheduleRequest(
+    actor: AuthenticatedUser,
+    encounterId: string,
+    requestId: string,
+    dto: DecideRescheduleRequestDto,
+  ) {
+    if (!['FAMILY_REP', 'DOCTOR', 'HEALTHCARE_FACILITY', 'ADMIN'].includes(actor.role)) {
+      throw new ForbiddenException('You are not authorized to review reschedule requests');
     }
 
     return this.repository.transaction(async (session) => {
       const encounter = await session.findEncounter(encounterId);
       if (!encounter) throw new NotFoundException('Encounter not found');
 
+      const request = await session.findRescheduleRequestById(requestId);
+      if (!request || request.encounterId !== encounterId) {
+        throw new NotFoundException('Reschedule request not found');
+      }
+      if (request.status !== 'PENDING') {
+        throw new ConflictException('Reschedule request is already resolved');
+      }
+
+      if (actor.role === 'FAMILY_REP' && encounter.contract.familyUnit.representativeUserId !== actor.id) {
+        throw new ForbiddenException('You are not authorized to decide this reschedule request');
+      }
       if (actor.role === 'DOCTOR') {
         const doc = await session.findDoctorByUserId(actor.id);
         if (!doc || doc.id !== encounter.doctorId) {
-          throw new ForbiddenException('You are not the assigned doctor for this examination');
+          throw new ForbiddenException('You are not the assigned doctor for this encounter');
+        }
+      }
+      if (actor.role === 'HEALTHCARE_FACILITY') {
+        const fac = await session.findFacilityByUserId(actor.id);
+        if (!fac || fac.id !== encounter.contract.facilityId) {
+          throw new ForbiddenException('You are not the facility for this encounter');
         }
       }
 
-      if (dto.accept) {
-        // Doctor accepts the proposed time from the family
-        if (!encounter.proposedDate || !encounter.proposedTime) {
-          throw new BadRequestException('No proposed schedule available to accept');
+      const now = new Date();
+      const decisionEnum = dto.decision === 'APPROVE' ? RescheduleDecision.APPROVED : RescheduleDecision.REJECTED;
+      const updateData: Prisma.EncounterRescheduleRequestUncheckedUpdateInput = {};
+
+      if (actor.role === 'FAMILY_REP') {
+        if (request.familyDecision !== RescheduleDecision.PENDING) {
+          throw new ConflictException('Family decision has already been recorded');
         }
+        updateData.familyDecision = decisionEnum;
+        updateData.familyDecidedBy = actor.id;
+        updateData.familyDecidedAt = now;
+        updateData.familyNote = dto.note ?? null;
+      } else if (actor.role === 'DOCTOR') {
+        if (request.doctorDecision !== RescheduleDecision.PENDING) {
+          throw new ConflictException('Doctor decision has already been recorded');
+        }
+        updateData.doctorDecision = decisionEnum;
+        updateData.doctorDecidedBy = actor.id;
+        updateData.doctorDecidedAt = now;
+        updateData.doctorNote = dto.note ?? null;
+      } else if (actor.role === 'HEALTHCARE_FACILITY') {
+        if (request.facilityDecision !== RescheduleDecision.PENDING) {
+          throw new ConflictException('Facility decision has already been recorded');
+        }
+        updateData.facilityDecision = decisionEnum;
+        updateData.facilityDecidedBy = actor.id;
+        updateData.facilityDecidedAt = now;
+        updateData.facilityNote = dto.note ?? null;
+      } else {
+        // ADMIN fallback
+        updateData.facilityDecision = decisionEnum;
+        updateData.facilityDecidedBy = actor.id;
+        updateData.facilityDecidedAt = now;
+        updateData.facilityNote = dto.note ?? null;
+      }
 
-        const newDate = encounter.proposedDate;
-        const newTime = encounter.proposedTime;
+      if (dto.decision === 'REJECT') {
+        updateData.status = 'REJECTED';
+        updateData.resolvedAt = now;
+        const rejected = await session.updateRescheduleRequest(request.id, updateData);
+        await session.createAuditLog(actor.id, 'REJECT_RESCHEDULE_REQUEST', request.id);
 
-        // Check for conflicts between examination schedule and healthcare facility duty shifts
-        const conflictResult = await this.checkDutyShiftConflicts(
-          session,
-          encounter.doctorId,
-          newDate,
-          newTime,
-          encounter.id,
-        );
-
-        if (conflictResult.hasConflict) {
-          await session.updateEncounter(encounterId, {
-            conflictAlert: true,
-            conflictDetails: conflictResult.reason,
+        const notifications: Prisma.NotificationUncheckedCreateInput[] = [
+          {
+            userId: encounter.contract.familyUnit.representativeUserId,
+            title: 'Yêu cầu đổi lịch đã bị từ chối',
+            content: `Yêu cầu đổi lịch không được chấp thuận. Lịch khám cũ vẫn được giữ nguyên.`,
+            type: 'ENCOUNTER_RESCHEDULE_REJECTED',
+            referenceId: encounter.id,
+          },
+        ];
+        if (encounter.doctor.user?.id) {
+          notifications.push({
+            userId: encounter.doctor.user.id,
+            title: 'Yêu cầu đổi lịch đã bị từ chối',
+            content: `Yêu cầu đổi lịch không được chấp thuận. Lịch khám cũ vẫn được giữ nguyên.`,
+            type: 'ENCOUNTER_RESCHEDULE_REJECTED',
+            referenceId: encounter.id,
           });
-
-          // Alert doctor and facility
-          if (encounter.doctor.user?.id) {
-            await session.createNotification({
-              userId: encounter.doctor.user.id,
-              title: 'CẢNH BÁO: Xung đột ca trực khi chấp thuận đổi lịch',
-              content: `Khung giờ mới ${newDate.toISOString().slice(0, 10)} bị xung đột ca trực: ${conflictResult.reason}`,
-              type: 'ENCOUNTER_DUTY_SHIFT_CONFLICT',
-              referenceId: encounter.id,
-            });
-          }
-
-          return {
-            status: 'CONFLICT_ALERT',
-            message: 'Scheduling conflict detected with duty shifts. Alert sent to Doctor and Healthcare Facility.',
-            conflictDetails: conflictResult.reason,
-            encounter: await session.findEncounter(encounterId),
-          };
         }
-
-        // Save finalized schedule and synchronize across all three parties
-        const confirmed = await session.updateEncounter(encounterId, {
-          scheduledDate: newDate,
-          scheduledTime: newTime,
-          proposedDate: null,
-          proposedTime: null,
-          proposedBy: null,
-          encounterStatus: EncounterStatus.CONFIRMED,
-          conflictAlert: false,
-          conflictDetails: null,
-        });
-
-        await session.createAuditLog(actor.id, 'DOCTOR_ACCEPT_RESCHEDULE', encounterId);
-
-        // Notify family of acceptance
-        await session.createNotification({
-          userId: encounter.contract.familyUnit.representativeUserId,
-          title: 'Bác sĩ đã chấp thuận lịch hẹn mới',
-          content: `Lịch khám đã được dời sang ngày ${newDate.toISOString().slice(0, 10)} thành công.`,
-          type: 'RESCHEDULE_ACCEPTED',
-          referenceId: encounter.id,
-        });
-
-        return confirmed;
+        await session.createNotifications(notifications);
+        return rejected;
       }
 
-      // Doctor does NOT accept the proposed time
-      if (dto.counterDate && dto.counterTime) {
-        // Doctor proposes an alternative time slot to the family
-        const counterDate = parseDateOnly(dto.counterDate);
-        const counterTime = parseTimeToDate(dto.counterTime);
+      const nextFamily = (updateData.familyDecision as RescheduleDecision | undefined) ?? request.familyDecision;
+      const nextDoctor = (updateData.doctorDecision as RescheduleDecision | undefined) ?? request.doctorDecision;
+      const nextFacility = (updateData.facilityDecision as RescheduleDecision | undefined) ?? request.facilityDecision;
 
-        const updated = await session.updateEncounter(encounterId, {
-          proposedDate: counterDate,
-          proposedTime: counterTime,
-          proposedBy: 'DOCTOR',
-          rescheduleReason: dto.notes ?? 'Bác sĩ đề xuất khung giờ thay thế',
-        });
+      const allThreeApproved =
+        nextFamily === RescheduleDecision.APPROVED &&
+        nextDoctor === RescheduleDecision.APPROVED &&
+        nextFacility === RescheduleDecision.APPROVED;
 
-        await session.createAuditLog(actor.id, 'DOCTOR_PROPOSE_ALTERNATIVE_SLOT', encounterId);
-
-        await session.createNotification({
-          userId: encounter.contract.familyUnit.representativeUserId,
-          title: 'Bác sĩ đề xuất khung giờ khám thay thế',
-          content: `Bác sĩ bận vào giờ bạn chọn và đề xuất chuyển sang ngày ${dto.counterDate} lúc ${dto.counterTime}. Vui lòng xem xét lại lịch.`,
-          type: 'ENCOUNTER_DOCTOR_COUNTER_OFFER',
-          referenceId: encounter.id,
-        });
-
-        return updated;
+      if (!allThreeApproved) {
+        const partial = await session.updateRescheduleRequest(request.id, updateData);
+        await session.createAuditLog(actor.id, 'PARTIAL_APPROVE_RESCHEDULE', request.id);
+        return partial;
       }
 
-      // Doctor rejects and no suitable alternative slot is available
-      await session.updateEncounter(encounterId, {
-        proposedDate: null,
-        proposedTime: null,
-        proposedBy: null,
+      // All 3 parties agreed -> Verify slot is still free on platform
+      const conflict = await this.checkEncounterSlotConflict(
+        session,
+        encounter.doctorId,
+        request.proposedDate,
+        request.proposedTime,
+        encounter.id,
+      );
+      if (conflict.hasConflict) {
+        throw new ConflictException(conflict.reason);
+      }
+
+      await session.updateEncounter(encounter.id, {
+        scheduledDate: request.proposedDate,
+        scheduledTime: request.proposedTime,
+        rescheduleCount: { increment: 1 },
+        reminder24hSentAt: null,
+        reminder2hSentAt: null,
       });
 
-      await session.createAuditLog(actor.id, 'DOCTOR_REJECT_RESCHEDULE_NO_SLOT', encounterId);
+      updateData.status = 'APPROVED';
+      updateData.resolvedAt = now;
+      const approved = await session.updateRescheduleRequest(request.id, updateData);
+      await session.createAuditLog(actor.id, 'APPROVE_RESCHEDULE_REQUEST', request.id);
 
-      await session.createNotification({
-        userId: encounter.contract.familyUnit.representativeUserId,
-        title: 'Không có khung giờ thay thế phù hợp',
-        content: `Bác sĩ không thể bố trí khung giờ này và hiện không có slot trống phù hợp. Vui lòng chọn thời gian khác hoặc liên hệ hotline.`,
-        type: 'RESCHEDULE_NO_SLOT_AVAILABLE',
-        referenceId: encounter.id,
-      });
-
-      return {
-        status: 'NO_SUITABLE_SLOT',
-        message: 'Notified the family that no suitable slot is available and asked them to choose another time',
-      };
+      const newDateStr = request.proposedDate.toISOString().slice(0, 10);
+      const newTimeStr = request.proposedTime.toISOString().slice(11, 16);
+      const notifications: Prisma.NotificationUncheckedCreateInput[] = [
+        {
+          userId: encounter.contract.familyUnit.representativeUserId,
+          title: 'Đổi lịch khám thành công (3 bên đồng thuận)',
+          content: `Lịch khám đã được cập nhật sang ${newTimeStr} ngày ${newDateStr}.`,
+          type: 'ENCOUNTER_RESCHEDULE_APPROVED',
+          referenceId: encounter.id,
+        },
+      ];
+      if (encounter.doctor.user?.id) {
+        notifications.push({
+          userId: encounter.doctor.user.id,
+          title: 'Đổi lịch khám thành công (3 bên đồng thuận)',
+          content: `Lịch khám đã được cập nhật sang ${newTimeStr} ngày ${newDateStr}.`,
+          type: 'ENCOUNTER_RESCHEDULE_APPROVED',
+          referenceId: encounter.id,
+        });
+      }
+      if (encounter.contract.facility.user?.id) {
+        notifications.push({
+          userId: encounter.contract.facility.user.id,
+          title: 'Đổi lịch khám thành công (3 bên đồng thuận)',
+          content: `Lịch khám của ${encounter.doctor.doctorName} đã chuyển sang ${newTimeStr} ngày ${newDateStr}.`,
+          type: 'ENCOUNTER_RESCHEDULE_APPROVED',
+          referenceId: encounter.id,
+        });
+      }
+      await session.createNotifications(notifications);
+      return approved;
     });
   }
 
-  async createDoctorShift(actor: AuthenticatedUser, dto: CreateDoctorShiftDto) {
-    if (!['HEALTHCARE_FACILITY', 'ADMIN'].includes(actor.role)) {
-      throw new ForbiddenException('Only the healthcare facility or admin can create duty shifts');
-    }
-
+  async getPendingRescheduleRequests(actor: AuthenticatedUser) {
     return this.repository.transaction(async (session) => {
-      let facilityId: string;
+      if (actor.role === 'FAMILY_REP') {
+        return session.findPendingRescheduleRequests({
+          encounter: { contract: { familyUnit: { representativeUserId: actor.id } } },
+        });
+      }
+      if (actor.role === 'DOCTOR') {
+        const doc = await session.findDoctorByUserId(actor.id);
+        if (!doc) throw new NotFoundException('Doctor profile not found');
+        return session.findPendingRescheduleRequests({
+          encounter: { doctorId: doc.id },
+        });
+      }
       if (actor.role === 'HEALTHCARE_FACILITY') {
         const fac = await session.findFacilityByUserId(actor.id);
-        if (!fac) throw new NotFoundException('Healthcare facility profile not found');
-        facilityId = fac.id;
-      } else {
-        const doc = await session.findDoctorById(dto.doctorId);
-        if (!doc) throw new NotFoundException('Doctor not found');
-        facilityId = doc.facilityId;
+        if (!fac) throw new NotFoundException('Facility profile not found');
+        return session.findPendingRescheduleRequests({
+          encounter: { contract: { facilityId: fac.id } },
+        });
       }
-
-      const shiftDate = parseDateOnly(dto.shiftDate);
-      const startTime = parseTimeToDate(dto.startTime);
-      const endTime = parseTimeToDate(dto.endTime);
-
-      if (getTimeWindowMinutes(startTime) >= getTimeWindowMinutes(endTime)) {
-        throw new BadRequestException('Shift start time must be before end time');
-      }
-
-      const shift = await session.createDoctorShift({
-        doctorId: dto.doctorId,
-        facilityId,
-        shiftDate,
-        startTime,
-        endTime,
-        shiftType: dto.shiftType,
-        notes: dto.notes ?? null,
-      });
-
-      await session.createAuditLog(actor.id, 'CREATE_DOCTOR_SHIFT', shift.id);
-      return shift;
+      return session.findPendingRescheduleRequests({});
     });
   }
 
@@ -666,6 +747,7 @@ export class EncountersServiceImpl implements IEncountersService {
 
       const where: Prisma.EncounterWhereInput = {
         ...(doctorId ? { doctorId } : {}),
+        ...(query.contractId ? { contractId: query.contractId } : {}),
         ...(query.status ? { encounterStatus: query.status } : {}),
         ...(query.category ? { category: query.category } : {}),
         ...(query.encounterType ? { encounterType: query.encounterType } : {}),
@@ -705,6 +787,7 @@ export class EncountersServiceImpl implements IEncountersService {
         ...(actor.role === 'FAMILY_REP'
           ? { contract: { familyUnit: { representativeUserId: actor.id } } }
           : {}),
+        ...(query.contractId ? { contractId: query.contractId } : {}),
         ...(query.status ? { encounterStatus: query.status } : {}),
         ...(query.category ? { category: query.category } : {}),
         ...(query.encounterType ? { encounterType: query.encounterType } : {}),
@@ -752,25 +835,27 @@ export class EncountersServiceImpl implements IEncountersService {
       const fDate = fromDate ? parseDateOnly(fromDate) : undefined;
       const tDate = toDate ? parseDateOnly(toDate) : undefined;
 
-      const shifts = await session.findShiftsByFacility(facilityId, fDate, tDate);
-
-      // Also get all encounters for doctors belonging to this facility
-      const encounters = await session.findEncounters({
-        doctor: { facilityId },
-        ...(fDate || tDate
-          ? {
-              scheduledDate: {
-                ...(fDate ? { gte: fDate } : {}),
-                ...(tDate ? { lte: tDate } : {}),
-              },
-            }
-          : {}),
-      }, 0, 100);
+      const [encounters, pendingRescheduleRequests] = await Promise.all([
+        session.findEncounters({
+          doctor: { facilityId },
+          ...(fDate || tDate
+            ? {
+                scheduledDate: {
+                  ...(fDate ? { gte: fDate } : {}),
+                  ...(tDate ? { lte: tDate } : {}),
+                },
+              }
+            : {}),
+        }, 0, 100),
+        session.findPendingRescheduleRequests({
+          encounter: { contract: { facilityId } },
+        }),
+      ]);
 
       return {
         facilityId,
-        dutyShifts: shifts,
-        externalEncounters: encounters[0],
+        encounters: encounters[0],
+        pendingRescheduleRequests,
       };
     });
   }
@@ -801,8 +886,8 @@ export class EncountersServiceImpl implements IEncountersService {
     });
   }
 
-  // Conflict Checking Engine between Examination Schedules and Facility Duty Shifts
-  private async checkDutyShiftConflicts(
+  // Conflict Checking Engine between Platform Encounters of the same doctor
+  private async checkEncounterSlotConflict(
     session: EncountersSession,
     doctorId: string,
     scheduledDate: Date,
@@ -812,25 +897,11 @@ export class EncountersServiceImpl implements IEncountersService {
     const encStartMin = getTimeWindowMinutes(scheduledTime);
     const encEndMin = encStartMin + APPOINTMENT_DURATION_MINUTES;
 
-    // 1. Check conflicts with Healthcare Facility internal duty shifts
-    const shifts = await session.findDoctorShifts(doctorId, scheduledDate);
-    for (const shift of shifts) {
-      const shiftStartMin = getTimeWindowMinutes(shift.startTime);
-      const shiftEndMin = getTimeWindowMinutes(shift.endTime);
-
-      if (encStartMin < shiftEndMin && encEndMin > shiftStartMin) {
-        return {
-          hasConflict: true,
-          reason: `Trùng với ca trực ${shift.shiftType} tại CSYT (${shift.startTime.toISOString().slice(11, 16)} - ${shift.endTime.toISOString().slice(11, 16)})`,
-        };
-      }
-    }
-
-    // 2. Check conflicts with existing confirmed encounters of this doctor (Double booking)
     const otherEncounters = await session.findDoctorOverlappingEncounters(
       doctorId,
       scheduledDate,
       excludeEncounterId,
+      [EncounterStatus.CONFIRMED, EncounterStatus.IN_PROGRESS],
     );
 
     for (const other of otherEncounters) {
@@ -899,10 +970,10 @@ export class EncountersServiceImpl implements IEncountersService {
         let chosenTime = parseTimeToDate('09:00:00');
 
         // Check slot availability for doctor (try 09:00, then 10:00, then 14:00)
-        const conflict09 = await this.checkDutyShiftConflicts(session, contract.doctorId, targetDate, chosenTime);
+        const conflict09 = await this.checkEncounterSlotConflict(session, contract.doctorId, targetDate, chosenTime);
         if (conflict09.hasConflict) {
           chosenTime = parseTimeToDate('10:00:00');
-          const conflict10 = await this.checkDutyShiftConflicts(session, contract.doctorId, targetDate, chosenTime);
+          const conflict10 = await this.checkEncounterSlotConflict(session, contract.doctorId, targetDate, chosenTime);
           if (conflict10.hasConflict) {
             chosenTime = parseTimeToDate('14:00:00');
           }
@@ -910,23 +981,21 @@ export class EncountersServiceImpl implements IEncountersService {
 
         const enc = await session.createEncounter({
           contractId,
-          patientId,
           doctorId: contract.doctorId,
           encounterType: EncounterType.HOME_VISIT,
           category: EncounterCategory.PERIODIC_ROUTINE,
+          visitScope: EncounterVisitScope.FAMILY,
           scheduledDate: targetDate,
           scheduledTime: chosenTime,
           encounterStatus: EncounterStatus.REQUESTED,
-          proposedDate: targetDate,
-          proposedTime: chosenTime,
-          proposedBy: 'SYSTEM_CADENCE',
-          rescheduleReason: JSON.stringify({
-            isCadenceDraft: true,
-            milestoneIndex: i + 1,
-            totalMilestones: quota,
-            turnTracker: 'DOCTOR',
-            topic: `Khám định kỳ lần ${i + 1}/${quota}`,
-          }),
+          cancelReason: `Khám định kỳ gia đình lần ${i + 1}/${quota} (khung dự thảo)`,
+          ...(contract.members.length > 0
+            ? {
+                participants: {
+                  create: contract.members.map((m) => ({ patientId: m.patientId })),
+                },
+              }
+            : {}),
         });
         createdList.push(enc);
       }
@@ -971,14 +1040,7 @@ export class EncountersServiceImpl implements IEncountersService {
         category: EncounterCategory.PERIODIC_ROUTINE,
       });
 
-      const draftEncounters = encounters.filter((e) => {
-        try {
-          const meta = e.rescheduleReason ? JSON.parse(e.rescheduleReason) : null;
-          return meta?.isCadenceDraft === true || e.proposedBy === 'SYSTEM_CADENCE';
-        } catch {
-          return e.proposedBy === 'SYSTEM_CADENCE';
-        }
-      });
+      const draftEncounters = encounters.filter((e) => e.encounterStatus === EncounterStatus.REQUESTED);
 
       if (draftEncounters.length === 0) {
         return { finalizedCount: 0, encounters: [] };
@@ -986,19 +1048,9 @@ export class EncountersServiceImpl implements IEncountersService {
 
       const updated = [];
       for (const draft of draftEncounters) {
-        let meta: any = {};
-        try {
-          meta = draft.rescheduleReason ? JSON.parse(draft.rescheduleReason) : {};
-        } catch {
-          meta = {};
-        }
-        meta.isCadenceDraft = false;
-        meta.turnTracker = 'FAMILY';
-        meta.finalizedAt = new Date().toISOString();
-
         const up = await session.updateEncounter(draft.id, {
-          proposedBy: 'ASSIGNED_DOCTOR',
-          rescheduleReason: JSON.stringify(meta),
+          encounterStatus: EncounterStatus.REQUESTED,
+          cancelReason: 'Bác sĩ đã chốt khung lịch khám định kỳ',
         });
         updated.push(up);
       }
@@ -1041,7 +1093,7 @@ export class EncountersServiceImpl implements IEncountersService {
       const newTime = dto.scheduledTime ? parseTimeToDate(dto.scheduledTime) : encounter.scheduledTime;
       const newType = dto.encounterType ? (dto.encounterType as EncounterType) : encounter.encounterType;
 
-      const conflict = await this.checkDutyShiftConflicts(
+      const conflict = await this.checkEncounterSlotConflict(
         session,
         encounter.doctorId,
         newDate,
@@ -1049,25 +1101,10 @@ export class EncountersServiceImpl implements IEncountersService {
         encounterId,
       );
 
-      let meta: any = {};
-      try {
-        meta = encounter.rescheduleReason ? JSON.parse(encounter.rescheduleReason) : {};
-      } catch {
-        meta = {};
-      }
-      meta.isCadenceDraft = true;
-      meta.adjustedByDoctor = true;
-      meta.turnTracker = 'DOCTOR';
-
       const updated = await session.updateEncounter(encounterId, {
         scheduledDate: newDate,
         scheduledTime: newTime,
-        proposedDate: newDate,
-        proposedTime: newTime,
         encounterType: newType,
-        conflictAlert: conflict.hasConflict,
-        conflictDetails: conflict.hasConflict ? conflict.reason : null,
-        rescheduleReason: JSON.stringify(meta),
       });
 
       await session.createAuditLog(actor.id, 'ADJUST_CADENCE_MILESTONE', encounterId);

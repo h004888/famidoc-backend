@@ -22,12 +22,12 @@ describe('EncountersController', () => {
       createAdHocEncounter: jest.fn().mockResolvedValue({ id: 'enc-2' }),
       finalizeEncounter: jest.fn().mockResolvedValue({ id: 'enc-1' }),
       confirmEncounter: jest.fn().mockResolvedValue({ id: 'enc-1' }),
-      requestReschedule: jest.fn().mockResolvedValue({ id: 'enc-1' }),
-      reviewReschedule: jest.fn().mockResolvedValue({ id: 'enc-1' }),
-      createDoctorShift: jest.fn().mockResolvedValue({ id: 'shift-1' }),
+      requestReschedule: jest.fn().mockResolvedValue({ id: 'req-1' }),
+      decideRescheduleRequest: jest.fn().mockResolvedValue({ id: 'req-1' }),
+      getPendingRescheduleRequests: jest.fn().mockResolvedValue([]),
       getDoctorTimetable: jest.fn().mockResolvedValue({ data: [], pagination: {} }),
       getFamilyTimetable: jest.fn().mockResolvedValue({ data: [], pagination: {} }),
-      getFacilityScheduleBoard: jest.fn().mockResolvedValue({ dutyShifts: [], externalEncounters: [] }),
+      getFacilityScheduleBoard: jest.fn().mockResolvedValue({ encounters: [], pendingRescheduleRequests: [] }),
       getEncounterDetail: jest.fn().mockResolvedValue({ id: 'enc-1' }),
       generateContractPeriodicCadence: jest.fn().mockResolvedValue({ generatedCount: 4, encounters: [] }),
       finalizeCadenceSchedule: jest.fn().mockResolvedValue({ finalizedCount: 4, encounters: [] }),
@@ -89,24 +89,14 @@ describe('EncountersController', () => {
     expect(service.requestReschedule).toHaveBeenCalledWith(req.user, 'enc-1', dto);
   });
 
-  it('delegates reviewReschedule', async () => {
-    const req = mockRequest('DOCTOR');
-    const dto = { accept: true };
-    await controller.reviewReschedule(req, 'enc-1', dto);
-    expect(service.reviewReschedule).toHaveBeenCalledWith(req.user, 'enc-1', dto);
-  });
-
-  it('delegates createDoctorShift', async () => {
+  it('delegates decideRescheduleRequest and getPendingRescheduleRequests', async () => {
     const req = mockRequest('HEALTHCARE_FACILITY');
-    const dto = {
-      doctorId: 'doc-1',
-      shiftDate: '2026-11-20',
-      startTime: '08:00:00',
-      endTime: '12:00:00',
-      shiftType: 'CLINIC',
-    };
-    await controller.createDoctorShift(req, dto);
-    expect(service.createDoctorShift).toHaveBeenCalledWith(req.user, dto);
+    const dto = { decision: 'APPROVE' as const, note: 'OK' };
+    await controller.decideRescheduleRequest(req, 'enc-1', 'req-1', dto);
+    expect(service.decideRescheduleRequest).toHaveBeenCalledWith(req.user, 'enc-1', 'req-1', dto);
+
+    await controller.getPendingRescheduleRequests(req);
+    expect(service.getPendingRescheduleRequests).toHaveBeenCalledWith(req.user);
   });
 
   it('delegates timetable and detail queries', async () => {

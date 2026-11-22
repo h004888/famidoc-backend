@@ -1,9 +1,15 @@
-import { IsEnum, IsISO8601, IsOptional } from 'class-validator';
+import { IsEnum, IsISO8601, IsOptional, IsUUID } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { EncounterCategory, EncounterStatus, EncounterType } from '@prisma/client';
 import { PaginationQueryDto } from '../../../core/dtos/pagination-query.dto';
 
 export class ListEncountersQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional({
+    description: 'Lọc theo ID hợp đồng y tế',
+  })
+  @IsUUID('4')
+  @IsOptional()
+  contractId?: string;
   @ApiPropertyOptional({
     description: 'Lọc theo trạng thái lịch khám',
     enum: EncounterStatus,

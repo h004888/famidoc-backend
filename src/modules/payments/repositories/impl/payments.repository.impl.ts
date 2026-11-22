@@ -6,7 +6,9 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { AutoScheduleFirstVisitService } from '../../../encounters/services/impl/auto-schedule-first-visit.service';
 import {
   Prisma,
   type Invoice,
@@ -95,8 +97,8 @@ function transactionEntity(
 ): PaymentTransaction {
   const payload =
     row.webhookPayload &&
-    typeof row.webhookPayload === 'object' &&
-    !Array.isArray(row.webhookPayload)
+      typeof row.webhookPayload === 'object' &&
+      !Array.isArray(row.webhookPayload)
       ? (row.webhookPayload as Record<string, unknown>)
       : null;
   const rawContent = payload?.content ?? payload?.transaction_content;
@@ -142,11 +144,19 @@ export class PaymentsRepositoryImpl implements PaymentsRepository {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: PaymentsConfig,
-  ) {}
+    @Optional()
+    private readonly autoScheduleFirstVisit?: AutoScheduleFirstVisitService,
+  ) { }
   transaction<T>(action: (session: PaymentsSession) => Promise<T>): Promise<T> {
     // Không gọi dịch vụ ngoài: ghi sổ, đối soát và kích hoạt cùng một transaction DB.
     return serializable(this.prisma, (tx) =>
-      action(new PrismaPaymentsSession(tx, this.config.getEnvironment())),
+      action(
+        new PrismaPaymentsSession(
+          tx,
+          this.config.getEnvironment(),
+          this.autoScheduleFirstVisit,
+        ),
+      ),
     );
   }
 }
@@ -154,7 +164,8 @@ class PrismaPaymentsSession implements PaymentsSession {
   constructor(
     private readonly tx: Prisma.TransactionClient,
     private readonly environment: 'TEST' | 'LIVE',
-  ) {}
+    private readonly autoScheduleFirstVisit?: AutoScheduleFirstVisitService,
+  ) { }
   async nextPaymentNumber(): Promise<number> {
     // nextval cấp số chung cho mọi kết nối. Transaction bị hủy có thể bỏ qua số, nhưng không dùng lại.
     const [row] = await this.tx.$queryRaw<{ number: bigint }[]>`
@@ -330,9 +341,9 @@ class PrismaPaymentsSession implements PaymentsSession {
           where: { familyId: row.familyId, status: 'ACTIVE' },
         })) <=
         row.memberCount +
-          (item.addendumType === 'MEMBER_EXTENSION'
-            ? (drafted.additionalMembers ?? drafted.memberIds?.length ?? 0)
-            : 0),
+        (item.addendumType === 'MEMBER_EXTENSION'
+          ? (drafted.additionalMembers ?? drafted.memberIds?.length ?? 0)
+          : 0),
       familySigned: signed('FAMILY_REP'),
       adminSigned: signed('ADMIN'),
       facilitySigned: signed('HEALTHCARE_FACILITY'),
@@ -366,10 +377,10 @@ class PrismaPaymentsSession implements PaymentsSession {
       await activateAddendumRights(this.tx, old.id, contract.addendumId);
       return;
     }
-    if (
+    const justActivated =
       contract.status === BillingContractStatus.ACTIVE &&
-      old.contractStatus !== 'ACTIVE'
-    ) {
+      old.contractStatus !== 'ACTIVE';
+    if (justActivated) {
       // Khóa bác sĩ để hai gia đình kích hoạt đồng thời không vượt panel cap.
       // Serializable sẽ retry nếu snapshot cũ xung đột với lần cập nhật trước.
       await this.tx
@@ -411,90 +422,11 @@ class PrismaPaymentsSession implements PaymentsSession {
       },
     });
 
-    // Tự động sinh khung lịch khám định kỳ (Cadence Generation) khi hợp đồng ACTIVE
-    if (
-      contract.status === BillingContractStatus.ACTIVE &&
-      old.contractStatus !== 'ACTIVE'
-    ) {
-      try {
-        const existingCadenceCount = await this.tx.encounter.count({
-          where: { contractId: contract.id, category: 'PERIODIC_ROUTINE' },
-        });
-
-        if (existingCadenceCount === 0) {
-          const fullContract = await this.tx.medicalContract.findUnique({
-            where: { id: contract.id },
-            include: {
-              servicePackage: true,
-              members: true,
-            },
-          });
-
-          const quota = fullContract?.servicePackage?.periodicVisitsQuota ?? 0;
-          const durationMonths = fullContract?.servicePackage?.durationMonths ?? 12;
-
-          if (quota > 0 && fullContract?.doctorId) {
-            let patientId = fullContract.members[0]?.patientId;
-            if (!patientId) {
-              const firstPatient = await this.tx.patient.findFirst({
-                where: { familyId: fullContract.familyId, status: 'ACTIVE' },
-                select: { id: true },
-              });
-              if (firstPatient) patientId = firstPatient.id;
-            }
-
-            if (patientId) {
-              const start = new Date(fullContract.startDate);
-              const milestoneDates: Date[] = [];
-              if (quota === 1) {
-                const d = new Date(start);
-                d.setUTCMonth(d.getUTCMonth() + 1);
-                milestoneDates.push(d);
-              } else {
-                const d1 = new Date(start);
-                d1.setUTCMonth(d1.getUTCMonth() + 1);
-                milestoneDates.push(d1);
-                const remainingMonths = Math.max(durationMonths - 1, quota - 1);
-                const step = remainingMonths / (quota - 1);
-                for (let i = 1; i < quota; i++) {
-                  const d = new Date(start);
-                  const monthOffset = Math.round(1 + i * step);
-                  d.setUTCMonth(d.getUTCMonth() + monthOffset);
-                  milestoneDates.push(d);
-                }
-              }
-
-              for (let i = 0; i < milestoneDates.length; i++) {
-                await this.tx.encounter.create({
-                  data: {
-                    contractId: contract.id,
-                    patientId,
-                    doctorId: fullContract.doctorId,
-                    encounterType: 'HOME_VISIT',
-                    category: 'PERIODIC_ROUTINE',
-                    scheduledDate: milestoneDates[i],
-                    scheduledTime: new Date(Date.UTC(1970, 0, 1, 9, 0, 0)),
-                    encounterStatus: 'REQUESTED',
-                    proposedDate: milestoneDates[i],
-                    proposedTime: new Date(Date.UTC(1970, 0, 1, 9, 0, 0)),
-                    proposedBy: 'SYSTEM_CADENCE',
-                    rescheduleReason: JSON.stringify({
-                      isCadenceDraft: true,
-                      milestoneIndex: i + 1,
-                      totalMilestones: quota,
-                      turnTracker: 'DOCTOR',
-                      topic: `Khám định kỳ lần ${i + 1}/${quota}`,
-                    }),
-                  },
-                });
-              }
-            }
-          }
-        }
-      } catch (err) {
-        // Tránh rollback giao dịch thanh toán chỉ vì lỗi phụ sinh lịch
-        console.warn(`[Payment] Failed to auto-generate cadence for contract ${contract.id}:`, err);
-      }
+    if (justActivated) {
+      await this.autoScheduleFirstVisit?.scheduleOnContractActivated(
+        this.tx,
+        contract.id,
+      );
     }
   }
   async findRequest(id: string) {
@@ -561,24 +493,26 @@ class PrismaPaymentsSession implements PaymentsSession {
     });
   }
   async recordPaymentOverride(entry: Parameters<PaymentsSession['recordPaymentOverride']>[0]) {
-    await this.tx.auditLog.create({ data: {
-      actorUserId: entry.actorId,
-      clientIp: entry.clientIp,
-      action: 'ADMIN_ADJUST_PAYMENT_REQUEST',
-      resourceName: 'Invoice',
-      resourceId: entry.request.id,
-      details: {
-        contractId: entry.request.contractId,
-        addendumId: entry.request.addendumId ?? null,
-        environment: entry.request.environment,
-        originalAmountVnd: entry.originalAmountVnd,
-        previousRequestId: entry.previous?.id ?? null,
-        previousAmountVnd: entry.previous?.amountVnd ?? entry.originalAmountVnd,
-        amountVnd: entry.request.amountVnd,
-        transferContent: entry.request.transferContent ?? entry.request.paymentCode,
-        reason: entry.reason,
-      },
-    } });
+    await this.tx.auditLog.create({
+      data: {
+        actorUserId: entry.actorId,
+        clientIp: entry.clientIp,
+        action: 'ADMIN_ADJUST_PAYMENT_REQUEST',
+        resourceName: 'Invoice',
+        resourceId: entry.request.id,
+        details: {
+          contractId: entry.request.contractId,
+          addendumId: entry.request.addendumId ?? null,
+          environment: entry.request.environment,
+          originalAmountVnd: entry.originalAmountVnd,
+          previousRequestId: entry.previous?.id ?? null,
+          previousAmountVnd: entry.previous?.amountVnd ?? entry.originalAmountVnd,
+          amountVnd: entry.request.amountVnd,
+          transferContent: entry.request.transferContent ?? entry.request.paymentCode,
+          reason: entry.reason,
+        },
+      }
+    });
   }
   async findTransaction(
     gatewayTransactionId: string,

@@ -1,6 +1,6 @@
-import { IsEnum, IsISO8601, IsNotEmpty, IsOptional, IsString, IsUUID, Matches } from 'class-validator';
+import { IsArray, IsEnum, IsISO8601, IsNotEmpty, IsOptional, IsString, IsUUID, Matches } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { EncounterType } from '@prisma/client';
+import { EncounterType, EncounterVisitScope } from '@prisma/client';
 
 export class CreatePeriodicEncounterDto {
   @ApiProperty({
@@ -11,13 +11,30 @@ export class CreatePeriodicEncounterDto {
   @IsNotEmpty()
   contractId!: string;
 
-  @ApiProperty({
-    description: 'ID thành viên gia đình (bệnh nhân) được khám',
+  @ApiPropertyOptional({
+    description: 'ID thành viên gia đình (bệnh nhân) được khám (tùy chọn nếu khám cả gia đình)',
     example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
   @IsUUID('4')
-  @IsNotEmpty()
-  patientId!: string;
+  @IsOptional()
+  patientId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Danh sách ID thành viên gia đình tham gia buổi khám',
+    type: [String],
+  })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @IsOptional()
+  patientIds?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Phạm vi buổi khám: cả gia đình (FAMILY) hoặc cá nhân (INDIVIDUAL)',
+    enum: EncounterVisitScope,
+  })
+  @IsEnum(EncounterVisitScope)
+  @IsOptional()
+  visitScope?: EncounterVisitScope;
 
   @ApiProperty({
     description: 'Hình thức khám bệnh: Khám tại nhà, Khám từ xa, hoặc Khám tại CSYT',
