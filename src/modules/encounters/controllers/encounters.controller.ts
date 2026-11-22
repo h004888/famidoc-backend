@@ -33,8 +33,7 @@ import { CreateAdHocEncounterDto } from '../dtos/create-adhoc-encounter.dto';
 import { FinalizeEncounterDto } from '../dtos/finalize-encounter.dto';
 import { ConfirmEncounterDto } from '../dtos/confirm-encounter.dto';
 import { RequestRescheduleDto } from '../dtos/request-reschedule.dto';
-import { DoctorRescheduleReviewDto } from '../dtos/doctor-reschedule-review.dto';
-import { CreateDoctorShiftDto } from '../dtos/create-doctor-shift.dto';
+import { DecideRescheduleRequestDto } from '../dtos/decide-reschedule-request.dto';
 import { ListEncountersQueryDto } from '../dtos/list-encounters-query.dto';
 
 @ApiTags('Encounters & Examination Scheduling')
@@ -120,15 +119,15 @@ export class EncountersController {
   }
 
   @Post(':id/reschedule')
-  @Roles('FAMILY_REP', 'ADMIN')
+  @Roles('FAMILY_REP', 'DOCTOR', 'ADMIN')
   @ApiOperation({
-    summary: 'Gia đình đề xuất đổi lịch khám sang khung giờ thay thế (Kiểm tra điều kiện trước >= 4 giờ)',
+    summary: 'Gia đình hoặc Bác sĩ gửi yêu cầu đổi lịch khám (SLA >= 4 giờ, cần 3 bên đồng ý)',
   })
   @ApiParam({ name: 'id', description: 'ID của buổi khám' })
   @ApiBody({ type: RequestRescheduleDto })
-  @ApiResponse({ status: 200, description: 'Tiếp nhận yêu cầu dời lịch và thông báo tới bác sĩ' })
+  @ApiResponse({ status: 201, description: 'Tạo yêu cầu đổi lịch thành công và gửi tới 2 bên còn lại' })
   @ApiResponse({ status: 400, description: 'Từ chối tự động do thời gian báo trước dưới 4 giờ' })
-  @ResponseMessage('Gửi yêu cầu dời lịch khám thành công')
+  @ResponseMessage('Gửi yêu cầu đổi lịch khám thành công')
   requestReschedule(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
@@ -137,36 +136,30 @@ export class EncountersController {
     return this.service.requestReschedule(req.user, id, dto);
   }
 
-  @Patch(':id/reschedule-review')
-  @Roles('DOCTOR', 'ADMIN')
+  @Patch(':id/reschedule-requests/:requestId/decision')
+  @Roles('FAMILY_REP', 'DOCTOR', 'HEALTHCARE_FACILITY', 'ADMIN')
   @ApiOperation({
-    summary: 'Bác sĩ phản hồi yêu cầu dời lịch: Đồng ý hoặc Đề xuất khung giờ thay thế',
+    summary: 'Phê duyệt (APPROVE) hoặc từ chối (REJECT) yêu cầu đổi lịch 3 bên',
   })
   @ApiParam({ name: 'id', description: 'ID của buổi khám' })
-  @ApiBody({ type: DoctorRescheduleReviewDto })
-  @ApiResponse({ status: 200, description: 'Phản hồi dời lịch thành công' })
-  @ResponseMessage('Phản hồi yêu cầu dời lịch thành công')
-  reviewReschedule(
+  @ApiParam({ name: 'requestId', description: 'ID của yêu cầu đổi lịch' })
+  @ApiBody({ type: DecideRescheduleRequestDto })
+  @ResponseMessage('Ghi nhận quyết định đổi lịch thành công')
+  decideRescheduleRequest(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
-    @Body() dto: DoctorRescheduleReviewDto,
+    @Param('requestId') requestId: string,
+    @Body() dto: DecideRescheduleRequestDto,
   ) {
-    return this.service.reviewReschedule(req.user, id, dto);
+    return this.service.decideRescheduleRequest(req.user, id, requestId, dto);
   }
 
-  @Post('shifts')
-  @Roles('HEALTHCARE_FACILITY', 'ADMIN')
-  @ApiOperation({
-    summary: 'Cơ sở Y tế phân bổ ca trực nội viện cho bác sĩ (phục vụ cân bằng tải)',
-  })
-  @ApiBody({ type: CreateDoctorShiftDto })
-  @ApiResponse({ status: 201, description: 'Tạo ca trực cho bác sĩ thành công' })
-  @ResponseMessage('Tạo ca trực cho bác sĩ thành công')
-  createDoctorShift(
-    @Req() req: AuthenticatedRequest,
-    @Body() dto: CreateDoctorShiftDto,
-  ) {
-    return this.service.createDoctorShift(req.user, dto);
+  @Get('reschedule-requests/pending')
+  @Roles('FAMILY_REP', 'DOCTOR', 'HEALTHCARE_FACILITY', 'ADMIN')
+  @ApiOperation({ summary: 'Danh sách yêu cầu đổi lịch đang chờ duyệt theo vai trò' })
+  @ResponseMessage('Lấy danh sách yêu cầu đổi lịch thành công')
+  getPendingRescheduleRequests(@Req() req: AuthenticatedRequest) {
+    return this.service.getPendingRescheduleRequests(req.user);
   }
 
   @Get('timetable/doctor')

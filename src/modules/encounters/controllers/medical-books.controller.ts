@@ -158,8 +158,9 @@ export class MedicalBooksController {
   visitDetail(
     @Req() req: AuthenticatedRequest,
     @Param('id', ParseUUIDPipe) id: string,
+    @Query('patientId') patientId?: string,
   ) {
-    return this.books.visitDetail(req.user, id);
+    return this.books.visitDetail(req.user, id, patientId);
   }
 
   @Post('visits/:id/confirm')

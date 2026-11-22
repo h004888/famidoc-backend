@@ -4,8 +4,7 @@ import type { CreateAdHocEncounterDto } from '../../dtos/create-adhoc-encounter.
 import type { FinalizeEncounterDto } from '../../dtos/finalize-encounter.dto';
 import type { ConfirmEncounterDto } from '../../dtos/confirm-encounter.dto';
 import type { RequestRescheduleDto } from '../../dtos/request-reschedule.dto';
-import type { DoctorRescheduleReviewDto } from '../../dtos/doctor-reschedule-review.dto';
-import type { CreateDoctorShiftDto } from '../../dtos/create-doctor-shift.dto';
+import type { DecideRescheduleRequestDto } from '../../dtos/decide-reschedule-request.dto';
 import type { ListEncountersQueryDto } from '../../dtos/list-encounters-query.dto';
 
 export const ENCOUNTERS_SERVICE_TOKEN = Symbol('IEncountersService');
@@ -16,8 +15,13 @@ export interface IEncountersService {
   finalizeEncounter(actor: AuthenticatedUser, encounterId: string, dto: FinalizeEncounterDto): Promise<unknown>;
   confirmEncounter(actor: AuthenticatedUser, encounterId: string, dto: ConfirmEncounterDto): Promise<unknown>;
   requestReschedule(actor: AuthenticatedUser, encounterId: string, dto: RequestRescheduleDto): Promise<unknown>;
-  reviewReschedule(actor: AuthenticatedUser, encounterId: string, dto: DoctorRescheduleReviewDto): Promise<unknown>;
-  createDoctorShift(actor: AuthenticatedUser, dto: CreateDoctorShiftDto): Promise<unknown>;
+  decideRescheduleRequest(
+    actor: AuthenticatedUser,
+    encounterId: string,
+    requestId: string,
+    dto: DecideRescheduleRequestDto,
+  ): Promise<unknown>;
+  getPendingRescheduleRequests(actor: AuthenticatedUser): Promise<unknown>;
   getDoctorTimetable(actor: AuthenticatedUser, query: ListEncountersQueryDto): Promise<unknown>;
   getFamilyTimetable(actor: AuthenticatedUser, query: ListEncountersQueryDto): Promise<unknown>;
   getFacilityScheduleBoard(actor: AuthenticatedUser, fromDate?: string, toDate?: string): Promise<unknown>;

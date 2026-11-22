@@ -6,7 +6,9 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { AutoScheduleFirstVisitService } from '../../../encounters/services/impl/auto-schedule-first-visit.service';
 import {
   Prisma,
   type Invoice,
@@ -142,11 +144,19 @@ export class PaymentsRepositoryImpl implements PaymentsRepository {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: PaymentsConfig,
+    @Optional()
+    private readonly autoScheduleFirstVisit?: AutoScheduleFirstVisitService,
   ) {}
   transaction<T>(action: (session: PaymentsSession) => Promise<T>): Promise<T> {
     // Không gọi dịch vụ ngoài: ghi sổ, đối soát và kích hoạt cùng một transaction DB.
     return serializable(this.prisma, (tx) =>
-      action(new PrismaPaymentsSession(tx, this.config.getEnvironment())),
+      action(
+        new PrismaPaymentsSession(
+          tx,
+          this.config.getEnvironment(),
+          this.autoScheduleFirstVisit,
+        ),
+      ),
     );
   }
 }
@@ -154,6 +164,7 @@ class PrismaPaymentsSession implements PaymentsSession {
   constructor(
     private readonly tx: Prisma.TransactionClient,
     private readonly environment: 'TEST' | 'LIVE',
+    private readonly autoScheduleFirstVisit?: AutoScheduleFirstVisitService,
   ) {}
   async nextPaymentNumber(): Promise<number> {
     // nextval cấp số chung cho mọi kết nối. Transaction bị hủy có thể bỏ qua số, nhưng không dùng lại.
@@ -366,10 +377,10 @@ class PrismaPaymentsSession implements PaymentsSession {
       await activateAddendumRights(this.tx, old.id, contract.addendumId);
       return;
     }
-    if (
+    const justActivated =
       contract.status === BillingContractStatus.ACTIVE &&
-      old.contractStatus !== 'ACTIVE'
-    ) {
+      old.contractStatus !== 'ACTIVE';
+    if (justActivated) {
       // Khóa bác sĩ để hai gia đình kích hoạt đồng thời không vượt panel cap.
       // Serializable sẽ retry nếu snapshot cũ xung đột với lần cập nhật trước.
       await this.tx
@@ -410,6 +421,12 @@ class PrismaPaymentsSession implements PaymentsSession {
         // Không sửa giá, chữ ký hay kỳ hạn đã thỏa thuận khi nhận tiền.
       },
     });
+    if (justActivated) {
+      await this.autoScheduleFirstVisit?.scheduleOnContractActivated(
+        this.tx,
+        contract.id,
+      );
+    }
   }
   async findRequest(id: string) {
     const row = await this.tx.invoice.findUnique({

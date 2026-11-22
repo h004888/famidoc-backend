@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ComplaintStatus, UserRole } from '@prisma/client';
 import { Transform } from 'class-transformer';
-import { IsEnum, IsIn, IsOptional, IsString, Length, MaxLength } from 'class-validator';
+import { IsEnum, IsIn, IsInt, IsOptional, IsString, Length, Max, MaxLength, Min } from 'class-validator';
 import { ListCarePackagesDto } from '../care-packages/dtos/list-care-packages.dto';
 
 function trim({ value }: { value: unknown }) {
@@ -84,6 +84,20 @@ export class AdminAccountStatusDto {
   @ApiProperty({ enum: ['SUSPENDED', 'ACTIVE'] })
   @IsIn(['SUSPENDED', 'ACTIVE'])
   status!: 'SUSPENDED' | 'ACTIVE';
+
+  @ApiProperty()
+  @Transform(trim)
+  @IsString()
+  @Length(5, 500)
+  reason!: string;
+}
+
+export class AdminUpdateDoctorPanelCapacityDto {
+  @ApiProperty({ minimum: 1, maximum: 100, example: 5 })
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  maxPanelCapacity!: number;
 
   @ApiProperty()
   @Transform(trim)

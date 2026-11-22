@@ -1,4 +1,4 @@
-import { DoctorShift, Encounter, EncounterType, Prisma } from '@prisma/client';
+import { Encounter, EncounterRescheduleRequest, EncounterStatus, EncounterType, Prisma } from '@prisma/client';
 
 export const ENCOUNTER_INCLUDE = {
   contract: {
@@ -18,7 +18,20 @@ export const ENCOUNTER_INCLUDE = {
       servicePackage: true,
     },
   },
-  patient: true,
+  participants: {
+    include: { patient: true },
+  },
+  rescheduleRequests: {
+    orderBy: { createdAt: 'desc' },
+    take: 5,
+  },
+  clinicalEmrs: {
+    select: {
+      id: true,
+      patientId: true,
+      isFinalized: true,
+    },
+  },
   doctor: {
     include: {
       user: true,
@@ -54,15 +67,25 @@ export interface EncountersSession {
   updateEncounter(id: string, data: Prisma.EncounterUncheckedUpdateInput): Promise<Encounter>;
   decrementContractQuota(contractId: string, type: EncounterType): Promise<void>;
 
-  findDoctorShifts(doctorId: string, shiftDate: Date): Promise<DoctorShift[]>;
   findDoctorOverlappingEncounters(
     doctorId: string,
     scheduledDate: Date,
     excludeEncounterId?: string,
+    statuses?: EncounterStatus[],
   ): Promise<Encounter[]>;
 
-  createDoctorShift(data: Prisma.DoctorShiftUncheckedCreateInput): Promise<DoctorShift>;
-  findShiftsByFacility(facilityId: string, fromDate?: Date, toDate?: Date): Promise<DoctorShift[]>;
+  findPendingRescheduleRequestByEncounter(encounterId: string): Promise<EncounterRescheduleRequest | null>;
+  findRescheduleRequestById(requestId: string): Promise<EncounterRescheduleRequest | null>;
+  createRescheduleRequest(
+    data: Prisma.EncounterRescheduleRequestUncheckedCreateInput,
+  ): Promise<EncounterRescheduleRequest>;
+  updateRescheduleRequest(
+    id: string,
+    data: Prisma.EncounterRescheduleRequestUncheckedUpdateInput,
+  ): Promise<EncounterRescheduleRequest>;
+  findPendingRescheduleRequests(
+    where: Prisma.EncounterRescheduleRequestWhereInput,
+  ): Promise<EncounterRescheduleRequest[]>;
 
   findEncounters(
     where: Prisma.EncounterWhereInput,

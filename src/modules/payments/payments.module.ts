@@ -1,5 +1,6 @@
 import { PAYMENTS_SERVICE_TOKEN } from './services/interfaces/payments.service.interface';
 import { AuthAccessModule } from '../../core/auth/auth-access.module';
+import { EncountersModule } from '../encounters/encounters.module';
 import { Module } from '@nestjs/common';
 import { SePayWebhookGuard } from './guards/sepay-webhook.guard';
 import { PaymentsClock } from './payments.clock';
@@ -14,7 +15,7 @@ import { SePayReconciliationConfig } from './sepay/sepay-reconciliation.config';
 import { SePayWebhookEvents, SePayWebhookExceptionFilter } from './sepay/sepay-webhook-events';
 
 @Module({
-  imports: [AuthAccessModule],
+  imports: [AuthAccessModule, EncountersModule],
   controllers: [PaymentsController, SePayWebhookController],
   providers: [
     PaymentsServiceImpl,

@@ -1,4 +1,5 @@
 import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { buildActiveAndHeldWhere } from '../contracts/pricing/doctor-quota.helper';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../core/database/prisma.service';
 import { moneyToNumber, serializable } from '../../core/database/prisma-transaction';
@@ -236,5 +237,55 @@ export class AdminService {
       else counts.pending += n;
     }
     return { gmvVnd: paid._sum.totalPayable ? moneyToNumber(paid._sum.totalPayable) : 0, activeContracts, doctors, facilities, openComplaints, queue, counts, series: [...buckets.values()] };
+  }
+
+  async updateDoctorPanelCapacity(
+    actor: AuthenticatedUser,
+    doctorId: string,
+    dto: { maxPanelCapacity: number; reason: string },
+    ip?: string,
+  ) {
+    return this.db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM doctors WHERE id = ${doctorId}::uuid FOR UPDATE`;
+      const doctor = await tx.doctor.findUnique({
+        where: { id: doctorId },
+        select: { id: true, doctorName: true, maxPanelCapacity: true },
+      });
+      if (!doctor) {
+        throw new NotFoundException('Không tìm thấy bác sĩ');
+      }
+
+      const activeAndHeldCount = await tx.medicalContract.count({
+        where: buildActiveAndHeldWhere(doctor.id),
+      });
+      if (dto.maxPanelCapacity < activeAndHeldCount) {
+        throw new ConflictException(
+          `Hạn mức mới (${dto.maxPanelCapacity}) không được thấp hơn số hộ gia đình đang hiệu lực/giữ chỗ (${activeAndHeldCount})`,
+        );
+      }
+
+      const updated = await tx.doctor.update({
+        where: { id: doctor.id },
+        data: { maxPanelCapacity: dto.maxPanelCapacity },
+        select: { id: true, doctorName: true, maxPanelCapacity: true, activePanelCount: true },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actor.id,
+          action: 'ADMIN_UPDATE_DOCTOR_PANEL_CAPACITY',
+          resourceName: 'Doctor',
+          resourceId: doctor.id,
+          clientIp: (ip ?? 'unknown').slice(0, 45),
+          metadata: {
+            previousMaxPanel: doctor.maxPanelCapacity,
+            newMaxPanel: dto.maxPanelCapacity,
+            reason: dto.reason.trim(),
+          },
+        },
+      });
+
+      return updated;
+    });
   }
 }

@@ -24,7 +24,11 @@ const visitSelect = {
   encounterType: true,
   scheduledDate: true,
   scheduledTime: true,
-  patient: { select: { id: true, fullName: true, familyId: true } },
+  participants: {
+    select: {
+      patient: { select: { id: true, fullName: true, familyId: true } },
+    },
+  },
   contract: {
     select: {
       familyId: true,
@@ -37,12 +41,14 @@ const visitSelect = {
       },
     },
   },
-  clinicalEmr: {
+  clinicalEmrs: {
     select: {
       id: true,
+      patientId: true,
       isFinalized: true,
       icd10Code: true,
       icd10Diagnosis: true,
+      patient: { select: { id: true, fullName: true, familyId: true } },
       prescriptions: {
         select: { id: true, prescriptionCode: true, recipientUserId: true },
         take: 1,
@@ -62,9 +68,9 @@ const prescriptionSelect = {
   clinicalEmr: {
     select: {
       icd10Diagnosis: true,
+      patient: { select: { id: true, fullName: true } },
       encounter: {
         select: {
-          patient: { select: { id: true, fullName: true } },
           doctor: {
             select: {
               doctorName: true,
@@ -82,7 +88,8 @@ type PrescriptionSummary = Prisma.PrescriptionGetPayload<{
 }>;
 
 function summary(record: PrescriptionSummary) {
-  const { patient, doctor } = record.clinicalEmr.encounter;
+  const { patient, encounter } = record.clinicalEmr;
+  const { doctor } = encounter;
   return {
     id: record.id,
     prescriptionCode: record.prescriptionCode,
@@ -136,8 +143,8 @@ function familyPrescriptionScope(
   return {
     recipientUserId: actor.id,
     clinicalEmr: {
+      patient: { familyId: actor.familyUnitId },
       encounter: {
-        patient: { familyId: actor.familyUnitId },
         contract: {
           familyId: actor.familyUnitId,
           familyUnit: { representativeUserId: actor.id },
@@ -169,14 +176,16 @@ export class PrescriptionsService {
     return {
       items: visits
         .slice(0, PAGE_SIZE)
-        .map(({ patient, contract, clinicalEmr, ...visit }) => {
+        .map(({ participants, contract, clinicalEmrs, ...visit }) => {
           const recipient = contract.familyUnit.representativeUser;
+          const clinicalEmr = clinicalEmrs[0];
+          const patient = clinicalEmr?.patient ?? participants[0]?.patient ?? null;
           const record = clinicalEmr?.prescriptions[0];
           return {
             ...visit,
-            patient: { id: patient.id, fullName: patient.fullName },
+            patient: patient ? { id: patient.id, fullName: patient.fullName } : null,
             recipient:
-              patient.familyId === contract.familyId &&
+              (!patient || patient.familyId === contract.familyId) &&
               recipient.role === 'FAMILY_REP' &&
               recipient.status === 'ACTIVE'
                 ? { id: recipient.id, name: recipient.fullName }
@@ -223,13 +232,24 @@ export class PrescriptionsService {
             throw new NotFoundException(
               'Không tìm thấy buổi khám đủ điều kiện kê đơn.',
             );
-          if (visit.clinicalEmr?.isFinalized) {
+          const targetPatientId =
+            (dto as { patientId?: string }).patientId ??
+            visit.participants[0]?.patient.id;
+          if (!targetPatientId) {
+            throw new BadRequestException(
+              'Vui lòng chọn thành viên được khám để kê đơn.',
+            );
+          }
+          const existingEmr = visit.clinicalEmrs.find(
+            (e) => e.patientId === targetPatientId,
+          );
+          if (existingEmr?.isFinalized) {
             throw new ConflictException('Trang khám đã được xác nhận.');
           }
-          if (visit.clinicalEmr?.prescriptions.length) {
+          if (existingEmr?.prescriptions.length) {
             throw new ConflictException('Buổi khám này đã có đơn thuốc.');
           }
-          let emrId = visit.clinicalEmr?.id;
+          let emrId = existingEmr?.id;
           if (!emrId) {
             if (!dto.exam)
               throw new BadRequestException(
@@ -238,6 +258,7 @@ export class PrescriptionsService {
             const emr = await tx.clinicalEmr.create({
               data: {
                 encounterId,
+                patientId: targetPatientId,
                 chiefComplaint: dto.exam.chiefComplaint,
                 clinicalFindings: dto.exam.clinicalFindings,
                 icd10Code: dto.exam.icd10Code,
@@ -288,28 +309,42 @@ export class PrescriptionsService {
       const visit = await tx.encounter.findFirst({
         where: {
           id,
-          patientId: dto.patientId,
           ...doctorVisitScope(actor.id, vietnamNow),
         },
         select: visitSelect,
       });
-      if (!visit || visit.patient.familyId !== visit.contract.familyId) {
+      if (!visit) {
         throw new NotFoundException(
           'Không tìm thấy buổi khám của thành viên này.',
         );
       }
-      if (visit.clinicalEmr?.isFinalized) {
+      const member = await tx.patient.findFirst({
+        where: {
+          id: dto.patientId,
+          familyId: visit.contract.familyId,
+        },
+        select: { id: true },
+      });
+      if (!member) {
+        throw new NotFoundException(
+          'Không tìm thấy buổi khám của thành viên này.',
+        );
+      }
+      const existingEmr = visit.clinicalEmrs.find(
+        (e) => e.patientId === dto.patientId,
+      );
+      if (existingEmr?.isFinalized) {
         throw new ConflictException('Trang khám đã được xác nhận.');
       }
       if (
-        visit.clinicalEmr?.prescriptions.length &&
+        existingEmr?.prescriptions.length &&
         (dto.prescription || dto.exam)
       ) {
         throw new ConflictException(
           'Trang khám đã có đơn thuốc. Bạn có thể xác nhận nội dung đã lưu.',
         );
       }
-      if (!visit.clinicalEmr && !dto.exam) {
+      if (!existingEmr && !dto.exam) {
         throw new BadRequestException(
           'Vui lòng nhập thông tin khám trước khi xác nhận.',
         );
@@ -317,14 +352,19 @@ export class PrescriptionsService {
 
       // Xác nhận nội bộ gắn với tài khoản bác sĩ và thời điểm ghi nhận.
       const confirmation = { isFinalized: true, finalizedAt: now };
-      const record = visit.clinicalEmr
+      const record = existingEmr
         ? await tx.clinicalEmr.update({
-            where: { id: visit.clinicalEmr.id },
+            where: { id: existingEmr.id },
             data: { ...dto.exam, ...confirmation },
             select: { id: true },
           })
         : await tx.clinicalEmr.create({
-            data: { ...dto.exam!, encounterId: id, ...confirmation },
+            data: {
+              ...dto.exam!,
+              encounterId: id,
+              patientId: dto.patientId,
+              ...confirmation,
+            },
             select: { id: true },
           });
       if (dto.prescription) {
@@ -359,7 +399,6 @@ export class PrescriptionsService {
     const recipient = visit.contract.familyUnit.representativeUser;
     if (
       dto.recipientAuthorized !== true ||
-      visit.patient.familyId !== visit.contract.familyId ||
       recipient.id !== dto.recipientUserId ||
       recipient.role !== 'FAMILY_REP' ||
       recipient.status !== 'ACTIVE'
@@ -371,7 +410,7 @@ export class PrescriptionsService {
     const prescription = await tx.prescription.create({
       data: {
         emrId,
-        prescriptionCode: `FMD-${visit.id}`,
+        prescriptionCode: `FMD-${emrId}`,
         recipientUserId: recipient.id,
         prescribedDate: new Date(
           `${vietnamNow.toISOString().slice(0, 10)}T00:00:00.000Z`,
@@ -419,7 +458,7 @@ export class PrescriptionsService {
         ...(query.patientId
           ? {
               AND: {
-                clinicalEmr: { encounter: { patientId: query.patientId } },
+                clinicalEmr: { patientId: query.patientId },
               },
             }
           : {}),

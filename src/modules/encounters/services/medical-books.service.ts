@@ -59,8 +59,10 @@ function rosterScope(
         },
       },
       {
-        encounters: {
-          some: { ...doctorVisitScope(actor.id), contract: { familyId } },
+        encounterParticipants: {
+          some: {
+            encounter: { ...doctorVisitScope(actor.id), contract: { familyId } },
+          },
         },
       },
     ],
@@ -86,8 +88,12 @@ function visitScope(actor: AuthenticatedUser): Prisma.EncounterWhereInput {
     ? doctorVisitScope(actor.id)
     : {
         contract: { familyUnit: { representativeUserId: actor.id } },
-        patient: { familyUnit: { representativeUserId: actor.id } },
-        clinicalEmr: { isFinalized: true },
+        clinicalEmrs: {
+          some: {
+            isFinalized: true,
+            patient: { familyUnit: { representativeUserId: actor.id } },
+          },
+        },
       };
 }
 
@@ -188,10 +194,25 @@ export class MedicalBooksService {
 
     const scope = visitScope(actor);
     const rows = await this.prisma.encounter.findMany({
-      where: { AND: [scope, { patientId, contract: { familyId } }] },
+      where: {
+        AND: [
+          scope,
+          {
+            contract: { familyId },
+            OR: [
+              { participants: { some: { patientId } } },
+              { clinicalEmrs: { some: { patientId } } },
+            ],
+          },
+        ],
+      },
       select: {
         ...visitSelect,
-        clinicalEmr: { select: { isFinalized: true, icd10Diagnosis: true } },
+        clinicalEmrs: {
+          where: { patientId },
+          select: { isFinalized: true, icd10Diagnosis: true },
+          take: 1,
+        },
       },
       orderBy: [
         { scheduledDate: 'desc' },
@@ -204,12 +225,15 @@ export class MedicalBooksService {
     return {
       items: rows
         .slice(0, PAGE_SIZE)
-        .map(({ clinicalEmr, doctor, ...visit }) => ({
-          ...visit,
-          doctorName: doctor.doctorName,
-          isFinalized: clinicalEmr?.isFinalized ?? false,
-          diagnosis: clinicalEmr?.icd10Diagnosis ?? null,
-        })),
+        .map(({ clinicalEmrs, doctor, ...visit }) => {
+          const clinicalEmr = clinicalEmrs[0];
+          return {
+            ...visit,
+            doctorName: doctor.doctorName,
+            isFinalized: clinicalEmr?.isFinalized ?? false,
+            diagnosis: clinicalEmr?.icd10Diagnosis ?? null,
+          };
+        }),
       hasNextPage: rows.length > PAGE_SIZE,
     };
   }
@@ -320,13 +344,16 @@ export class MedicalBooksService {
     return { bytes, extension };
   }
 
-  async visitDetail(actor: AuthenticatedUser, id: string) {
+  async visitDetail(actor: AuthenticatedUser, id: string, patientId?: string) {
     const isDoctor = actor.role === 'DOCTOR';
     const visit = await this.prisma.encounter.findFirst({
       where: { id, ...visitScope(actor) },
       select: {
         ...visitSelect,
-        patient: { select: { ...patientSelect, familyId: true } },
+        visitScope: true,
+        participants: {
+          select: { patient: { select: { ...patientSelect, familyId: true } } },
+        },
         contract: {
           select: {
             familyId: true,
@@ -344,9 +371,14 @@ export class MedicalBooksService {
             },
           },
         },
-        clinicalEmr: {
+        clinicalEmrs: {
+          where: patientId ? { patientId } : undefined,
+          orderBy: [{ createdAt: 'asc' }],
+          take: 1,
           select: {
             id: true,
+            patientId: true,
+            patient: { select: { ...patientSelect, familyId: true } },
             chiefComplaint: true,
             clinicalFindings: true,
             icd10Code: true,
@@ -373,12 +405,19 @@ export class MedicalBooksService {
         },
       },
     });
-    if (!visit || visit.patient.familyId !== visit.contract.familyId) {
+    const clinicalEmr = visit?.clinicalEmrs[0] ?? null;
+    const resolvedPatient =
+      clinicalEmr?.patient ??
+      (patientId
+        ? visit?.participants.find((p) => p.patient.id === patientId)?.patient
+        : visit?.participants[0]?.patient) ??
+      null;
+    if (!visit || !resolvedPatient || resolvedPatient.familyId !== visit.contract.familyId) {
       throw new NotFoundException(
         'Không tìm thấy trang khám trong phạm vi của bạn.',
       );
     }
-    const { clinicalEmr, contract, doctor, ...entry } = visit;
+    const { clinicalEmrs: _emrs, participants, contract, doctor, ...entry } = visit;
     const recipient = contract.familyUnit.representativeUser;
     const prescription = clinicalEmr?.prescriptions[0];
     if (clinicalEmr) {
@@ -392,6 +431,16 @@ export class MedicalBooksService {
     }
     return {
       ...entry,
+      participants: participants.map((p) => ({
+        id: p.patient.id,
+        fullName: p.patient.fullName,
+      })),
+      patient: {
+        id: resolvedPatient.id,
+        fullName: resolvedPatient.fullName,
+        dateOfBirth: resolvedPatient.dateOfBirth,
+        relationshipToHead: resolvedPatient.relationshipToHead,
+      },
       doctorName: doctor.doctorName,
       recipient:
         isDoctor &&
