@@ -78,9 +78,9 @@ jobs:
         with:
           images: ${{ steps.image-name.outputs.IMAGE_NAME }}
           tags: |
-            type=ref,event=branch
-            type=sha,format=short
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
+            type=sha,prefix=sha-,format=short
 
       - name: Build và Push Docker Image lên GHCR
         uses: docker/build-push-action@v6
@@ -93,10 +93,14 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Kích hoạt Dokploy Deploy Webhook
-        if: ${{ env.DOKPLOY_WEBHOOK != '' }}
         env:
           DOKPLOY_WEBHOOK: ${{ secrets.DOKPLOY_DEPLOY_WEBHOOK_URL }}
         run: |
+          if [ -z "$DOKPLOY_WEBHOOK" ]; then
+            echo "::error::Secret DOKPLOY_DEPLOY_WEBHOOK_URL chưa được cấu hình trong GitHub Settings!"
+            exit 1
+          fi
+
           echo "📡 Đang kích hoạt Dokploy Redeploy qua Webhook..."
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             -H "X-GitHub-Event: push" \
@@ -108,8 +112,39 @@ jobs:
 
           echo "Phản hồi từ Dokploy (HTTP $HTTP_STATUS): $BODY"
 
-          if [ "$HTTP_STATUS" -ne 200 ]; then
+          if [ "$HTTP_STATUS" -lt 200 ] || [ "$HTTP_STATUS" -ge 300 ]; then
             echo "❌ Dokploy Webhook trả về lỗi HTTP $HTTP_STATUS: $BODY"
             exit 1
           fi
           echo "✅ Đã kích hoạt Dokploy deploy thành công."
+
+      - name: Post-Deploy Healthcheck
+        env:
+          HEALTHCHECK_URL: ${{ secrets.BACKEND_HEALTHCHECK_URL || 'https://api.famidoc.online/health' }}
+        run: |
+          echo "🩺 Đang kiểm tra trạng thái $HEALTHCHECK_URL ..."
+          for i in $(seq 1 25); do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTHCHECK_URL" || true)
+            if [ "$STATUS" -eq 200 ]; then
+              echo "✅ Backend online (HTTP 200) sau lần thử $i."
+              exit 0
+            fi
+            echo "⏳ Lần $i/25: HTTP $STATUS — chờ 3s..."
+            sleep 3
+          done
+          echo "❌ Backend không phản hồi HTTP 200 sau 75s."
+          exit 1
+
+  cleanup-ghcr:
+    name: 🧹 Dọn phiên bản GHCR cũ
+    needs: build-and-deploy
+    if: always() && needs.build-and-deploy.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Xóa các phiên bản container cũ trên GHCR
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: famidoc-backend
+          package-type: container
+          min-versions-to-keep: 10
+          delete-only-untagged-versions: true

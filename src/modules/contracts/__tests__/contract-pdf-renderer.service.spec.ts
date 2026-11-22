@@ -1,6 +1,7 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import {
   ContractPdfRendererService,
+  type PuppeteerConnectFn,
   type PuppeteerLaunchFn,
 } from '../services/contract-pdf-renderer.service';
 
@@ -130,5 +131,97 @@ describe('ContractPdfRendererService (Puppeteer-core, mutex queue = 1)', () => {
     expect(launcher).toHaveBeenCalledTimes(1);
     await service.disconnect();
     await service.disconnect();
+  });
+
+  describe('Remote Browserless WebSocket (PUPPETEER_BROWSER_WS_ENDPOINT)', () => {
+    const originalWsEndpoint = process.env.PUPPETEER_BROWSER_WS_ENDPOINT;
+
+    afterEach(() => {
+      if (originalWsEndpoint === undefined) {
+        delete process.env.PUPPETEER_BROWSER_WS_ENDPOINT;
+      } else {
+        process.env.PUPPETEER_BROWSER_WS_ENDPOINT = originalWsEndpoint;
+      }
+    });
+
+    it('khi PUPPETEER_BROWSER_WS_ENDPOINT được đặt, ưu tiên gọi connector và không gọi launcher cục bộ', async () => {
+      process.env.PUPPETEER_BROWSER_WS_ENDPOINT =
+        'ws://chromium-renderer:3000?token=test-token';
+
+      const pageClose = jest.fn().mockResolvedValue(undefined);
+      const setContent = jest.fn().mockResolvedValue(undefined);
+      const pdf = jest.fn().mockResolvedValue(Buffer.from('%PDF-1.4 remote'));
+      const browserClose = jest.fn().mockResolvedValue(undefined);
+
+      const launcher = jest.fn() as unknown as jest.Mock & PuppeteerLaunchFn;
+      const connector = jest.fn().mockResolvedValue({
+        newPage: jest.fn().mockResolvedValue({
+          setContent,
+          pdf,
+          close: pageClose,
+        }),
+        close: browserClose,
+      }) as unknown as jest.Mock & PuppeteerConnectFn;
+
+      const service = new ContractPdfRendererService(launcher, connector);
+      const buffer = await service.renderPdf('<html><body>HĐ</body></html>');
+
+      expect(buffer.toString('utf8')).toBe('%PDF-1.4 remote');
+      expect(connector).toHaveBeenCalledTimes(1);
+      expect(connector).toHaveBeenCalledWith({
+        browserWSEndpoint: 'ws://chromium-renderer:3000?token=test-token',
+      });
+      expect(launcher).not.toHaveBeenCalled();
+      expect(pageClose).toHaveBeenCalledTimes(1);
+      expect(browserClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('khi PUPPETEER_BROWSER_WS_ENDPOINT rỗng hoặc chỉ có khoảng trắng, fallback về launcher cục bộ', async () => {
+      process.env.PUPPETEER_BROWSER_WS_ENDPOINT = '   ';
+
+      const browserClose = jest.fn().mockResolvedValue(undefined);
+      const launcher = jest.fn().mockResolvedValue({
+        newPage: jest.fn().mockResolvedValue({
+          setContent: jest.fn().mockResolvedValue(undefined),
+          pdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-1.4 local')),
+          close: jest.fn().mockResolvedValue(undefined),
+        }),
+        close: browserClose,
+      }) as unknown as jest.Mock & PuppeteerLaunchFn;
+      const connector = jest.fn() as unknown as jest.Mock & PuppeteerConnectFn;
+
+      const service = new ContractPdfRendererService(launcher, connector);
+      const buffer = await service.renderPdf('<html><body>Local</body></html>');
+
+      expect(buffer.toString('utf8')).toBe('%PDF-1.4 local');
+      expect(launcher).toHaveBeenCalledTimes(1);
+      expect(connector).not.toHaveBeenCalled();
+    });
+
+    it('khi connector lỗi kết nối WebSocket, ném ServiceUnavailableException và giải phóng mutex', async () => {
+      process.env.PUPPETEER_BROWSER_WS_ENDPOINT =
+        'ws://chromium-renderer:3000?token=test-token';
+
+      const connector = jest
+        .fn()
+        .mockRejectedValueOnce(new Error('ECONNREFUSED'))
+        .mockResolvedValueOnce({
+          newPage: jest.fn().mockResolvedValue({
+            setContent: jest.fn().mockResolvedValue(undefined),
+            pdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-1.4 recovered')),
+            close: jest.fn().mockResolvedValue(undefined),
+          }),
+          close: jest.fn().mockResolvedValue(undefined),
+        }) as unknown as jest.Mock & PuppeteerConnectFn;
+
+      const service = new ContractPdfRendererService(undefined, connector);
+
+      await expect(service.renderPdf('<html>1</html>')).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+
+      const recovered = await service.renderPdf('<html>2</html>');
+      expect(recovered.toString('utf8')).toBe('%PDF-1.4 recovered');
+    });
   });
 });
