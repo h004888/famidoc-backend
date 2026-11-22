@@ -9,6 +9,7 @@ import {
 import {
   COMPLAINT_CONTRACT_INCLUDE,
   COMPLAINT_INCLUDE,
+  COMPLAINT_LIST_SELECT,
   type IComplaintsRepository,
   type ComplaintsSession,
   type ComplaintContract,
@@ -44,6 +45,23 @@ class PrismaComplaintsSession implements ComplaintsSession {
       where: { id },
       include: COMPLAINT_INCLUDE,
     });
+  }
+  async listComplaints(
+    where: Prisma.ComplaintWhereInput,
+    skip: number,
+    take: number,
+  ) {
+    const [total, items] = await Promise.all([
+      this.tx.complaint.count({ where }),
+      this.tx.complaint.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { createdAt: 'desc' },
+        select: COMPLAINT_LIST_SELECT,
+      }),
+    ]);
+    return { items, total };
   }
   updateComplaint(id: string, data: Prisma.ComplaintUncheckedUpdateInput) {
     return this.tx.complaint.update({ where: { id }, data });

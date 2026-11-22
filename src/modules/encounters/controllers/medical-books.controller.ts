@@ -30,6 +30,8 @@ import { BypassTransform } from '../../../core/decorators/bypass-transform.decor
 import { DEFAULT_MAX_DOCUMENT_BYTES } from '../../../core/validation/document-file.validator';
 import {
   ConfirmVisitRecordDto,
+  FamilyPrescriptionsDto,
+  FamilyPrescriptionDateQuery,
   PrescriptionPageQuery,
   UploadBookDocumentDto,
 } from '../dtos/share-prescription.dto';
@@ -58,6 +60,35 @@ export class MedicalBooksController {
     @Query() query: PrescriptionPageQuery,
   ) {
     return this.books.families(req.user, query.page);
+  }
+
+  @Get('families/:familyId/prescription-visits')
+  @Roles('DOCTOR')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({
+    summary: 'Tổng hợp sổ khám của gia đình trong một ngày để kê đơn',
+  })
+  familyPrescriptionVisits(
+    @Req() req: AuthenticatedRequest,
+    @Param('familyId', ParseUUIDPipe) familyId: string,
+    @Query() query: FamilyPrescriptionDateQuery,
+  ) {
+    return this.books.familyPrescriptionVisits(req.user, familyId, query.date);
+  }
+
+  @Post('families/:familyId/prescriptions')
+  @Roles('DOCTOR')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({
+    summary:
+      'Gửi đồng thời đơn gia đình, lưu thuốc riêng cho từng người và lần khám',
+  })
+  prescribeFamily(
+    @Req() req: AuthenticatedRequest,
+    @Param('familyId', ParseUUIDPipe) familyId: string,
+    @Body() dto: FamilyPrescriptionsDto,
+  ) {
+    return this.prescriptions.prescribeFamily(req.user, familyId, dto);
   }
 
   @Get('families/:familyId/patients/:patientId/visits')

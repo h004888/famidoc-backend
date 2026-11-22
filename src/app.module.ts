@@ -22,6 +22,7 @@ import { EncountersModule } from './modules/encounters/encounters.module';
 import { TelehealthModule } from './modules/telehealth/telehealth.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { MatchingModule } from './modules/matching/matching.module';
+import { SupportCasesModule } from './modules/support-cases/support-cases.module';
 
 @Module({
   // Các module nghiệp vụ dùng chung Prisma và cơ chế xác thực của backend.
@@ -45,6 +46,7 @@ import { MatchingModule } from './modules/matching/matching.module';
     TelehealthModule,
     AdminModule,
     MatchingModule,
+    SupportCasesModule,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

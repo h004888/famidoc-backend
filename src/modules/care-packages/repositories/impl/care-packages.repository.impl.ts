@@ -143,7 +143,8 @@ export class CarePackagesRepositoryImpl implements CarePackagesRepository {
               item.version === 1 ? item.code : `${item.code}_V${item.version}`,
             lineageCode: item.code,
             version: item.version,
-            status: 'DRAFT',
+            status: item.status,
+            publishedAt: item.publishedAt,
             createdAt: item.createdAt,
             updatedAt: item.updatedAt,
           },
@@ -172,16 +173,28 @@ export class CarePackagesRepositoryImpl implements CarePackagesRepository {
   }
 
   async publish(id: string): Promise<CarePackage> {
+    return this.activate(id, 'DRAFT');
+  }
+
+  async reopen(id: string): Promise<CarePackage> {
+    return this.activate(id, 'DEPRECATED');
+  }
+
+  private async activate(id: string, expectedStatus: 'DRAFT' | 'DEPRECATED'): Promise<CarePackage> {
     return serializable(this.prisma, async (tx) => {
       const row = await this.requireRow(tx, id);
-      if (row.status !== 'DRAFT')
-        throw new ConflictException('Only a draft can be published');
+      if (row.status !== expectedStatus)
+        throw new ConflictException(expectedStatus === 'DRAFT'
+          ? 'Only a draft can be published'
+          : 'Chỉ có thể mở bán lại gói đã ngừng bán. Hãy tải lại danh mục.');
       const latest = await tx.servicePackage.findFirst({
         where: { lineageCode: row.lineageCode },
         orderBy: { version: 'desc' },
       });
       if (latest?.id !== id)
-        throw new ConflictException('Only the latest version can be published');
+        throw new ConflictException(expectedStatus === 'DRAFT'
+          ? 'Only the latest version can be published'
+          : 'Gói đã có phiên bản mới hơn. Vui lòng mở bán phiên bản mới nhất.');
       validateCarePackageTerms(toEntity(row));
       const now = new Date();
       // Ngừng bản cũ trước khi bật bản mới; unique index trong DB bảo đảm chỉ có một ACTIVE/mã.

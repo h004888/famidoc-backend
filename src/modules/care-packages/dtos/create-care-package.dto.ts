@@ -75,18 +75,19 @@ export class CarePackageTermsDto {
   @Min(1)
   @Max(9_999_999_999)
   homeVisitUnitPriceVnd?: number;
-  // Tên không được rỗng sau khi loại khoảng trắng đầu/cuối.
+  @ApiProperty({ minLength: 10, maxLength: 120 })
   @Transform(trimString)
   @IsString()
-  @Length(1, 120)
+  @Length(10, 120)
+  @Matches(/\p{L}/u)
   name: string;
 
-  // Có thể không gửi mô tả; nếu đã gửi thì phải là chuỗi, không chấp nhận null.
-  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @ApiProperty({ minLength: 20, maxLength: 2000 })
   @Transform(trimString)
   @IsString()
-  @Length(0, 2000)
-  description?: string;
+  @Length(20, 2000)
+  @Matches(/\p{L}/u)
+  description: string;
 
   // Bốn kỳ hạn của catalog 05/11/2026.
   @IsInt()
@@ -141,12 +142,10 @@ export class CarePackageTermsDto {
 }
 
 export class CreateCarePackageDto extends CarePackageTermsDto {
-  // Mã ổn định qua các phiên bản: bắt đầu bằng chữ hoa, chỉ gồm chữ hoa/số/dấu gạch dưới.
+  // Giới hạn độ dài để còn chỗ cho hậu tố phiên bản trong packageCode.
+  @ApiProperty({ minLength: 1, maxLength: 40 })
   @Transform(trimString)
   @IsString()
-  @Length(2, 40)
-  @Matches(/^[A-Z][A-Z0-9_]*$/, {
-    message: 'code must use uppercase letters, digits or underscores',
-  })
+  @Length(1, 40)
   code: string;
 }

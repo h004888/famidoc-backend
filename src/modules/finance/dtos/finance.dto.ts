@@ -31,9 +31,9 @@ class ReportingPeriodDto {
   })
   @ValidateIf((_dto, value) => value !== undefined)
   @Transform(parsePeriodNumber)
-  @IsInt()
-  @Min(2000)
-  @Max(2200)
+  @IsInt({ message: 'Năm đối soát phải là số nguyên.' })
+  @Min(2000, { message: 'Năm đối soát phải từ 2000 trở lên.' })
+  @Max(2200, { message: 'Năm đối soát không được vượt quá 2200.' })
   year?: number;
 
   @ApiPropertyOptional({
@@ -44,9 +44,9 @@ class ReportingPeriodDto {
   })
   @ValidateIf((_dto, value) => value !== undefined)
   @Transform(parsePeriodNumber)
-  @IsInt()
-  @Min(1)
-  @Max(12)
+  @IsInt({ message: 'Tháng đối soát phải là số nguyên.' })
+  @Min(1, { message: 'Tháng đối soát phải từ 1 đến 12.' })
+  @Max(12, { message: 'Tháng đối soát phải từ 1 đến 12.' })
   month?: number;
 
   @ApiPropertyOptional({
@@ -55,7 +55,9 @@ class ReportingPeriodDto {
     default: 'LIVE',
     example: 'LIVE',
   })
-  @IsIn(['TEST', 'LIVE'])
+  @IsIn(['TEST', 'LIVE'], {
+    message: 'Môi trường dữ liệu chỉ chấp nhận LIVE hoặc TEST.',
+  })
   environment: 'TEST' | 'LIVE' = 'LIVE';
 }
 
@@ -65,7 +67,7 @@ export class RevenueAnalyticsQueryDto extends ReportingPeriodDto {
     example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
   @IsOptional()
-  @IsUUID('4')
+  @IsUUID('4', { message: 'Mã cơ sở y tế không đúng định dạng UUID.' })
   facilityId?: string;
 }
 
@@ -75,7 +77,9 @@ export class RunSePayReconciliationDto {
     description: 'Môi trường SePay cần đối soát',
     default: 'LIVE',
   })
-  @IsIn(['TEST', 'LIVE'])
+  @IsIn(['TEST', 'LIVE'], {
+    message: 'Môi trường đối soát chỉ chấp nhận LIVE hoặc TEST.',
+  })
   environment: 'TEST' | 'LIVE' = 'LIVE';
 
   @ApiPropertyOptional({
@@ -87,7 +91,10 @@ export class RunSePayReconciliationDto {
     (dto: RunSePayReconciliationDto) =>
       dto.from !== undefined || dto.to !== undefined,
   )
-  @IsISO8601({ strict: true, strictSeparator: true })
+  @IsISO8601(
+    { strict: true, strictSeparator: true },
+    { message: 'Thời điểm bắt đầu (from) phải đúng định dạng ISO 8601.' },
+  )
   from?: string;
 
   @ApiPropertyOptional({
@@ -99,44 +106,60 @@ export class RunSePayReconciliationDto {
     (dto: RunSePayReconciliationDto) =>
       dto.from !== undefined || dto.to !== undefined,
   )
-  @IsISO8601({ strict: true, strictSeparator: true })
+  @IsISO8601(
+    { strict: true, strictSeparator: true },
+    { message: 'Thời điểm kết thúc (to) phải đúng định dạng ISO 8601.' },
+  )
   to?: string;
 }
 
 export class SePayReconciliationQueryDto {
   @ApiPropertyOptional({ enum: ['TEST', 'LIVE'], default: 'LIVE' })
-  @IsIn(['TEST', 'LIVE'])
+  @IsIn(['TEST', 'LIVE'], {
+    message: 'Môi trường dữ liệu chỉ chấp nhận LIVE hoặc TEST.',
+  })
   environment: 'TEST' | 'LIVE' = 'LIVE';
 
   @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 })
   @Transform(parsePeriodNumber)
-  @IsInt()
-  @Min(1)
-  @Max(100)
+  @IsInt({ message: 'Số bản ghi mỗi trang phải là số nguyên.' })
+  @Min(1, { message: 'Số bản ghi mỗi trang phải từ 1 đến 100.' })
+  @Max(100, { message: 'Số bản ghi mỗi trang phải từ 1 đến 100.' })
   limit = 20;
 }
 
 export class SettlementEnvironmentDto {
   @ApiPropertyOptional({ enum: ['TEST', 'LIVE'], default: 'LIVE' })
-  @IsIn(['TEST', 'LIVE'])
+  @IsIn(['TEST', 'LIVE'], {
+    message: 'Môi trường dữ liệu chỉ chấp nhận LIVE hoặc TEST.',
+  })
   environment: 'TEST' | 'LIVE' = 'LIVE';
 }
 
 export class ReviewSettlementDto extends SettlementEnvironmentDto {
   @ApiProperty({ enum: ['CONFIRM', 'REPORT_DISCREPANCY'] })
-  @IsIn(['CONFIRM', 'REPORT_DISCREPANCY'])
+  @IsIn(['CONFIRM', 'REPORT_DISCREPANCY'], {
+    message: 'Hành động đối soát không hợp lệ.',
+  })
   action: 'CONFIRM' | 'REPORT_DISCREPANCY';
 
-  @ApiProperty({ minimum: 1, description: 'Phiên bản bảng quyết toán đang được kiểm tra' })
-  @IsInt()
-  @Min(1)
+  @ApiProperty({
+    minimum: 1,
+    description: 'Phiên bản bảng quyết toán đang được kiểm tra',
+  })
+  @IsInt({ message: 'Phiên bản bảng quyết toán phải là số nguyên.' })
+  @Min(1, { message: 'Phiên bản bảng quyết toán không hợp lệ.' })
   reviewVersion: number;
 
-  @ApiPropertyOptional({ description: 'Nội dung sai lệch, bắt buộc khi báo sai lệch' })
+  @ApiPropertyOptional({
+    description: 'Nội dung sai lệch, bắt buộc khi báo sai lệch',
+  })
   @FieldFor('action', ['REPORT_DISCREPANCY'])
-  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
-  @IsString()
-  @Length(10, 1000)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString({ message: 'Nội dung sai lệch phải là chuỗi ký tự.' })
+  @Length(10, 1000, {
+    message: 'Nội dung sai lệch phải từ 10 đến 1000 ký tự.',
+  })
   reason?: string;
 }
 
@@ -148,15 +171,18 @@ export class MonthlySettlementDto extends ReportingPeriodDto {
     default: 'PREPARE',
     example: 'PREPARE',
   })
-  @IsIn(['PREPARE', 'CONFIRM_TRANSFER', 'MARK_FAILED', 'REOPEN_REVIEW'])
-  action: 'PREPARE' | 'CONFIRM_TRANSFER' | 'MARK_FAILED' | 'REOPEN_REVIEW' = 'PREPARE';
+  @IsIn(['PREPARE', 'CONFIRM_TRANSFER', 'MARK_FAILED', 'REOPEN_REVIEW'], {
+    message: 'Hành động quyết toán không hợp lệ.',
+  })
+  action: 'PREPARE' | 'CONFIRM_TRANSFER' | 'MARK_FAILED' | 'REOPEN_REVIEW' =
+    'PREPARE';
 
   @ApiPropertyOptional({
     description: 'Lọc theo UUID cơ sở y tế khi lập bảng (PREPARE)',
     example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
   @FieldFor('action', ['PREPARE'], false)
-  @IsUUID('4')
+  @IsUUID('4', { message: 'Mã cơ sở y tế không đúng định dạng UUID.' })
   facilityId?: string;
 
   @ApiPropertyOptional({
@@ -164,13 +190,16 @@ export class MonthlySettlementDto extends ReportingPeriodDto {
     example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
   @FieldFor('action', ['CONFIRM_TRANSFER', 'MARK_FAILED', 'REOPEN_REVIEW'])
-  @IsUUID('4')
+  @IsUUID('4', { message: 'Mã bảng quyết toán không đúng định dạng UUID.' })
   settlementId?: string;
 
-  @ApiPropertyOptional({ minimum: 1, description: 'Phiên bản bảng quyết toán đang hiển thị' })
+  @ApiPropertyOptional({
+    minimum: 1,
+    description: 'Phiên bản bảng quyết toán đang hiển thị',
+  })
   @FieldFor('action', ['CONFIRM_TRANSFER', 'REOPEN_REVIEW'], false)
-  @IsInt()
-  @Min(1)
+  @IsInt({ message: 'Phiên bản bảng quyết toán phải là số nguyên.' })
+  @Min(1, { message: 'Phiên bản bảng quyết toán không hợp lệ.' })
   reviewVersion?: number;
 
   @ApiPropertyOptional({
@@ -178,15 +207,22 @@ export class MonthlySettlementDto extends ReportingPeriodDto {
     example: 'FT261110001234',
   })
   @FieldFor('action', ['CONFIRM_TRANSFER'])
-  @IsString()
-  @Length(3, 100)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString({ message: 'Mã giao dịch ngân hàng phải là chuỗi ký tự.' })
+  @Length(3, 100, {
+    message: 'Mã giao dịch trên chứng từ phải từ 3 đến 100 ký tự.',
+  })
   bankTransferOrderId?: string;
 
-  @ApiPropertyOptional({ description: 'Nội dung đã điền khi chuyển tiền cho CSYT.' })
-  @FieldFor('action', ['CONFIRM_TRANSFER'], false)
-  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
-  @IsString()
-  @Length(1, 140)
+  @ApiPropertyOptional({
+    description: 'Nội dung đã điền khi chuyển tiền cho CSYT.',
+  })
+  @FieldFor('action', ['CONFIRM_TRANSFER'])
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString({ message: 'Nội dung chuyển khoản phải là chuỗi ký tự.' })
+  @Length(1, 140, {
+    message: 'Nội dung chuyển khoản phải từ 1 đến 140 ký tự.',
+  })
   transferMemo?: string;
 
   @ApiPropertyOptional({
@@ -194,9 +230,11 @@ export class MonthlySettlementDto extends ReportingPeriodDto {
     example: 50000000,
   })
   @FieldFor('action', ['CONFIRM_TRANSFER'])
-  @IsInt()
-  @Min(1)
-  @Max(999999999999)
+  @IsInt({ message: 'Số tiền đã chuyển phải là số nguyên (VNĐ).' })
+  @Min(1, { message: 'Số tiền đã chuyển phải lớn hơn 0 VNĐ.' })
+  @Max(999999999999, {
+    message: 'Số tiền đã chuyển không được vượt quá 999.999.999.999 VNĐ.',
+  })
   amountPaidVnd?: number;
 
   @ApiPropertyOptional({
@@ -205,12 +243,15 @@ export class MonthlySettlementDto extends ReportingPeriodDto {
     example: '2026-11-10T08:00:00.000Z',
   })
   @FieldFor('action', ['CONFIRM_TRANSFER'])
-  @IsISO8601({ strict: true, strictSeparator: true })
+  @IsISO8601(
+    { strict: true, strictSeparator: true },
+    { message: 'Thời điểm chuyển khoản không đúng định dạng ngày giờ.' },
+  )
   @Matches(
     /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-]\d{2}:[0-5]\d)$/,
     {
       message:
-        'paidAt phải có giờ và múi giờ, ví dụ 2026-11-10T15:00:00+07:00.',
+        'Thời điểm chuyển khoản phải có đầy đủ giờ, phút, giây và múi giờ.',
     },
   )
   paidAt?: string;
@@ -220,8 +261,11 @@ export class MonthlySettlementDto extends ReportingPeriodDto {
     example: '3fa85f64-5717-4562-b3fc-2c963f66afa6/settlements/unc_nov2026.pdf',
   })
   @FieldFor('action', ['CONFIRM_TRANSFER'])
-  @IsString()
-  @Length(5, 300)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString({ message: 'Đường dẫn chứng từ phải là chuỗi ký tự.' })
+  @Length(5, 300, {
+    message: 'Đường dẫn chứng từ phải từ 5 đến 300 ký tự.',
+  })
   evidenceKey?: string;
 
   @ApiPropertyOptional({
@@ -229,7 +273,10 @@ export class MonthlySettlementDto extends ReportingPeriodDto {
     example: 'Sai thông tin tài khoản thụ hưởng của cơ sở y tế',
   })
   @FieldFor('action', ['MARK_FAILED'])
-  @IsString()
-  @Length(10, 1000)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString({ message: 'Lý do chi trả thất bại phải là chuỗi ký tự.' })
+  @Length(10, 1000, {
+    message: 'Lý do chi trả thất bại phải từ 10 đến 1000 ký tự.',
+  })
   failureReason?: string;
 }

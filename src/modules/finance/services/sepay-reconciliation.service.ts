@@ -39,7 +39,7 @@ export class SePayReconciliationService {
     dto: RunSePayReconciliationDto,
   ) {
     if (actor.role !== 'ADMIN')
-      throw new ForbiddenException('Only Admin can run SePay reconciliation');
+      throw new ForbiddenException('Chỉ Quản trị viên mới có quyền chạy đối soát SePay.');
     return this.run('MANUAL', dto.environment, dto, actor.id);
   }
 
@@ -96,18 +96,18 @@ export class SePayReconciliationService {
     this.assertActiveEnvironment(environment);
     const explicitRange = Boolean(dto?.from || dto?.to);
     if (explicitRange && (!dto?.from || !dto.to))
-      throw new BadRequestException('from and to must be provided together');
+      throw new BadRequestException('Vui lòng cung cấp đầy đủ cả thời điểm bắt đầu và kết thúc.');
     const rangeFrom = dto?.from ? new Date(dto.from) : undefined;
     const rangeTo = dto?.to ? new Date(dto.to) : undefined;
     if (rangeFrom && rangeTo) {
       if (rangeFrom >= rangeTo)
-        throw new BadRequestException('from must be earlier than to');
+        throw new BadRequestException('Thời điểm bắt đầu phải sớm hơn thời điểm kết thúc.');
       if (rangeTo.getTime() - rangeFrom.getTime() > 31 * 86_400_000)
         throw new BadRequestException(
-          'A reconciliation range cannot exceed 31 days',
+          'Khoảng thời gian đối soát tối đa không được vượt quá 31 ngày.',
         );
       if (rangeTo.getTime() > Date.now() + 300_000)
-        throw new BadRequestException('to cannot be in the future');
+        throw new BadRequestException('Thời điểm kết thúc không được ở tương lai.');
     }
 
     await this.prisma.sePayReconciliationState.upsert({
@@ -124,7 +124,7 @@ export class SePayReconciliationService {
       data: { lockedUntil: new Date(now.getTime() + 30 * 60_000) },
     });
     if (!lock.count)
-      throw new ConflictException('A SePay reconciliation is already running');
+      throw new ConflictException('Đang có một lượt đồng bộ SePay khác đang chạy. Vui lòng đợi hoàn tất.');
 
     const state = await this.prisma.sePayReconciliationState.findUniqueOrThrow({
       where: { environment },
@@ -175,7 +175,7 @@ export class SePayReconciliationService {
       while (hasMore) {
         if (pageNumber > 1000)
           throw new ConflictException(
-            'Reconciliation exceeded 100,000 transactions; use a smaller range',
+            'Số giao dịch đối soát vượt quá 100.000 bản ghi; vui lòng chọn khoảng thời gian ngắn hơn.',
           );
         const page = await this.api.listTransactions(environment, {
           bankAccountId,
@@ -275,7 +275,7 @@ export class SePayReconciliationService {
   private assertActiveEnvironment(environment: PaymentEnvironment) {
     if (environment !== this.paymentsConfig.getEnvironment())
       throw new BadRequestException(
-        `This backend instance is configured for ${this.paymentsConfig.getEnvironment()}, not ${environment}`,
+        `Hệ thống hiện đang cấu hình ở môi trường ${this.paymentsConfig.getEnvironment()}, không hỗ trợ thao tác trên môi trường ${environment}.`,
       );
   }
 }

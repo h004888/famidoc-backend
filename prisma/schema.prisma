@@ -205,6 +205,20 @@ enum ComplaintStatus {
   CLOSED
 }
 
+enum SupportCaseType {
+  COMPLAINT_APPEAL
+  COMPLAINT_QUESTION
+  PAYMENT_ISSUE
+}
+
+enum SupportCaseStatus {
+  OPEN
+  IN_REVIEW
+  NEED_MORE_INFO
+  RESOLVED
+  CLOSED
+}
+
 enum OtpChallengePurpose {
   REGISTER_FAMILY_REP
   RESET_PASSWORD
@@ -279,6 +293,9 @@ model User {
   matchingQueueRequests             MatchingQueueRequest[] @relation("QueueRequester")
   assignedQueueRequests             MatchingQueueRequest[] @relation("QueueAdminAssigner")
   authSessions                      AuthSession[]
+  familySupportCases                SupportCase[]         @relation("SupportCaseFamilyUser")
+  resolvedSupportCases              SupportCase[]         @relation("SupportCaseResolver")
+  supportMessages                   SupportMessage[]      @relation("SupportMessageSender")
 
   @@map("users")
 }
@@ -688,6 +705,7 @@ model MedicalContract {
   encounters     Encounter[]
   invoices             Invoice[]
   complaints           Complaint[]
+  supportCases         SupportCase[]
   matchingSession      MatchingSession?
   matchingQueueRequest MatchingQueueRequest?
 
@@ -960,6 +978,11 @@ model Prescription {
   validUntil       DateTime?          @map("valid_until") @db.Date
   recipientUserId  String?            @map("recipient_user_id") @db.Uuid
   instructions     String?            @db.Text
+  clinicalContext  Json?              @map("clinical_context") @db.JsonB
+  recordSnapshot   Json?              @map("record_snapshot") @db.JsonB
+  replacesPrescriptionId String?      @unique @map("replaces_prescription_id") @db.Uuid
+  replacementReason String?           @map("replacement_reason") @db.Text
+  cancelledAt      DateTime?          @map("cancelled_at") @db.Timestamptz()
   status           PrescriptionStatus @default(ISSUED)
   createdAt        DateTime           @default(now()) @map("created_at") @db.Timestamptz()
 
@@ -967,6 +990,8 @@ model Prescription {
   clinicalEmr ClinicalEmr          @relation(fields: [emrId], references: [id], onDelete: Restrict)
   recipient   User?                @relation(fields: [recipientUserId], references: [id], onDelete: SetNull)
   details     PrescriptionDetail[]
+  replaces    Prescription? @relation("PrescriptionReplacement", fields: [replacesPrescriptionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  replacedBy  Prescription? @relation("PrescriptionReplacement")
 
   @@index([recipientUserId, createdAt(sort: Desc)])
   @@map("prescriptions")
@@ -976,6 +1001,9 @@ model PrescriptionDetail {
   id             String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   prescriptionId String @map("prescription_id") @db.Uuid
   medicationName String @map("medication_name") @db.VarChar(150)
+  medicationCode String? @map("medication_code") @db.VarChar(100)
+  activeIngredient String? @map("active_ingredient") @db.VarChar(255)
+  medicationType String @default("SINGLE_INGREDIENT") @map("medication_type") @db.VarChar(30)
   strength       String? @db.VarChar(50)
   administrationRoute String? @map("administration_route") @db.VarChar(50)
   lineNumber     Int @default(0) @map("line_number")
@@ -1045,6 +1073,7 @@ model Invoice {
   acceptedTransaction PaymentTransaction?  @relation("AcceptedInvoiceTransaction", fields: [acceptedTransactionId], references: [id], onDelete: Restrict)
 
   settlementItems FacilitySettlementItem[]
+  supportCases    SupportCase[]
 
   @@map("invoices")
 }
@@ -1098,6 +1127,7 @@ model PaymentTransaction {
   invoice           Invoice?                @relation("InvoiceTransactions", fields: [invoiceId], references: [id], onDelete: Restrict)
   acceptedBy        Invoice?                @relation("AcceptedInvoiceTransaction")
   reconciliationRun SePayReconciliationRun? @relation(fields: [reconciliationRunId], references: [id], onDelete: SetNull, map: "payment_transactions_reconciliation_run_fkey")
+  supportCases      SupportCase[]
 
   @@unique([environment, gatewayTransactionId])
   @@unique([environment, sepayWebhookTransactionId], map: "payment_transactions_environment_webhook_id_key")
@@ -1230,8 +1260,58 @@ model Complaint {
 
   facilityReviewer User? @relation("ComplaintFacilityReviewer", fields: [facilityReviewedById], references: [id], onDelete: Restrict, map: "complaints_facility_reviewer_fkey")
   resolver         User? @relation("ComplaintResolver", fields: [resolvedByUserId], references: [id], onDelete: Restrict, map: "complaints_resolver_fkey")
+  supportCases     SupportCase[]
 
   @@map("complaints")
+}
+
+model SupportCase {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseCode          String            @unique @map("case_code") @db.VarChar(50)
+  caseType          SupportCaseType   @map("case_type")
+  status            SupportCaseStatus @default(OPEN)
+  familyUserId      String            @map("family_user_id") @db.Uuid
+  contractId        String            @map("contract_id") @db.Uuid
+  complaintId       String?           @map("complaint_id") @db.Uuid
+  invoiceId         String?           @map("invoice_id") @db.Uuid
+  transactionId     String?           @map("transaction_id") @db.Uuid
+  contextSnapshot   Json              @default("{}") @map("context_snapshot") @db.JsonB
+  resolutionSummary String?           @map("resolution_summary") @db.Text
+  resolvedByUserId  String?           @map("resolved_by_user_id") @db.Uuid
+  resolvedAt        DateTime?         @map("resolved_at") @db.Timestamptz()
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  familyUser  User                @relation("SupportCaseFamilyUser", fields: [familyUserId], references: [id], onDelete: Restrict)
+  resolver    User?               @relation("SupportCaseResolver", fields: [resolvedByUserId], references: [id], onDelete: SetNull)
+  contract    MedicalContract     @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  complaint   Complaint?          @relation(fields: [complaintId], references: [id], onDelete: Restrict)
+  invoice     Invoice?            @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  transaction PaymentTransaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  messages    SupportMessage[]
+
+  @@index([caseType, status, updatedAt], map: "idx_support_cases_type_status_updated")
+  @@index([familyUserId, createdAt], map: "idx_support_cases_family_created")
+  @@index([complaintId], map: "idx_support_cases_complaint_id")
+  @@index([invoiceId], map: "idx_support_cases_invoice_id")
+  @@map("support_cases")
+}
+
+model SupportMessage {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caseId         String      @map("case_id") @db.Uuid
+  senderUserId   String      @map("sender_user_id") @db.Uuid
+  senderRole     String      @map("sender_role") @db.VarChar(30)
+  body           String      @db.Text
+  attachmentKeys Json?       @map("attachment_keys") @db.JsonB
+  isSupplement   Boolean     @default(false) @map("is_supplement")
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+
+  supportCase SupportCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  senderUser  User        @relation("SupportMessageSender", fields: [senderUserId], references: [id], onDelete: Restrict)
+
+  @@index([caseId, createdAt], map: "idx_support_messages_case_created")
+  @@map("support_messages")
 }
 
 // =========================================================================

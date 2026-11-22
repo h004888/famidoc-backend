@@ -56,9 +56,9 @@ export class AdminCarePackagesController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Tạo gói chăm sóc mới ở trạng thái DRAFT' })
+  @ApiOperation({ summary: 'Tạo và mở bán ngay gói chăm sóc mới' })
   @ApiBody({ type: CreateCarePackageDto })
-  @ApiResponse({ status: 201, description: 'Tạo gói chăm sóc thành công' })
+  @ApiResponse({ status: 201, description: 'Gói được tạo thành công và đang mở bán' })
   @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
   create(@Body() dto: CreateCarePackageDto) {
     // Controller chỉ chuyển DTO hợp lệ sang service, không tự tạo ID hay phiên bản.
@@ -95,6 +95,15 @@ export class AdminCarePackagesController {
   publish(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
     // Công bố để gói xuất hiện ở danh mục công khai; không phải thao tác thanh toán.
     return this.service.publish(id);
+  }
+
+  @Post(':id/reopen')
+  @ApiOperation({ summary: 'Mở bán lại gói đã ngừng bán' })
+  @ApiParam({ name: 'id', description: 'UUID của gói cần mở bán lại' })
+  @ApiResponse({ status: 201, description: 'Gói được mở bán lại thành công' })
+  @ApiResponse({ status: 409, description: 'Trạng thái gói đã thay đổi hoặc đã có phiên bản mới hơn' })
+  reopen(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+    return this.service.reopen(id);
   }
 
   @Post(':id/retire')
