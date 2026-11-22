@@ -146,11 +146,29 @@ enum EncounterCategory {
   AD_HOC_ON_DEMAND
 }
 
+enum EncounterVisitScope {
+  FAMILY
+  INDIVIDUAL
+}
+
 enum EncounterStatus {
   REQUESTED
   CONFIRMED
   IN_PROGRESS
   COMPLETED
+  CANCELLED
+}
+
+enum RescheduleDecision {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RescheduleRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
   CANCELLED
 }
 
@@ -353,7 +371,6 @@ model HealthcareFacility {
   // Relations
   user                User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
   doctors             Doctor[]
-  doctorShifts        DoctorShift[]
   staffingContracts   B2bStaffingContract[]
   medicalContracts    MedicalContract[]
   facilitySettlements FacilitySettlement[]
@@ -375,7 +392,7 @@ model Doctor {
   clinicalTier     DoctorClinicalTier     @default(STANDARD) @map("clinical_tier")
   bio              String?                @db.Text
   activePanelCount Int                    @default(0) @map("active_panel_count")
-  maxPanelCapacity Int                    @default(30) @map("max_panel_capacity")
+  maxPanelCapacity Int                    @default(5) @map("max_panel_capacity")
   ratingAvg              Decimal                @default(5.00) @map("rating_avg") @db.Decimal(3, 2)
   totalReviews           Int                    @default(0) @map("total_reviews")
   onboardingStatus       DoctorOnboardingStatus @default(PENDING_SUBMISSION) @map("onboarding_status")
@@ -388,7 +405,6 @@ model Doctor {
   user               User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
   facility           HealthcareFacility     @relation(fields: [facilityId], references: [id], onDelete: Restrict)
   credentials        DoctorCredential[]
-  shifts             DoctorShift[]
   medicalContracts   MedicalContract[]
   encounters         Encounter[]
   reviews            DoctorReview[]
@@ -443,24 +459,6 @@ model DoctorTreatedCase {
 
   @@index([doctorId, status], map: "idx_doctor_treated_cases_lookup")
   @@map("doctor_treated_cases")
-}
-
-model DoctorShift {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  doctorId   String   @map("doctor_id") @db.Uuid
-  facilityId String   @map("facility_id") @db.Uuid
-  shiftDate  DateTime @map("shift_date") @db.Date
-  startTime  DateTime @map("start_time") @db.Time
-  endTime    DateTime @map("end_time") @db.Time
-  shiftType  String   @map("shift_type") @db.VarChar(50)
-  notes      String?  @db.Text
-
-  // Relations
-  doctor   Doctor             @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  facility HealthcareFacility @relation(fields: [facilityId], references: [id], onDelete: Cascade)
-
-  @@index([doctorId, shiftDate], map: "idx_doctor_shifts_lookup")
-  @@map("doctor_shifts")
 }
 
 // =========================================================================
@@ -594,11 +592,12 @@ model Patient {
 
   // Relations
   familyUnit      FamilyUnit        @relation(fields: [familyId], references: [id], onDelete: Cascade)
-  allergies       PatientAllergy[]
-  documents       PatientDocument[]
-  encounters      Encounter[]
-  vitalSigns      VitalSign[]
-  contractMembers ContractMember[]
+  allergies             PatientAllergy[]
+  documents             PatientDocument[]
+  encounterParticipants EncounterParticipant[]
+  clinicalEmrs          ClinicalEmr[]
+  vitalSigns            VitalSign[]
+  contractMembers       ContractMember[]
 
   @@map("patients")
 }
@@ -785,39 +784,81 @@ model ContractAddendum {
 // =========================================================================
 
 model Encounter {
-  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  contractId      String            @map("contract_id") @db.Uuid
-  patientId       String            @map("patient_id") @db.Uuid
-  doctorId        String            @map("doctor_id") @db.Uuid
-  encounterType   EncounterType     @map("encounter_type")
-  category        EncounterCategory
-  scheduledDate   DateTime          @map("scheduled_date") @db.Date
-  scheduledTime   DateTime          @map("scheduled_time") @db.Time
-  rescheduleCount Int               @default(0) @map("reschedule_count")
-  proposedDate    DateTime?         @map("proposed_date") @db.Date
-  proposedTime    DateTime?         @map("proposed_time") @db.Time
-  proposedBy      String?           @map("proposed_by") @db.VarChar(50)
-  rescheduleReason String?          @map("reschedule_reason") @db.Text
-  conflictAlert   Boolean           @default(false) @map("conflict_alert")
-  conflictDetails String?           @map("conflict_details") @db.Text
-  encounterStatus EncounterStatus   @default(REQUESTED) @map("encounter_status")
-  cancelReason    String?           @map("cancel_reason") @db.Text
-  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt       DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contractId         String              @map("contract_id") @db.Uuid
+  doctorId           String              @map("doctor_id") @db.Uuid
+  encounterType      EncounterType       @map("encounter_type")
+  category           EncounterCategory
+  visitScope         EncounterVisitScope @default(INDIVIDUAL) @map("visit_scope")
+  scheduledDate      DateTime            @map("scheduled_date") @db.Date
+  scheduledTime      DateTime            @map("scheduled_time") @db.Time
+  rescheduleCount    Int                 @default(0) @map("reschedule_count")
+  encounterStatus    EncounterStatus     @default(REQUESTED) @map("encounter_status")
+  cancelReason       String?             @map("cancel_reason") @db.Text
+  reminder24hSentAt  DateTime?           @map("reminder_24h_sent_at") @db.Timestamptz()
+  reminder2hSentAt   DateTime?           @map("reminder_2h_sent_at") @db.Timestamptz()
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt          DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   // Relations
-  contract          MedicalContract    @relation(fields: [contractId], references: [id], onDelete: Restrict)
-  patient           Patient            @relation(fields: [patientId], references: [id], onDelete: Restrict)
-  doctor            Doctor             @relation(fields: [doctorId], references: [id], onDelete: Restrict)
-  telehealthSession TelehealthSession?
-  clinicalEmr       ClinicalEmr?
-  invoices          Invoice[]
-  doctorReview      DoctorReview?
-  complaints        Complaint[]
+  contract           MedicalContract              @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  doctor             Doctor                       @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  participants       EncounterParticipant[]
+  rescheduleRequests EncounterRescheduleRequest[]
+  telehealthSession  TelehealthSession?
+  clinicalEmrs       ClinicalEmr[]
+  invoices           Invoice[]
+  doctorReview       DoctorReview?
+  complaints         Complaint[]
 
-  @@index([patientId, scheduledDate(sort: Desc), scheduledTime(sort: Desc)], map: "idx_encounters_patient_timeline")
+  @@index([contractId, scheduledDate(sort: Desc), scheduledTime(sort: Desc)], map: "idx_encounters_contract_timeline")
   @@index([doctorId, scheduledDate, scheduledTime], map: "idx_encounters_doctor_schedule")
   @@map("encounters")
+}
+
+model EncounterRescheduleRequest {
+  id                String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  encounterId       String                  @map("encounter_id") @db.Uuid
+  requestedByRole   String                  @map("requested_by_role") @db.VarChar(30)
+  requestedByUserId String                  @map("requested_by_user_id") @db.Uuid
+  proposedDate      DateTime                @map("proposed_date") @db.Date
+  proposedTime      DateTime                @map("proposed_time") @db.Time
+  reason            String                  @db.Text
+  familyDecision    RescheduleDecision      @default(PENDING) @map("family_decision")
+  familyDecidedBy   String?                 @map("family_decided_by") @db.Uuid
+  familyDecidedAt   DateTime?               @map("family_decided_at") @db.Timestamptz()
+  familyNote        String?                 @map("family_note") @db.Text
+  doctorDecision    RescheduleDecision      @default(PENDING) @map("doctor_decision")
+  doctorDecidedBy   String?                 @map("doctor_decided_by") @db.Uuid
+  doctorDecidedAt   DateTime?               @map("doctor_decided_at") @db.Timestamptz()
+  doctorNote        String?                 @map("doctor_note") @db.Text
+  facilityDecision  RescheduleDecision      @default(PENDING) @map("facility_decision")
+  facilityDecidedBy String?                 @map("facility_decided_by") @db.Uuid
+  facilityDecidedAt DateTime?               @map("facility_decided_at") @db.Timestamptz()
+  facilityNote      String?                 @map("facility_note") @db.Text
+  status            RescheduleRequestStatus @default(PENDING)
+  resolvedAt        DateTime?               @map("resolved_at") @db.Timestamptz()
+  createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt         DateTime                @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+
+  @@index([encounterId, status], map: "idx_encounter_reschedule_requests_lookup")
+  @@map("encounter_reschedule_requests")
+}
+
+model EncounterParticipant {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  encounterId String   @map("encounter_id") @db.Uuid
+  patientId   String   @map("patient_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  patient   Patient   @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@unique([encounterId, patientId], map: "idx_encounter_participants_unique")
+  @@index([patientId], map: "idx_encounter_participants_patient")
+  @@map("encounter_participants")
 }
 
 model TelehealthSession {
@@ -831,9 +872,30 @@ model TelehealthSession {
   isFallbackChat      Boolean   @default(false) @map("is_fallback_chat")
 
   // Relations
-  encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  encounter Encounter           @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+  messages  TelehealthMessage[]
 
   @@map("telehealth_sessions")
+}
+
+model TelehealthMessage {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sessionId           String   @map("session_id") @db.Uuid
+  senderUserId        String   @map("sender_user_id") @db.Uuid
+  senderRole          String   @map("sender_role") @db.VarChar(20)
+  senderName          String   @map("sender_name") @db.VarChar(150)
+  content             String?  @db.Text
+  attachmentKey       String?  @map("attachment_key") @db.VarChar(500)
+  attachmentName      String?  @map("attachment_name") @db.VarChar(255)
+  attachmentMimeType  String?  @map("attachment_mime_type") @db.VarChar(100)
+  attachmentSizeBytes Int?     @map("attachment_size_bytes")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  // Relations
+  session TelehealthSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt], map: "idx_telehealth_messages_session_created")
+  @@map("telehealth_messages")
 }
 
 // =========================================================================
@@ -842,7 +904,8 @@ model TelehealthSession {
 
 model ClinicalEmr {
   id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  encounterId         String    @unique @map("encounter_id") @db.Uuid
+  encounterId         String    @map("encounter_id") @db.Uuid
+  patientId           String    @map("patient_id") @db.Uuid
   chiefComplaint      String    @map("chief_complaint") @db.Text
   anamnesis           String?   @db.Text
   clinicalFindings    String    @map("clinical_findings") @db.Text
@@ -857,10 +920,12 @@ model ClinicalEmr {
 
   // Relations
   encounter     Encounter      @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+  patient       Patient        @relation(fields: [patientId], references: [id], onDelete: Restrict)
   vitalSigns    VitalSign[]
   prescriptions Prescription[]
   referralOrder ReferralOrder?
 
+  @@unique([encounterId, patientId], map: "idx_clinical_emr_encounter_patient")
   @@map("clinical_emr")
 }
 

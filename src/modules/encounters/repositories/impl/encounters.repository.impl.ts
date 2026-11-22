@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DoctorShift, Encounter, EncounterType, Prisma } from '@prisma/client';
+import { Encounter, EncounterStatus, EncounterType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../../core/database/prisma.service';
 import { serializable } from '../../../../core/database/prisma-transaction';
 import { writeBusinessAudit } from '../../../../core/business/business-helpers';
@@ -97,53 +97,46 @@ class PrismaEncountersSession implements EncountersSession {
     }
   }
 
-  findDoctorShifts(doctorId: string, shiftDate: Date) {
-    return this.tx.doctorShift.findMany({
-      where: {
-        doctorId,
-        shiftDate,
-      },
-    });
-  }
-
   findDoctorOverlappingEncounters(
     doctorId: string,
     scheduledDate: Date,
     excludeEncounterId?: string,
+    statuses: EncounterStatus[] = ['CONFIRMED'],
   ) {
     return this.tx.encounter.findMany({
       where: {
         doctorId,
         scheduledDate,
-        encounterStatus: 'CONFIRMED',
+        encounterStatus: { in: statuses },
         ...(excludeEncounterId ? { id: { not: excludeEncounterId } } : {}),
       },
     });
   }
 
-  createDoctorShift(data: Prisma.DoctorShiftUncheckedCreateInput) {
-    return this.tx.doctorShift.create({ data });
+  findPendingRescheduleRequestByEncounter(encounterId: string) {
+    return this.tx.encounterRescheduleRequest.findFirst({
+      where: { encounterId, status: 'PENDING' },
+    });
   }
 
-  findShiftsByFacility(facilityId: string, fromDate?: Date, toDate?: Date) {
-    return this.tx.doctorShift.findMany({
-      where: {
-        facilityId,
-        ...(fromDate || toDate
-          ? {
-              shiftDate: {
-                ...(fromDate ? { gte: fromDate } : {}),
-                ...(toDate ? { lte: toDate } : {}),
-              },
-            }
-          : {}),
-      },
-      include: {
-        doctor: {
-          include: { user: true },
-        },
-      },
-      orderBy: [{ shiftDate: 'asc' }, { startTime: 'asc' }],
+  findRescheduleRequestById(requestId: string) {
+    return this.tx.encounterRescheduleRequest.findUnique({
+      where: { id: requestId },
+    });
+  }
+
+  createRescheduleRequest(data: Prisma.EncounterRescheduleRequestUncheckedCreateInput) {
+    return this.tx.encounterRescheduleRequest.create({ data });
+  }
+
+  updateRescheduleRequest(id: string, data: Prisma.EncounterRescheduleRequestUncheckedUpdateInput) {
+    return this.tx.encounterRescheduleRequest.update({ where: { id }, data });
+  }
+
+  findPendingRescheduleRequests(where: Prisma.EncounterRescheduleRequestWhereInput) {
+    return this.tx.encounterRescheduleRequest.findMany({
+      where: { ...where, status: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
     });
   }
 

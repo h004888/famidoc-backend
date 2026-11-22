@@ -82,11 +82,11 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       id: 'contract-1',
       familyId: 'fam-unit-1',
       facilityId: 'facility-1',
-      familyUnit: { representativeUserId: 'user-family-1' },
+      familyUnit: { representativeUserId: 'user-family-1', representativeUser: { fullName: 'Gia dinh 1' } },
       facility: { user: { id: 'user-facility-1' } },
       doctor: { user: { id: 'user-doctor-1' } },
     },
-    patient: { id: 'patient-1', fullName: 'Nguyen Van Patient' },
+    participants: [{ patient: { id: 'patient-1', fullName: 'Nguyen Van Patient' } }],
     doctor: {
       id: 'doctor-1',
       doctorName: 'BS Nguyen Van A',
@@ -107,10 +107,12 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
         Promise.resolve({ ...sampleEncounter, ...data }),
       ),
       decrementContractQuota: jest.fn().mockResolvedValue(undefined),
-      findDoctorShifts: jest.fn().mockResolvedValue([]),
       findDoctorOverlappingEncounters: jest.fn().mockResolvedValue([]),
-      createDoctorShift: jest.fn().mockImplementation((data) => Promise.resolve({ id: 'shift-1', ...data })),
-      findShiftsByFacility: jest.fn().mockResolvedValue([]),
+      findPendingRescheduleRequestByEncounter: jest.fn().mockResolvedValue(null),
+      findRescheduleRequestById: jest.fn().mockResolvedValue(null),
+      createRescheduleRequest: jest.fn().mockImplementation((data) => Promise.resolve({ id: 'req-1', ...data })),
+      updateRescheduleRequest: jest.fn().mockImplementation((id, data) => Promise.resolve({ id, ...data })),
+      findPendingRescheduleRequests: jest.fn().mockResolvedValue([]),
       findEncounters: jest.fn().mockResolvedValue([[sampleEncounter as any], 1]),
       createNotification: jest.fn().mockResolvedValue(undefined),
       createNotifications: jest.fn().mockResolvedValue(undefined),
@@ -161,10 +163,11 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       expect(mockSession.createEncounter).toHaveBeenCalledWith(
         expect.objectContaining({
           contractId: 'contract-1',
-          patientId: 'patient-1',
           encounterType: EncounterType.HOME_VISIT,
           category: EncounterCategory.PERIODIC_ROUTINE,
           encounterStatus: EncounterStatus.REQUESTED,
+          visitScope: 'INDIVIDUAL',
+          participants: { create: [{ patientId: 'patient-1' }] },
         }),
       );
       expect(mockSession.createNotification).toHaveBeenCalled();
@@ -287,35 +290,12 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       expect(mockSession.decrementContractQuota).toHaveBeenCalledWith('contract-1', EncounterType.HOME_VISIT);
       expect(mockSession.updateEncounter).toHaveBeenCalledWith('encounter-1', {
         encounterStatus: EncounterStatus.CONFIRMED,
-        conflictAlert: false,
-        conflictDetails: null,
       });
       expect(mockSession.createNotifications).toHaveBeenCalled();
       expect((res as any).encounterStatus).toBe(EncounterStatus.CONFIRMED);
     });
 
-    it('TC-U03: Overlaps with Healthcare Facility internal duty shift -> triggers Conflict Alert', async () => {
-      // Mock existing shift at facility from 08:00 to 12:00
-      (mockSession.findDoctorShifts as jest.Mock).mockResolvedValueOnce([
-        {
-          id: 'shift-1',
-          doctorId: 'doctor-1',
-          shiftDate: new Date('2026-12-01T00:00:00.000Z'),
-          startTime: new Date('1970-01-01T08:00:00.000Z'),
-          endTime: new Date('1970-01-01T12:00:00.000Z'),
-          shiftType: 'MORNING_CLINIC',
-        },
-      ]);
-
-      const res: any = await service.confirmEncounter(familyActor, 'encounter-1', { confirmed: true });
-
-      expect(res.status).toBe('CONFLICT_ALERT');
-      expect(res.conflictDetails).toContain('MORNING_CLINIC');
-      expect(mockSession.decrementContractQuota).not.toHaveBeenCalled();
-      expect(mockSession.createNotification).toHaveBeenCalled(); // Alert to doctor and facility
-    });
-
-    it('TC-U04: Overlaps with another confirmed appointment (Double booking) -> triggers Conflict Alert', async () => {
+    it('TC-U04: Overlaps with another confirmed appointment (Double booking) -> throws ConflictException', async () => {
       (mockSession.findDoctorOverlappingEncounters as jest.Mock).mockResolvedValueOnce([
         {
           id: 'other-encounter-2',
@@ -323,10 +303,10 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
         },
       ]);
 
-      const res: any = await service.confirmEncounter(familyActor, 'encounter-1', { confirmed: true });
-
-      expect(res.status).toBe('CONFLICT_ALERT');
-      expect(res.conflictDetails).toContain('Trùng với một lịch khám đã xác nhận khác');
+      await expect(
+        service.confirmEncounter(familyActor, 'encounter-1', { confirmed: true }),
+      ).rejects.toThrow(ConflictException);
+      expect(mockSession.decrementContractQuota).not.toHaveBeenCalled();
     });
 
     it('Fails if encounter is already confirmed', async () => {
@@ -343,10 +323,10 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
 
   describe('6. Rescheduling & 4-Hour SLA Rule (TC-H03 & TC-U01 & TC-U08)', () => {
     it('TC-U01: Rejects reschedule request when remaining time < 4 hours', async () => {
-      // Appointment in 2 hours
       const twoHoursAhead = new Date(Date.now() + 2 * 3600_000);
       (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
         ...sampleEncounter,
+        encounterStatus: EncounterStatus.CONFIRMED,
         scheduledDate: twoHoursAhead,
         scheduledTime: twoHoursAhead,
       });
@@ -366,34 +346,38 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       );
     });
 
-    it('TC-H03: Accepts reschedule request when remaining time >= 4 hours', async () => {
-      // Appointment in 24 hours
+    it('TC-H03: Family creates reschedule request when >= 4 hours -> auto approves family, pending doctor & facility', async () => {
       const tomorrow = new Date(Date.now() + 24 * 3600_000);
       (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
         ...sampleEncounter,
+        encounterStatus: EncounterStatus.CONFIRMED,
         scheduledDate: tomorrow,
         scheduledTime: tomorrow,
       });
 
-      const res = await service.requestReschedule(familyActor, 'encounter-1', {
+      const res: any = await service.requestReschedule(familyActor, 'encounter-1', {
         proposedDate: '2026-12-05',
         proposedTime: '14:00:00',
         rescheduleReason: 'Cần dời sang chiều',
       });
 
-      expect(mockSession.updateEncounter).toHaveBeenCalledWith('encounter-1', {
-        proposedDate: expect.any(Date),
-        proposedTime: expect.any(Date),
-        proposedBy: 'FAMILY_REP',
-        rescheduleReason: 'Cần dời sang chiều',
-        rescheduleCount: { increment: 1 },
-      });
-      expect(res).toBeDefined();
+      expect(mockSession.createRescheduleRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestedByRole: 'FAMILY_REP',
+          familyDecision: 'APPROVED',
+          doctorDecision: 'PENDING',
+          facilityDecision: 'PENDING',
+          status: 'PENDING',
+        }),
+      );
+      expect(mockSession.createNotifications).toHaveBeenCalled();
+      expect(res.status).toBe('PENDING');
     });
 
     it('TC-U08: Rejects when reschedule count exceeds maximum limit (>= 3)', async () => {
       (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
         ...sampleEncounter,
+        encounterStatus: EncounterStatus.CONFIRMED,
         rescheduleCount: 3,
         scheduledDate: new Date(Date.now() + 24 * 3600_000),
       });
@@ -408,106 +392,85 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
     });
   });
 
-  describe('7. Doctor Reschedule Review (TC-H03, TC-H04, TC-U02)', () => {
-    it('TC-H03: Doctor accepts family proposed schedule', async () => {
-      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+  describe('7. Tripartite Reschedule Decisions (3-Party Consensus)', () => {
+    it('Family request: Doctor approves (still PENDING), then Facility approves -> updates Encounter & APPROVED', async () => {
+      (mockSession.findEncounter as jest.Mock).mockResolvedValue({
         ...sampleEncounter,
+        encounterStatus: EncounterStatus.CONFIRMED,
+      });
+      (mockSession.findRescheduleRequestById as jest.Mock).mockResolvedValueOnce({
+        id: 'req-1',
+        encounterId: 'encounter-1',
+        requestedByRole: 'FAMILY_REP',
         proposedDate: new Date('2026-12-05T00:00:00.000Z'),
         proposedTime: new Date('1970-01-01T14:00:00.000Z'),
-        proposedBy: 'FAMILY_REP',
+        familyDecision: 'APPROVED',
+        doctorDecision: 'PENDING',
+        facilityDecision: 'PENDING',
+        status: 'PENDING',
       });
 
-      const res = await service.reviewReschedule(doctorActor, 'encounter-1', {
-        accept: true,
+      const partial: any = await service.decideRescheduleRequest(doctorActor, 'encounter-1', 'req-1', {
+        decision: 'APPROVE',
+      });
+      expect(partial.doctorDecision).toBe('APPROVED');
+      expect(mockSession.updateEncounter).not.toHaveBeenCalled();
+
+      (mockSession.findRescheduleRequestById as jest.Mock).mockResolvedValueOnce({
+        id: 'req-1',
+        encounterId: 'encounter-1',
+        requestedByRole: 'FAMILY_REP',
+        proposedDate: new Date('2026-12-05T00:00:00.000Z'),
+        proposedTime: new Date('1970-01-01T14:00:00.000Z'),
+        familyDecision: 'APPROVED',
+        doctorDecision: 'APPROVED',
+        facilityDecision: 'PENDING',
+        status: 'PENDING',
       });
 
+      const finalRes: any = await service.decideRescheduleRequest(facilityActor, 'encounter-1', 'req-1', {
+        decision: 'APPROVE',
+      });
+      expect(finalRes.status).toBe('APPROVED');
       expect(mockSession.updateEncounter).toHaveBeenCalledWith(
         'encounter-1',
         expect.objectContaining({
-          encounterStatus: EncounterStatus.CONFIRMED,
-          proposedDate: null,
-          proposedTime: null,
-          proposedBy: null,
-        }),
-      );
-      expect(mockSession.createNotification).toHaveBeenCalled();
-      expect(res).toBeDefined();
-    });
-
-    it('TC-H04: Doctor counters with an alternative time slot', async () => {
-      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
-        ...sampleEncounter,
-        proposedDate: new Date('2026-12-05T00:00:00.000Z'),
-        proposedTime: new Date('1970-01-01T14:00:00.000Z'),
-        proposedBy: 'FAMILY_REP',
-      });
-
-      const res = await service.reviewReschedule(doctorActor, 'encounter-1', {
-        accept: false,
-        counterDate: '2026-12-06',
-        counterTime: '15:30:00',
-        notes: 'Chiều 5/12 tôi bận, đổi sang chiều 6/12',
-      });
-
-      expect(mockSession.updateEncounter).toHaveBeenCalledWith('encounter-1', {
-        proposedDate: expect.any(Date),
-        proposedTime: expect.any(Date),
-        proposedBy: 'DOCTOR',
-        rescheduleReason: 'Chiều 5/12 tôi bận, đổi sang chiều 6/12',
-      });
-      expect(mockSession.createNotification).toHaveBeenCalled();
-      expect(res).toBeDefined();
-    });
-
-    it('TC-U02: Doctor rejects and no suitable slot is available', async () => {
-      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
-        ...sampleEncounter,
-        proposedDate: new Date('2026-12-05T00:00:00.000Z'),
-        proposedTime: new Date('1970-01-01T14:00:00.000Z'),
-        proposedBy: 'FAMILY_REP',
-      });
-
-      const res: any = await service.reviewReschedule(doctorActor, 'encounter-1', {
-        accept: false,
-      });
-
-      expect(res.status).toBe('NO_SUITABLE_SLOT');
-      expect(mockSession.createNotification).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'RESCHEDULE_NO_SLOT_AVAILABLE',
+          rescheduleCount: { increment: 1 },
+          reminder24hSentAt: null,
+          reminder2hSentAt: null,
         }),
       );
     });
-  });
 
-  describe('8. Healthcare Facility Duty Shifts Management', () => {
-    it('Facility creates a duty shift successfully', async () => {
-      const res = await service.createDoctorShift(facilityActor, {
-        doctorId: 'doctor-1',
-        shiftDate: '2026-11-25',
-        startTime: '07:30:00',
-        endTime: '11:30:00',
-        shiftType: 'MORNING_CLINIC',
+    it('Facility rejects -> request REJECTED, original CONFIRMED encounter untouched', async () => {
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...sampleEncounter,
+        encounterStatus: EncounterStatus.CONFIRMED,
+      });
+      (mockSession.findRescheduleRequestById as jest.Mock).mockResolvedValueOnce({
+        id: 'req-1',
+        encounterId: 'encounter-1',
+        requestedByRole: 'FAMILY_REP',
+        proposedDate: new Date('2026-12-05T00:00:00.000Z'),
+        proposedTime: new Date('1970-01-01T14:00:00.000Z'),
+        familyDecision: 'APPROVED',
+        doctorDecision: 'APPROVED',
+        facilityDecision: 'PENDING',
+        status: 'PENDING',
       });
 
-      expect(mockSession.createDoctorShift).toHaveBeenCalled();
-      expect(res).toBeDefined();
-    });
+      const res: any = await service.decideRescheduleRequest(facilityActor, 'encounter-1', 'req-1', {
+        decision: 'REJECT',
+        note: 'Không điều phối được giờ này',
+      });
 
-    it('Fails when shift startTime is after endTime', async () => {
-      await expect(
-        service.createDoctorShift(facilityActor, {
-          doctorId: 'doctor-1',
-          shiftDate: '2026-11-25',
-          startTime: '15:00:00',
-          endTime: '08:00:00',
-          shiftType: 'INVALID_SHIFT',
-        }),
-      ).rejects.toThrow(BadRequestException);
+      expect(res.status).toBe('REJECTED');
+      expect(mockSession.updateEncounter).not.toHaveBeenCalled();
+      expect(mockSession.createNotifications).toHaveBeenCalled();
     });
   });
 
-  describe('9. Timetable & Schedule Board Queries', () => {
+  describe('8. Timetable & Schedule Board Queries', () => {
     it('Doctor queries timetable successfully', async () => {
       const res: any = await service.getDoctorTimetable(doctorActor, { page: 1, pageSize: 10 });
       expect(res.data).toHaveLength(1);
@@ -520,11 +483,11 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       expect(res.pagination.totalItems).toBe(1);
     });
 
-    it('Facility queries schedule board successfully', async () => {
+    it('Facility queries schedule board successfully (platform encounters & pending reschedules)', async () => {
       const res: any = await service.getFacilityScheduleBoard(facilityActor);
       expect(res.facilityId).toBe('facility-1');
-      expect(res.dutyShifts).toBeDefined();
-      expect(res.externalEncounters).toBeDefined();
+      expect(res.encounters).toBeDefined();
+      expect(res.pendingRescheduleRequests).toBeDefined();
     });
   });
 });

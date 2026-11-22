@@ -8,6 +8,7 @@ import { ENCOUNTERS_SERVICE_TOKEN } from './services/interfaces/encounters.servi
 import { EncountersRepositoryImpl } from './repositories/impl/encounters.repository.impl';
 import { ENCOUNTERS_REPOSITORY_TOKEN } from './repositories/interfaces/encounters.repository.interface';
 import { EncounterRemindersService } from './services/impl/encounter-reminders.service';
+import { AutoScheduleFirstVisitService } from './services/impl/auto-schedule-first-visit.service';
 import { PrescriptionsController } from './controllers/prescriptions.controller';
 import { PrescriptionsService } from './services/prescriptions.service';
 import { MedicalBooksController } from './controllers/medical-books.controller';
@@ -20,6 +21,7 @@ import { MedicalBooksService } from './services/medical-books.service';
     { provide: ENCOUNTERS_SERVICE_TOKEN, useClass: EncountersServiceImpl },
     { provide: ENCOUNTERS_REPOSITORY_TOKEN, useClass: EncountersRepositoryImpl },
     EncounterRemindersService,
+    AutoScheduleFirstVisitService,
     PrescriptionsService,
     MedicalBooksService,
   ],
@@ -27,6 +29,7 @@ import { MedicalBooksService } from './services/medical-books.service';
     ENCOUNTERS_SERVICE_TOKEN,
     ENCOUNTERS_REPOSITORY_TOKEN,
     EncounterRemindersService,
+    AutoScheduleFirstVisitService,
   ],
 })
 export class EncountersModule {}

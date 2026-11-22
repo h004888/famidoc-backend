@@ -10,6 +10,7 @@ describe('EncounterRemindersService', () => {
     mockPrisma = {
       encounter: {
         findMany: jest.fn(),
+        update: jest.fn().mockResolvedValue({}),
       },
       notification: {
         createMany: jest.fn().mockResolvedValue({ count: 2 }),
@@ -40,9 +41,9 @@ describe('EncounterRemindersService', () => {
         scheduledTime: enc24hDate,
         encounterType: EncounterType.HOME_VISIT,
         contract: {
-          familyUnit: { representativeUserId: 'fam-user-1' },
+          familyUnit: { representativeUserId: 'fam-user-1', representativeUser: { fullName: 'Fam 1' } },
         },
-        patient: { fullName: 'Patient 24H' },
+        participants: [{ patient: { fullName: 'Patient 24H' } }],
         doctor: {
           user: { id: 'doc-user-1' },
         },
@@ -53,9 +54,9 @@ describe('EncounterRemindersService', () => {
         scheduledTime: enc2hDate,
         encounterType: EncounterType.TELEHEALTH,
         contract: {
-          familyUnit: { representativeUserId: 'fam-user-2' },
+          familyUnit: { representativeUserId: 'fam-user-2', representativeUser: { fullName: 'Fam 2' } },
         },
-        patient: { fullName: 'Patient 2H' },
+        participants: [{ patient: { fullName: 'Patient 2H' } }],
         doctor: {
           user: { id: 'doc-user-2' },
         },
@@ -66,9 +67,9 @@ describe('EncounterRemindersService', () => {
         scheduledTime: encFarDate,
         encounterType: EncounterType.HOME_VISIT,
         contract: {
-          familyUnit: { representativeUserId: 'fam-user-3' },
+          familyUnit: { representativeUserId: 'fam-user-3', representativeUser: { fullName: 'Fam 3' } },
         },
-        patient: { fullName: 'Patient Far' },
+        participants: [{ patient: { fullName: 'Patient Far' } }],
         doctor: {
           user: { id: 'doc-user-3' },
         },
@@ -89,22 +90,22 @@ describe('EncounterRemindersService', () => {
         expect.objectContaining({
           userId: 'fam-user-1',
           type: 'ENCOUNTER_REMINDER_24H',
-          referenceId: 'enc-24h_24H_FAM',
+          referenceId: 'enc-24h',
         }),
         expect.objectContaining({
           userId: 'doc-user-1',
           type: 'ENCOUNTER_REMINDER_24H',
-          referenceId: 'enc-24h_24H_DOC',
+          referenceId: 'enc-24h',
         }),
         expect.objectContaining({
           userId: 'fam-user-2',
           type: 'ENCOUNTER_REMINDER_2H',
-          referenceId: 'enc-2h_2H_FAM',
+          referenceId: 'enc-2h',
         }),
         expect.objectContaining({
           userId: 'doc-user-2',
           type: 'ENCOUNTER_REMINDER_2H',
-          referenceId: 'enc-2h_2H_DOC',
+          referenceId: 'enc-2h',
         }),
       ]),
       skipDuplicates: true,

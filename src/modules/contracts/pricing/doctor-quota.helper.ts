@@ -1,7 +1,7 @@
 import type { Prisma } from '@prisma/client';
 
 const DEFAULT_CONTRACT_HOLD_TTL_HOURS = 24;
-const DEFAULT_MAX_PANEL_CAPACITY = 30;
+const DEFAULT_MAX_PANEL_CAPACITY = 5;
 
 export function resolveContractHoldTtlHours(): number {
   const raw = Number(process.env.CONTRACT_HOLD_TTL_HOURS);

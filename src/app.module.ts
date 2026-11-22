@@ -19,6 +19,7 @@ import { CarePackagesModule } from './modules/care-packages/care-packages.module
 import { PaymentsModule } from './modules/payments/payments.module';
 import { PlatformContentModule } from './modules/platform-content/platform-content.module';
 import { EncountersModule } from './modules/encounters/encounters.module';
+import { TelehealthModule } from './modules/telehealth/telehealth.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { MatchingModule } from './modules/matching/matching.module';
 
@@ -41,6 +42,7 @@ import { MatchingModule } from './modules/matching/matching.module';
     PatientsModule,
     PlatformContentModule,
     EncountersModule,
+    TelehealthModule,
     AdminModule,
     MatchingModule,
   ],

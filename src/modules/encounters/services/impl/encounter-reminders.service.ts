@@ -59,10 +59,14 @@ export class EncounterRemindersService
       include: {
         contract: {
           include: {
-            familyUnit: true,
+            familyUnit: {
+              include: { representativeUser: true },
+            },
           },
         },
-        patient: true,
+        participants: {
+          include: { patient: true },
+        },
         doctor: {
           include: { user: true },
         },
@@ -96,16 +100,20 @@ export class EncounterRemindersService
 
       const dateStr = enc.scheduledDate.toISOString().slice(0, 10);
       const timeStr = enc.scheduledTime.toISOString().slice(11, 16);
+      const participantLabel =
+        enc.participants.length > 0
+          ? enc.participants.map((p) => p.patient.fullName).join(', ')
+          : `hộ gia đình ${enc.contract.familyUnit.representativeUser.fullName}`;
 
       // Check 24-hour reminder window (23.0h <= diff <= 25.0h)
-      if (diffHours >= 23 && diffHours <= 25) {
+      if (!enc.reminder24hSentAt && diffHours >= 23 && diffHours <= 25) {
         // Family reminder
         notificationsToCreate.push({
           userId: enc.contract.familyUnit.representativeUserId,
           title: 'Nhắc lịch khám trước 24 giờ',
-          content: `Bạn có lịch khám ${enc.encounterType} cho bệnh nhân ${enc.patient.fullName} vào ngày mai lúc ${timeStr}. Vui lòng kiểm tra lại thời gian.`,
+          content: `Bạn có lịch khám ${enc.encounterType} cho ${participantLabel} vào ngày mai lúc ${timeStr}. Vui lòng kiểm tra lại thời gian.`,
           type: 'ENCOUNTER_REMINDER_24H',
-          referenceId: `${enc.id}_24H_FAM`,
+          referenceId: enc.id,
         });
 
         // Doctor reminder
@@ -113,32 +121,42 @@ export class EncounterRemindersService
           notificationsToCreate.push({
             userId: enc.doctor.user.id,
             title: 'Nhắc lịch khám bệnh nhân trước 24 giờ',
-            content: `Bác sĩ có lịch khám ${enc.encounterType} cho bệnh nhân ${enc.patient.fullName} vào ngày mai lúc ${timeStr}.`,
+            content: `Bác sĩ có lịch khám ${enc.encounterType} cho ${participantLabel} vào ngày mai lúc ${timeStr}.`,
             type: 'ENCOUNTER_REMINDER_24H',
-            referenceId: `${enc.id}_24H_DOC`,
+            referenceId: enc.id,
           });
         }
+
+        await this.prisma.encounter.update({
+          where: { id: enc.id },
+          data: { reminder24hSentAt: now },
+        });
       }
 
       // Check 2-hour reminder window (1.75h <= diff <= 2.25h)
-      if (diffHours >= 1.75 && diffHours <= 2.25) {
+      if (!enc.reminder2hSentAt && diffHours >= 1.75 && diffHours <= 2.25) {
         notificationsToCreate.push({
           userId: enc.contract.familyUnit.representativeUserId,
           title: 'Nhắc lịch khám trước 2 giờ',
           content: `Lịch khám ${enc.encounterType} của bạn sẽ bắt đầu sau 2 giờ nữa (${timeStr}). Xin chuẩn bị sẵn sàng.`,
           type: 'ENCOUNTER_REMINDER_2H',
-          referenceId: `${enc.id}_2H_FAM`,
+          referenceId: enc.id,
         });
 
         if (enc.doctor.user?.id) {
           notificationsToCreate.push({
             userId: enc.doctor.user.id,
             title: 'Nhắc ca khám sắp diễn ra trong 2 giờ',
-            content: `Ca khám ${enc.encounterType} bệnh nhân ${enc.patient.fullName} sẽ bắt đầu lúc ${timeStr}.`,
+            content: `Ca khám ${enc.encounterType} cho ${participantLabel} sẽ bắt đầu lúc ${timeStr}.`,
             type: 'ENCOUNTER_REMINDER_2H',
-            referenceId: `${enc.id}_2H_DOC`,
+            referenceId: enc.id,
           });
         }
+
+        await this.prisma.encounter.update({
+          where: { id: enc.id },
+          data: { reminder2hSentAt: now },
+        });
       }
     }
 
