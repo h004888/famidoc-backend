@@ -1,6 +1,7 @@
 import { Encounter, EncounterRescheduleRequest, EncounterStatus, EncounterType, Prisma } from '@prisma/client';
 
 export const ENCOUNTER_INCLUDE = {
+  patient: true,
   contract: {
     include: {
       familyUnit: {
@@ -59,6 +60,7 @@ export interface EncountersSession {
   }> | null>;
 
   isPatientInContract(patientId: string, contractId: string): Promise<boolean>;
+  findFirstPatientOfFamily(familyId: string): Promise<{ id: string; fullName: string } | null>;
   findDoctorByUserId(userId: string): Promise<Prisma.DoctorGetPayload<{ include: { facility: true } }> | null>;
   findDoctorById(id: string): Promise<Prisma.DoctorGetPayload<{ include: { facility: true } }> | null>;
   findFacilityByUserId(userId: string): Promise<Prisma.HealthcareFacilityGetPayload<Record<string, never>> | null>;
