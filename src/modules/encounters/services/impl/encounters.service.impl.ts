@@ -125,6 +125,7 @@ export class EncountersServiceImpl implements IEncountersService {
         category: EncounterCategory.PERIODIC_ROUTINE,
         scheduledDate,
         scheduledTime,
+        proposedBy: 'DOCTOR',
         encounterStatus: EncounterStatus.REQUESTED,
         cancelReason: dto.notes ?? null,
       });
@@ -177,6 +178,7 @@ export class EncountersServiceImpl implements IEncountersService {
         category: EncounterCategory.AD_HOC_ON_DEMAND,
         scheduledDate,
         scheduledTime,
+        proposedBy: 'FAMILY_REP',
         encounterStatus: EncounterStatus.REQUESTED,
         cancelReason: dto.reason,
       });
@@ -214,7 +216,13 @@ export class EncountersServiceImpl implements IEncountersService {
         }
       }
 
-      const updateData: Prisma.EncounterUncheckedUpdateInput = {};
+      const updateData: Prisma.EncounterUncheckedUpdateInput = {
+        proposedBy: 'DOCTOR',
+        proposedDate: null,
+        proposedTime: null,
+        conflictAlert: false,
+        conflictDetails: null,
+      };
       if (dto.encounterType) updateData.encounterType = dto.encounterType;
       if (dto.scheduledDate) updateData.scheduledDate = parseDateOnly(dto.scheduledDate);
       if (dto.scheduledTime) updateData.scheduledTime = parseTimeToDate(dto.scheduledTime);
@@ -256,12 +264,25 @@ export class EncountersServiceImpl implements IEncountersService {
         throw new BadRequestException('To propose an alternative time, please use the reschedule endpoint');
       }
 
+      if (encounter.proposedBy === 'FAMILY_REP') {
+        throw new BadRequestException('Schedule is awaiting doctor review before family confirmation');
+      }
+
+      const targetDate =
+        encounter.proposedBy === 'DOCTOR' && encounter.proposedDate
+          ? encounter.proposedDate
+          : encounter.scheduledDate;
+      const targetTime =
+        encounter.proposedBy === 'DOCTOR' && encounter.proposedTime
+          ? encounter.proposedTime
+          : encounter.scheduledTime;
+
       // Check for conflicts between examination schedule and healthcare facility duty shifts
       const conflictResult = await this.checkDutyShiftConflicts(
         session,
         encounter.doctorId,
-        encounter.scheduledDate,
-        encounter.scheduledTime,
+        targetDate,
+        targetTime,
         encounter.id,
       );
 
@@ -277,7 +298,7 @@ export class EncountersServiceImpl implements IEncountersService {
           await session.createNotification({
             userId: encounter.doctor.user.id,
             title: 'CẢNH BÁO: Xung đột ca trực tại CSYT',
-            content: `Lịch khám ngày ${encounter.scheduledDate.toISOString().slice(0, 10)} bị xung đột: ${conflictResult.reason}`,
+            content: `Lịch khám ngày ${targetDate.toISOString().slice(0, 10)} bị xung đột: ${conflictResult.reason}`,
             type: 'ENCOUNTER_DUTY_SHIFT_CONFLICT',
             referenceId: encounter.id,
           });
@@ -306,6 +327,11 @@ export class EncountersServiceImpl implements IEncountersService {
       await session.decrementContractQuota(encounter.contractId, encounter.encounterType);
 
       const confirmedEncounter = await session.updateEncounter(encounterId, {
+        scheduledDate: targetDate,
+        scheduledTime: targetTime,
+        proposedDate: null,
+        proposedTime: null,
+        proposedBy: null,
         encounterStatus: EncounterStatus.CONFIRMED,
         conflictAlert: false,
         conflictDetails: null,
@@ -314,11 +340,12 @@ export class EncountersServiceImpl implements IEncountersService {
       await session.createAuditLog(actor.id, 'CONFIRM_ENCOUNTER', encounterId);
 
       // Synchronize notifications across Doctor, Family, and Facility
+      const targetDateStr = targetDate.toISOString().slice(0, 10);
       const notifications: Prisma.NotificationUncheckedCreateInput[] = [
         {
           userId: encounter.contract.familyUnit.representativeUserId,
           title: 'Lịch khám đã được xác nhận',
-          content: `Lịch khám ngày ${encounter.scheduledDate.toISOString().slice(0, 10)} đã xác nhận thành công. Hệ thống sẽ nhắc bạn trước 24h và 2h.`,
+          content: `Lịch khám ngày ${targetDateStr} đã xác nhận thành công. Hệ thống sẽ nhắc bạn trước 24h và 2h.`,
           type: 'ENCOUNTER_CONFIRMED',
           referenceId: encounter.id,
         },
@@ -328,7 +355,7 @@ export class EncountersServiceImpl implements IEncountersService {
         notifications.push({
           userId: encounter.doctor.user.id,
           title: 'Gia đình đã xác nhận lịch khám',
-          content: `Lịch khám cho bệnh nhân ${encounter.patient.fullName} ngày ${encounter.scheduledDate.toISOString().slice(0, 10)} đã được xác nhận.`,
+          content: `Lịch khám cho bệnh nhân ${encounter.patient.fullName} ngày ${targetDateStr} đã được xác nhận.`,
           type: 'ENCOUNTER_CONFIRMED',
           referenceId: encounter.id,
         });
@@ -338,7 +365,7 @@ export class EncountersServiceImpl implements IEncountersService {
         notifications.push({
           userId: encounter.contract.facility.user.id,
           title: 'Đồng bộ lịch khám ngoại viện bác sĩ',
-          content: `Bác sĩ ${encounter.doctor.doctorName} có lịch khám xác nhận ngày ${encounter.scheduledDate.toISOString().slice(0, 10)}.`,
+          content: `Bác sĩ ${encounter.doctor.doctorName} có lịch khám xác nhận ngày ${targetDateStr}.`,
           type: 'ENCOUNTER_SYNC_FACILITY',
           referenceId: encounter.id,
         });

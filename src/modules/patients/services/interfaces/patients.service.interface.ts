@@ -1,3 +1,4 @@
+import type { Readable } from 'stream';
 import type { Patient, PatientAllergy } from '@prisma/client';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
 import type { CreatePatientDto } from '../../dtos/create-patient.dto';
@@ -38,6 +39,11 @@ export interface IPatientsService {
     patientId: string,
     documentId: string,
   ): Promise<{ bytes: Buffer; contentType: string }>;
+  getDocumentFileStream(
+    user: AuthenticatedUser,
+    patientId: string,
+    documentId: string,
+  ): Promise<{ stream: Readable; contentType: string; contentLength?: number }>;
   deleteDocument(
     user: AuthenticatedUser,
     patientId: string,

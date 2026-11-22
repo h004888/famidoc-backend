@@ -285,11 +285,14 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       const res = await service.confirmEncounter(familyActor, 'encounter-1', { confirmed: true });
 
       expect(mockSession.decrementContractQuota).toHaveBeenCalledWith('contract-1', EncounterType.HOME_VISIT);
-      expect(mockSession.updateEncounter).toHaveBeenCalledWith('encounter-1', {
-        encounterStatus: EncounterStatus.CONFIRMED,
-        conflictAlert: false,
-        conflictDetails: null,
-      });
+      expect(mockSession.updateEncounter).toHaveBeenCalledWith(
+        'encounter-1',
+        expect.objectContaining({
+          encounterStatus: EncounterStatus.CONFIRMED,
+          conflictAlert: false,
+          conflictDetails: null,
+        }),
+      );
       expect(mockSession.createNotifications).toHaveBeenCalled();
       expect((res as any).encounterStatus).toBe(EncounterStatus.CONFIRMED);
     });
@@ -525,6 +528,76 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       expect(res.facilityId).toBe('facility-1');
       expect(res.dutyShifts).toBeDefined();
       expect(res.externalEncounters).toBeDefined();
+    });
+  });
+
+  describe('10. Turn Tracking & Doctor Counter-Offer Confirmation', () => {
+    it('sets proposedBy = DOCTOR on createPeriodicEncounter and FAMILY_REP on createAdHocEncounter', async () => {
+      await service.createPeriodicEncounter(doctorActor, {
+        contractId: 'contract-1',
+        patientId: 'patient-1',
+        encounterType: EncounterType.HOME_VISIT,
+        scheduledDate: '2026-12-10',
+        scheduledTime: '09:00:00',
+      });
+      expect(mockSession.createEncounter).toHaveBeenCalledWith(
+        expect.objectContaining({ proposedBy: 'DOCTOR', encounterStatus: EncounterStatus.REQUESTED }),
+      );
+
+      await service.createAdHocEncounter(familyActor, {
+        contractId: 'contract-1',
+        patientId: 'patient-1',
+        encounterType: EncounterType.TELEHEALTH,
+        desiredDate: '2026-12-12',
+        desiredTime: '15:00:00',
+        reason: 'Sốt nhẹ cần tư vấn',
+      });
+      expect(mockSession.createEncounter).toHaveBeenCalledWith(
+        expect.objectContaining({
+          proposedBy: 'FAMILY_REP',
+          encounterStatus: EncounterStatus.REQUESTED,
+        }),
+      );
+    });
+
+    it('promotes proposedDate/proposedTime on confirmEncounter when proposedBy is DOCTOR', async () => {
+      const counterDate = new Date('2026-12-06T00:00:00.000Z');
+      const counterTime = new Date('1970-01-01T14:30:00.000Z');
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...sampleEncounter,
+        proposedDate: counterDate,
+        proposedTime: counterTime,
+        proposedBy: 'DOCTOR',
+      });
+
+      await service.confirmEncounter(familyActor, 'encounter-1', { confirmed: true });
+
+      expect(mockSession.updateEncounter).toHaveBeenCalledWith(
+        'encounter-1',
+        expect.objectContaining({
+          scheduledDate: counterDate,
+          scheduledTime: counterTime,
+          proposedDate: null,
+          proposedTime: null,
+          proposedBy: null,
+          encounterStatus: EncounterStatus.CONFIRMED,
+        }),
+      );
+      expect(mockSession.decrementContractQuota).toHaveBeenCalledWith(
+        'contract-1',
+        EncounterType.HOME_VISIT,
+      );
+    });
+
+    it('blocks confirmEncounter while encounter is awaiting doctor review (proposedBy = FAMILY_REP)', async () => {
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...sampleEncounter,
+        proposedBy: 'FAMILY_REP',
+      });
+
+      await expect(
+        service.confirmEncounter(familyActor, 'encounter-1', { confirmed: true }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });
