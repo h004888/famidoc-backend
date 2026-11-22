@@ -1,7 +1,6 @@
 import { Encounter, EncounterRescheduleRequest, EncounterStatus, EncounterType, Prisma } from '@prisma/client';
 
 export const ENCOUNTER_INCLUDE = {
-  patient: true,
   contract: {
     include: {
       familyUnit: {
