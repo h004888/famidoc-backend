@@ -29,6 +29,9 @@ describe('EncountersController', () => {
       getFamilyTimetable: jest.fn().mockResolvedValue({ data: [], pagination: {} }),
       getFacilityScheduleBoard: jest.fn().mockResolvedValue({ dutyShifts: [], externalEncounters: [] }),
       getEncounterDetail: jest.fn().mockResolvedValue({ id: 'enc-1' }),
+      generateContractPeriodicCadence: jest.fn().mockResolvedValue({ generatedCount: 4, encounters: [] }),
+      finalizeCadenceSchedule: jest.fn().mockResolvedValue({ finalizedCount: 4, encounters: [] }),
+      adjustCadenceMilestone: jest.fn().mockResolvedValue({ id: 'enc-1' }),
     };
 
     controller = new EncountersController(service);
@@ -113,5 +116,19 @@ describe('EncountersController', () => {
 
     await controller.getEncounterDetail(req, 'enc-1');
     expect(service.getEncounterDetail).toHaveBeenCalledWith(req.user, 'enc-1');
+
+    await controller.finalizeCadenceSchedule(req, 'contract-1');
+    expect(service.finalizeCadenceSchedule).toHaveBeenCalledWith(req.user, 'contract-1');
+
+    await controller.adjustCadenceMilestone(req, 'enc-1', { scheduledDate: '2026-07-01' });
+    expect(service.adjustCadenceMilestone).toHaveBeenCalledWith(req.user, 'enc-1', {
+      scheduledDate: '2026-07-01',
+    });
+
+    await controller.backfillCadence(req, 'contract-1');
+    expect(service.generateContractPeriodicCadence).toHaveBeenCalledWith('contract-1', {
+      triggeredBy: req.user.id,
+      force: false,
+    });
   });
 });

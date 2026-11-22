@@ -410,6 +410,92 @@ class PrismaPaymentsSession implements PaymentsSession {
         // Không sửa giá, chữ ký hay kỳ hạn đã thỏa thuận khi nhận tiền.
       },
     });
+
+    // Tự động sinh khung lịch khám định kỳ (Cadence Generation) khi hợp đồng ACTIVE
+    if (
+      contract.status === BillingContractStatus.ACTIVE &&
+      old.contractStatus !== 'ACTIVE'
+    ) {
+      try {
+        const existingCadenceCount = await this.tx.encounter.count({
+          where: { contractId: contract.id, category: 'PERIODIC_ROUTINE' },
+        });
+
+        if (existingCadenceCount === 0) {
+          const fullContract = await this.tx.medicalContract.findUnique({
+            where: { id: contract.id },
+            include: {
+              servicePackage: true,
+              members: true,
+            },
+          });
+
+          const quota = fullContract?.servicePackage?.periodicVisitsQuota ?? 0;
+          const durationMonths = fullContract?.servicePackage?.durationMonths ?? 12;
+
+          if (quota > 0 && fullContract?.doctorId) {
+            let patientId = fullContract.members[0]?.patientId;
+            if (!patientId) {
+              const firstPatient = await this.tx.patient.findFirst({
+                where: { familyId: fullContract.familyId, status: 'ACTIVE' },
+                select: { id: true },
+              });
+              if (firstPatient) patientId = firstPatient.id;
+            }
+
+            if (patientId) {
+              const start = new Date(fullContract.startDate);
+              const milestoneDates: Date[] = [];
+              if (quota === 1) {
+                const d = new Date(start);
+                d.setUTCMonth(d.getUTCMonth() + 1);
+                milestoneDates.push(d);
+              } else {
+                const d1 = new Date(start);
+                d1.setUTCMonth(d1.getUTCMonth() + 1);
+                milestoneDates.push(d1);
+                const remainingMonths = Math.max(durationMonths - 1, quota - 1);
+                const step = remainingMonths / (quota - 1);
+                for (let i = 1; i < quota; i++) {
+                  const d = new Date(start);
+                  const monthOffset = Math.round(1 + i * step);
+                  d.setUTCMonth(d.getUTCMonth() + monthOffset);
+                  milestoneDates.push(d);
+                }
+              }
+
+              for (let i = 0; i < milestoneDates.length; i++) {
+                await this.tx.encounter.create({
+                  data: {
+                    contractId: contract.id,
+                    patientId,
+                    doctorId: fullContract.doctorId,
+                    encounterType: 'HOME_VISIT',
+                    category: 'PERIODIC_ROUTINE',
+                    scheduledDate: milestoneDates[i],
+                    scheduledTime: new Date(Date.UTC(1970, 0, 1, 9, 0, 0)),
+                    encounterStatus: 'REQUESTED',
+                    proposedDate: milestoneDates[i],
+                    proposedTime: new Date(Date.UTC(1970, 0, 1, 9, 0, 0)),
+                    proposedBy: 'SYSTEM_CADENCE',
+                    rescheduleReason: JSON.stringify({
+                      isCadenceDraft: true,
+                      milestoneIndex: i + 1,
+                      totalMilestones: quota,
+                      turnTracker: 'DOCTOR',
+                      topic: `Khám định kỳ lần ${i + 1}/${quota}`,
+                    }),
+                  },
+                });
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // Tránh rollback giao dịch thanh toán chỉ vì lỗi phụ sinh lịch
+        console.warn(`[Payment] Failed to auto-generate cadence for contract ${contract.id}:`, err);
+      }
+    }
   }
   async findRequest(id: string) {
     const row = await this.tx.invoice.findUnique({
