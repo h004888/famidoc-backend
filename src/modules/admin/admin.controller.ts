@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../../core/auth/roles.guard';
 import type { AuthenticatedRequest } from '../../core/auth/authenticated-request';
-import { AdminAccountStatusDto, AdminAuditQuery, AdminComplaintsQuery, AdminOverviewQuery, AdminUpdateDoctorPanelCapacityDto, AdminUsersQuery, ComplaintsQuery } from './admin.dto';
+import { AdminAccountStatusDto, AdminAuditQuery, AdminComplaintsQuery, AdminFinanceReportQuery, AdminOverviewQuery, AdminUpdateDoctorPanelCapacityDto, AdminUsersQuery, ComplaintsQuery } from './admin.dto';
 import { AdminService } from './admin.service';
 
 @ApiTags('Admin')
@@ -19,6 +19,12 @@ export class AdminController {
   @ApiOperation({ summary: 'Tổng quan doanh thu, lượt khám và khiếu nại của nền tảng' })
   overview(@Query() query: AdminOverviewQuery) {
     return this.service.overview(query.period, query.environment);
+  }
+
+  @Get('finance-report')
+  @ApiOperation({ summary: 'Báo cáo tiền thu từ hóa đơn và tiền chi trả CSYT theo từng tháng trong năm' })
+  financeReport(@Query() query: AdminFinanceReportQuery) {
+    return this.service.financeReport(query);
   }
 
   @Get('users')

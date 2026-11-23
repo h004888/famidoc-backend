@@ -1,4 +1,8 @@
-import type { IPaymentsService } from '../interfaces/payments.service.interface';
+import type {
+  FamilyPaymentRequestItem,
+  IPaymentsService,
+  PaymentEligibility,
+} from '../interfaces/payments.service.interface';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
 import {
   BadRequestException,
@@ -7,7 +11,10 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { PrismaService } from '../../../../core/database/prisma.service';
+import { moneyToNumber } from '../../../../core/database/prisma-transaction';
 import { randomUUID } from 'node:crypto';
 
 import type { ListTransactionsDto } from '../../dtos/list-transactions.dto';
@@ -78,7 +85,105 @@ export class PaymentsServiceImpl implements IPaymentsService {
     private readonly repository: PaymentsRepository,
     private readonly config: PaymentsConfig,
     private readonly clock: PaymentsClock,
+    @Optional() private readonly prisma?: PrismaService,
   ) {}
+
+  async listMyPaymentRequests(
+    actor: AuthenticatedUser,
+  ): Promise<FamilyPaymentRequestItem[]> {
+    if (actor.role !== 'FAMILY_REP') {
+      throw new ForbiddenException(
+        'Chỉ đại diện hộ gia đình mới có quyền xem lịch sử yêu cầu thanh toán của hộ mình.',
+      );
+    }
+    if (!this.prisma) {
+      return [];
+    }
+    const rows = await this.prisma.invoice.findMany({
+      where: {
+        contract: {
+          familyUnit: { representativeUserId: actor.id },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+      include: {
+        contract: {
+          select: {
+            id: true,
+            contractNumber: true,
+            contractStatus: true,
+            facility: { select: { facilityName: true } },
+            servicePackage: { select: { packageName: true } },
+          },
+        },
+        paymentTransactions: {
+          orderBy: { paymentTime: 'desc' },
+          take: 1,
+        },
+        supportCases: {
+          where: {
+            caseType: 'PAYMENT_ISSUE',
+            status: { in: ['OPEN', 'IN_REVIEW', 'NEED_MORE_INFO'] },
+          },
+          orderBy: { updatedAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            caseCode: true,
+            status: true,
+            updatedAt: true,
+          },
+        },
+      },
+    });
+
+    return rows
+      .filter((row): row is typeof row & { contract: NonNullable<typeof row.contract> } =>
+        Boolean(row.contract),
+      )
+      .map((row) => {
+        const latestTx = row.paymentTransactions[0] ?? null;
+        const openCase = row.supportCases[0] ?? null;
+        return {
+          id: row.id,
+          contractId: row.contract.id,
+          contractNumber: row.contract.contractNumber,
+          contractStatus: row.contract.contractStatus,
+          packageName: row.contract.servicePackage.packageName,
+          facilityName: row.contract.facility.facilityName,
+          paymentCode: row.invoiceCode,
+          transferContent: row.transferContent ?? row.invoiceCode,
+          amountVnd: moneyToNumber(row.totalPayable),
+          status: row.paymentStatus,
+          expectedAccountNumber: row.expectedAccountNumber,
+          expectedGateway: row.expectedGateway,
+          createdAt: row.createdAt.toISOString(),
+          expiresAt: row.expiredAt.toISOString(),
+          paidAt: row.paidAt?.toISOString() ?? null,
+          latestTransaction: latestTx
+            ? {
+                id: latestTx.id,
+                providerTransactionId: latestTx.gatewayTransactionId,
+                amountReceived: moneyToNumber(latestTx.amountReceived),
+                paymentTime: latestTx.paymentTime.toISOString(),
+                outcome: latestTx.outcome,
+                reason: latestTx.reason,
+                referenceCode: latestTx.referenceCode,
+                gateway: latestTx.gateway,
+              }
+            : null,
+          openSupportCase: openCase
+            ? {
+                id: openCase.id,
+                caseCode: openCase.caseCode,
+                status: openCase.status,
+                updatedAt: openCase.updatedAt.toISOString(),
+              }
+            : null,
+        };
+      });
+  }
 
   // Lấy số tiền đã chốt trong hợp đồng/phụ lục. Khách không được tự truyền giá vào API.
   async createVietQRPayment(
@@ -97,6 +202,73 @@ export class PaymentsServiceImpl implements IPaymentsService {
     return this.issuePayment(dto.contractId, dto.addendumId, actor, { dto, actorId: actor.id, ip });
   }
 
+  async getAdminPaymentEligibility(contractId: string, addendumId: string | undefined, actor: AuthenticatedUser): Promise<PaymentEligibility> {
+    if (actor.role !== 'ADMIN') {
+      throw new ForbiddenException('Chỉ Admin được kiểm tra điều kiện tạo mã thu tiền.');
+    }
+    this.config.getDestination();
+    return this.repository.transaction(async (session) => {
+      const contract = await this.requireContract(session, contractId, addendumId);
+      const result = await this.checkIssueEligibility(session, contract);
+      return result.eligible ? { eligible: true, blockingReasons: [] } : result;
+    });
+  }
+
+  // Dùng cùng điều kiện lúc xem trước và lúc tạo mã để hai chỗ báo giống nhau.
+  private async checkIssueEligibility(
+    session: PaymentsSession,
+    contract: BillingContract,
+  ): Promise<
+    | { eligible: true; requests: PaymentRequest[] }
+    | { eligible: false; message: string; blockingReasons: string[] }
+  > {
+    if ((this.config.getEnvironment() === 'TEST') !== contract.simulation) {
+      return {
+        eligible: false,
+        message:
+          'Hợp đồng dữ liệu thử và hợp đồng thật phải dùng hai môi trường thanh toán riêng biệt.',
+        blockingReasons: [],
+      };
+    }
+    if (contract.status !== BillingContractStatus.PENDING) {
+      return {
+        eligible: false,
+        message: contract.addendumId
+          ? 'Phụ lục hợp đồng không còn ở trạng thái chờ thanh toán.'
+          : 'Hợp đồng không ở trạng thái chờ thanh toán (nếu hợp đồng đang hiệu lực, vui lòng chọn kèm phụ lục chờ thanh toán).',
+        blockingReasons: [],
+      };
+    }
+    const missing = missingActivationRequirements(contract.requirements);
+    if (missing.length) {
+      return {
+        eligible: false,
+        message: contract.addendumId
+          ? 'Phụ lục hợp đồng chưa đủ điều kiện thanh toán.'
+          : 'Hợp đồng chưa đủ điều kiện thanh toán.',
+        blockingReasons: missing,
+      };
+    }
+    if (await this.otherActiveContractExists(session, contract)) {
+      return {
+        eligible: false,
+        message: 'Hộ gia đình đã có một hợp đồng khác đang hiệu lực.',
+        blockingReasons: [],
+      };
+    }
+    const requests = await session.listRequests(contract.id, contract.addendumId);
+    if (requests.some((item) => item.status === PaymentRequestStatus.PAID)) {
+      return {
+        eligible: false,
+        message: contract.addendumId
+          ? 'Phụ lục hợp đồng này đã được ghi nhận thanh toán.'
+          : 'Hợp đồng này đã được ghi nhận thanh toán.',
+        blockingReasons: [],
+      };
+    }
+    return { eligible: true, requests };
+  }
+
   private issuePayment(
     contractId: string,
     addendumId: string | undefined,
@@ -111,30 +283,21 @@ export class PaymentsServiceImpl implements IPaymentsService {
         addendumId,
       );
       this.assertPaymentOwner(contract, actor);
-      this.config.assertContractEnvironment(contract.simulation);
-      if (contract.status !== BillingContractStatus.PENDING)
-        throw new ConflictException('Contract is not pending');
-      // Chỉ phát hành yêu cầu khi bốn bên, phân công và năng lực phục vụ đã đủ điều kiện.
-      const missing = missingActivationRequirements(contract.requirements);
-      if (missing.length)
+      const eligibility = await this.checkIssueEligibility(session, contract);
+      if (!eligibility.eligible) {
         throw new ConflictException({
-          message: 'Contract is not ready for payment',
-          blockingReasons: missing,
+          message: eligibility.message,
+          blockingReasons: eligibility.blockingReasons,
         });
-      if (await this.otherActiveContractExists(session, contract))
-        throw new ConflictException('Family already has an active contract');
-      const requests = await session.listRequests(contractId, addendumId);
-      if (requests.some((item) => item.status === PaymentRequestStatus.PAID)) {
-        throw new ConflictException(
-          'Contract payment has already been recorded',
-        );
       }
+      const { requests } = eligibility;
       const now = this.clock.now();
       const pending = requests.find(
         (item) =>
           item.status === PaymentRequestStatus.PENDING &&
           Date.parse(item.expiresAt) > now.getTime(),
       );
+      // Cùng số tiền và nội dung thì dùng lại mã còn hạn.
       if (pending && (!adjustment || (
         pending.amountVnd === adjustment.dto.amountVnd &&
         pending.adminTransferDescription === adjustment.dto.transferDescription
@@ -153,7 +316,7 @@ export class PaymentsServiceImpl implements IPaymentsService {
       const amount = adjustment?.dto.amountVnd ?? previousOverride?.amountVnd ?? originalAmountVnd;
       const description = adjustment?.dto.transferDescription ?? previousOverride?.adminTransferDescription;
       if (!Number.isSafeInteger(amount) || amount <= 0 || amount > 9999999999)
-        throw new BadRequestException('Invalid contract payment amount');
+        throw new BadRequestException('Số tiền thanh toán của hợp đồng không hợp lệ.');
       let payment!: PaymentRequest;
       for (let attemptIdx = 0; attemptIdx < 5; attemptIdx += 1) {
         const paymentCode = createPaymentCode();
@@ -274,7 +437,9 @@ export class PaymentsServiceImpl implements IPaymentsService {
       const item = await this.requireRequest(session, id);
       this.assertPaymentOwner(item, actor);
       if (item.status === PaymentRequestStatus.PAID)
-        throw new ConflictException('A paid request cannot be cancelled');
+        throw new ConflictException(
+          'Không thể hủy yêu cầu thanh toán đã được xác nhận chi trả.',
+        );
       if (item.status === PaymentRequestStatus.PENDING) {
         item.status =
           Date.parse(item.expiresAt) <= this.clock.now().getTime()
@@ -848,7 +1013,7 @@ export class PaymentsServiceImpl implements IPaymentsService {
       actor.role !== 'ADMIN' &&
       (actor.role !== 'FAMILY_REP' || actor.familyUnitId !== item.familyId)
     )
-      throw new NotFoundException('Payment or contract not found');
+      throw new NotFoundException('Không tìm thấy hợp đồng hoặc yêu cầu thanh toán.');
   }
   private async otherActiveContractExists(
     session: PaymentsSession,
@@ -869,7 +1034,12 @@ export class PaymentsServiceImpl implements IPaymentsService {
     addendumId?: string,
   ): Promise<BillingContract> {
     const contract = await session.findContract(id, addendumId);
-    if (!contract) throw new NotFoundException('Billing contract not found');
+    if (!contract)
+      throw new NotFoundException(
+        addendumId
+          ? 'Không tìm thấy hợp đồng hoặc phụ lục tương ứng.'
+          : 'Không tìm thấy hợp đồng cần thu tiền.',
+      );
     return contract;
   }
 
@@ -878,7 +1048,8 @@ export class PaymentsServiceImpl implements IPaymentsService {
     id: string,
   ): Promise<PaymentRequest> {
     const request = await session.findRequest(id);
-    if (!request) throw new NotFoundException('Payment request not found');
+    if (!request)
+      throw new NotFoundException('Không tìm thấy yêu cầu thanh toán.');
     return request;
   }
 }

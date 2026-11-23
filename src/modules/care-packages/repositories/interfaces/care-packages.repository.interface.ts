@@ -50,5 +50,6 @@ export interface CarePackagesRepository {
   ): Promise<CarePackage>;
   // Adapter DB phải công bố bản mới/ngừng bán bản cũ một cách nguyên tử và giữ lịch sử.
   publish(id: string): Promise<CarePackage>;
+  reopen(id: string): Promise<CarePackage>;
   retire(id: string): Promise<CarePackage>; // Không xóa bản ghi khỏi kho dữ liệu.
 }

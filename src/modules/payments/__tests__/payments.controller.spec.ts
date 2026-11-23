@@ -62,7 +62,8 @@ describe('PaymentsController (recheck-activation HTTP route)', () => {
     );
     const pkg = await packages.create({
       code: 'CTRL',
-      name: 'Ctrl',
+      name: 'Controller test package',
+      description: 'Example care package description.',
       durationMonths: 1,
       priceVnd: 100_000,
       includedMembers: 2,
@@ -71,7 +72,6 @@ describe('PaymentsController (recheck-activation HTTP route)', () => {
       quotaPeriod: QuotaPeriod.PER_TERM,
       quotas: { videoConsultations: 5, homeVisits: 0, facilityVisits: 0 },
     });
-    await packages.publish(pkg.id);
     packageId = pkg.id;
 
     service = new PaymentTestService(repository, packages, config, clock);
@@ -110,6 +110,48 @@ describe('PaymentsController (recheck-activation HTTP route)', () => {
       if (val === undefined) delete process.env[key];
       else process.env[key] = val;
     }
+  });
+
+  it('checks admin payment eligibility without creating a request and rechecks it when issuing', async () => {
+    const familyId = randomUUID();
+    const contract = await service.createDemoContract({ familyId, packageId, memberCount: 2 });
+    await service.updateDemoRequirements(contract.id, {
+      familySigned: true,
+      adminSigned: true,
+      facilitySigned: true,
+      doctorSigned: true,
+      facilityId: randomUUID(),
+      doctorId: randomUUID(),
+      doctorVerified: true,
+      panelCapacityAvailable: true,
+    });
+    const eligibilityPath = '/api/v1/payments/admin/eligibility';
+    currentUser = { id: randomUUID(), role: 'FAMILY_REP', familyUnitId: familyId };
+    await request(app.getHttpServer()).get(eligibilityPath).query({ contractId: contract.id }).expect(403);
+
+    currentUser = { id: randomUUID(), role: 'ADMIN', familyUnitId: null };
+    const eligible = await request(app.getHttpServer())
+      .get(eligibilityPath)
+      .query({ contractId: contract.id })
+      .expect('Cache-Control', 'private, no-store')
+      .expect(200);
+    expect(eligible.body.data).toEqual({ eligible: true, blockingReasons: [] });
+
+    await service.updateDemoRequirements(contract.id, { doctorVerified: false });
+    const blocked = await request(app.getHttpServer())
+      .get(eligibilityPath)
+      .query({ contractId: contract.id })
+      .expect(200);
+    expect(blocked.body.data).toMatchObject({
+      eligible: false,
+      blockingReasons: ['DOCTOR_VERIFICATION_REQUIRED'],
+    });
+    const rejected = await request(app.getHttpServer())
+      .post('/api/v1/payments/admin/requests')
+      .send({ contractId: contract.id, amountVnd: 100000, transferDescription: 'THU PHI', reason: 'Kiểm thử điều kiện' })
+      .expect(409);
+    expect(rejected.body.error.blockingReasons).toEqual(blocked.body.data.blockingReasons);
+    expect(await repository.transaction((session) => session.listRequests(contract.id))).toEqual([]);
   });
 
   it('returns HTTP 200 with activated:false and blockingReasons for owner FAMILY_REP on PAID blocked contract', async () => {

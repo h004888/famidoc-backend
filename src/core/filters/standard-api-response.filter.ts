@@ -124,9 +124,13 @@ export class StandardApiResponseFilter implements ExceptionFilter {
       let errorCode = 'BAD_REQUEST';
       let invalidParams: InvalidParamItem[] | undefined;
       let blockingReasons: string[] | undefined;
+      let existingCaseId: string | undefined;
 
       if (typeof res === 'object' && res !== null) {
         const resObj = res as Record<string, any>;
+        if (status === HttpStatus.CONFLICT && typeof resObj.existingCaseId === 'string') {
+          existingCaseId = resObj.existingCaseId;
+        }
         // Các mã chặn nghiệp vụ (ví dụ thanh toán chưa đủ điều kiện) phải giữ nguyên
         // trong ProblemDetails để client chẩn đoán được lý do cụ thể.
         if (
@@ -163,6 +167,7 @@ export class StandardApiResponseFilter implements ExceptionFilter {
         instance,
         ...(invalidParams ? { invalidParams } : {}),
         ...(blockingReasons ? { blockingReasons } : {}),
+        ...(existingCaseId ? { existingCaseId } : {}),
       };
 
       const errorPayload: ApiErrorResponse = {

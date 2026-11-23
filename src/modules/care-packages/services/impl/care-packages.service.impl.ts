@@ -108,11 +108,7 @@ export class CarePackagesServiceImpl {
       );
     }
     const { code, ...terms } = dto;
-    // Server tự cấp phiên bản đầu tiên; mô tả không gửi lên được chuẩn hóa thành rỗng.
-    return this.insertDraft(code, 1, {
-      ...terms,
-      description: dto.description ?? '',
-    });
+    return this.insertPackage(code, 1, terms, CarePackageStatus.ACTIVE);
   }
 
   async update(id: string, dto: UpdateCarePackageDto): Promise<CarePackage> {
@@ -168,7 +164,7 @@ export class CarePackagesServiceImpl {
       quotas,
     } = source;
     // Bản mới có UUID riêng, tăng số phiên bản và bắt đầu lại ở trạng thái DRAFT.
-    return this.insertDraft(source.code, source.version + 1, {
+    return this.insertPackage(source.code, source.version + 1, {
       name,
       description,
       durationMonths,
@@ -188,17 +184,21 @@ export class CarePackagesServiceImpl {
     return this.repository.publish(id);
   }
 
+  async reopen(id: string): Promise<CarePackage> {
+    return this.repository.reopen(id);
+  }
+
   async retire(id: string): Promise<CarePackage> {
     // Ngừng bán chứ không xóa dữ liệu; không tự hủy hợp đồng đã mua gói.
     return this.repository.retire(id);
   }
 
-  private insertDraft(
+  private insertPackage(
     code: string,
     version: number,
     terms: CarePackageTerms,
+    status: CarePackageStatus = CarePackageStatus.DRAFT,
   ): Promise<CarePackage> {
-    // Dùng chung bước tạo bản nháp cho cả gói mới và phiên bản kế tiếp.
     validateCarePackageTerms(terms);
     // Lưu thời gian chuẩn ISO/UTC để các phần khác đọc cùng một định dạng.
     const now = new Date().toISOString();
@@ -208,10 +208,10 @@ export class CarePackagesServiceImpl {
       code,
       version,
       currency: 'VND', // Phần hiện tại chỉ hỗ trợ số tiền nguyên theo đồng Việt Nam.
-      status: CarePackageStatus.DRAFT, // Tạo mới không đồng nghĩa được bán ngay.
+      status,
       createdAt: now,
       updatedAt: now,
-      publishedAt: null, // Chỉ ghi khi công bố thành công.
+      publishedAt: status === CarePackageStatus.ACTIVE ? now : null,
       retiredAt: null, // Chỉ ghi khi ngừng bán hoặc được thay bằng bản mới.
     });
   }

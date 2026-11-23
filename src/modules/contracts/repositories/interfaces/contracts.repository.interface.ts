@@ -63,6 +63,24 @@ export const MEDICAL_CONTRACT_DETAIL_INCLUDE = {
       completedAt: true,
     },
   },
+  // Lấy kèm phụ lục để admin chọn khoản cần thu ngay trên giao diện.
+  addenda: {
+    select: {
+      id: true,
+      addendumNumber: true,
+      addendumType: true,
+      additionalAmount: true,
+      status: true,
+      createdAt: true,
+      signatures: {
+        select: {
+          signerRole: true,
+          signedAt: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  },
   invoices: true,
 } as const;
 export type DetailedMedicalContract = Prisma.MedicalContractGetPayload<{

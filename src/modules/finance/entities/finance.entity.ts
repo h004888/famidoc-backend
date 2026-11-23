@@ -1,5 +1,7 @@
 import type { FacilitySettlement } from '@prisma/client';
 export interface RevenueAnalyticsResult {
+  settlementFrequency: 'MONTHLY';
+  taxTreatment: string;
   year: number;
   month: number;
   environment: 'TEST' | 'LIVE';
@@ -16,6 +18,7 @@ export interface RevenueAnalyticsResult {
   settlements: FacilitySettlement[];
 }
 export interface PreparedSettlementResult {
+  settlementFrequency: 'MONTHLY';
   year: number;
   month: number;
   environment: 'TEST' | 'LIVE';

@@ -5,7 +5,9 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { getContractSignerRole } from '../../../../core/business/business-helpers';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
@@ -17,9 +19,29 @@ import {
 } from '../../repositories/interfaces/complaints.repository.interface';
 import type { IComplaintsService } from '../interfaces/complaints.service.interface';
 import type {
+  ListComplaintsQueryDto,
   ResolveComplaintDto,
   SubmitIncidentComplaintDto,
 } from '../../dtos/complaint.dto';
+
+function resolveEvidenceExtension(file: Express.Multer.File): string {
+  const mime = (file.mimetype || '').toLowerCase();
+  const name = (file.originalname || '').toLowerCase();
+  if (mime === 'application/pdf' || name.endsWith('.pdf')) return 'pdf';
+  if (mime === 'image/png' || name.endsWith('.png')) return 'png';
+  if (
+    mime === 'image/jpeg' ||
+    mime === 'image/jpg' ||
+    name.endsWith('.jpg') ||
+    name.endsWith('.jpeg')
+  ) {
+    return 'jpg';
+  }
+  throw new BadRequestException(
+    'Chỉ chấp nhận tệp bằng chứng định dạng PDF, PNG hoặc JPEG.',
+  );
+}
+
 @Injectable()
 export class ComplaintsServiceImpl implements IComplaintsService {
   constructor(
@@ -27,17 +49,70 @@ export class ComplaintsServiceImpl implements IComplaintsService {
     private readonly repository: IComplaintsRepository,
     private readonly storage: StorageService,
   ) {}
+
+  listComplaints(actor: AuthenticatedUser, query: ListComplaintsQueryDto) {
+    const page = Math.max(1, query.page ?? 1);
+    const limit = Math.min(50, Math.max(1, query.limit ?? 20));
+    const skip = (page - 1) * limit;
+    const where: Prisma.ComplaintWhereInput = query.status
+      ? { status: query.status }
+      : {};
+
+    if (actor.role === 'FAMILY_REP') {
+      where.contract = { familyUnit: { representativeUserId: actor.id } };
+    } else if (actor.role === 'DOCTOR') {
+      where.contract = { doctor: { userId: actor.id } };
+    } else if (actor.role === 'HEALTHCARE_FACILITY') {
+      where.contract = { facility: { userId: actor.id } };
+    } else if (actor.role !== 'ADMIN') {
+      throw new ForbiddenException('Bạn không có quyền xem danh sách khiếu nại.');
+    }
+
+    return this.repository.transaction(async (session) => {
+      const { items, total } = await session.listComplaints(where, skip, limit);
+      return { items, total, page, limit };
+    });
+  }
+
+  async uploadComplaintEvidence(
+    actor: AuthenticatedUser,
+    file?: Express.Multer.File,
+  ) {
+    if (!['FAMILY_REP', 'DOCTOR'].includes(actor.role)) {
+      throw new ForbiddenException(
+        'Chỉ đại diện hộ gia đình hoặc bác sĩ mới được tải bằng chứng khiếu nại.',
+      );
+    }
+    if (!file?.buffer?.length || file.buffer.length > 5 * 1024 * 1024) {
+      throw new BadRequestException(
+        'Tệp bằng chứng phải có dung lượng từ 1 byte đến 5 MB.',
+      );
+    }
+    const extension = resolveEvidenceExtension(file);
+    try {
+      const evidenceKey = await this.storage.uploadFile(
+        { ...file, originalname: `bang-chung.${extension}` },
+        `${actor.id}/complaints`,
+      );
+      return { evidenceKey };
+    } catch {
+      throw new ServiceUnavailableException(
+        'Không tải được tệp bằng chứng lên kho lưu trữ. Vui lòng thử lại.',
+      );
+    }
+  }
+
   submitIncidentComplaint(
     actor: AuthenticatedUser,
     dto: SubmitIncidentComplaintDto,
   ) {
     if (!['FAMILY_REP', 'DOCTOR'].includes(actor.role))
       throw new ForbiddenException(
-        'Only families and assigned doctors can file incidents',
+        'Chỉ đại diện hộ gia đình hoặc bác sĩ phụ trách mới có thể gửi khiếu nại.',
       );
     return this.repository.transaction(async (session) => {
       const contract = await session.findContract(dto.contractId);
-      if (!contract) throw new NotFoundException('Contract not found');
+      if (!contract) throw new NotFoundException('Không tìm thấy hợp đồng.');
       getContractSignerRole(contract, actor);
       if (
         dto.encounterId &&
@@ -47,7 +122,7 @@ export class ComplaintsServiceImpl implements IComplaintsService {
         ))
       )
         throw new BadRequestException(
-          'Encounter does not belong to this contract',
+          'Lượt khám không thuộc hợp đồng đã chọn.',
         );
       // Bằng chứng chỉ tham chiếu object đã tải trong vùng của người gửi, không nhận link tùy ý.
       const keys = dto.evidenceKeys ?? [];
@@ -60,10 +135,10 @@ export class ComplaintsServiceImpl implements IComplaintsService {
         )
       )
         throw new BadRequestException(
-          'Evidence keys must be in your complaint upload namespace',
+          'Đường dẫn tệp bằng chứng không thuộc vùng tải lên hợp lệ của bạn.',
         );
       if (!contract.doctor) {
-        throw new BadRequestException('Hợp đồng chưa có bác sĩ phân công');
+        throw new BadRequestException('Hợp đồng chưa có bác sĩ phân công.');
       }
       const evidenceExists = await Promise.all(
         keys.map((key) => this.storage.objectExists(key)),
@@ -93,20 +168,29 @@ export class ComplaintsServiceImpl implements IComplaintsService {
       return item;
     });
   }
+
   getComplaintDetail(actor: AuthenticatedUser, id: string) {
     return this.repository.transaction(async (session) => {
       const item = await session.findComplaint(id);
       this.assertComplaintAccess(item, actor);
-      if (!item) throw new NotFoundException('Complaint not found');
-      // Không trả đối tượng contract include: nó chứa thông tin nội bộ của CSYT/bác sĩ.
+      if (!item) throw new NotFoundException('Không tìm thấy khiếu nại.');
+      // Chỉ trả các trường hiển thị công khai của hợp đồng, không trả nguyên đối tượng contract nội bộ.
       const { contract, ...detail } = item;
       return {
         ...detail,
         facilityId: contract.facilityId,
         doctorId: contract.doctorId,
+        contract: {
+          contractNumber: contract.contractNumber,
+          facility: { facilityName: contract.facility.facilityName },
+          doctor: contract.doctor
+            ? { doctorName: contract.doctor.doctorName }
+            : null,
+        },
       };
     });
   }
+
   resolveComplaint(
     actor: AuthenticatedUser,
     id: string,
@@ -115,28 +199,28 @@ export class ComplaintsServiceImpl implements IComplaintsService {
     return this.repository.transaction(async (session) => {
       const item = await session.findComplaint(id);
       this.assertComplaintAccess(item, actor);
-      if (!item) throw new NotFoundException('Complaint not found');
+      if (!item) throw new NotFoundException('Không tìm thấy khiếu nại.');
       if (!['ADMIN', 'HEALTHCARE_FACILITY'].includes(actor.role))
         throw new ForbiddenException(
-          'Only Admin and the responsible facility can process complaints',
+          'Chỉ Quản trị viên và Cơ sở y tế phụ trách mới có quyền xử lý khiếu nại.',
         );
       if (
         item.status === 'CLOSED' ||
         (item.status === 'RESOLVED' && dto.action !== 'CLOSE')
       )
-        throw new ConflictException('Complaint has already been resolved');
+        throw new ConflictException('Khiếu nại này đã được giải quyết trước đó.');
       if (dto.action === 'FACILITY_RESPONSE') {
         if (actor.role !== 'HEALTHCARE_FACILITY')
           throw new ForbiddenException(
-            'The facility must submit its own verification',
+            'Chỉ Cơ sở y tế phụ trách mới được gửi biên bản xác minh.',
           );
         if (item.status !== 'INVESTIGATING')
           throw new ConflictException(
-            'Admin must start the investigation first',
+            'Quản trị viên cần thụ lý hồ sơ trước khi Cơ sở y tế gửi xác minh.',
           );
         if (item.facilityReviewedAt)
           throw new ConflictException(
-            'Facility verification has already been recorded',
+            'Cơ sở y tế đã gửi biên bản xác minh trước đó.',
           );
         const updated = await session.updateComplaint(id, {
           facilityResponse: dto.notes,
@@ -152,11 +236,13 @@ export class ComplaintsServiceImpl implements IComplaintsService {
         return updated;
       }
       if (actor.role !== 'ADMIN')
-        throw new ForbiddenException('Only Admin can issue the final decision');
+        throw new ForbiddenException(
+          'Chỉ Quản trị viên mới có quyền ban hành quyết định cuối cùng.',
+        );
       if (dto.action === 'INVESTIGATE') {
         if (item.status !== 'SUBMITTED')
           throw new ConflictException(
-            'Complaint is not awaiting investigation',
+            'Khiếu nại không ở trạng thái chờ thụ lý.',
           );
         const updated = await session.updateComplaint(id, {
           status: 'INVESTIGATING',
@@ -173,7 +259,7 @@ export class ComplaintsServiceImpl implements IComplaintsService {
         // CSYT xác minh phần chuyên môn trước, Admin mới chốt kết luận phi tài chính.
         if (item.status !== 'INVESTIGATING' || !item.facilityReviewedAt)
           throw new ConflictException(
-            'Facility verification is required before resolution',
+            'Cần có biên bản xác minh từ Cơ sở y tế trước khi ra phán quyết.',
           );
         const updated = await session.updateComplaint(id, {
           status: 'RESOLVED',
@@ -191,7 +277,9 @@ export class ComplaintsServiceImpl implements IComplaintsService {
         return updated;
       }
       if (item.status !== 'RESOLVED')
-        throw new ConflictException('Resolve the complaint before closing it');
+        throw new ConflictException(
+          'Cần ban hành phán quyết trước khi đóng hồ sơ khiếu nại.',
+        );
       const updated = await session.updateComplaint(id, { status: 'CLOSED' });
       await session.recordComplaintEvent(
         actor.id,
@@ -202,15 +290,16 @@ export class ComplaintsServiceImpl implements IComplaintsService {
       return updated;
     });
   }
+
   private assertComplaintAccess(
     item: ComplaintDetail | null,
     actor: AuthenticatedUser,
   ) {
-    if (!item) throw new NotFoundException('Complaint not found');
+    if (!item) throw new NotFoundException('Không tìm thấy khiếu nại.');
     try {
       getContractSignerRole(item.contract, actor);
     } catch {
-      throw new NotFoundException('Complaint not found');
+      throw new NotFoundException('Không tìm thấy khiếu nại.');
     }
   }
 }

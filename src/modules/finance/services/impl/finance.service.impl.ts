@@ -53,12 +53,12 @@ export class FinanceServiceImpl implements IFinanceService {
     const period = this.resolveReportingPeriod(query);
     return this.repository.transaction(async (session) => {
       if (!['ADMIN', 'HEALTHCARE_FACILITY'].includes(actor.role))
-        throw new ForbiddenException('Finance access is restricted');
+        throw new ForbiddenException('Bạn không có quyền truy cập dữ liệu tài chính.');
       let facilityId = query.facilityId;
       if (actor.role === 'HEALTHCARE_FACILITY') {
         const facility = await session.findFacilityForUser(actor.id);
         if (!facility || (facilityId && facilityId !== facility.id))
-          throw new NotFoundException('Facility not found');
+          throw new NotFoundException('Không tìm thấy thông tin cơ sở y tế.');
         facilityId = facility.id;
       }
       const filter: RevenueFilter = {
@@ -86,11 +86,12 @@ export class FinanceServiceImpl implements IFinanceService {
         currency: 'VND' as const,
         invoiceCount: invoices.length,
         recognitionBasis: 'SERVICE_DAYS',
+        settlementFrequency: 'MONTHLY' as const,
         platformFeeGrossVnd: totals.platformFeeVnd,
         platformFeeVatVnd: null,
         platformFeeNetVnd: null,
         taxTreatment:
-          'Phí 15% đã gồm thuế nếu phát sinh; chưa tự xác định thuế suất.',
+          'Phí nền tảng 15% đã gồm thuế nếu phát sinh. Khoản 85% trả CSYT chưa khấu trừ hoặc nộp thay thuế thuộc nghĩa vụ của bên nhận. CSYT và bác sĩ tự xác định, kê khai và nộp thuế phát sinh theo hoạt động và quy định áp dụng. Dịch vụ khám bệnh, chữa bệnh thuộc đối tượng không chịu VAT theo quy định. Bảng chi trả chưa xác nhận bên nhận đã hoàn thành nghĩa vụ thuế.',
         satisfaction: await session.getSatisfactionSummary(filter),
         ...totals,
         // CSYT không xem nhật ký giao dịch chưa xác định của đơn vị khác.
@@ -182,7 +183,7 @@ export class FinanceServiceImpl implements IFinanceService {
   ) {
     if (actor.role !== 'ADMIN')
       throw new ForbiddenException(
-        'Only Admin can prepare or confirm settlements',
+        'Chỉ Quản trị viên mới được lập bảng hoặc xác nhận chi trả quyết toán.',
       );
     const period = this.resolveReportingPeriod(dto);
     if (dto.action !== 'PREPARE') return this.updateSettlementStatus(actor, dto);
@@ -191,7 +192,7 @@ export class FinanceServiceImpl implements IFinanceService {
       period.year * 12 + period.month >=
       vnNow.getUTCFullYear() * 12 + vnNow.getUTCMonth() + 1
     )
-      throw new BadRequestException('Only closed months can be settled');
+      throw new BadRequestException('Chỉ có thể lập bảng quyết toán cho các tháng đã kết thúc.');
     return this.repository.transaction(async (session) => {
       const filter: RevenueFilter = {
         ...getVietnamMonthWindow(period.year, period.month),
@@ -205,7 +206,7 @@ export class FinanceServiceImpl implements IFinanceService {
         invoices.some((invoice) => !invoice.acceptedTransaction?.reconciledAt)
       )
         throw new ConflictException(
-          'Run SePay reconciliation before preparing this settlement; one or more paid invoices are not verified by SePay API.',
+          'Vui lòng đồng bộ đối soát SePay trước khi lập bảng; còn hóa đơn đã thanh toán chưa được xác minh qua SePay API.',
         );
       const groups = new Map<string, RevenueInvoice[]>();
       for (const invoice of invoices) {
@@ -222,7 +223,7 @@ export class FinanceServiceImpl implements IFinanceService {
         );
         if (settlement && settlement.disbursementStatus !== 'PENDING')
           throw new ConflictException(
-            'Late invoices require a reviewed adjustment; the settled statement is immutable',
+            'Bảng quyết toán đã chi trả không thể thay đổi; các hóa đơn phát sinh muộn cần lập điều chỉnh riêng.',
           );
         const needsNewReview = Boolean(settlement);
         const facility = items[0].contract!.facility;
@@ -289,9 +290,10 @@ export class FinanceServiceImpl implements IFinanceService {
         ...period,
         environment: dto.environment,
         transferExecuted: false as const,
+        settlementFrequency: 'MONTHLY' as const,
         satisfaction: await session.getSatisfactionSummary(filter),
         message:
-          'Đã lập bảng đối soát. Cần CSYT xác nhận trước khi ghi nhận chi trả.',
+          'Đã lập bảng đối soát cho tháng đã chọn theo ngày phục vụ. Cần CSYT xác nhận trước khi ghi nhận chi trả hàng tháng.',
         settlements: await session.findSettlements(
           filter,
           period.year,
@@ -307,13 +309,13 @@ export class FinanceServiceImpl implements IFinanceService {
     return this.repository.transaction(async (session) => {
       const item = await session.findSettlement(dto.settlementId!);
       if (!item || item.environment !== dto.environment)
-        throw new NotFoundException('Settlement not found');
+        throw new NotFoundException('Không tìm thấy bảng quyết toán.');
       if (
         (dto.year !== undefined && dto.year !== item.year) ||
         (dto.month !== undefined && dto.month !== item.month)
       )
         throw new BadRequestException(
-          'Settlement period does not match the selected statement',
+          'Kỳ quyết toán không khớp với bảng đang chọn.',
         );
       if (item.disbursementStatus === 'SETTLED') {
         if (
@@ -325,7 +327,7 @@ export class FinanceServiceImpl implements IFinanceService {
           item.settledAt?.getTime() === Date.parse(dto.paidAt!)
         )
           return item;
-        throw new ConflictException('Settled statements cannot be overwritten');
+        throw new ConflictException('Bảng quyết toán đã chi trả xong, không thể ghi đè.');
       }
       if (dto.reviewVersion !== undefined && dto.reviewVersion !== item.reviewVersion)
         throw new ConflictException('Bảng quyết toán đã thay đổi. Hãy tải lại trước khi tiếp tục.');
@@ -356,7 +358,7 @@ export class FinanceServiceImpl implements IFinanceService {
         throw new ConflictException('Cơ sở y tế cần xác nhận bảng đối soát trước khi ghi nhận chi trả.');
       if (dto.amountPaidVnd !== moneyToNumber(item.facilityPayoutAmount))
         throw new BadRequestException(
-          'Transferred amount does not match the facility share',
+          'Số tiền đã chuyển không khớp với phần chi trả của cơ sở y tế.',
         );
       const prefix = `${actor.id}/settlements/`;
       const evidenceKey = dto.evidenceKey;
@@ -367,7 +369,7 @@ export class FinanceServiceImpl implements IFinanceService {
         (path.length === 2 && path[0] === item.id && Boolean(path[1]));
       if (!evidenceKey || !validPath || evidenceKey.includes('..') || evidenceKey.includes('://'))
         throw new BadRequestException(
-          'Provide your settlement evidence object key',
+          'Đường dẫn tệp chứng từ quyết toán không hợp lệ.',
         );
       const paidAt = new Date(dto.paidAt!);
       if (
@@ -376,7 +378,7 @@ export class FinanceServiceImpl implements IFinanceService {
         paidAt < item.createdAt
       )
         throw new BadRequestException(
-          'Transfer time must be between statement creation and now',
+          'Thời điểm chuyển khoản phải nằm trong khoảng từ khi lập bảng quyết toán đến hiện tại.',
         );
       if (!(await this.storage.objectExists(evidenceKey)))
         throw new BadRequestException(
@@ -411,7 +413,7 @@ export class FinanceServiceImpl implements IFinanceService {
   private resolveReportingPeriod(query: RevenueAnalyticsQueryDto) {
     this.assertReportingEnvironment(query.environment);
     if ((query.year === undefined) !== (query.month === undefined))
-      throw new BadRequestException('Provide both year and month');
+      throw new BadRequestException('Vui lòng cung cấp đầy đủ cả năm và tháng đối soát.');
     const prev = new Date(Date.now() + 7 * 3600000);
     prev.setUTCDate(1);
     prev.setUTCMonth(prev.getUTCMonth() - 1);

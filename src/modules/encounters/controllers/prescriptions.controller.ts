@@ -18,6 +18,7 @@ import {
   FamilyPrescriptionQuery,
   PrescriptionPageQuery,
   SharePrescriptionDto,
+  ReplacePrescriptionDto,
 } from '../dtos/share-prescription.dto';
 import { PrescriptionsService } from '../services/prescriptions.service';
 
@@ -55,6 +56,21 @@ export class PrescriptionsController {
     return this.prescriptions.share(req.user, id, dto);
   }
 
+  @Post(':id/replacements')
+  @Roles('DOCTOR')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({
+    summary:
+      'Kê đơn mới thay thế đơn cũ, giữ nguyên nội dung và lịch sử bản cũ',
+  })
+  replace(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReplacePrescriptionDto,
+  ) {
+    return this.prescriptions.replace(req.user, id, dto);
+  }
+
   @Get()
   @Roles('FAMILY_REP')
   @Header('Cache-Control', 'private, no-store')
@@ -79,5 +95,19 @@ export class PrescriptionsController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.prescriptions.familyDetail(req.user, id);
+  }
+
+  @Get(':id/export')
+  @Roles('DOCTOR', 'FAMILY_REP')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({
+    summary:
+      'Trích xuất bản lưu đơn thuốc và thông tin phiên bản trong phạm vi được phép',
+  })
+  exportRecord(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.prescriptions.exportRecord(req.user, id);
   }
 }

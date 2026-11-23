@@ -68,16 +68,28 @@ export class AdminComplaintsQuery extends ComplaintsQuery {
   complainantRole?: 'FAMILY_REP' | 'DOCTOR';
 }
 
-export class AdminOverviewQuery {
-  @ApiPropertyOptional({ enum: ['weekly', 'monthly', 'yearly'] })
-  @IsOptional()
-  @IsIn(['weekly', 'monthly', 'yearly'])
-  period: 'weekly' | 'monthly' | 'yearly' = 'monthly';
-
+class AdminEnvironmentQuery {
   @ApiPropertyOptional({ enum: ['LIVE', 'TEST'] })
   @IsOptional()
   @IsIn(['LIVE', 'TEST'])
   environment: 'LIVE' | 'TEST' = 'LIVE';
+}
+
+export class AdminOverviewQuery extends AdminEnvironmentQuery {
+  @ApiPropertyOptional({ enum: ['weekly', 'monthly', 'yearly'] })
+  @IsOptional()
+  @IsIn(['weekly', 'monthly', 'yearly'])
+  period: 'weekly' | 'monthly' | 'yearly' = 'monthly';
+}
+
+export class AdminFinanceReportQuery extends AdminEnvironmentQuery {
+  @ApiPropertyOptional({ minimum: 2000, maximum: 2200, description: 'Mặc định là năm hiện tại theo giờ Việt Nam.' })
+  @IsOptional()
+  @Transform(({ value }) => typeof value === 'string' && /^\d{4}$/.test(value) ? Number(value) : value)
+  @IsInt()
+  @Min(2000)
+  @Max(2200)
+  year?: number;
 }
 
 export class AdminAccountStatusDto {
