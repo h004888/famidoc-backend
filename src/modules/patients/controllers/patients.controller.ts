@@ -31,6 +31,7 @@ import {
 import { DEFAULT_MAX_DOCUMENT_BYTES } from '../../../core/validation/document-file.validator';
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../../../core/auth/roles.guard';
+import { BypassTransform } from '../../../core/decorators/bypass-transform.decorator';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
 import {
   PATIENTS_SERVICE_TOKEN,
@@ -185,6 +186,7 @@ export class PatientsController {
   }
 
   @Get(':id/documents/:documentId/file')
+  @BypassTransform()
   @ApiOperation({ summary: 'Tải hoặc xem trực tiếp tệp/ảnh tài liệu y tế đã lưu trong kho nội bộ' })
   @ApiParam({ name: 'id', description: 'UUID của bệnh nhân' })
   @ApiParam({ name: 'documentId', description: 'UUID của tài liệu' })

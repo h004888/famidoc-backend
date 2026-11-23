@@ -3,6 +3,7 @@ import {
   NestInterceptor,
   ExecutionContext,
   CallHandler,
+  StreamableFile,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Observable } from 'rxjs';
@@ -56,6 +57,11 @@ export class TransformResponseInterceptor<T>
 
     return next.handle().pipe(
       map((data) => {
+        // Không đóng gói luồng tệp nhị phân (StreamableFile / Buffer) sang JSON envelope
+        if (data instanceof StreamableFile || Buffer.isBuffer(data)) {
+          return data;
+        }
+
         // Idempotency: nếu response đã có cấu trúc Unified Envelope thì giữ nguyên
         if (
           data &&
