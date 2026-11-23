@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEnum, IsInt, Max, Min, ValidateIf } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, Max, Min, ValidateIf } from 'class-validator';
 import { CarePackageStatus } from '../entities/care-package.entity';
 
 // Query HTTP là chuỗi: chỉ chuyển chuỗi toàn chữ số; giữ đầu vào khác để DTO báo lỗi.
@@ -34,4 +34,14 @@ export class AdminListCarePackagesDto extends ListCarePackagesDto {
   @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsEnum(CarePackageStatus)
   status?: CarePackageStatus;
+
+  @ApiPropertyOptional({ description: 'Ẩn bản nháp cũ khi xem danh mục gói' })
+  @Transform(({ value }: { value: unknown }) => {
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsBoolean()
+  excludeDrafts?: boolean;
 }

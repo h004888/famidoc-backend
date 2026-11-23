@@ -204,26 +204,36 @@ export class AdminService {
     const { start: end } = getVietnamMonthWindow(reportYear + 1, 1);
 
     const rows = await this.db.$queryRaw<{
-      month: number;
+      month: number | null;
       receivedVnd: Prisma.Decimal;
       paidVnd: Prisma.Decimal;
+      purchasingFamilies: number;
     }[]>`
       WITH cash_movements AS (
-        SELECT paid_at AS occurred_at, total_payable AS amount, TRUE AS is_income
-        FROM invoices
-        WHERE environment = ${environment} AND payment_status = 'PAID'
-          AND paid_at >= ${start} AND paid_at < ${end} AND paid_at <= ${now}
+        SELECT invoice.paid_at AS occurred_at, invoice.total_payable AS amount,
+          TRUE AS is_income, contract.family_id AS purchasing_family_id
+        FROM invoices AS invoice
+        LEFT JOIN medical_contracts AS contract
+          ON contract.id = invoice.contract_id
+          AND invoice.addendum_id IS NULL AND invoice.encounter_id IS NULL
+        WHERE invoice.environment = ${environment} AND invoice.payment_status = 'PAID'
+          AND invoice.paid_at >= ${start} AND invoice.paid_at < ${end} AND invoice.paid_at <= ${now}
         UNION ALL
-        SELECT settled_at, facility_payout_amount, FALSE
+        SELECT settled_at, facility_payout_amount, FALSE, NULL::uuid
         FROM facility_settlements
         WHERE environment = ${environment} AND disbursement_status = 'SETTLED'
           AND settled_at >= ${start} AND settled_at < ${end} AND settled_at <= ${now}
       )
-      SELECT EXTRACT(MONTH FROM occurred_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::integer AS month,
+      SELECT month,
         COALESCE(SUM(amount) FILTER (WHERE is_income), 0) AS "receivedVnd",
-        COALESCE(SUM(amount) FILTER (WHERE NOT is_income), 0) AS "paidVnd"
-      FROM cash_movements
-      GROUP BY month
+        COALESCE(SUM(amount) FILTER (WHERE NOT is_income), 0) AS "paidVnd",
+        COUNT(DISTINCT purchasing_family_id)::integer AS "purchasingFamilies"
+      FROM (
+        SELECT EXTRACT(MONTH FROM occurred_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::integer AS month,
+          amount, is_income, purchasing_family_id
+        FROM cash_movements
+      ) AS monthly_cash_movements
+      GROUP BY GROUPING SETS ((month), ())
     `;
 
     const byMonth = new Map(rows.map((row) => [row.month, row]));
@@ -236,13 +246,18 @@ export class AdminService {
         paidVnd: row ? moneyToNumber(row.paidVnd) : 0,
       };
     });
-    const receivedVnd = moneyToNumber(rows.reduce((sum, row) => sum.plus(row.receivedVnd), new Prisma.Decimal(0)));
-    const paidVnd = moneyToNumber(rows.reduce((sum, row) => sum.plus(row.paidVnd), new Prisma.Decimal(0)));
+    // Dòng tổng đếm hộ theo cả năm vì một hộ có thể mua gói ở nhiều tháng.
+    const yearly = byMonth.get(null);
 
     return {
       year: reportYear,
       environment,
-      totals: { receivedVnd, paidVnd, netVnd: receivedVnd - paidVnd },
+      totals: {
+        purchasingFamilies: yearly?.purchasingFamilies ?? 0,
+        receivedVnd: yearly ? moneyToNumber(yearly.receivedVnd) : 0,
+        paidVnd: yearly ? moneyToNumber(yearly.paidVnd) : 0,
+        netVnd: yearly ? moneyToNumber(yearly.receivedVnd.minus(yearly.paidVnd)) : 0,
+      },
       months,
     };
   }

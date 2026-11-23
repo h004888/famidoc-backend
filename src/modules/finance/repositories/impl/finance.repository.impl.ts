@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import type { FacilitySettlement } from '@prisma/client';
 import { PrismaService } from '../../../../core/database/prisma.service';
 import { serializable } from '../../../../core/database/prisma-transaction';
-import { writeBusinessAudit } from '../../../../core/business/business-helpers';
+import { todayInVietnam, writeBusinessAudit } from '../../../../core/business/business-helpers';
 import {
   FINANCE_INVOICE_INCLUDE,
   type IFinanceRepository,
@@ -60,6 +60,120 @@ class PrismaFinanceSession implements FinanceSession {
       where: { userId },
       select: { id: true },
     });
+  }
+  async getFacilityBusinessInputs(filter: RevenueFilter & { facilityId: string }) {
+    const now = new Date();
+    const today = todayInVietnam(now);
+    const contractScope = {
+      facilityId: filter.facilityId,
+      isDemo: filter.environment === 'TEST',
+    };
+    const [doctors, activeContracts, packageInvoices] = await Promise.all([
+      this.tx.doctor.findMany({
+        where: {
+          facilityId: filter.facilityId,
+          onboardingStatus: 'ACTIVE',
+          user: { status: 'ACTIVE' },
+        },
+        select: { id: true, doctorName: true, specialty: true },
+        orderBy: [{ doctorName: 'asc' }, { id: 'asc' }],
+      }),
+      this.tx.medicalContract.findMany({
+        where: {
+          ...contractScope,
+          contractStatus: 'ACTIVE',
+          startDate: { lte: today },
+          endDate: { gt: today },
+        },
+        select: { familyId: true, doctorId: true },
+      }),
+      this.tx.invoice.findMany({
+        // Mỗi hợp đồng chỉ có một hóa đơn gốc PAID. Phụ lục và ca khám không tính là mua gói.
+        // Lấy cả gói mua trong kỳ và gói đã thanh toán trước đó nhưng còn phục vụ trong kỳ báo cáo.
+        where: {
+          environment: filter.environment,
+          paymentStatus: 'PAID',
+          addendumId: null,
+          encounterId: null,
+          paidAt: { lt: filter.end, lte: now },
+          contract: contractScope,
+          OR: [
+            { paidAt: { gte: filter.start } },
+            {
+              contract: {
+                is: {
+                  ...contractScope,
+                  contractStatus: { in: ['ACTIVE', 'EXPIRED', 'TERMINATED'] },
+                  startDate: { lt: filter.end },
+                  endDate: { gt: filter.start },
+                },
+              },
+            },
+          ],
+        },
+        select: {
+          id: true,
+          invoiceCode: true,
+          paidAt: true,
+          totalPayable: true,
+          addendumId: true,
+          settlementItems: {
+            select: {
+              recognitionYear: true,
+              recognitionMonth: true,
+              recognitionBasis: true,
+              grossAmount: true,
+              vatAmount: true,
+              netAmount: true,
+              platformFeeAmount: true,
+              facilityShareAmount: true,
+              serviceFrom: true,
+              serviceUntil: true,
+            },
+          },
+          contract: {
+            select: {
+              id: true,
+              contractNumber: true,
+              contractStatus: true,
+              startDate: true,
+              endDate: true,
+              terminatedAt: true,
+              memberCount: true,
+              familyId: true,
+              familyUnit: {
+                select: {
+                  representativeUser: { select: { fullName: true } },
+                },
+              },
+              doctor: { select: { id: true, doctorName: true, specialty: true } },
+              servicePackage: {
+                select: {
+                  lineageCode: true,
+                  packageName: true,
+                  durationMonths: true,
+                },
+              },
+              encounters: {
+                where: { encounterStatus: { not: 'CANCELLED' } },
+                select: {
+                  doctor: { select: { id: true, doctorName: true, specialty: true } },
+                },
+              },
+            },
+          },
+        },
+        orderBy: [{ paidAt: 'desc' }, { id: 'desc' }],
+      }),
+    ]);
+    const paidInvoices = packageInvoices.filter(
+      (invoice) =>
+        invoice.paidAt !== null &&
+        invoice.paidAt >= filter.start &&
+        invoice.paidAt < filter.end &&
+        invoice.paidAt <= now,
+    );
+    return { doctors, activeContracts, paidInvoices, packageInvoices };
   }
   async findEligibleInvoices(filter: RevenueFilter) {
     const rows = await this.tx.invoice.findMany({
