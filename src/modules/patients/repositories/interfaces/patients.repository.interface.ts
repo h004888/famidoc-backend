@@ -1,7 +1,17 @@
-import type { FamilyUnit, Patient, PatientAllergy, PatientDocument, PatientDocumentType, VitalSign } from '@prisma/client';
+import type {
+  FamilyUnit,
+  Patient,
+  PatientAllergy,
+  PatientChronicCondition,
+  PatientDocument,
+  PatientDocumentType,
+  VitalSign,
+} from '@prisma/client';
 import type { CreatePatientDto } from '../../dtos/create-patient.dto';
 import type { UpdatePatientDto } from '../../dtos/update-patient.dto';
 import type { CreateAllergyDto } from '../../dtos/create-allergy.dto';
+import type { CreateChronicConditionDto } from '../../dtos/create-chronic-condition.dto';
+import type { UpdateChronicConditionDto } from '../../dtos/update-chronic-condition.dto';
 import type { CreateVitalSignDto } from '../../dtos/create-vital-sign.dto';
 import type { UpdateVitalSignDto } from '../../dtos/update-vital-sign.dto';
 
@@ -22,6 +32,7 @@ export type SerializedPatientDocument = PatientDocument & {
 
 export type PatientDetail = Patient & {
   allergies?: PatientAllergy[];
+  chronicConditions?: PatientChronicCondition[];
   documents?: SerializedPatientDocument[];
 };
 
@@ -68,6 +79,14 @@ export interface IPatientsRepository {
   findAllergiesByPatientId(patientId: string): Promise<PatientAllergy[]>;
   findAllergyById?(allergyId: string): Promise<PatientAllergy | null>;
   deleteAllergy?(allergyId: string): Promise<PatientAllergy>;
+  addChronicCondition?(patientId: string, data: CreateChronicConditionDto): Promise<PatientChronicCondition>;
+  findChronicConditionsByPatientId?(patientId: string): Promise<PatientChronicCondition[]>;
+  findChronicConditionById?(conditionId: string): Promise<PatientChronicCondition | null>;
+  updateChronicCondition?(
+    conditionId: string,
+    data: UpdateChronicConditionDto,
+  ): Promise<PatientChronicCondition>;
+  deleteChronicCondition?(conditionId: string): Promise<PatientChronicCondition>;
   addDocument(patientId: string, data: CreatePatientDocumentRecordInput): Promise<PatientDocument>;
   findDocumentsByPatientId(patientId: string): Promise<PatientDocument[]>;
   findDocumentById?(documentId: string): Promise<PatientDocument | null>;

@@ -2,12 +2,19 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsDateString,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
+  IsString,
   Max,
+  MaxLength,
   Min,
 } from 'class-validator';
+import {
+  GLUCOSE_CONTEXT_VALUES,
+  MEASUREMENT_STATE_VALUES,
+} from './create-vital-sign.dto';
 
 export class UpdateVitalSignDto {
   @ApiPropertyOptional({ description: 'Huyết áp tâm thu (mmHg)', example: 120 })
@@ -65,6 +72,30 @@ export class UpdateVitalSignDto {
   @Min(1)
   @Max(40)
   bloodGlucose?: number;
+
+  @ApiPropertyOptional({
+    description: 'Bối cảnh đo đường huyết',
+    enum: GLUCOSE_CONTEXT_VALUES,
+  })
+  @IsOptional()
+  @IsIn(GLUCOSE_CONTEXT_VALUES)
+  glucoseContext?: (typeof GLUCOSE_CONTEXT_VALUES)[number] | null;
+
+  @ApiPropertyOptional({
+    description: 'Trạng thái cơ thể khi đo',
+    enum: MEASUREMENT_STATE_VALUES,
+  })
+  @IsOptional()
+  @IsIn(MEASUREMENT_STATE_VALUES)
+  measurementState?: (typeof MEASUREMENT_STATE_VALUES)[number] | null;
+
+  @ApiPropertyOptional({
+    description: 'Ghi chú triệu chứng hoặc hoàn cảnh đo',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string | null;
 
   @ApiPropertyOptional({
     description: 'Thời điểm đo (ISO-8601)',

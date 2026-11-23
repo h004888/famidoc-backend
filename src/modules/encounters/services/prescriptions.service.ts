@@ -377,6 +377,23 @@ export class PrescriptionsService {
           vietnamNow,
         );
       }
+      await tx.encounter.updateMany({
+        where: {
+          id,
+          encounterStatus: { in: ['CONFIRMED', 'IN_PROGRESS'] },
+        },
+        data: { encounterStatus: 'COMPLETED' },
+      });
+      await tx.notification.create({
+        data: {
+          userId: visit.contract.familyUnit.representativeUser.id,
+          type: 'ENCOUNTER_COMPLETED',
+          title: 'Buổi khám đã hoàn tất',
+          content:
+            'Bác sĩ đã hoàn tất ghi nhận bệnh án cho buổi khám. Bạn có thể xem lại sổ khám và gửi đánh giá bác sĩ.',
+          referenceId: id,
+        },
+      });
       await writeBusinessAudit(
         tx,
         actor.id,

@@ -2194,6 +2194,14 @@ export class ContractsServiceImpl implements IContractsService {
             clinicalManifestation: a.clinicalManifestation,
           }));
 
+          const chronicConditions = (rawPatient.chronicConditions || []).map((c: any) => ({
+            id: c.id,
+            conditionName: c.conditionName,
+            icd10Code: c.icd10Code ?? null,
+            clinicalStatus: c.clinicalStatus,
+            notes: c.notes ?? null,
+          }));
+
           const documents = (rawPatient.documents || []).map((d: any) => ({
             id: d.id,
             documentName: d.documentName,
@@ -2211,7 +2219,11 @@ export class ContractsServiceImpl implements IContractsService {
             ageGroup,
             gender: rawPatient.gender || 'OTHER',
             relationshipToHead: rawPatient.relationshipToHead || 'MEMBER',
+            heightCm: rawPatient.heightCm != null ? Number(rawPatient.heightCm) : null,
+            weightKg: rawPatient.weightKg != null ? Number(rawPatient.weightKg) : null,
+            chronicDiseases: rawPatient.chronicDiseases ?? null,
             allergies,
+            chronicConditions,
             documents,
           };
         },
