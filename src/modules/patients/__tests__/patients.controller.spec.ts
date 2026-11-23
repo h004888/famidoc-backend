@@ -1,3 +1,5 @@
+import { Readable } from 'stream';
+import { StreamableFile } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PatientsController } from '../controllers/patients.controller';
 import {
@@ -74,6 +76,7 @@ describe('PatientsController', () => {
       addDocument: jest.fn(),
       listDocuments: jest.fn(),
       getDocumentFile: jest.fn(),
+      getDocumentFileStream: jest.fn(),
       deleteDocument: jest.fn(),
       deleteAllergy: jest.fn(),
       addVitalSign: jest.fn(),
@@ -229,31 +232,37 @@ describe('PatientsController', () => {
   });
 
   describe('GET /api/v1/patients/:id/documents/:documentId/file', () => {
-    it('stream tệp tài liệu với Content-Type đúng', async () => {
-      const bytes = Buffer.from('%PDF-1.4');
-      service.getDocumentFile.mockResolvedValue({
-        bytes,
+    it('stream tệp tài liệu qua StreamableFile với Content-Type, Content-Length và Cache-Control private', async () => {
+      const mockStream = Readable.from([Buffer.from('%PDF-1.4')]);
+      service.getDocumentFileStream.mockResolvedValue({
+        stream: mockStream,
         contentType: 'application/pdf',
+        contentLength: 8,
       });
       const mockRes = {
         setHeader: jest.fn(),
-        send: jest.fn(),
       } as unknown as import('express').Response;
 
-      await controller.getDocumentFile(
+      const result = await controller.getDocumentFile(
         mockFamilyRepReq,
         'patient-uuid-1',
         'doc-uuid-1',
         mockRes,
       );
 
-      expect(service.getDocumentFile).toHaveBeenCalledWith(
+      expect(service.getDocumentFileStream).toHaveBeenCalledWith(
         mockFamilyRepReq.user,
         'patient-uuid-1',
         'doc-uuid-1',
       );
       expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
-      expect(mockRes.send).toHaveBeenCalledWith(bytes);
+      expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Disposition', 'inline');
+      expect(mockRes.setHeader).toHaveBeenCalledWith(
+        'Cache-Control',
+        'private, max-age=300',
+      );
+      expect(mockRes.setHeader).toHaveBeenCalledWith('Content-Length', '8');
+      expect(result).toBeInstanceOf(StreamableFile);
     });
   });
 

@@ -1,5 +1,9 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../core/database/prisma.service';
+import {
+  renderFamiDocEmailLayout,
+  renderKeyValueRows,
+} from '../../../core/mailer/templates/famidoc-email-layout';
 
 interface MailerService {
   sendMail(options: Record<string, unknown>): Promise<unknown>;
@@ -156,45 +160,33 @@ export class ContractPaymentNoticeService {
   }
 
   private buildHtml(data: PaymentNoticeData): string {
-    const doctorLine = data.doctorName
-      ? `<tr><td style="padding:6px 0;color:#475569;">Bác sĩ phụ trách</td><td style="padding:6px 0;color:#0f172a;font-weight:600;">${this.escapeHtml(data.doctorName)}</td></tr>`
-      : '';
+    const rows = [
+      { label: 'Mã hợp đồng', value: data.contractNumber },
+      { label: 'Gói dịch vụ', value: data.packageName },
+      {
+        label: 'Số tiền cần thanh toán',
+        value: data.amountLabel,
+        highlight: true,
+      },
+      { label: 'Kỳ hạn hợp đồng', value: data.termLabel },
+      ...(data.doctorName
+        ? [{ label: 'Bác sĩ phụ trách', value: data.doctorName }]
+        : []),
+    ];
 
-    return `<!doctype html>
-<html lang="vi">
-  <body style="margin:0;padding:24px;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;color:#0f172a;">
-    <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;">
-      <h1 style="margin:0 0 8px;font-size:18px;color:#2E37A4;">Hợp đồng đã đủ 4 chữ ký</h1>
-      <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#334155;">
-        Kính gửi <strong>${this.escapeHtml(data.representativeName)}</strong>, hợp đồng dịch vụ chăm sóc sức khỏe gia đình
-        số <strong>${this.escapeHtml(data.contractNumber)}</strong> đã được cả bốn bên ký số thành công.
-      </p>
-      <table style="width:100%;font-size:14px;border-collapse:collapse;margin-bottom:20px;">
-        <tr><td style="padding:6px 0;color:#475569;">Gói dịch vụ</td><td style="padding:6px 0;color:#0f172a;font-weight:600;">${this.escapeHtml(data.packageName)}</td></tr>
-        <tr><td style="padding:6px 0;color:#475569;">Số tiền cần thanh toán</td><td style="padding:6px 0;color:#2E37A4;font-weight:700;font-size:16px;">${this.escapeHtml(data.amountLabel)}</td></tr>
-        <tr><td style="padding:6px 0;color:#475569;">Kỳ hạn hợp đồng</td><td style="padding:6px 0;color:#0f172a;font-weight:600;">${this.escapeHtml(data.termLabel)}</td></tr>
-        ${doctorLine}
-      </table>
-      <a href="${this.escapeHtml(data.paymentUrl)}" style="display:inline-block;background:#2E37A4;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 20px;border-radius:12px;">
-        Thanh toán gói dịch vụ
-      </a>
-      <p style="margin:20px 0 0;font-size:12px;line-height:1.6;color:#64748b;">
-        Nếu nút trên không mở được, hãy sao chép đường dẫn sau vào trình duyệt:<br />
-        <span style="word-break:break-all;">${this.escapeHtml(data.paymentUrl)}</span>
-      </p>
-      <p style="margin:20px 0 0;font-size:12px;color:#94a3b8;">Trân trọng, Đội ngũ FamiDoc</p>
-    </div>
-  </body>
-</html>`;
-  }
-
-  private escapeHtml(value: string): string {
-    return value
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+    return renderFamiDocEmailLayout({
+      preheader: `Hợp đồng ${data.contractNumber} đã đủ 4 chữ ký. Số tiền cần thanh toán: ${data.amountLabel}.`,
+      badgeLabel: 'Chờ thanh toán',
+      tone: 'action',
+      title: 'Hợp đồng đã đủ 4 chữ ký',
+      greeting: `Kính gửi ${data.representativeName},`,
+      intro: `Hợp đồng dịch vụ chăm sóc sức khỏe gia đình số ${data.contractNumber} đã được cả bốn bên ký số thành công.`,
+      bodyHtml: renderKeyValueRows(rows, 'action'),
+      cta: {
+        label: 'Thanh toán gói dịch vụ',
+        url: data.paymentUrl,
+      },
+    });
   }
 }
 

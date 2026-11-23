@@ -5,6 +5,7 @@ import { todayInVietnam } from '../../../../core/business/business-helpers';
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
@@ -97,8 +98,8 @@ function transactionEntity(
 ): PaymentTransaction {
   const payload =
     row.webhookPayload &&
-    typeof row.webhookPayload === 'object' &&
-    !Array.isArray(row.webhookPayload)
+      typeof row.webhookPayload === 'object' &&
+      !Array.isArray(row.webhookPayload)
       ? (row.webhookPayload as Record<string, unknown>)
       : null;
   const rawContent = payload?.content ?? payload?.transaction_content;
@@ -146,7 +147,7 @@ export class PaymentsRepositoryImpl implements PaymentsRepository {
     private readonly config: PaymentsConfig,
     @Optional()
     private readonly autoScheduleFirstVisit?: AutoScheduleFirstVisitService,
-  ) {}
+  ) { }
   transaction<T>(action: (session: PaymentsSession) => Promise<T>): Promise<T> {
     // Không gọi dịch vụ ngoài: ghi sổ, đối soát và kích hoạt cùng một transaction DB.
     return serializable(this.prisma, (tx) =>
@@ -165,7 +166,7 @@ class PrismaPaymentsSession implements PaymentsSession {
     private readonly tx: Prisma.TransactionClient,
     private readonly environment: 'TEST' | 'LIVE',
     private readonly autoScheduleFirstVisit?: AutoScheduleFirstVisitService,
-  ) {}
+  ) { }
   async nextPaymentNumber(): Promise<number> {
     // nextval cấp số chung cho mọi kết nối. Transaction bị hủy có thể bỏ qua số, nhưng không dùng lại.
     const [row] = await this.tx.$queryRaw<{ number: bigint }[]>`
@@ -341,9 +342,9 @@ class PrismaPaymentsSession implements PaymentsSession {
           where: { familyId: row.familyId, status: 'ACTIVE' },
         })) <=
         row.memberCount +
-          (item.addendumType === 'MEMBER_EXTENSION'
-            ? (drafted.additionalMembers ?? drafted.memberIds?.length ?? 0)
-            : 0),
+        (item.addendumType === 'MEMBER_EXTENSION'
+          ? (drafted.additionalMembers ?? drafted.memberIds?.length ?? 0)
+          : 0),
       familySigned: signed('FAMILY_REP'),
       adminSigned: signed('ADMIN'),
       facilitySigned: signed('HEALTHCARE_FACILITY'),
@@ -421,11 +422,20 @@ class PrismaPaymentsSession implements PaymentsSession {
         // Không sửa giá, chữ ký hay kỳ hạn đã thỏa thuận khi nhận tiền.
       },
     });
+
     if (justActivated) {
-      await this.autoScheduleFirstVisit?.scheduleOnContractActivated(
-        this.tx,
-        contract.id,
-      );
+      try {
+        await this.autoScheduleFirstVisit?.scheduleOnContractActivated(
+          this.tx,
+          contract.id,
+        );
+      } catch (err) {
+        new Logger(PaymentsRepositoryImpl.name).warn(
+          `Automatic cadence draft generation failed for contract ${contract.id}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
     }
   }
   async findRequest(id: string) {
@@ -492,24 +502,26 @@ class PrismaPaymentsSession implements PaymentsSession {
     });
   }
   async recordPaymentOverride(entry: Parameters<PaymentsSession['recordPaymentOverride']>[0]) {
-    await this.tx.auditLog.create({ data: {
-      actorUserId: entry.actorId,
-      clientIp: entry.clientIp,
-      action: 'ADMIN_ADJUST_PAYMENT_REQUEST',
-      resourceName: 'Invoice',
-      resourceId: entry.request.id,
-      details: {
-        contractId: entry.request.contractId,
-        addendumId: entry.request.addendumId ?? null,
-        environment: entry.request.environment,
-        originalAmountVnd: entry.originalAmountVnd,
-        previousRequestId: entry.previous?.id ?? null,
-        previousAmountVnd: entry.previous?.amountVnd ?? entry.originalAmountVnd,
-        amountVnd: entry.request.amountVnd,
-        transferContent: entry.request.transferContent ?? entry.request.paymentCode,
-        reason: entry.reason,
-      },
-    } });
+    await this.tx.auditLog.create({
+      data: {
+        actorUserId: entry.actorId,
+        clientIp: entry.clientIp,
+        action: 'ADMIN_ADJUST_PAYMENT_REQUEST',
+        resourceName: 'Invoice',
+        resourceId: entry.request.id,
+        details: {
+          contractId: entry.request.contractId,
+          addendumId: entry.request.addendumId ?? null,
+          environment: entry.request.environment,
+          originalAmountVnd: entry.originalAmountVnd,
+          previousRequestId: entry.previous?.id ?? null,
+          previousAmountVnd: entry.previous?.amountVnd ?? entry.originalAmountVnd,
+          amountVnd: entry.request.amountVnd,
+          transferContent: entry.request.transferContent ?? entry.request.paymentCode,
+          reason: entry.reason,
+        },
+      }
+    });
   }
   async findTransaction(
     gatewayTransactionId: string,

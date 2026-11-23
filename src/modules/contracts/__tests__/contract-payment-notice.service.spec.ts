@@ -48,6 +48,13 @@ describe('ContractPaymentNoticeService', () => {
 
     const payload = mailer.sendMail.mock.calls[0][0];
     expect(payload.to).toBe('dai.dien@famidoc.test');
+    expect(payload.subject).toBe(
+      'FamiDoc - Hợp đồng chăm sóc gia đình đã đủ 4 chữ ký, vui lòng thanh toán',
+    );
+    expect(payload.html).toContain('Chờ thanh toán');
+    expect(payload.html).toContain('support@famidoc.online');
+    expect(payload.html).toContain('#0037c1');
+    expect(payload.html).not.toContain('#2E37A4');
 
     const expectedUrl = `https://app.famidoc.test/booking/tracking?contractId=${contractRow.id}`;
     for (const body of [payload.text, payload.html]) {
@@ -58,6 +65,27 @@ describe('ContractPaymentNoticeService', () => {
       expect(body).toContain('01/01/2026 - 31/12/2026');
       expect(body).toContain(expectedUrl);
     }
+  });
+
+  it('escape XSS an toàn trong tên đại diện, gói dịch vụ và bác sĩ', async () => {
+    prisma.medicalContract.findUnique.mockResolvedValue({
+      ...contractRow,
+      familyUnit: {
+        representativeUser: {
+          email: 'dai.dien@famidoc.test',
+          fullName: '<script>alert(1)</script>',
+        },
+      },
+      doctor: { user: { fullName: 'BS. <img src=x onerror=alert(1)>' } },
+    });
+
+    await service.sendPaymentNotice(contractRow.id);
+
+    const payload = mailer.sendMail.mock.calls[0][0];
+    expect(payload.html).not.toContain('<script>');
+    expect(payload.html).not.toContain('<img src=x');
+    expect(payload.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(payload.html).toContain('&lt;img src=x onerror=alert(1)&gt;');
   });
 
   it('dùng giá đã chốt trong hợp đồng thay vì đọc lại bảng giá', async () => {

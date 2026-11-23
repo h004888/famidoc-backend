@@ -10,6 +10,7 @@ import {
   Query,
   Req,
   Res,
+  StreamableFile,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -38,6 +39,8 @@ import {
 import { CreatePatientDto } from '../dtos/create-patient.dto';
 import { UpdatePatientDto } from '../dtos/update-patient.dto';
 import { CreateAllergyDto } from '../dtos/create-allergy.dto';
+import { CreateChronicConditionDto } from '../dtos/create-chronic-condition.dto';
+import { UpdateChronicConditionDto } from '../dtos/update-chronic-condition.dto';
 import { CreatePatientDocumentDto } from '../dtos/create-patient-document.dto';
 import { CreateVitalSignDto } from '../dtos/create-vital-sign.dto';
 import { UpdateVitalSignDto } from '../dtos/update-vital-sign.dto';
@@ -185,23 +188,24 @@ export class PatientsController {
   @ApiOperation({ summary: 'Tải hoặc xem trực tiếp tệp/ảnh tài liệu y tế đã lưu trong kho nội bộ' })
   @ApiParam({ name: 'id', description: 'UUID của bệnh nhân' })
   @ApiParam({ name: 'documentId', description: 'UUID của tài liệu' })
-  @ApiResponse({ status: 200, description: 'Nội dung nhị phân của tệp tài liệu' })
+  @ApiResponse({ status: 200, description: 'Luồng dữ liệu tệp tài liệu' })
   @ApiResponse({ status: 403, description: 'Không có quyền truy cập tài liệu ngoài gia đình' })
-  @ApiResponse({ status: 404, description: 'Không tìm thấy tài liệu' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy tài liệu hoặc tệp trên kho lưu trữ' })
   async getDocumentFile(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
     @Param('documentId') documentId: string,
-    @Res() res: Response,
-  ) {
-    const { bytes, contentType } = await this.service.getDocumentFile(
-      req.user,
-      id,
-      documentId,
-    );
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const { stream, contentType, contentLength } =
+      await this.service.getDocumentFileStream(req.user, id, documentId);
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', 'inline');
-    res.send(bytes);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    if (typeof contentLength === 'number') {
+      res.setHeader('Content-Length', String(contentLength));
+    }
+    return new StreamableFile(stream);
   }
 
   @Delete(':id/documents/:documentId')
@@ -232,6 +236,56 @@ export class PatientsController {
     @Param('allergyId') allergyId: string,
   ) {
     return this.service.deleteAllergy(req.user, id, allergyId);
+  }
+
+  @Post(':id/chronic-conditions')
+  @ApiOperation({ summary: 'Thêm bệnh nền có cấu trúc cho bệnh nhân' })
+  @ApiParam({ name: 'id', description: 'UUID của bệnh nhân' })
+  @ApiResponse({ status: 201, description: 'Thêm bệnh nền thành công' })
+  addChronicCondition(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: CreateChronicConditionDto,
+  ) {
+    return this.service.addChronicCondition(req.user, id, dto);
+  }
+
+  @Get(':id/chronic-conditions')
+  @ApiOperation({ summary: 'Lấy danh sách bệnh nền có cấu trúc của bệnh nhân' })
+  @ApiParam({ name: 'id', description: 'UUID của bệnh nhân' })
+  @ApiResponse({ status: 200, description: 'Danh sách bệnh nền' })
+  listChronicConditions(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+  ) {
+    return this.service.listChronicConditions(req.user, id);
+  }
+
+  @Put(':id/chronic-conditions/:conditionId')
+  @ApiOperation({ summary: 'Cập nhật bệnh nền có cấu trúc của bệnh nhân' })
+  @ApiParam({ name: 'id', description: 'UUID của bệnh nhân' })
+  @ApiParam({ name: 'conditionId', description: 'UUID của bản ghi bệnh nền' })
+  @ApiResponse({ status: 200, description: 'Cập nhật bệnh nền thành công' })
+  updateChronicCondition(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('conditionId') conditionId: string,
+    @Body() dto: UpdateChronicConditionDto,
+  ) {
+    return this.service.updateChronicCondition(req.user, id, conditionId, dto);
+  }
+
+  @Delete(':id/chronic-conditions/:conditionId')
+  @ApiOperation({ summary: 'Xóa bệnh nền có cấu trúc của bệnh nhân' })
+  @ApiParam({ name: 'id', description: 'UUID của bệnh nhân' })
+  @ApiParam({ name: 'conditionId', description: 'UUID của bản ghi bệnh nền' })
+  @ApiResponse({ status: 200, description: 'Đã xóa bệnh nền' })
+  deleteChronicCondition(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('conditionId') conditionId: string,
+  ) {
+    return this.service.deleteChronicCondition(req.user, id, conditionId);
   }
 
   @Get(':id/vital-signs')

@@ -100,6 +100,12 @@ enum AllergySeverity {
   LIFE_THREATENING_ANAPHYLAXIS
 }
 
+enum ChronicClinicalStatus {
+  ACTIVE
+  CONTROLLED
+  REMISSION
+}
+
 enum PatientDocumentType {
   LAB_RESULT
   IMAGING_XRAY_CT
@@ -154,6 +160,8 @@ enum EncounterVisitScope {
 enum EncounterStatus {
   REQUESTED
   CONFIRMED
+  ON_THE_WAY
+  ARRIVED
   IN_PROGRESS
   COMPLETED
   CANCELLED
@@ -602,6 +610,8 @@ model Patient {
   gender                Gender
   relationshipToHead String        @map("relationship_to_head") @db.VarChar(50)
   bloodType          String?       @map("blood_type") @db.VarChar(10)
+  heightCm           Decimal?      @map("height_cm") @db.Decimal(5, 1)
+  weightKg           Decimal?      @map("weight_kg") @db.Decimal(5, 1)
   chronicDiseases    String?       @map("chronic_diseases") @db.Text
   status                PatientStatus @default(ACTIVE)
   createdAt             DateTime      @default(now()) @map("created_at") @db.Timestamptz()
@@ -610,6 +620,7 @@ model Patient {
   // Relations
   familyUnit      FamilyUnit        @relation(fields: [familyId], references: [id], onDelete: Cascade)
   allergies             PatientAllergy[]
+  chronicConditions     PatientChronicCondition[]
   documents             PatientDocument[]
   encounterParticipants EncounterParticipant[]
   clinicalEmrs          ClinicalEmr[]
@@ -632,6 +643,24 @@ model PatientAllergy {
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
   @@map("patient_allergies")
+}
+
+model PatientChronicCondition {
+  id             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  patientId      String                @map("patient_id") @db.Uuid
+  conditionName  String                @map("condition_name") @db.VarChar(150)
+  icd10Code      String?               @map("icd10_code") @db.VarChar(20)
+  clinicalStatus ChronicClinicalStatus @default(ACTIVE) @map("clinical_status")
+  diagnosedAt    DateTime?             @map("diagnosed_at") @db.Date
+  notes          String?               @db.Text
+  createdAt      DateTime              @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt      DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  // Relations
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId], map: "idx_patient_chronic_conditions_patient_id")
+  @@map("patient_chronic_conditions")
 }
 
 model PatientDocument {
@@ -811,8 +840,11 @@ model Encounter {
   scheduledDate      DateTime            @map("scheduled_date") @db.Date
   scheduledTime      DateTime            @map("scheduled_time") @db.Time
   rescheduleCount    Int                 @default(0) @map("reschedule_count")
-  encounterStatus    EncounterStatus     @default(REQUESTED) @map("encounter_status")
-  cancelReason       String?             @map("cancel_reason") @db.Text
+  encounterStatus          EncounterStatus     @default(REQUESTED) @map("encounter_status")
+  onTheWayAt               DateTime?           @map("on_the_way_at") @db.Timestamptz()
+  arrivedAt                DateTime?           @map("arrived_at") @db.Timestamptz()
+  familyConfirmedArrivalAt DateTime?           @map("family_confirmed_arrival_at") @db.Timestamptz()
+  cancelReason             String?             @map("cancel_reason") @db.Text
   reminder24hSentAt  DateTime?           @map("reminder_24h_sent_at") @db.Timestamptz()
   reminder2hSentAt   DateTime?           @map("reminder_2h_sent_at") @db.Timestamptz()
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz()
@@ -956,10 +988,13 @@ model VitalSign {
   heartRate       Int?     @map("heart_rate")
   temperature     Decimal? @db.Decimal(4, 1)
   spo2            Int?
-  respiratoryRate Int?     @map("respiratory_rate")
-  bloodGlucose    Decimal? @map("blood_glucose") @db.Decimal(5, 2)
-  isAbnormalAlert Boolean  @default(false) @map("is_abnormal_alert")
-  recordedAt      DateTime @default(now()) @map("recorded_at") @db.Timestamptz()
+  respiratoryRate  Int?     @map("respiratory_rate")
+  bloodGlucose     Decimal? @map("blood_glucose") @db.Decimal(5, 2)
+  glucoseContext   String?  @map("glucose_context") @db.VarChar(30)
+  measurementState String?  @map("measurement_state") @db.VarChar(30)
+  notes            String?  @db.VarChar(500)
+  isAbnormalAlert  Boolean  @default(false) @map("is_abnormal_alert")
+  recordedAt       DateTime @default(now()) @map("recorded_at") @db.Timestamptz()
 
   // Relations
   clinicalEmr ClinicalEmr? @relation(fields: [emrId], references: [id], onDelete: SetNull)

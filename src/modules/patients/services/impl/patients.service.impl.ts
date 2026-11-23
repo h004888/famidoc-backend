@@ -1,3 +1,4 @@
+import type { Readable } from 'stream';
 import {
   BadRequestException,
   ConflictException,
@@ -14,6 +15,8 @@ import { buildMediaUrl } from '../../../../shared/utils/media-url.util';
 import type { CreatePatientDto } from '../../dtos/create-patient.dto';
 import type { UpdatePatientDto } from '../../dtos/update-patient.dto';
 import type { CreateAllergyDto } from '../../dtos/create-allergy.dto';
+import type { CreateChronicConditionDto } from '../../dtos/create-chronic-condition.dto';
+import type { UpdateChronicConditionDto } from '../../dtos/update-chronic-condition.dto';
 import type { CreatePatientDocumentDto } from '../../dtos/create-patient-document.dto';
 import type { CreateVitalSignDto } from '../../dtos/create-vital-sign.dto';
 import type { UpdateVitalSignDto } from '../../dtos/update-vital-sign.dto';
@@ -189,14 +192,24 @@ export class PatientsServiceImpl implements IPatientsService {
     return this.repository.create(familyId, dto);
   }
 
+  private serializePatient<T extends Patient>(patient: T): T {
+    return {
+      ...patient,
+      heightCm: patient.heightCm != null ? (Number(patient.heightCm) as unknown as T['heightCm']) : null,
+      weightKg: patient.weightKg != null ? (Number(patient.weightKg) as unknown as T['weightKg']) : null,
+    };
+  }
+
   async listFamilyMembers(user: AuthenticatedUser): Promise<Patient[]> {
     if (user.role === 'ADMIN') {
-      return this.repository.findAll();
+      const rows = await this.repository.findAll();
+      return rows.map((p) => this.serializePatient(p));
     }
 
     if (user.role === 'FAMILY_REP') {
       const familyId = await this.resolveFamilyId(user);
-      return this.repository.findByFamilyId(familyId);
+      const rows = await this.repository.findByFamilyId(familyId);
+      return rows.map((p) => this.serializePatient(p));
     }
 
     throw new ForbiddenException('Access denied');
@@ -204,10 +217,11 @@ export class PatientsServiceImpl implements IPatientsService {
 
   async getPatientById(user: AuthenticatedUser, id: string): Promise<PatientDetail> {
     const patient = await this.assertPatientAccess(user, id);
-    if (!patient.documents) return patient;
+    const serialized = this.serializePatient(patient);
+    if (!serialized.documents) return serialized;
     return {
-      ...patient,
-      documents: patient.documents.map((doc) => this.serializeDocument(doc)),
+      ...serialized,
+      documents: serialized.documents.map((doc) => this.serializeDocument(doc)),
     };
   }
 
@@ -217,7 +231,8 @@ export class PatientsServiceImpl implements IPatientsService {
     dto: UpdatePatientDto,
   ): Promise<Patient> {
     await this.assertPatientAccess(user, id);
-    return this.repository.update(id, dto);
+    const updated = await this.repository.update(id, dto);
+    return this.serializePatient(updated);
   }
 
   async detachPatient(user: AuthenticatedUser, id: string): Promise<Patient> {
@@ -357,11 +372,11 @@ export class PatientsServiceImpl implements IPatientsService {
     return docs.map((doc) => this.serializeDocument(doc));
   }
 
-  async getDocumentFile(
+  private async resolveInternalDocument(
     user: AuthenticatedUser,
     patientId: string,
     documentId: string,
-  ): Promise<{ bytes: Buffer; contentType: string }> {
+  ): Promise<{ storage: StorageService; document: PatientDocument }> {
     await this.assertPatientAccess(user, patientId);
     if (!this.repository.findDocumentById || !this.storage) {
       throw new NotFoundException('Chức năng tải tệp tài liệu chưa khả dụng');
@@ -373,10 +388,41 @@ export class PatientsServiceImpl implements IPatientsService {
     if (/^https?:\/\//i.test(existing.fileUrl)) {
       throw new BadRequestException('Tài liệu dùng đường dẫn ngoài, không lưu trữ nội bộ');
     }
-    const downloaded = await this.storage.downloadFile(existing.fileUrl);
+    return { storage: this.storage, document: existing };
+  }
+
+  async getDocumentFile(
+    user: AuthenticatedUser,
+    patientId: string,
+    documentId: string,
+  ): Promise<{ bytes: Buffer; contentType: string }> {
+    const { storage, document } = await this.resolveInternalDocument(
+      user,
+      patientId,
+      documentId,
+    );
+    const downloaded = await storage.downloadFile(document.fileUrl);
     return {
       bytes: downloaded.bytes,
-      contentType: existing.mimeType || downloaded.contentType,
+      contentType: document.mimeType || downloaded.contentType,
+    };
+  }
+
+  async getDocumentFileStream(
+    user: AuthenticatedUser,
+    patientId: string,
+    documentId: string,
+  ): Promise<{ stream: Readable; contentType: string; contentLength?: number }> {
+    const { storage, document } = await this.resolveInternalDocument(
+      user,
+      patientId,
+      documentId,
+    );
+    const downloaded = await storage.downloadFileStream(document.fileUrl);
+    return {
+      stream: downloaded.stream,
+      contentType: document.mimeType || downloaded.contentType,
+      contentLength: downloaded.contentLength,
     };
   }
 
@@ -398,6 +444,65 @@ export class PatientsServiceImpl implements IPatientsService {
       await this.storage.deleteFile(existing.fileUrl);
     }
     return this.serializeDocument(deleted);
+  }
+
+  async addChronicCondition(
+    user: AuthenticatedUser,
+    patientId: string,
+    dto: CreateChronicConditionDto,
+  ) {
+    await this.assertPatientAccess(user, patientId);
+    if (!this.repository.addChronicCondition) {
+      throw new BadRequestException('Chưa hỗ trợ thêm bệnh nền');
+    }
+    return this.repository.addChronicCondition(patientId, dto);
+  }
+
+  async listChronicConditions(user: AuthenticatedUser, patientId: string) {
+    await this.assertPatientAccess(user, patientId);
+    if (!this.repository.findChronicConditionsByPatientId) {
+      return [];
+    }
+    return this.repository.findChronicConditionsByPatientId(patientId);
+  }
+
+  async updateChronicCondition(
+    user: AuthenticatedUser,
+    patientId: string,
+    conditionId: string,
+    dto: UpdateChronicConditionDto,
+  ) {
+    await this.assertPatientAccess(user, patientId);
+    const existing = this.repository.findChronicConditionById
+      ? await this.repository.findChronicConditionById(conditionId)
+      : null;
+    if (
+      !existing ||
+      existing.patientId !== patientId ||
+      !this.repository.updateChronicCondition
+    ) {
+      throw new NotFoundException(`Không tìm thấy bệnh nền ID ${conditionId}`);
+    }
+    return this.repository.updateChronicCondition(conditionId, dto);
+  }
+
+  async deleteChronicCondition(
+    user: AuthenticatedUser,
+    patientId: string,
+    conditionId: string,
+  ) {
+    await this.assertPatientAccess(user, patientId);
+    const existing = this.repository.findChronicConditionById
+      ? await this.repository.findChronicConditionById(conditionId)
+      : null;
+    if (
+      !existing ||
+      existing.patientId !== patientId ||
+      !this.repository.deleteChronicCondition
+    ) {
+      throw new NotFoundException(`Không tìm thấy bệnh nền ID ${conditionId}`);
+    }
+    return this.repository.deleteChronicCondition(conditionId);
   }
 
   private serializeVitalSign(vital: VitalSign): SerializedVitalSign {

@@ -14,6 +14,9 @@ export interface IEncountersService {
   createAdHocEncounter(actor: AuthenticatedUser, dto: CreateAdHocEncounterDto): Promise<unknown>;
   finalizeEncounter(actor: AuthenticatedUser, encounterId: string, dto: FinalizeEncounterDto): Promise<unknown>;
   confirmEncounter(actor: AuthenticatedUser, encounterId: string, dto: ConfirmEncounterDto): Promise<unknown>;
+  markOnTheWay(actor: AuthenticatedUser, encounterId: string): Promise<unknown>;
+  markArrived(actor: AuthenticatedUser, encounterId: string): Promise<unknown>;
+  confirmArrival(actor: AuthenticatedUser, encounterId: string): Promise<unknown>;
   requestReschedule(actor: AuthenticatedUser, encounterId: string, dto: RequestRescheduleDto): Promise<unknown>;
   decideRescheduleRequest(
     actor: AuthenticatedUser,
@@ -26,4 +29,15 @@ export interface IEncountersService {
   getFamilyTimetable(actor: AuthenticatedUser, query: ListEncountersQueryDto): Promise<unknown>;
   getFacilityScheduleBoard(actor: AuthenticatedUser, fromDate?: string, toDate?: string): Promise<unknown>;
   getEncounterDetail(actor: AuthenticatedUser, encounterId: string): Promise<unknown>;
+  generateContractPeriodicCadence(
+    contractId: string,
+    options?: { triggeredBy?: string; force?: boolean },
+  ): Promise<{ generatedCount: number; encounters: unknown[] }>;
+  finalizeCadenceSchedule(actor: AuthenticatedUser, contractId: string): Promise<{ finalizedCount: number; encounters: unknown[] }>;
+  confirmCadenceSchedule(actor: AuthenticatedUser, contractId: string): Promise<{ confirmedCount: number; encounters: unknown[] }>;
+  adjustCadenceMilestone(
+    actor: AuthenticatedUser,
+    encounterId: string,
+    dto: { scheduledDate?: string; scheduledTime?: string; encounterType?: string },
+  ): Promise<unknown>;
 }

@@ -35,6 +35,7 @@ import { ConfirmEncounterDto } from '../dtos/confirm-encounter.dto';
 import { RequestRescheduleDto } from '../dtos/request-reschedule.dto';
 import { DecideRescheduleRequestDto } from '../dtos/decide-reschedule-request.dto';
 import { ListEncountersQueryDto } from '../dtos/list-encounters-query.dto';
+import { AdjustCadenceMilestoneDto } from '../dtos/adjust-cadence-milestone.dto';
 
 @ApiTags('Encounters & Examination Scheduling')
 @ApiBearerAuth('JWT-auth')
@@ -102,9 +103,9 @@ export class EncountersController {
   }
 
   @Patch(':id/confirm')
-  @Roles('FAMILY_REP', 'ADMIN')
+  @Roles('FAMILY_REP', 'DOCTOR', 'ADMIN')
   @ApiOperation({
-    summary: 'Gia đình xác nhận đồng ý lịch khám & đối chiếu ca trực CSYT để đồng bộ lịch',
+    summary: 'Gia đình hoặc Bác sĩ xác nhận đồng ý lịch khám & đối chiếu ca trực để đồng bộ lịch',
   })
   @ApiParam({ name: 'id', description: 'ID của buổi khám' })
   @ApiBody({ type: ConfirmEncounterDto })
@@ -118,10 +119,37 @@ export class EncountersController {
     return this.service.confirmEncounter(req.user, id, dto);
   }
 
+  @Patch(':id/on-the-way')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({ summary: 'Bác sĩ báo đang di chuyển tới nhà gia đình' })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám' })
+  @ResponseMessage('Đã cập nhật trạng thái đang di chuyển')
+  markOnTheWay(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.service.markOnTheWay(req.user, id);
+  }
+
+  @Patch(':id/arrive')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({ summary: 'Bác sĩ check-in đã có mặt tại nhà gia đình' })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám' })
+  @ResponseMessage('Đã check-in có mặt tại nhà gia đình')
+  markArrived(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.service.markArrived(req.user, id);
+  }
+
+  @Patch(':id/confirm-arrival')
+  @Roles('FAMILY_REP', 'ADMIN')
+  @ApiOperation({ summary: 'Gia đình xác nhận 1 chạm bác sĩ đã có mặt tại nhà' })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám' })
+  @ResponseMessage('Đã xác nhận bác sĩ có mặt tại nhà')
+  confirmArrival(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.service.confirmArrival(req.user, id);
+  }
+
   @Post(':id/reschedule')
-  @Roles('FAMILY_REP', 'DOCTOR', 'ADMIN')
+  @Roles('FAMILY_REP', 'DOCTOR', 'HEALTHCARE_FACILITY', 'ADMIN')
   @ApiOperation({
-    summary: 'Gia đình hoặc Bác sĩ gửi yêu cầu đổi lịch khám (SLA >= 4 giờ, cần 3 bên đồng ý)',
+    summary: 'Gia đình, Bác sĩ hoặc CSYT gửi yêu cầu đổi lịch khám (SLA >= 4 giờ)',
   })
   @ApiParam({ name: 'id', description: 'ID của buổi khám' })
   @ApiBody({ type: RequestRescheduleDto })
@@ -137,9 +165,9 @@ export class EncountersController {
   }
 
   @Patch(':id/reschedule-requests/:requestId/decision')
-  @Roles('FAMILY_REP', 'DOCTOR', 'HEALTHCARE_FACILITY', 'ADMIN')
+  @Roles('FAMILY_REP', 'DOCTOR', 'ADMIN')
   @ApiOperation({
-    summary: 'Phê duyệt (APPROVE) hoặc từ chối (REJECT) yêu cầu đổi lịch 3 bên',
+    summary: 'Phê duyệt (APPROVE) hoặc từ chối (REJECT) yêu cầu đổi lịch 2 bên (Gia đình <-> Bác sĩ)',
   })
   @ApiParam({ name: 'id', description: 'ID của buổi khám' })
   @ApiParam({ name: 'requestId', description: 'ID của yêu cầu đổi lịch' })
@@ -205,5 +233,70 @@ export class EncountersController {
   @ResponseMessage('Lấy thông tin buổi khám thành công')
   getEncounterDetail(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     return this.service.getEncounterDetail(req.user, id);
+  }
+
+  @Post('cadence/finalize/:contractId')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({
+    summary: 'Bác sĩ chốt toàn bộ khung lịch khám định kỳ theo gói cho gia đình',
+  })
+  @ApiParam({ name: 'contractId', description: 'ID của hợp đồng y tế' })
+  @ApiResponse({ status: 200, description: 'Chốt khung lịch định kỳ thành công' })
+  @ResponseMessage('Chốt khung lịch định kỳ thành công')
+  finalizeCadenceSchedule(
+    @Req() req: AuthenticatedRequest,
+    @Param('contractId') contractId: string,
+  ) {
+    return this.service.finalizeCadenceSchedule(req.user, contractId);
+  }
+
+  @Post('cadence/confirm/:contractId')
+  @Roles('FAMILY_REP', 'ADMIN')
+  @ApiOperation({
+    summary: 'Gia đình xác nhận hàng loạt toàn bộ các mốc lịch định kỳ bác sĩ đã chốt',
+  })
+  @ApiParam({ name: 'contractId', description: 'ID của hợp đồng y tế' })
+  @ApiResponse({ status: 200, description: 'Xác nhận toàn bộ lộ trình khám định kỳ thành công' })
+  @ResponseMessage('Xác nhận toàn bộ lộ trình khám định kỳ thành công')
+  confirmCadenceSchedule(
+    @Req() req: AuthenticatedRequest,
+    @Param('contractId') contractId: string,
+  ) {
+    return this.service.confirmCadenceSchedule(req.user, contractId);
+  }
+
+  @Patch('cadence/:id')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({
+    summary: 'Bác sĩ điều chỉnh một mốc khám định kỳ trong khung lịch dự kiến',
+  })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám định kỳ' })
+  @ApiBody({ type: AdjustCadenceMilestoneDto })
+  @ApiResponse({ status: 200, description: 'Cập nhật mốc khám định kỳ thành công' })
+  @ResponseMessage('Cập nhật mốc khám định kỳ thành công')
+  adjustCadenceMilestone(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: AdjustCadenceMilestoneDto,
+  ) {
+    return this.service.adjustCadenceMilestone(req.user, id, dto);
+  }
+
+  @Post('cadence/backfill/:contractId')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({
+    summary: 'Tạo bù khung lịch khám định kỳ cho hợp đồng đang ACTIVE chưa có lịch',
+  })
+  @ApiParam({ name: 'contractId', description: 'ID của hợp đồng y tế' })
+  @ApiResponse({ status: 201, description: 'Tạo bù khung lịch định kỳ thành công' })
+  @ResponseMessage('Tạo bù khung lịch định kỳ thành công')
+  backfillCadence(
+    @Req() req: AuthenticatedRequest,
+    @Param('contractId') contractId: string,
+  ) {
+    return this.service.generateContractPeriodicCadence(contractId, {
+      triggeredBy: req.user.id,
+      force: false,
+    });
   }
 }

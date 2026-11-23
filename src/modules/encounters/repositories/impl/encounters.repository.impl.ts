@@ -45,6 +45,13 @@ class PrismaEncountersSession implements EncountersSession {
     return Boolean(member);
   }
 
+  findFirstPatientOfFamily(familyId: string) {
+    return this.tx.patient.findFirst({
+      where: { familyId, status: 'ACTIVE' },
+      select: { id: true, fullName: true },
+    });
+  }
+
   findDoctorByUserId(userId: string) {
     return this.tx.doctor.findUnique({
       where: { userId },
@@ -90,6 +97,14 @@ class PrismaEncountersSession implements EncountersSession {
         data: { remainingHomeVisits: { decrement: 1 } },
       });
     } else if (type === 'TELEHEALTH') {
+      const contract = await this.tx.medicalContract.findUnique({
+        where: { id: contractId },
+        include: { servicePackage: true },
+      });
+      const policy = contract?.servicePackage?.videoQuotaPolicy ?? 'FIXED';
+      if (policy === 'UNLIMITED' || policy === 'CONTRACT') {
+        return;
+      }
       await this.tx.medicalContract.update({
         where: { id: contractId },
         data: { remainingTelehealth: { decrement: 1 } },
@@ -136,6 +151,37 @@ class PrismaEncountersSession implements EncountersSession {
   findPendingRescheduleRequests(where: Prisma.EncounterRescheduleRequestWhereInput) {
     return this.tx.encounterRescheduleRequest.findMany({
       where: { ...where, status: 'PENDING' },
+      include: {
+        encounter: {
+          select: {
+            id: true,
+            contractId: true,
+            encounterType: true,
+            category: true,
+            visitScope: true,
+            scheduledDate: true,
+            scheduledTime: true,
+            encounterStatus: true,
+            doctor: { select: { id: true, doctorName: true } },
+            participants: {
+              include: { patient: { select: { id: true, fullName: true } } },
+            },
+            contract: {
+              select: {
+                id: true,
+                contractNumber: true,
+                familyUnit: {
+                  select: {
+                    id: true,
+                    homeAddress: true,
+                    representativeUser: { select: { id: true, fullName: true, phone: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

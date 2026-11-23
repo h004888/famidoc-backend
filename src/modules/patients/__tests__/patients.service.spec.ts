@@ -1,3 +1,4 @@
+import { Readable } from 'stream';
 import { ForbiddenException, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PatientsServiceImpl } from '../services/impl/patients.service.impl';
 import type { IPatientsRepository } from '../repositories/interfaces/patients.repository.interface';
@@ -15,6 +16,7 @@ describe('PatientsServiceImpl', () => {
   let storage: {
     uploadFile: jest.Mock;
     downloadFile: jest.Mock;
+    downloadFileStream: jest.Mock;
     deleteFile: jest.Mock;
     objectExists: jest.Mock;
   };
@@ -39,6 +41,8 @@ describe('PatientsServiceImpl', () => {
     gender: Gender.MALE,
     relationshipToHead: 'CON',
     bloodType: 'O+',
+    heightCm: null,
+    weightKg: null,
     chronicDiseases: null,
     status: 'ACTIVE' as const,
     createdAt: new Date(),
@@ -53,6 +57,8 @@ describe('PatientsServiceImpl', () => {
     gender: Gender.FEMALE,
     relationshipToHead: 'SELF',
     bloodType: null,
+    heightCm: null,
+    weightKg: null,
     chronicDiseases: null,
     status: 'ACTIVE' as const,
     createdAt: new Date(),
@@ -79,6 +85,7 @@ describe('PatientsServiceImpl', () => {
     storage = {
       uploadFile: jest.fn(),
       downloadFile: jest.fn(),
+      downloadFileStream: jest.fn(),
       deleteFile: jest.fn(),
       objectExists: jest.fn(),
     };
@@ -570,6 +577,47 @@ describe('PatientsServiceImpl', () => {
       repository.findById.mockResolvedValueOnce(mockOtherFamilyPatient);
       await expect(
         service.getDocumentFile(mockFamilyRep, 'patient-uuid-2', 'doc-int-1'),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('stream tệp tài liệu nội bộ qua downloadFileStream, giữ kiểm tra quyền 403 và truyền lỗi 404 từ kho S3', async () => {
+      const internalDoc = {
+        ...mockDoc,
+        id: 'doc-stream-1',
+        fileUrl: 'patient-documents/patient-uuid-1/lab.pdf',
+        mimeType: 'application/pdf',
+      };
+      const mockStream = Readable.from([Buffer.from('%PDF-1.4')]);
+      repository.findById.mockResolvedValue(mockPatient);
+      (repository.findDocumentById as jest.Mock).mockResolvedValue(internalDoc);
+      storage.downloadFileStream.mockResolvedValue({
+        stream: mockStream,
+        contentType: 'application/octet-stream',
+        contentLength: 8,
+      });
+
+      const streamRes = await service.getDocumentFileStream(
+        mockFamilyRep,
+        'patient-uuid-1',
+        'doc-stream-1',
+      );
+      expect(streamRes.stream).toBe(mockStream);
+      expect(streamRes.contentType).toBe('application/pdf');
+      expect(streamRes.contentLength).toBe(8);
+      expect(storage.downloadFileStream).toHaveBeenCalledWith(
+        'patient-documents/patient-uuid-1/lab.pdf',
+      );
+
+      storage.downloadFileStream.mockRejectedValueOnce(
+        new NotFoundException('Không tìm thấy tệp tài liệu trên kho lưu trữ.'),
+      );
+      await expect(
+        service.getDocumentFileStream(mockFamilyRep, 'patient-uuid-1', 'doc-stream-1'),
+      ).rejects.toThrow(NotFoundException);
+
+      repository.findById.mockResolvedValueOnce(mockOtherFamilyPatient);
+      await expect(
+        service.getDocumentFileStream(mockFamilyRep, 'patient-uuid-2', 'doc-stream-1'),
       ).rejects.toThrow(ForbiddenException);
     });
 

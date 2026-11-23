@@ -1,3 +1,4 @@
+import { Readable } from 'stream';
 import { StorageService } from '../services/storage.service';
 import { S3ServiceException } from '@aws-sdk/client-s3';
 
@@ -11,6 +12,7 @@ jest.mock('@aws-sdk/client-s3', () => {
     S3Client: jest.fn().mockImplementation(() => ({
       send: mockSend,
     })),
+    GetObjectCommand: jest.fn().mockImplementation((args) => args),
     PutObjectCommand: jest.fn().mockImplementation((args) => args),
     HeadObjectCommand: jest.fn().mockImplementation((args) => args),
     DeleteObjectCommand: jest.fn().mockImplementation((args) => args),
@@ -106,5 +108,70 @@ describe('StorageService', () => {
 
     mockSend.mockRejectedValueOnce(new Error('Network error'));
     await expect(service.deleteFile('broken.pdf')).resolves.toBeUndefined();
+  });
+
+  describe('downloadFileStream', () => {
+    it('trả về stream Readable kèm contentType và contentLength khi S3 phản hồi thành công', async () => {
+      const mockStream = Readable.from([Buffer.from('%PDF-1.7-stream')]);
+      mockSend.mockResolvedValueOnce({
+        Body: mockStream,
+        ContentType: 'application/pdf',
+        ContentLength: 15,
+      });
+
+      const result = await service.downloadFileStream(
+        'patient-documents/p-1/test.pdf',
+      );
+
+      expect(result.contentType).toBe('application/pdf');
+      expect(result.contentLength).toBe(15);
+      expect(result.stream).toBe(mockStream);
+      expect(mockSend).toHaveBeenCalledTimes(1);
+    });
+
+    it('tự động thử lại 1 lần khi gặp lỗi kết nối nhàn rỗi và thành công ở lần 2', async () => {
+      const mockStream = Readable.from([Buffer.from('image-bytes')]);
+      mockSend
+        .mockRejectedValueOnce(new Error('ECONNRESET'))
+        .mockResolvedValueOnce({
+          Body: mockStream,
+          ContentType: 'image/jpeg',
+          ContentLength: 11,
+        });
+
+      const result = await service.downloadFileStream(
+        'patient-documents/p-1/photo.jpg',
+      );
+
+      expect(result.contentType).toBe('image/jpeg');
+      expect(result.stream).toBe(mockStream);
+      expect(mockSend).toHaveBeenCalledTimes(2);
+    });
+
+    it('không retry và ném 404 NotFoundException khi khóa tệp không còn trên S3', async () => {
+      mockSend.mockRejectedValueOnce(
+        new S3ServiceException({
+          name: 'NoSuchKey',
+          $fault: 'client',
+          $metadata: { httpStatusCode: 404 },
+        }),
+      );
+
+      await expect(
+        service.downloadFileStream('patient-documents/p-1/missing.pdf'),
+      ).rejects.toMatchObject({ status: 404 });
+      expect(mockSend).toHaveBeenCalledTimes(1);
+    });
+
+    it('ném 503 ServiceUnavailableException khi cả 2 lần thử đều lỗi mạng', async () => {
+      mockSend
+        .mockRejectedValueOnce(new Error('Timeout 1'))
+        .mockRejectedValueOnce(new Error('Timeout 2'));
+
+      await expect(
+        service.downloadFileStream('patient-documents/p-1/stuck.pdf'),
+      ).rejects.toMatchObject({ status: 503 });
+      expect(mockSend).toHaveBeenCalledTimes(2);
+    });
   });
 });

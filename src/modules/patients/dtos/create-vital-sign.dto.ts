@@ -2,15 +2,32 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsDateString,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
+  IsString,
   Max,
+  MaxLength,
   Min,
   ValidateIf,
 } from 'class-validator';
 import { hasAnyVitalMetric } from '../utils/vital-sign.util';
+
+export const GLUCOSE_CONTEXT_VALUES = [
+  'FASTING',
+  'BEFORE_MEAL',
+  'AFTER_MEAL',
+  'RANDOM',
+] as const;
+
+export const MEASUREMENT_STATE_VALUES = [
+  'RESTING',
+  'AFTER_EXERCISE',
+  'AFTER_MEDICATION',
+  'UNWELL',
+] as const;
 
 export class CreateVitalSignDto {
   @ApiPropertyOptional({ description: 'Huyết áp tâm thu (mmHg)', example: 120 })
@@ -72,6 +89,33 @@ export class CreateVitalSignDto {
   @Min(1)
   @Max(40)
   bloodGlucose?: number;
+
+  @ApiPropertyOptional({
+    description: 'Bối cảnh đo đường huyết',
+    enum: GLUCOSE_CONTEXT_VALUES,
+    example: 'FASTING',
+  })
+  @IsOptional()
+  @IsIn(GLUCOSE_CONTEXT_VALUES)
+  glucoseContext?: (typeof GLUCOSE_CONTEXT_VALUES)[number];
+
+  @ApiPropertyOptional({
+    description: 'Trạng thái cơ thể khi đo',
+    enum: MEASUREMENT_STATE_VALUES,
+    example: 'RESTING',
+  })
+  @IsOptional()
+  @IsIn(MEASUREMENT_STATE_VALUES)
+  measurementState?: (typeof MEASUREMENT_STATE_VALUES)[number];
+
+  @ApiPropertyOptional({
+    description: 'Ghi chú triệu chứng hoặc hoàn cảnh đo',
+    example: 'Đo sáng ngủ dậy, sau nghỉ ngơi 10 phút',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  notes?: string;
 
   @ApiPropertyOptional({
     description: 'Thời điểm đo (ISO-8601), mặc định thời điểm hiện tại',

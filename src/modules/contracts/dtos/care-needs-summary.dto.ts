@@ -37,6 +37,23 @@ export class PatientDocumentSummaryDto {
   recordedDate!: Date;
 }
 
+export class PatientChronicConditionSummaryDto {
+  @ApiProperty({ example: '3fa85f64-5717-4562-b3fc-2c963f66afa6' })
+  id!: string;
+
+  @ApiProperty({ example: 'Tăng huyết áp' })
+  conditionName!: string;
+
+  @ApiPropertyOptional({ example: 'I10' })
+  icd10Code?: string | null;
+
+  @ApiProperty({ example: 'ACTIVE' })
+  clinicalStatus!: string;
+
+  @ApiPropertyOptional({ example: 'Đang uống thuốc đều' })
+  notes?: string | null;
+}
+
 export class PatientCareSummaryDto {
   @ApiProperty({ example: '3fa85f64-5717-4562-b3fc-2c963f66afa6' })
   patientId!: string;
@@ -63,8 +80,20 @@ export class PatientCareSummaryDto {
   @ApiProperty({ example: 'CON' })
   relationshipToHead!: string;
 
+  @ApiPropertyOptional({ example: 168.5 })
+  heightCm?: number | null;
+
+  @ApiPropertyOptional({ example: 62.0 })
+  weightKg?: number | null;
+
+  @ApiPropertyOptional({ example: 'Tăng huyết áp, Tiểu đường' })
+  chronicDiseases?: string | null;
+
   @ApiProperty({ type: [PatientAllergySummaryDto] })
   allergies!: PatientAllergySummaryDto[];
+
+  @ApiProperty({ type: [PatientChronicConditionSummaryDto] })
+  chronicConditions!: PatientChronicConditionSummaryDto[];
 
   @ApiProperty({ type: [PatientDocumentSummaryDto] })
   documents!: PatientDocumentSummaryDto[];

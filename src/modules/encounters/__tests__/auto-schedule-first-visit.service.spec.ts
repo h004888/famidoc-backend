@@ -5,17 +5,24 @@ import {
   EncounterVisitScope,
 } from '@prisma/client';
 import { AutoScheduleFirstVisitService } from '../services/impl/auto-schedule-first-visit.service';
+import { parseEncounterScheduleMeta } from '../utils/encounter-schedule-meta.util';
 
-describe('AutoScheduleFirstVisitService', () => {
+describe('AutoScheduleFirstVisitService (Package Default Cadence Drafts)', () => {
   let service: AutoScheduleFirstVisitService;
   let mockTx: any;
 
   const baseContract = {
     id: 'contract-1',
+    contractNumber: 'MC-2026-001',
     doctorId: 'doctor-1',
     remainingHomeVisits: 4,
     remainingTelehealth: 2,
-    endDate: new Date('2026-12-31T00:00:00.000Z'),
+    startDate: new Date('2026-01-05T00:00:00.000Z'),
+    endDate: new Date('2027-01-05T00:00:00.000Z'),
+    servicePackage: {
+      durationMonths: 12,
+      periodicVisitsQuota: 4,
+    },
     familyUnit: {
       representativeUserId: 'user-fam-1',
       representativeUser: { fullName: 'Nguyễn Văn An' },
@@ -39,69 +46,75 @@ describe('AutoScheduleFirstVisitService', () => {
         findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockImplementation(({ data }) =>
-          Promise.resolve({ id: 'enc-auto-1', ...data }),
+          Promise.resolve({ id: `enc-draft-${Math.random()}`, ...data }),
         ),
       },
       notification: {
-        createMany: jest.fn().mockResolvedValue({ count: 3 }),
+        createMany: jest.fn().mockResolvedValue({ count: 2 }),
       },
     };
   });
 
-  it('tạo buổi khám FAMILY CONFIRMED vào slot rảnh đầu tiên tránh Encounter khác, trừ quota và gửi thông báo 3 bên', async () => {
-    // Đã có lịch khám chiếm 08:30 ngày đầu tiên -> phải nhảy sang 09:30
+  it('generates all N periodic CADENCE_DRAFT milestones avoiding Sundays and busy slots without deducting quota', async () => {
+    // Slot 08:30 busy on milestone 1 -> must pick 09:30
     mockTx.encounter.findMany.mockResolvedValueOnce([
-      {
-        scheduledTime: new Date('1970-01-01T08:30:00.000Z'),
-      },
+      { scheduledTime: new Date('1970-01-01T08:30:00.000Z') },
     ]);
 
-    const now = new Date('2026-11-20T03:00:00.000Z'); // Thứ 6, ngày kế tiếp là Thứ 7 (2026-11-21)
     const result = await service.scheduleOnContractActivated(
       mockTx,
       'contract-1',
-      now,
     );
 
-    expect(result).toBeDefined();
-    expect(mockTx.encounter.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
+    expect(result).toHaveLength(4);
+    expect(mockTx.encounter.create).toHaveBeenCalledTimes(4);
+    // Never deducts quota at draft stage
+    expect(mockTx.medicalContract.update).not.toHaveBeenCalled();
+
+    const firstCreateArg = mockTx.encounter.create.mock.calls[0][0].data;
+    expect(firstCreateArg).toEqual(
+      expect.objectContaining({
         contractId: 'contract-1',
         doctorId: 'doctor-1',
         encounterType: EncounterType.HOME_VISIT,
         category: EncounterCategory.PERIODIC_ROUTINE,
         visitScope: EncounterVisitScope.FAMILY,
-        encounterStatus: EncounterStatus.CONFIRMED,
-        scheduledDate: new Date('2026-11-21T00:00:00.000Z'),
+        encounterStatus: EncounterStatus.REQUESTED,
         scheduledTime: new Date('1970-01-01T09:30:00.000Z'),
         participants: {
           create: [{ patientId: 'pat-1' }, { patientId: 'pat-2' }],
         },
       }),
-    });
-    expect(mockTx.medicalContract.update).toHaveBeenCalledWith({
-      where: { id: 'contract-1' },
-      data: { remainingHomeVisits: { decrement: 1 } },
-    });
+    );
+
+    // Every generated milestone avoids Sunday and carries CADENCE_DRAFT metadata
+    for (let i = 0; i < 4; i++) {
+      const data = mockTx.encounter.create.mock.calls[i][0].data;
+      expect(data.scheduledDate.getUTCDay()).not.toBe(0);
+      expect(data.scheduledDate.getTime()).toBeLessThan(
+        baseContract.endDate.getTime(),
+      );
+      const parsed = parseEncounterScheduleMeta(data);
+      expect(parsed.scheduleStage).toBe('CADENCE_DRAFT');
+      expect(parsed.milestoneIndex).toBe(i + 1);
+      expect(parsed.totalMilestones).toBe(4);
+    }
+
     expect(mockTx.notification.createMany).toHaveBeenCalledWith({
       data: expect.arrayContaining([
         expect.objectContaining({
-          userId: 'user-fam-1',
-          type: 'ENCOUNTER_AUTO_CONFIRMED',
-        }),
-        expect.objectContaining({
           userId: 'user-doc-1',
-          type: 'ENCOUNTER_AUTO_CONFIRMED',
+          type: 'ENCOUNTER_CADENCE_DRAFT_READY',
         }),
         expect.objectContaining({
-          userId: 'user-fac-1',
-          type: 'ENCOUNTER_AUTO_CONFIRMED',
+          userId: 'user-fam-1',
+          type: 'ENCOUNTER_CADENCE_DRAFT_READY',
         }),
       ]),
     });
   });
 
-  it('idempotent: không tạo trùng nếu hợp đồng đã có buổi khám PERIODIC_ROUTINE', async () => {
+  it('is idempotent and skips creation if contract already has a non-cancelled PERIODIC_ROUTINE encounter', async () => {
     mockTx.encounter.findFirst.mockResolvedValueOnce({ id: 'enc-existing' });
 
     const result = await service.scheduleOnContractActivated(
@@ -109,11 +122,11 @@ describe('AutoScheduleFirstVisitService', () => {
       'contract-1',
     );
 
-    expect(result).toBeNull();
+    expect(result).toEqual([]);
     expect(mockTx.encounter.create).not.toHaveBeenCalled();
   });
 
-  it('vẫn tạo được lịch FAMILY khi hợp đồng chưa có ContractMember nào', async () => {
+  it('generates FAMILY draft milestones even when contract has no pre-assigned members', async () => {
     mockTx.medicalContract.findUnique.mockResolvedValueOnce({
       ...baseContract,
       members: [],
@@ -122,47 +135,12 @@ describe('AutoScheduleFirstVisitService', () => {
     const result = await service.scheduleOnContractActivated(
       mockTx,
       'contract-1',
-      new Date('2026-11-20T03:00:00.000Z'),
     );
 
-    expect(result).toBeDefined();
-    expect(mockTx.encounter.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        visitScope: EncounterVisitScope.FAMILY,
-        encounterStatus: EncounterStatus.CONFIRMED,
-      }),
-    });
-  });
-
-  it('fallback an toàn khi kín lịch 30 ngày: không throw và gửi thông báo tự sắp lịch', async () => {
-    mockTx.encounter.findMany.mockResolvedValue([
-      { scheduledTime: new Date('1970-01-01T08:30:00.000Z') },
-      { scheduledTime: new Date('1970-01-01T09:30:00.000Z') },
-      { scheduledTime: new Date('1970-01-01T10:30:00.000Z') },
-      { scheduledTime: new Date('1970-01-01T14:00:00.000Z') },
-      { scheduledTime: new Date('1970-01-01T15:00:00.000Z') },
-      { scheduledTime: new Date('1970-01-01T16:00:00.000Z') },
-    ]);
-
-    const result = await service.scheduleOnContractActivated(
-      mockTx,
-      'contract-1',
-      new Date('2026-11-20T03:00:00.000Z'),
-    );
-
-    expect(result).toBeNull();
-    expect(mockTx.encounter.create).not.toHaveBeenCalled();
-    expect(mockTx.notification.createMany).toHaveBeenCalledWith({
-      data: expect.arrayContaining([
-        expect.objectContaining({
-          userId: 'user-fam-1',
-          type: 'ENCOUNTER_MANUAL_SCHEDULE_REQUIRED',
-        }),
-        expect.objectContaining({
-          userId: 'user-doc-1',
-          type: 'ENCOUNTER_MANUAL_SCHEDULE_REQUIRED',
-        }),
-      ]),
-    });
+    expect(result).toHaveLength(4);
+    const firstData = mockTx.encounter.create.mock.calls[0][0].data;
+    expect(firstData.visitScope).toBe(EncounterVisitScope.FAMILY);
+    expect(firstData.participants).toBeUndefined();
+    expect(firstData.encounterStatus).toBe(EncounterStatus.REQUESTED);
   });
 });

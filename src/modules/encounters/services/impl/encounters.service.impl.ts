@@ -28,10 +28,16 @@ import {
   Prisma,
   RescheduleDecision,
 } from '@prisma/client';
+import {
+  enrichEncounterWithScheduleMeta,
+  parseEncounterScheduleMeta,
+  serializeEncounterScheduleMeta,
+} from '../../utils/encounter-schedule-meta.util';
 
 export const APPOINTMENT_DURATION_MINUTES = 45;
 export const RESCHEDULE_MIN_NOTICE_HOURS = 4;
 export const MAX_RESCHEDULE_COUNT = 3;
+const CADENCE_CANDIDATE_SLOTS = ['08:30:00', '09:30:00', '10:30:00', '14:00:00', '15:00:00', '16:00:00'];
 
 export function parseDateOnly(dateStr: string): Date {
   const parts = dateStr.split('-');
@@ -49,6 +55,68 @@ export function parseTimeToDate(timeStr: string, baseDate = new Date()): Date {
     throw new BadRequestException('Invalid time format');
   }
   return new Date(Date.UTC(1970, 0, 1, h, m, s, 0));
+}
+
+function normalizeMilestoneDate(rawDate: Date, endDate?: Date): Date {
+  const d = new Date(
+    Date.UTC(rawDate.getUTCFullYear(), rawDate.getUTCMonth(), rawDate.getUTCDate(), 0, 0, 0, 0),
+  );
+  if (endDate) {
+    const endMidnight = new Date(
+      Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate(), 0, 0, 0, 0),
+    );
+    if (d.getTime() >= endMidnight.getTime()) {
+      d.setTime(endMidnight.getTime() - 24 * 60 * 60 * 1000);
+    }
+  }
+  if (d.getUTCDay() === 0) {
+    const monday = new Date(d.getTime() + 24 * 60 * 60 * 1000);
+    if (endDate) {
+      const endMidnight = new Date(
+        Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate(), 0, 0, 0, 0),
+      );
+      if (monday.getTime() >= endMidnight.getTime()) {
+        return new Date(d.getTime() - 24 * 60 * 60 * 1000);
+      }
+    }
+    return monday;
+  }
+  return d;
+}
+
+export function calculateCadenceDates(
+  startDate: Date,
+  durationMonths: number,
+  quota: number,
+  endDate?: Date,
+): Date[] {
+  if (quota <= 0) return [];
+  const results: Date[] = [];
+  const start = new Date(startDate);
+
+  if (quota === 1) {
+    const d = new Date(start);
+    d.setUTCMonth(d.getUTCMonth() + 1);
+    results.push(normalizeMilestoneDate(d, endDate));
+    return results;
+  }
+
+  // First milestone: 1 month after activation
+  const d1 = new Date(start);
+  d1.setUTCMonth(d1.getUTCMonth() + 1);
+  results.push(normalizeMilestoneDate(d1, endDate));
+
+  const remainingMonths = Math.max(durationMonths - 1, quota - 1);
+  const step = remainingMonths / (quota - 1);
+
+  for (let i = 1; i < quota; i++) {
+    const d = new Date(start);
+    const monthOffset = Math.round(1 + i * step);
+    d.setUTCMonth(d.getUTCMonth() + monthOffset);
+    results.push(normalizeMilestoneDate(d, endDate));
+  }
+
+  return results;
 }
 
 export function combineDateAndTime(dateObj: Date, timeObj: Date | string): Date {
@@ -148,7 +216,10 @@ export class EncountersServiceImpl implements IEncountersService {
         scheduledDate,
         scheduledTime,
         encounterStatus: EncounterStatus.REQUESTED,
-        cancelReason: dto.notes ?? null,
+        cancelReason: serializeEncounterScheduleMeta(
+          { stage: 'AWAITING_FAMILY_CONFIRM' },
+          dto.notes ?? null,
+        ),
         ...(participantIds.length > 0
           ? {
               participants: {
@@ -168,7 +239,7 @@ export class EncountersServiceImpl implements IEncountersService {
         referenceId: encounter.id,
       });
 
-      return encounter;
+      return enrichEncounterWithScheduleMeta(encounter);
     });
   }
 
@@ -185,6 +256,19 @@ export class EncountersServiceImpl implements IEncountersService {
       }
       if (actor.role === 'FAMILY_REP' && contract.familyUnit.representativeUserId !== actor.id) {
         throw new ForbiddenException('You are not the representative of this contract');
+      }
+
+      if (dto.encounterType === EncounterType.HOME_VISIT && actor.role === 'FAMILY_REP') {
+        throw new BadRequestException(
+          'Lịch khám tại nhà được hệ thống tự động sắp xếp theo gói dịch vụ. Gia đình chỉ có thể đặt lịch Tư vấn Video trực tuyến.',
+        );
+      }
+
+      if (dto.encounterType === EncounterType.TELEHEALTH) {
+        const videoPolicy = contract.servicePackage?.videoQuotaPolicy ?? 'FIXED';
+        if (videoPolicy === 'FIXED' && contract.remainingTelehealth <= 0) {
+          throw new BadRequestException('Hạn ngạch Tư vấn Video của hợp đồng đã hết');
+        }
       }
 
       const requestedPatientIds = Array.from(
@@ -222,7 +306,10 @@ export class EncountersServiceImpl implements IEncountersService {
         scheduledDate,
         scheduledTime,
         encounterStatus: EncounterStatus.REQUESTED,
-        cancelReason: dto.reason,
+        cancelReason: serializeEncounterScheduleMeta(
+          { stage: 'AWAITING_DOCTOR_REVIEW' },
+          dto.reason,
+        ),
         ...(participantIds.length > 0
           ? {
               participants: {
@@ -245,7 +332,7 @@ export class EncountersServiceImpl implements IEncountersService {
         });
       }
 
-      return encounter;
+      return enrichEncounterWithScheduleMeta(encounter);
     });
   }
 
@@ -265,11 +352,20 @@ export class EncountersServiceImpl implements IEncountersService {
         }
       }
 
-      const updateData: Prisma.EncounterUncheckedUpdateInput = {};
+      const existingMeta = parseEncounterScheduleMeta(encounter);
+      const updateData: Prisma.EncounterUncheckedUpdateInput = {
+        cancelReason: serializeEncounterScheduleMeta(
+          {
+            stage: 'AWAITING_FAMILY_CONFIRM',
+            ...(existingMeta.milestoneIndex !== null ? { milestoneIndex: existingMeta.milestoneIndex } : {}),
+            ...(existingMeta.totalMilestones !== null ? { totalMilestones: existingMeta.totalMilestones } : {}),
+          },
+          dto.doctorNotes ?? existingMeta.displayNotes,
+        ),
+      };
       if (dto.encounterType) updateData.encounterType = dto.encounterType;
       if (dto.scheduledDate) updateData.scheduledDate = parseDateOnly(dto.scheduledDate);
       if (dto.scheduledTime) updateData.scheduledTime = parseTimeToDate(dto.scheduledTime);
-      if (dto.doctorNotes) updateData.cancelReason = dto.doctorNotes;
 
       const updated = await session.updateEncounter(encounterId, updateData);
       await session.createAuditLog(actor.id, 'FINALIZE_ENCOUNTER_SCHEDULE', encounterId);
@@ -283,13 +379,13 @@ export class EncountersServiceImpl implements IEncountersService {
         referenceId: encounter.id,
       });
 
-      return updated;
+      return enrichEncounterWithScheduleMeta(updated);
     });
   }
 
   async confirmEncounter(actor: AuthenticatedUser, encounterId: string, dto: ConfirmEncounterDto) {
-    if (!['FAMILY_REP', 'ADMIN'].includes(actor.role)) {
-      throw new ForbiddenException('Only the family representative or admin can confirm the schedule');
+    if (!['FAMILY_REP', 'DOCTOR', 'ADMIN'].includes(actor.role)) {
+      throw new ForbiddenException('Only the family representative, attending doctor, or admin can confirm the schedule');
     }
 
     return this.repository.transaction(async (session) => {
@@ -302,9 +398,61 @@ export class EncountersServiceImpl implements IEncountersService {
       if (actor.role === 'FAMILY_REP' && encounter.contract.familyUnit.representativeUserId !== actor.id) {
         throw new ForbiddenException('You are not authorized to confirm this encounter');
       }
+      if (actor.role === 'DOCTOR') {
+        const doc = await session.findDoctorByUserId(actor.id);
+        if (!doc || doc.id !== encounter.doctorId) {
+          throw new ForbiddenException('You are not the assigned doctor for this examination');
+        }
+      }
 
       if (!dto.confirmed) {
+        if (
+          actor.role === 'DOCTOR' &&
+          encounter.encounterType === EncounterType.TELEHEALTH &&
+          encounter.encounterStatus === EncounterStatus.REQUESTED
+        ) {
+          const declined = await session.updateEncounter(encounterId, {
+            encounterStatus: EncounterStatus.CANCELLED,
+          });
+          await session.createAuditLog(actor.id, 'DECLINE_TELEHEALTH_ENCOUNTER', encounterId);
+          await session.createNotification({
+            userId: encounter.contract.familyUnit.representativeUserId,
+            title: 'Bác sĩ từ chối lịch Tư vấn Video',
+            content: `Bác sĩ chưa thể nhận lịch Tư vấn Video ngày ${encounter.scheduledDate.toISOString().slice(0, 10)}. Vui lòng chọn khung giờ khác.`,
+            type: 'ENCOUNTER_CANCELLED',
+            referenceId: encounter.id,
+          });
+          return declined;
+        }
         throw new BadRequestException('To propose an alternative time, please use the reschedule endpoint');
+      }
+
+      const parsedStage = parseEncounterScheduleMeta(encounter).scheduleStage;
+      if (parsedStage !== 'AWAITING_FAMILY_CONFIRM') {
+        throw new BadRequestException(
+          parsedStage === 'CADENCE_DRAFT'
+            ? 'Bác sĩ chưa hoàn tất rà soát và chốt khung lịch định kỳ này'
+            : 'Lịch khám chưa ở trạng thái chờ gia đình xác nhận',
+        );
+      }
+
+      const contractQuota = encounter.contract as unknown as {
+        remainingHomeVisits?: number;
+        remainingTelehealth?: number;
+      };
+      if (
+        encounter.encounterType === EncounterType.HOME_VISIT &&
+        typeof contractQuota.remainingHomeVisits === 'number' &&
+        contractQuota.remainingHomeVisits <= 0
+      ) {
+        throw new BadRequestException('Hợp đồng đã hết lượt khám tại nhà còn lại');
+      }
+      if (
+        encounter.encounterType === EncounterType.TELEHEALTH &&
+        typeof contractQuota.remainingTelehealth === 'number' &&
+        contractQuota.remainingTelehealth <= 0
+      ) {
+        throw new BadRequestException('Hợp đồng đã hết lượt tư vấn Telehealth còn lại');
       }
 
       // Check for conflicts with other confirmed/in-progress encounters on the platform
@@ -330,11 +478,12 @@ export class EncountersServiceImpl implements IEncountersService {
       await session.createAuditLog(actor.id, 'CONFIRM_ENCOUNTER', encounterId);
 
       // Synchronize notifications across Doctor, Family, and Facility
+      const targetDateStr = encounter.scheduledDate.toISOString().slice(0, 10);
       const notifications: Prisma.NotificationUncheckedCreateInput[] = [
         {
           userId: encounter.contract.familyUnit.representativeUserId,
           title: 'Lịch khám đã được xác nhận',
-          content: `Lịch khám ngày ${encounter.scheduledDate.toISOString().slice(0, 10)} đã xác nhận thành công. Hệ thống sẽ nhắc bạn trước 24h và 2h.`,
+          content: `Lịch khám ngày ${targetDateStr} đã xác nhận thành công. Hệ thống sẽ nhắc bạn trước 24h và 2h.`,
           type: 'ENCOUNTER_CONFIRMED',
           referenceId: encounter.id,
         },
@@ -348,31 +497,136 @@ export class EncountersServiceImpl implements IEncountersService {
         notifications.push({
           userId: encounter.doctor.user.id,
           title: 'Gia đình đã xác nhận lịch khám',
-          content: `Lịch khám cho ${patientLabel} ngày ${encounter.scheduledDate.toISOString().slice(0, 10)} đã được xác nhận.`,
+          content: `Lịch khám ngày ${targetDateStr} cho ${patientLabel} đã được xác nhận thành công.`,
           type: 'ENCOUNTER_CONFIRMED',
           referenceId: encounter.id,
         });
       }
 
-      if (encounter.contract.facility.user?.id) {
+      if (encounter.encounterType !== EncounterType.TELEHEALTH && encounter.contract.facility.user?.id) {
         notifications.push({
-          userId: encounter.contract.facility.user.id,
-          title: 'Đồng bộ lịch khám ngoại viện bác sĩ',
-          content: `Bác sĩ ${encounter.doctor.doctorName} có lịch khám xác nhận ngày ${encounter.scheduledDate.toISOString().slice(0, 10)}.`,
-          type: 'ENCOUNTER_SYNC_FACILITY',
+          userId: encounter.contract.facility.userId,
+          title: 'Đồng bộ lịch khám gia đình',
+          content: `Bác sĩ ${encounter.doctor.doctorName} có lịch khám đã xác nhận vào ngày ${targetDateStr}.`,
+          type: 'ENCOUNTER_CONFIRMED',
           referenceId: encounter.id,
         });
       }
 
       await session.createNotifications(notifications);
 
-      return confirmedEncounter;
+      return enrichEncounterWithScheduleMeta(confirmedEncounter);
+    });
+  }
+
+  async markOnTheWay(actor: AuthenticatedUser, encounterId: string) {
+    if (!['DOCTOR', 'ADMIN'].includes(actor.role)) {
+      throw new ForbiddenException('Only assigned doctor or admin can mark encounter on the way');
+    }
+    return this.repository.transaction(async (session) => {
+      const encounter = await session.findEncounter(encounterId);
+      if (!encounter) throw new NotFoundException('Encounter not found');
+      if (actor.role === 'DOCTOR') {
+        const doc = await session.findDoctorByUserId(actor.id);
+        if (!doc || doc.id !== encounter.doctorId) {
+          throw new ForbiddenException('You are not the assigned doctor for this encounter');
+        }
+      }
+      if (encounter.encounterStatus !== EncounterStatus.CONFIRMED) {
+        throw new BadRequestException('Only CONFIRMED encounters can transition to ON_THE_WAY');
+      }
+      const now = new Date();
+      const updated = await session.updateEncounter(encounter.id, {
+        encounterStatus: 'ON_THE_WAY' as EncounterStatus,
+        onTheWayAt: now,
+      } as Prisma.EncounterUncheckedUpdateInput);
+      await session.createAuditLog(actor.id, 'DOCTOR_ON_THE_WAY', encounter.id);
+      await session.createNotification({
+        userId: encounter.contract.familyUnit.representativeUserId,
+        title: 'Bác sĩ đang trên đường đến nhà',
+        content: `Bác sĩ ${encounter.doctor.doctorName} đã bắt đầu di chuyển đến nhà bạn cho lịch khám hôm nay.`,
+        type: 'ENCOUNTER_DOCTOR_ON_THE_WAY',
+        referenceId: encounter.id,
+      });
+      return updated;
+    });
+  }
+
+  async markArrived(actor: AuthenticatedUser, encounterId: string) {
+    if (!['DOCTOR', 'ADMIN'].includes(actor.role)) {
+      throw new ForbiddenException('Only assigned doctor or admin can check in arrival');
+    }
+    return this.repository.transaction(async (session) => {
+      const encounter = await session.findEncounter(encounterId);
+      if (!encounter) throw new NotFoundException('Encounter not found');
+      if (actor.role === 'DOCTOR') {
+        const doc = await session.findDoctorByUserId(actor.id);
+        if (!doc || doc.id !== encounter.doctorId) {
+          throw new ForbiddenException('You are not the assigned doctor for this encounter');
+        }
+      }
+      const statusStr = String(encounter.encounterStatus);
+      if (statusStr !== 'CONFIRMED' && statusStr !== 'ON_THE_WAY') {
+        throw new BadRequestException('Encounter must be CONFIRMED or ON_THE_WAY to check in arrival');
+      }
+      const now = new Date();
+      const updated = await session.updateEncounter(encounter.id, {
+        encounterStatus: 'ARRIVED' as EncounterStatus,
+        arrivedAt: now,
+      } as Prisma.EncounterUncheckedUpdateInput);
+      await session.createAuditLog(actor.id, 'DOCTOR_ARRIVED', encounter.id);
+      await session.createNotification({
+        userId: encounter.contract.familyUnit.representativeUserId,
+        title: 'Bác sĩ đã có mặt tại nhà',
+        content: `Bác sĩ ${encounter.doctor.doctorName} đã check-in tại nhà bạn. Vui lòng mở Lịch Khám để xác nhận 1 chạm.`,
+        type: 'ENCOUNTER_DOCTOR_ARRIVED',
+        referenceId: encounter.id,
+      });
+      return updated;
+    });
+  }
+
+  async confirmArrival(actor: AuthenticatedUser, encounterId: string) {
+    if (!['FAMILY_REP', 'ADMIN'].includes(actor.role)) {
+      throw new ForbiddenException('Only family representative or admin can confirm doctor arrival');
+    }
+    return this.repository.transaction(async (session) => {
+      const encounter = await session.findEncounter(encounterId);
+      if (!encounter) throw new NotFoundException('Encounter not found');
+      if (
+        actor.role === 'FAMILY_REP' &&
+        encounter.contract.familyUnit.representativeUserId !== actor.id
+      ) {
+        throw new ForbiddenException('You are not authorized to confirm arrival for this encounter');
+      }
+      const statusStr = String(encounter.encounterStatus);
+      if (statusStr !== 'ARRIVED' && statusStr !== 'ON_THE_WAY' && statusStr !== 'CONFIRMED') {
+        throw new BadRequestException('Encounter is not in an arrival-confirmable state');
+      }
+      const now = new Date();
+      const updated = await session.updateEncounter(encounter.id, {
+        encounterStatus: EncounterStatus.IN_PROGRESS,
+        familyConfirmedArrivalAt: now,
+      } as Prisma.EncounterUncheckedUpdateInput);
+      await session.createAuditLog(actor.id, 'FAMILY_CONFIRMED_ARRIVAL', encounter.id);
+      if (encounter.doctor.user?.id) {
+        await session.createNotification({
+          userId: encounter.doctor.user.id,
+          title: 'Gia đình đã xác nhận bác sĩ có mặt',
+          content: 'Đại diện gia đình đã xác nhận bạn có mặt tại nhà. Bạn có thể bắt đầu thăm khám và ghi bệnh án.',
+          type: 'ENCOUNTER_ARRIVAL_CONFIRMED',
+          referenceId: encounter.id,
+        });
+      }
+      return updated;
     });
   }
 
   async requestReschedule(actor: AuthenticatedUser, encounterId: string, dto: RequestRescheduleDto) {
-    if (!['FAMILY_REP', 'DOCTOR', 'ADMIN'].includes(actor.role)) {
-      throw new ForbiddenException('Only family representative, assigned doctor, or admin can request reschedule');
+    if (!['FAMILY_REP', 'DOCTOR', 'HEALTHCARE_FACILITY', 'ADMIN'].includes(actor.role)) {
+      throw new ForbiddenException(
+        'Only family representative, assigned doctor, healthcare facility, or admin can request reschedule',
+      );
     }
 
     return this.repository.transaction(async (session) => {
@@ -390,6 +644,12 @@ export class EncountersServiceImpl implements IEncountersService {
         const doc = await session.findDoctorByUserId(actor.id);
         if (!doc || doc.id !== encounter.doctorId) {
           throw new ForbiddenException('You are not the assigned doctor for this encounter');
+        }
+      }
+      if (actor.role === 'HEALTHCARE_FACILITY') {
+        const fac = await session.findFacilityByUserId(actor.id);
+        if (!fac || fac.id !== encounter.contract.facilityId) {
+          throw new ForbiddenException('You are not the facility for this encounter');
         }
       }
 
@@ -438,7 +698,13 @@ export class EncountersServiceImpl implements IEncountersService {
         throw new ConflictException(conflict.reason);
       }
 
-      const requestedByRole = actor.role === 'DOCTOR' ? 'DOCTOR' : 'FAMILY_REP';
+      const isTelehealth = encounter.encounterType === EncounterType.TELEHEALTH;
+      const requestedByRole =
+        actor.role === 'DOCTOR'
+          ? 'DOCTOR'
+          : actor.role === 'HEALTHCARE_FACILITY'
+            ? 'HEALTHCARE_FACILITY'
+            : 'FAMILY_REP';
       const request = await session.createRescheduleRequest({
         encounterId: encounter.id,
         requestedByRole,
@@ -446,13 +712,28 @@ export class EncountersServiceImpl implements IEncountersService {
         proposedDate,
         proposedTime,
         reason: dto.rescheduleReason,
-        familyDecision: requestedByRole === 'FAMILY_REP' ? RescheduleDecision.APPROVED : RescheduleDecision.PENDING,
+        familyDecision:
+          requestedByRole === 'FAMILY_REP'
+            ? RescheduleDecision.APPROVED
+            : RescheduleDecision.PENDING,
         familyDecidedBy: requestedByRole === 'FAMILY_REP' ? actor.id : null,
         familyDecidedAt: requestedByRole === 'FAMILY_REP' ? now : null,
-        doctorDecision: requestedByRole === 'DOCTOR' ? RescheduleDecision.APPROVED : RescheduleDecision.PENDING,
-        doctorDecidedBy: requestedByRole === 'DOCTOR' ? actor.id : null,
-        doctorDecidedAt: requestedByRole === 'DOCTOR' ? now : null,
-        facilityDecision: RescheduleDecision.PENDING,
+        doctorDecision:
+          requestedByRole === 'DOCTOR' || requestedByRole === 'HEALTHCARE_FACILITY'
+            ? RescheduleDecision.APPROVED
+            : RescheduleDecision.PENDING,
+        doctorDecidedBy:
+          requestedByRole === 'DOCTOR' || requestedByRole === 'HEALTHCARE_FACILITY'
+            ? actor.id
+            : null,
+        doctorDecidedAt:
+          requestedByRole === 'DOCTOR' || requestedByRole === 'HEALTHCARE_FACILITY' ? now : null,
+        facilityDecision:
+          requestedByRole === 'HEALTHCARE_FACILITY' || isTelehealth
+            ? RescheduleDecision.APPROVED
+            : RescheduleDecision.PENDING,
+        facilityDecidedBy: requestedByRole === 'HEALTHCARE_FACILITY' ? actor.id : null,
+        facilityDecidedAt: requestedByRole === 'HEALTHCARE_FACILITY' || isTelehealth ? now : null,
         status: 'PENDING',
       });
 
@@ -472,18 +753,21 @@ export class EncountersServiceImpl implements IEncountersService {
       } else {
         notifications.push({
           userId: encounter.contract.familyUnit.representativeUserId,
-          title: 'Bác sĩ yêu cầu đổi lịch khám',
-          content: `Bác sĩ đề xuất đổi sang ngày ${dto.proposedDate} lúc ${dto.proposedTime}. Lý do: ${dto.rescheduleReason}`,
+          title:
+            requestedByRole === 'HEALTHCARE_FACILITY'
+              ? 'Cơ sở y tế đề xuất đổi lịch khám'
+              : 'Bác sĩ yêu cầu đổi lịch khám',
+          content: `${requestedByRole === 'HEALTHCARE_FACILITY' ? 'Cơ sở y tế' : 'Bác sĩ'} đề xuất đổi sang ngày ${dto.proposedDate} lúc ${dto.proposedTime}. Lý do: ${dto.rescheduleReason}`,
           type: 'ENCOUNTER_RESCHEDULE_REQUESTED',
           referenceId: encounter.id,
         });
       }
 
-      if (encounter.contract.facility.user?.id) {
+      if (!isTelehealth && requestedByRole !== 'HEALTHCARE_FACILITY' && encounter.contract.facility.user?.id) {
         notifications.push({
           userId: encounter.contract.facility.user.id,
-          title: 'Yêu cầu đổi lịch khám cần CSYT phê duyệt',
-          content: `${requestedByRole === 'FAMILY_REP' ? 'Gia đình' : 'Bác sĩ'} đề xuất đổi lịch khám sang ngày ${dto.proposedDate} lúc ${dto.proposedTime}.`,
+          title: 'Thông báo đồng bộ: Có yêu cầu đổi lịch khám mới',
+          content: `${requestedByRole === 'FAMILY_REP' ? 'Gia đình' : 'Bác sĩ'} vừa đề xuất đổi lịch khám sang ngày ${dto.proposedDate} lúc ${dto.proposedTime} (đang chờ bên còn lại xác nhận).`,
           type: 'ENCOUNTER_RESCHEDULE_REQUESTED',
           referenceId: encounter.id,
         });
@@ -500,7 +784,12 @@ export class EncountersServiceImpl implements IEncountersService {
     requestId: string,
     dto: DecideRescheduleRequestDto,
   ) {
-    if (!['FAMILY_REP', 'DOCTOR', 'HEALTHCARE_FACILITY', 'ADMIN'].includes(actor.role)) {
+    if (actor.role === 'HEALTHCARE_FACILITY') {
+      throw new ForbiddenException(
+        'Reschedule decisions are handled directly between doctor and family; healthcare facilities monitor synchronized updates.',
+      );
+    }
+    if (!['FAMILY_REP', 'DOCTOR', 'ADMIN'].includes(actor.role)) {
       throw new ForbiddenException('You are not authorized to review reschedule requests');
     }
 
@@ -525,12 +814,6 @@ export class EncountersServiceImpl implements IEncountersService {
           throw new ForbiddenException('You are not the assigned doctor for this encounter');
         }
       }
-      if (actor.role === 'HEALTHCARE_FACILITY') {
-        const fac = await session.findFacilityByUserId(actor.id);
-        if (!fac || fac.id !== encounter.contract.facilityId) {
-          throw new ForbiddenException('You are not the facility for this encounter');
-        }
-      }
 
       const now = new Date();
       const decisionEnum = dto.decision === 'APPROVE' ? RescheduleDecision.APPROVED : RescheduleDecision.REJECTED;
@@ -552,20 +835,20 @@ export class EncountersServiceImpl implements IEncountersService {
         updateData.doctorDecidedBy = actor.id;
         updateData.doctorDecidedAt = now;
         updateData.doctorNote = dto.note ?? null;
-      } else if (actor.role === 'HEALTHCARE_FACILITY') {
-        if (request.facilityDecision !== RescheduleDecision.PENDING) {
-          throw new ConflictException('Facility decision has already been recorded');
-        }
-        updateData.facilityDecision = decisionEnum;
-        updateData.facilityDecidedBy = actor.id;
-        updateData.facilityDecidedAt = now;
-        updateData.facilityNote = dto.note ?? null;
       } else {
-        // ADMIN fallback
-        updateData.facilityDecision = decisionEnum;
-        updateData.facilityDecidedBy = actor.id;
-        updateData.facilityDecidedAt = now;
-        updateData.facilityNote = dto.note ?? null;
+        // ADMIN override: resolve pending side(s)
+        if (request.familyDecision === RescheduleDecision.PENDING) {
+          updateData.familyDecision = decisionEnum;
+          updateData.familyDecidedBy = actor.id;
+          updateData.familyDecidedAt = now;
+          updateData.familyNote = dto.note ?? null;
+        }
+        if (request.doctorDecision === RescheduleDecision.PENDING) {
+          updateData.doctorDecision = decisionEnum;
+          updateData.doctorDecidedBy = actor.id;
+          updateData.doctorDecidedAt = now;
+          updateData.doctorNote = dto.note ?? null;
+        }
       }
 
       if (dto.decision === 'REJECT') {
@@ -592,26 +875,33 @@ export class EncountersServiceImpl implements IEncountersService {
             referenceId: encounter.id,
           });
         }
+        if (encounter.contract.facility.user?.id) {
+          notifications.push({
+            userId: encounter.contract.facility.user.id,
+            title: 'Thông báo đồng bộ: Yêu cầu đổi lịch bị từ chối',
+            content: `Yêu cầu đổi lịch khám của ${encounter.doctor.doctorName} không được chấp thuận. Lịch khám cũ vẫn được giữ nguyên.`,
+            type: 'ENCOUNTER_RESCHEDULE_REJECTED',
+            referenceId: encounter.id,
+          });
+        }
         await session.createNotifications(notifications);
         return rejected;
       }
 
       const nextFamily = (updateData.familyDecision as RescheduleDecision | undefined) ?? request.familyDecision;
       const nextDoctor = (updateData.doctorDecision as RescheduleDecision | undefined) ?? request.doctorDecision;
-      const nextFacility = (updateData.facilityDecision as RescheduleDecision | undefined) ?? request.facilityDecision;
 
-      const allThreeApproved =
+      const bilateralApproved =
         nextFamily === RescheduleDecision.APPROVED &&
-        nextDoctor === RescheduleDecision.APPROVED &&
-        nextFacility === RescheduleDecision.APPROVED;
+        nextDoctor === RescheduleDecision.APPROVED;
 
-      if (!allThreeApproved) {
+      if (!bilateralApproved) {
         const partial = await session.updateRescheduleRequest(request.id, updateData);
         await session.createAuditLog(actor.id, 'PARTIAL_APPROVE_RESCHEDULE', request.id);
         return partial;
       }
 
-      // All 3 parties agreed -> Verify slot is still free on platform
+      // Both Family & Doctor agreed -> Verify slot is still free on platform
       const conflict = await this.checkEncounterSlotConflict(
         session,
         encounter.doctorId,
@@ -631,6 +921,7 @@ export class EncountersServiceImpl implements IEncountersService {
         reminder2hSentAt: null,
       });
 
+      updateData.facilityDecision = RescheduleDecision.APPROVED;
       updateData.status = 'APPROVED';
       updateData.resolvedAt = now;
       const approved = await session.updateRescheduleRequest(request.id, updateData);
@@ -641,7 +932,7 @@ export class EncountersServiceImpl implements IEncountersService {
       const notifications: Prisma.NotificationUncheckedCreateInput[] = [
         {
           userId: encounter.contract.familyUnit.representativeUserId,
-          title: 'Đổi lịch khám thành công (3 bên đồng thuận)',
+          title: 'Đổi lịch khám thành công',
           content: `Lịch khám đã được cập nhật sang ${newTimeStr} ngày ${newDateStr}.`,
           type: 'ENCOUNTER_RESCHEDULE_APPROVED',
           referenceId: encounter.id,
@@ -650,7 +941,7 @@ export class EncountersServiceImpl implements IEncountersService {
       if (encounter.doctor.user?.id) {
         notifications.push({
           userId: encounter.doctor.user.id,
-          title: 'Đổi lịch khám thành công (3 bên đồng thuận)',
+          title: 'Đổi lịch khám thành công',
           content: `Lịch khám đã được cập nhật sang ${newTimeStr} ngày ${newDateStr}.`,
           type: 'ENCOUNTER_RESCHEDULE_APPROVED',
           referenceId: encounter.id,
@@ -659,8 +950,8 @@ export class EncountersServiceImpl implements IEncountersService {
       if (encounter.contract.facility.user?.id) {
         notifications.push({
           userId: encounter.contract.facility.user.id,
-          title: 'Đổi lịch khám thành công (3 bên đồng thuận)',
-          content: `Lịch khám của ${encounter.doctor.doctorName} đã chuyển sang ${newTimeStr} ngày ${newDateStr}.`,
+          title: 'Đồng bộ lịch khám: Đã đổi giờ thành công',
+          content: `Lịch khám của ${encounter.doctor.doctorName} đã được Gia đình và Bác sĩ thống nhất chuyển sang ${newTimeStr} ngày ${newDateStr}.`,
           type: 'ENCOUNTER_RESCHEDULE_APPROVED',
           referenceId: encounter.id,
         });
@@ -729,7 +1020,7 @@ export class EncountersServiceImpl implements IEncountersService {
 
       const [items, total] = await session.findEncounters(where, skip, take);
       return {
-        data: items,
+        data: items.map(enrichEncounterWithScheduleMeta),
         pagination: {
           page: query.page ?? 1,
           pageSize: query.pageSize ?? 20,
@@ -769,7 +1060,7 @@ export class EncountersServiceImpl implements IEncountersService {
 
       const [items, total] = await session.findEncounters(where, skip, take);
       return {
-        data: items,
+        data: items.map(enrichEncounterWithScheduleMeta),
         pagination: {
           page: query.page ?? 1,
           pageSize: query.pageSize ?? 20,
@@ -817,7 +1108,7 @@ export class EncountersServiceImpl implements IEncountersService {
 
       return {
         facilityId,
-        encounters: encounters[0],
+        encounters: encounters[0].map(enrichEncounterWithScheduleMeta),
         pendingRescheduleRequests,
       };
     });
@@ -845,7 +1136,7 @@ export class EncountersServiceImpl implements IEncountersService {
         }
       }
 
-      return encounter;
+      return enrichEncounterWithScheduleMeta(encounter);
     });
   }
 
@@ -856,6 +1147,7 @@ export class EncountersServiceImpl implements IEncountersService {
     scheduledDate: Date,
     scheduledTime: Date,
     excludeEncounterId?: string,
+    statuses: EncounterStatus[] = [EncounterStatus.CONFIRMED, EncounterStatus.IN_PROGRESS],
   ): Promise<{ hasConflict: boolean; reason?: string }> {
     const encStartMin = getTimeWindowMinutes(scheduledTime);
     const encEndMin = encStartMin + APPOINTMENT_DURATION_MINUTES;
@@ -864,7 +1156,7 @@ export class EncountersServiceImpl implements IEncountersService {
       doctorId,
       scheduledDate,
       excludeEncounterId,
-      [EncounterStatus.CONFIRMED, EncounterStatus.IN_PROGRESS],
+      statuses,
     );
 
     for (const other of otherEncounters) {
@@ -874,11 +1166,380 @@ export class EncountersServiceImpl implements IEncountersService {
       if (encStartMin < otherEndMin && encEndMin > otherStartMin) {
         return {
           hasConflict: true,
-          reason: `Trùng với một lịch khám đã xác nhận khác của bác sĩ lúc ${other.scheduledTime.toISOString().slice(11, 16)}`,
+          reason: `Trùng với một lịch khám khác của bác sĩ lúc ${other.scheduledTime.toISOString().slice(11, 16)}`,
         };
       }
     }
 
     return { hasConflict: false };
+  }
+
+  async generateContractPeriodicCadence(
+    contractId: string,
+    options?: { triggeredBy?: string; force?: boolean },
+  ): Promise<{ generatedCount: number; encounters: unknown[] }> {
+    return this.repository.transaction(async (session) => {
+      const contract = await session.findContract(contractId);
+      if (!contract) {
+        throw new NotFoundException(`Medical contract ${contractId} not found`);
+      }
+      if (contract.contractStatus !== 'ACTIVE') {
+        throw new BadRequestException('Contract is not active for cadence generation');
+      }
+
+      const defaultType =
+        contract.remainingHomeVisits > 0
+          ? EncounterType.HOME_VISIT
+          : contract.remainingTelehealth > 0
+            ? EncounterType.TELEHEALTH
+            : EncounterType.HOME_VISIT;
+      const packageQuota = contract.servicePackage?.periodicVisitsQuota ?? 0;
+      const quota =
+        packageQuota > 0
+          ? packageQuota
+          : defaultType === EncounterType.HOME_VISIT
+            ? contract.remainingHomeVisits
+            : contract.remainingTelehealth;
+      const durationMonths = contract.servicePackage?.durationMonths ?? 12;
+      if (quota <= 0) {
+        return { generatedCount: 0, encounters: [] };
+      }
+
+      // Check existing non-cancelled periodic encounters for idempotency
+      const [existing] = await session.findEncounters({
+        contractId,
+        category: EncounterCategory.PERIODIC_ROUTINE,
+        encounterStatus: { not: EncounterStatus.CANCELLED },
+      });
+
+      if (existing.length > 0 && !options?.force) {
+        return { generatedCount: 0, encounters: existing.map(enrichEncounterWithScheduleMeta) };
+      }
+
+      if (!contract.doctorId) {
+        throw new BadRequestException('Contract has no assigned doctor for scheduling');
+      }
+
+      const milestoneDates = calculateCadenceDates(
+        contract.startDate,
+        durationMonths,
+        quota,
+        contract.endDate ?? undefined,
+      );
+      const createdList = [];
+      const bookedByDay = new Map<string, number[]>();
+
+      for (let i = 0; i < milestoneDates.length; i++) {
+        const targetDate = milestoneDates[i];
+        const dayKey = targetDate.toISOString().slice(0, 10);
+        const bookedMinutes = bookedByDay.get(dayKey) ?? [];
+        let chosenTime = parseTimeToDate(CADENCE_CANDIDATE_SLOTS[0]);
+
+        for (const slot of CADENCE_CANDIDATE_SLOTS) {
+          const candidateTime = parseTimeToDate(slot);
+          const candidateMin = getTimeWindowMinutes(candidateTime);
+          const overlapsLocal = bookedMinutes.some(
+            (m) => candidateMin < m + APPOINTMENT_DURATION_MINUTES && candidateMin + APPOINTMENT_DURATION_MINUTES > m,
+          );
+          if (overlapsLocal) continue;
+
+          const conflict = await this.checkEncounterSlotConflict(
+            session,
+            contract.doctorId,
+            targetDate,
+            candidateTime,
+            undefined,
+            [EncounterStatus.CONFIRMED, EncounterStatus.IN_PROGRESS, EncounterStatus.REQUESTED],
+          );
+          if (!conflict.hasConflict) {
+            chosenTime = candidateTime;
+            break;
+          }
+        }
+
+        bookedMinutes.push(getTimeWindowMinutes(chosenTime));
+        bookedByDay.set(dayKey, bookedMinutes);
+
+        const enc = await session.createEncounter({
+          contractId,
+          doctorId: contract.doctorId,
+          encounterType: defaultType,
+          category: EncounterCategory.PERIODIC_ROUTINE,
+          visitScope: EncounterVisitScope.FAMILY,
+          scheduledDate: targetDate,
+          scheduledTime: chosenTime,
+          encounterStatus: EncounterStatus.REQUESTED,
+          cancelReason: serializeEncounterScheduleMeta(
+            {
+              stage: 'CADENCE_DRAFT',
+              milestoneIndex: i + 1,
+              totalMilestones: milestoneDates.length,
+            },
+            `Khám định kỳ gia đình lần ${i + 1}/${milestoneDates.length} (khung dự thảo mặc định theo gói)`,
+          ),
+          ...(contract.members.length > 0
+            ? {
+                participants: {
+                  create: contract.members.map((m) => ({ patientId: m.patientId })),
+                },
+              }
+            : {}),
+        });
+        createdList.push(enrichEncounterWithScheduleMeta(enc));
+      }
+
+      // Notify doctor that draft cadence is ready for review
+      if (contract.doctor?.user?.id) {
+        await session.createNotification({
+          userId: contract.doctor.user.id,
+          title: 'Khung lịch khám định kỳ mới cần duyệt',
+          content: `Hệ thống đã tự động tính toán ${createdList.length} mốc khám định kỳ cho hợp đồng ${contract.contractNumber}. Vui lòng kiểm tra và duyệt lịch.`,
+          type: 'ENCOUNTER_CADENCE_DRAFT_READY',
+          referenceId: contractId,
+        });
+      }
+
+      await session.createAuditLog(
+        options?.triggeredBy || contract.doctorId,
+        'GENERATE_PERIODIC_CADENCE',
+        contractId,
+      );
+
+      return { generatedCount: createdList.length, encounters: createdList };
+    });
+  }
+
+  async finalizeCadenceSchedule(actor: AuthenticatedUser, contractId: string) {
+    return this.repository.transaction(async (session) => {
+      const contract = await session.findContract(contractId);
+      if (!contract) throw new NotFoundException('Medical contract not found');
+
+      if (actor.role === 'DOCTOR') {
+        const doc = await session.findDoctorByUserId(actor.id);
+        if (!doc || doc.id !== contract.doctorId) {
+          throw new ForbiddenException('Only the assigned doctor can finalize cadence schedule');
+        }
+      } else if (actor.role !== 'ADMIN') {
+        throw new ForbiddenException('Forbidden');
+      }
+
+      const [encounters] = await session.findEncounters({
+        contractId,
+        category: EncounterCategory.PERIODIC_ROUTINE,
+      }, 0, 100);
+
+      const draftEncounters = encounters.filter(
+        (e) => parseEncounterScheduleMeta(e).scheduleStage === 'CADENCE_DRAFT',
+      );
+
+      if (draftEncounters.length === 0) {
+        return { finalizedCount: 0, encounters: [] };
+      }
+
+      const updated = [];
+      for (const draft of draftEncounters) {
+        const meta = parseEncounterScheduleMeta(draft);
+        const up = await session.updateEncounter(draft.id, {
+          encounterStatus: EncounterStatus.REQUESTED,
+          cancelReason: serializeEncounterScheduleMeta(
+            {
+              stage: 'AWAITING_FAMILY_CONFIRM',
+              ...(meta.milestoneIndex !== null ? { milestoneIndex: meta.milestoneIndex } : {}),
+              ...(meta.totalMilestones !== null ? { totalMilestones: meta.totalMilestones } : {}),
+            },
+            'Bác sĩ đã chốt khung lịch khám định kỳ',
+          ),
+        });
+        updated.push(enrichEncounterWithScheduleMeta(up));
+      }
+
+      // Notify family
+      const familyRepId =
+        contract.familyUnit?.representativeUserId || contract.familyUnit?.representativeUser?.id;
+      if (familyRepId) {
+        await session.createNotification({
+          userId: familyRepId,
+          title: 'Bác sĩ đã chốt kế hoạch khám định kỳ',
+          content: `Bác sĩ ${contract.doctor?.user?.fullName || ''} đã chốt khung lịch khám định kỳ ${updated.length} lần trong năm cho gia đình. Vui lòng xem và xác nhận lịch hẹn.`,
+          type: 'ENCOUNTER_FINALIZED_BY_DOCTOR',
+          referenceId: contractId,
+        });
+      }
+
+      await session.createAuditLog(actor.id, 'FINALIZE_CADENCE_SCHEDULE', contractId);
+      return { finalizedCount: updated.length, encounters: updated };
+    });
+  }
+
+  async confirmCadenceSchedule(actor: AuthenticatedUser, contractId: string) {
+    if (!['FAMILY_REP', 'ADMIN'].includes(actor.role)) {
+      throw new ForbiddenException('Only the family representative or admin can confirm cadence schedule');
+    }
+
+    return this.repository.transaction(async (session) => {
+      const contract = await session.findContract(contractId);
+      if (!contract) throw new NotFoundException('Medical contract not found');
+      if (contract.contractStatus !== 'ACTIVE') {
+        throw new BadRequestException('Contract is not active');
+      }
+      if (actor.role === 'FAMILY_REP' && contract.familyUnit.representativeUserId !== actor.id) {
+        throw new ForbiddenException('You are not authorized to confirm this contract schedule');
+      }
+
+      const [encounters] = await session.findEncounters(
+        {
+          contractId,
+          category: EncounterCategory.PERIODIC_ROUTINE,
+          encounterStatus: EncounterStatus.REQUESTED,
+        },
+        0,
+        100,
+      );
+
+      const readyEncounters = encounters.filter(
+        (e) => parseEncounterScheduleMeta(e).scheduleStage === 'AWAITING_FAMILY_CONFIRM',
+      );
+      if (readyEncounters.length === 0) {
+        return { confirmedCount: 0, encounters: [] };
+      }
+
+      const homeNeeded = readyEncounters.filter((e) => e.encounterType === EncounterType.HOME_VISIT).length;
+      const teleNeeded = readyEncounters.filter((e) => e.encounterType === EncounterType.TELEHEALTH).length;
+      if (homeNeeded > contract.remainingHomeVisits) {
+        throw new BadRequestException('Không đủ lượt khám tại nhà còn lại để xác nhận toàn bộ lộ trình');
+      }
+      if (teleNeeded > contract.remainingTelehealth) {
+        throw new BadRequestException('Không đủ lượt tư vấn Telehealth còn lại để xác nhận toàn bộ lộ trình');
+      }
+
+      // Check conflicts against existing confirmed/in-progress encounters and within the batch
+      const batchSlotsByDay = new Map<string, number[]>();
+      for (const enc of readyEncounters) {
+        const conflict = await this.checkEncounterSlotConflict(
+          session,
+          enc.doctorId,
+          enc.scheduledDate,
+          enc.scheduledTime,
+          enc.id,
+        );
+        if (conflict.hasConflict) {
+          throw new ConflictException(conflict.reason);
+        }
+
+        const dayKey = enc.scheduledDate.toISOString().slice(0, 10);
+        const startMin = getTimeWindowMinutes(enc.scheduledTime);
+        const existingInBatch = batchSlotsByDay.get(dayKey) ?? [];
+        const overlapsBatch = existingInBatch.some(
+          (m) => startMin < m + APPOINTMENT_DURATION_MINUTES && startMin + APPOINTMENT_DURATION_MINUTES > m,
+        );
+        if (overlapsBatch) {
+          throw new ConflictException(`Hai mốc lịch trong cùng ngày ${dayKey} bị trùng khung giờ`);
+        }
+        existingInBatch.push(startMin);
+        batchSlotsByDay.set(dayKey, existingInBatch);
+      }
+
+      const confirmed = [];
+      for (const enc of readyEncounters) {
+        await session.decrementContractQuota(contractId, enc.encounterType);
+        const up = await session.updateEncounter(enc.id, {
+          encounterStatus: EncounterStatus.CONFIRMED,
+        });
+        confirmed.push(enrichEncounterWithScheduleMeta(up));
+      }
+
+      await session.createAuditLog(actor.id, 'CONFIRM_CADENCE_SCHEDULE', contractId);
+
+      const notifications: Prisma.NotificationUncheckedCreateInput[] = [
+        {
+          userId: contract.familyUnit.representativeUserId,
+          title: 'Đã xác nhận lộ trình khám định kỳ',
+          content: `Gia đình đã xác nhận thành công ${confirmed.length} mốc khám định kỳ theo gói. Hệ thống sẽ nhắc hẹn trước 24h và 2h.`,
+          type: 'ENCOUNTER_CONFIRMED',
+          referenceId: contractId,
+        },
+      ];
+      if (contract.doctor?.user?.id) {
+        notifications.push({
+          userId: contract.doctor.user.id,
+          title: 'Gia đình đã xác nhận lộ trình khám định kỳ',
+          content: `Hộ gia đình đã xác nhận ${confirmed.length} mốc khám định kỳ trong hợp đồng ${contract.contractNumber || contractId.slice(0, 8)}.`,
+          type: 'ENCOUNTER_CONFIRMED',
+          referenceId: contractId,
+        });
+      }
+      if (contract.facility?.userId) {
+        notifications.push({
+          userId: contract.facility.userId,
+          title: 'Đồng bộ lộ trình khám định kỳ',
+          content: `Bác sĩ ${contract.doctor?.doctorName || ''} có ${confirmed.length} lịch khám định kỳ đã được xác nhận.`,
+          type: 'ENCOUNTER_CONFIRMED',
+          referenceId: contractId,
+        });
+      }
+      await session.createNotifications(notifications);
+
+      return { confirmedCount: confirmed.length, encounters: confirmed };
+    });
+  }
+
+  async adjustCadenceMilestone(
+    actor: AuthenticatedUser,
+    encounterId: string,
+    dto: { scheduledDate?: string; scheduledTime?: string; encounterType?: string },
+  ) {
+    return this.repository.transaction(async (session) => {
+      const encounter = await session.findEncounter(encounterId);
+      if (!encounter) throw new NotFoundException('Encounter not found');
+
+      if (actor.role === 'DOCTOR') {
+        const doc = await session.findDoctorByUserId(actor.id);
+        if (!doc || doc.id !== encounter.doctorId) {
+          throw new ForbiddenException('Only assigned doctor can adjust cadence milestone');
+        }
+      } else if (actor.role !== 'ADMIN') {
+        throw new ForbiddenException('Forbidden');
+      }
+
+      const parsed = parseEncounterScheduleMeta(encounter);
+      if (parsed.scheduleStage !== 'CADENCE_DRAFT') {
+        throw new BadRequestException(
+          'Chỉ có thể điều chỉnh trực tiếp các mốc lịch ở trạng thái dự thảo (CADENCE_DRAFT). Với lịch đã chốt, vui lòng gửi yêu cầu đổi lịch.',
+        );
+      }
+
+      const newDate = dto.scheduledDate ? parseDateOnly(dto.scheduledDate) : encounter.scheduledDate;
+      const newTime = dto.scheduledTime ? parseTimeToDate(dto.scheduledTime) : encounter.scheduledTime;
+      const newType = dto.encounterType ? (dto.encounterType as EncounterType) : encounter.encounterType;
+
+      const conflict = await this.checkEncounterSlotConflict(
+        session,
+        encounter.doctorId,
+        newDate,
+        newTime,
+        encounterId,
+        [EncounterStatus.CONFIRMED, EncounterStatus.IN_PROGRESS, EncounterStatus.REQUESTED],
+      );
+      if (conflict.hasConflict) {
+        throw new ConflictException(conflict.reason);
+      }
+
+      const updated = await session.updateEncounter(encounterId, {
+        scheduledDate: newDate,
+        scheduledTime: newTime,
+        encounterType: newType,
+        cancelReason: serializeEncounterScheduleMeta(
+          {
+            stage: 'CADENCE_DRAFT',
+            ...(parsed.milestoneIndex !== null ? { milestoneIndex: parsed.milestoneIndex } : {}),
+            ...(parsed.totalMilestones !== null ? { totalMilestones: parsed.totalMilestones } : {}),
+          },
+          parsed.displayNotes,
+        ),
+      });
+
+      await session.createAuditLog(actor.id, 'ADJUST_CADENCE_MILESTONE', encounterId);
+      return enrichEncounterWithScheduleMeta(updated);
+    });
   }
 }

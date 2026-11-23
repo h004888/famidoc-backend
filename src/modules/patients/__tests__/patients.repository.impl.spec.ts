@@ -37,15 +37,17 @@ describe('PatientsRepositoryImpl - atomic memberCount lock & metadata', () => {
     expect(tx.patient.count).toHaveBeenCalledWith({
       where: { familyId, status: 'ACTIVE' },
     });
-    expect(tx.patient.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
-        familyId,
-        relationshipToHead: 'CHILD',
-        bloodType: 'A+',
-        chronicDiseases: 'Không',
-        status: 'ACTIVE',
+    expect(tx.patient.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          familyId,
+          relationshipToHead: 'CHILD',
+          bloodType: 'A+',
+          chronicDiseases: 'Không',
+          status: 'ACTIVE',
+        }),
       }),
-    });
+    );
     expect(tx.contractMember.create).toHaveBeenCalledWith({
       data: { contractId: 'contract-1', patientId: 'pt-new' },
     });

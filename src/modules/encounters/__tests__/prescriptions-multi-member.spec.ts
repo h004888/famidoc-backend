@@ -52,6 +52,7 @@ describe('PrescriptionsService multi-member family visit', () => {
             prescriptions: [],
           })),
         })),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       patient: {
         findFirst: jest.fn().mockImplementation(async ({ where }: any) => {
