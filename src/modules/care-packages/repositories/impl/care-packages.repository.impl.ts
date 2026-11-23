@@ -85,7 +85,9 @@ export class CarePackagesRepositoryImpl implements CarePackagesRepository {
     options?: CarePackagesListOptions,
   ): Promise<CarePackagesPage> {
     return serializable(this.prisma, async (tx) => {
-      const where: Prisma.ServicePackageWhereInput = { status };
+      const where: Prisma.ServicePackageWhereInput = {
+        status: status ?? (options?.excludeDrafts ? { not: 'DRAFT' } : undefined),
+      };
       if (options?.excludeDemo) {
         where.id = { notIn: DEMO_CARE_PACKAGE_IDS };
         where.lineageCode = { notIn: DEMO_CARE_PACKAGE_CODES };
@@ -95,6 +97,8 @@ export class CarePackagesRepositoryImpl implements CarePackagesRepository {
         { version: 'desc' },
       ];
       if (options?.ascendingPrice) orderBy.unshift({ basePrice: 'asc' });
+      // Danh mục không có bản nháp nên thứ tự enum đưa ACTIVE lên trước DEPRECATED.
+      if (!status && options?.excludeDrafts) orderBy.unshift({ status: 'asc' });
       const total = await tx.servicePackage.count({ where });
       const rows = await tx.servicePackage.findMany({
         where,
@@ -188,7 +192,11 @@ export class CarePackagesRepositoryImpl implements CarePackagesRepository {
           ? 'Only a draft can be published'
           : 'Chỉ có thể mở bán lại gói đã ngừng bán. Hãy tải lại danh mục.');
       const latest = await tx.servicePackage.findFirst({
-        where: { lineageCode: row.lineageCode },
+        where: {
+          lineageCode: row.lineageCode,
+          // Bản nháp cũ không chặn mở bán lại phiên bản đã từng bán gần nhất.
+          status: expectedStatus === 'DEPRECATED' ? { not: 'DRAFT' } : undefined,
+        },
         orderBy: { version: 'desc' },
       });
       if (latest?.id !== id)

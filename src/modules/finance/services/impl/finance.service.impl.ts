@@ -1,4 +1,5 @@
 import { calculateMonthlyInvoiceShares } from '../../pricing/monthly-recognition';
+import { calculateRevenueShares } from '../../pricing/revenue-sharing';
 import {
   BadRequestException,
   ConflictException,
@@ -13,8 +14,15 @@ import type { AuthenticatedUser } from '../../../../core/auth/authenticated-requ
 import { getVietnamMonthWindow } from '../../../../core/business/business-helpers';
 import { moneyToNumber } from '../../../../core/database/prisma-transaction';
 import { StorageService } from '../../../../core/services/storage.service';
+import type {
+  FacilityBusinessSummary,
+  FacilityFamilyPackageItem,
+  PackageSalesTotals,
+  ParticipatingDoctorSummary,
+} from '../../entities/finance.entity';
 import {
   FINANCE_REPOSITORY_TOKEN,
+  type FacilityBusinessInputs,
   type IFinanceRepository,
   type RevenueFilter,
   type RevenueInvoice,
@@ -36,6 +44,168 @@ function evidenceExtension(file?: Express.Multer.File) {
   if (file?.mimetype === 'image/jpeg' && buffer?.subarray(0, 3).equals(Buffer.from('ffd8ff', 'hex')))
     return 'jpg';
   throw new BadRequestException('Chọn chứng từ PDF, PNG hoặc JPEG hợp lệ.');
+}
+
+function summarizeFacilityBusiness(
+  {
+    doctors,
+    activeContracts,
+    paidInvoices,
+    packageInvoices,
+  }: FacilityBusinessInputs,
+  filter?: Pick<RevenueFilter, 'start' | 'end'>,
+): FacilityBusinessSummary {
+  const activeHouseholds = new Set<string>();
+  const householdsByDoctor = new Map(doctors.map((doctor) => [doctor.id, new Set<string>()]));
+  for (const { doctorId, familyId } of activeContracts) {
+    activeHouseholds.add(familyId);
+    if (doctorId) householdsByDoctor.get(doctorId)?.add(familyId);
+  }
+
+  const purchasingHouseholds = new Set<string>();
+  const totals: PackageSalesTotals = {
+    packagesSold: 0,
+    grossVnd: 0,
+    platformFeeVnd: 0,
+    facilityShareVnd: 0,
+  };
+  const byPackage = new Map<string, FacilityBusinessSummary['purchases']['byPackage'][number]>();
+  for (const invoice of paidInvoices) {
+    if (!invoice.contract) continue;
+    const { familyId, servicePackage } = invoice.contract;
+    const packageCode = servicePackage.lineageCode;
+    // Gộp các phiên bản của cùng gói. Số tiền luôn lấy từ hóa đơn đã thanh toán.
+    const row = byPackage.get(packageCode) ?? {
+      ...totals,
+      packageCode,
+      packageName: servicePackage.packageName,
+    };
+    const shares = calculateRevenueShares(moneyToNumber(invoice.totalPayable), 0);
+    row.packagesSold += 1;
+    row.grossVnd += shares.grossVnd;
+    row.platformFeeVnd += shares.platformFeeVnd;
+    row.facilityShareVnd += shares.facilityShareVnd;
+    byPackage.set(packageCode, row);
+    purchasingHouseholds.add(familyId);
+  }
+  for (const row of byPackage.values()) {
+    totals.packagesSold += row.packagesSold;
+    totals.grossVnd += row.grossVnd;
+    totals.platformFeeVnd += row.platformFeeVnd;
+    totals.facilityShareVnd += row.facilityShareVnd;
+  }
+
+  const familyPackages: FacilityFamilyPackageItem[] = [];
+  const sourceInvoices = packageInvoices ?? paidInvoices;
+  for (let index = 0; index < sourceInvoices.length; index += 1) {
+    const invoice = sourceInvoices[index];
+    const contract = invoice.contract;
+    if (!contract) continue;
+
+    const shares = calculateRevenueShares(moneyToNumber(invoice.totalPayable), 0);
+    const doctorsMap = new Map<string, ParticipatingDoctorSummary>();
+    if (contract.doctor) {
+      doctorsMap.set(contract.doctor.id, {
+        id: contract.doctor.id,
+        doctorName: contract.doctor.doctorName,
+        specialty: contract.doctor.specialty,
+        isPrimary: true,
+        encounterCount: 0,
+      });
+    }
+    for (const encounter of contract.encounters ?? []) {
+      const existing = doctorsMap.get(encounter.doctor.id);
+      if (existing) {
+        existing.encounterCount += 1;
+      } else {
+        doctorsMap.set(encounter.doctor.id, {
+          id: encounter.doctor.id,
+          doctorName: encounter.doctor.doctorName,
+          specialty: encounter.doctor.specialty,
+          isPrimary: false,
+          encounterCount: 1,
+        });
+      }
+    }
+    const participatingDoctors = [...doctorsMap.values()].sort((a, b) => {
+      if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
+      if (a.encounterCount !== b.encounterCount) return b.encounterCount - a.encounterCount;
+      return a.doctorName.localeCompare(b.doctorName, 'vi');
+    });
+
+    const purchasedInPeriod =
+      filter && invoice.paidAt
+        ? invoice.paidAt >= filter.start && invoice.paidAt < filter.end
+        : true;
+
+    const monthly =
+      filter && invoice.paidAt && contract.startDate && contract.endDate
+        ? calculateMonthlyInvoiceShares(
+            {
+              totalPayable: invoice.totalPayable,
+              paidAt: invoice.paidAt,
+              addendumId: invoice.addendumId ?? null,
+              settlementItems: invoice.settlementItems,
+              contract: {
+                startDate: contract.startDate,
+                endDate: contract.endDate,
+                terminatedAt: contract.terminatedAt ?? null,
+              },
+            },
+            filter,
+          )
+        : null;
+
+    familyPackages.push({
+      invoiceId: invoice.id ?? `${contract.familyId}-${contract.servicePackage.lineageCode}-${index}`,
+      invoiceCode: invoice.invoiceCode ?? '',
+      contractId: contract.id ?? '',
+      contractNumber: contract.contractNumber ?? '',
+      contractStatus: contract.contractStatus ?? 'ACTIVE',
+      familyId: contract.familyId,
+      familyName: contract.familyUnit?.representativeUser?.fullName ?? 'Hộ gia đình',
+      memberCount: contract.memberCount ?? 1,
+      packageCode: contract.servicePackage.lineageCode,
+      packageName: contract.servicePackage.packageName,
+      durationMonths: contract.servicePackage.durationMonths ?? 1,
+      paidAt: invoice.paidAt ? invoice.paidAt.toISOString() : null,
+      startDate: contract.startDate ? contract.startDate.toISOString() : null,
+      endDate: contract.endDate ? contract.endDate.toISOString() : null,
+      purchasedInPeriod,
+      primaryDoctor: contract.doctor ?? null,
+      participatingDoctors,
+      packagePriceVnd: shares.grossVnd,
+      platformFeePercent: 15,
+      platformFeeVnd: shares.platformFeeVnd,
+      facilitySharePercent: 85,
+      facilityShareVnd: shares.facilityShareVnd,
+      ...(monthly
+        ? {
+            periodRecognition: {
+              grossVnd: monthly.grossVnd,
+              platformFeeVnd: monthly.platformFeeVnd,
+              facilityShareVnd: monthly.facilityShareVnd,
+              serviceFrom: monthly.serviceFrom.toISOString(),
+              serviceUntil: monthly.serviceUntil.toISOString(),
+            },
+          }
+        : {}),
+    });
+  }
+
+  return {
+    activeHouseholds: activeHouseholds.size,
+    doctors: doctors.map((doctor) => ({
+      ...doctor,
+      households: householdsByDoctor.get(doctor.id)?.size ?? 0,
+    })),
+    familyPackages,
+    purchases: {
+      ...totals,
+      purchasingHouseholds: purchasingHouseholds.size,
+      byPackage: [...byPackage.values()],
+    },
+  };
 }
 
 @Injectable()
@@ -67,6 +237,13 @@ export class FinanceServiceImpl implements IFinanceService {
         facilityId,
       };
       const invoices = await session.findEligibleInvoices(filter);
+      const facilityBusiness =
+        actor.role === 'HEALTHCARE_FACILITY' && facilityId
+          ? summarizeFacilityBusiness(
+              await session.getFacilityBusinessInputs({ ...filter, facilityId }),
+              filter,
+            )
+          : undefined;
       const totals = {
         grossVnd: 0,
         vatVnd: 0,
@@ -93,6 +270,7 @@ export class FinanceServiceImpl implements IFinanceService {
         taxTreatment:
           'Phí nền tảng 15% đã gồm thuế nếu phát sinh. Khoản 85% trả CSYT chưa khấu trừ hoặc nộp thay thuế thuộc nghĩa vụ của bên nhận. CSYT và bác sĩ tự xác định, kê khai và nộp thuế phát sinh theo hoạt động và quy định áp dụng. Dịch vụ khám bệnh, chữa bệnh thuộc đối tượng không chịu VAT theo quy định. Bảng chi trả chưa xác nhận bên nhận đã hoàn thành nghĩa vụ thuế.',
         satisfaction: await session.getSatisfactionSummary(filter),
+        facilityBusiness,
         ...totals,
         // CSYT không xem nhật ký giao dịch chưa xác định của đơn vị khác.
         unmatchedTransactionsCount:

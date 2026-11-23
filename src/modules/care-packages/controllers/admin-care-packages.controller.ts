@@ -66,16 +66,16 @@ export class AdminCarePackagesController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Chỉnh sửa thông tin gói chăm sóc bản nháp' })
+  @ApiOperation({ summary: 'Cập nhật trực tiếp thông tin gói chăm sóc theo ID' })
   @ApiParam({ name: 'id', description: 'UUID của gói chăm sóc cần cập nhật' })
   @ApiBody({ type: UpdateCarePackageDto })
   @ApiResponse({ status: 200, description: 'Cập nhật thành công' })
-  @ApiResponse({ status: 400, description: 'Không thể sửa gói đã xuất bản hoặc đã ngừng bán' })
+  @ApiResponse({ status: 409, description: 'Gói đang ngừng bán, cần mở bán lại trước khi chỉnh sửa' })
   update(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Body() dto: UpdateCarePackageDto,
   ) {
-    // Chỉ service quyết định bản ghi còn được sửa hay phải tạo phiên bản mới.
+    // Lưu trên đúng gói hiện tại để giữ nguyên ID và số phiên bản.
     return this.service.update(id, dto);
   }
 

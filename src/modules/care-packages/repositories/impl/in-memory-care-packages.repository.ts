@@ -30,13 +30,20 @@ export class InMemoryCarePackagesRepository implements CarePackagesRepository {
     options?: CarePackagesListOptions,
   ): Promise<CarePackagesPage> {
     // Lọc trước khi phân trang để total phản ánh đúng số bản ghi thỏa điều kiện.
+    const putRetiredLast = !status && options?.excludeDrafts;
     const items = [...this.packages.values()]
-      .filter((item) => status === undefined || item.status === status)
+      .filter((item) => status !== undefined
+        ? item.status === status
+        : !options?.excludeDrafts || item.status !== CarePackageStatus.DRAFT,
+      )
       .filter((item) => !options?.excludeDemo || (
         !DEMO_CARE_PACKAGE_IDS.includes(item.id) &&
         !DEMO_CARE_PACKAGE_CODES.includes(item.code)
       ))
       .sort((a, b) =>
+        (putRetiredLast
+          ? Number(a.status === CarePackageStatus.DEPRECATED) - Number(b.status === CarePackageStatus.DEPRECATED)
+          : 0) ||
         (options?.ascendingPrice ? a.priceVnd - b.priceVnd : 0) ||
         a.code.localeCompare(b.code) ||
         b.version - a.version,
@@ -120,7 +127,8 @@ export class InMemoryCarePackagesRepository implements CarePackagesRepository {
     }
     // Chặn công bố bản cũ khi cùng mã đã có phiên bản mới hơn.
     const newerVersionExists = [...this.packages.values()].some(
-      (item) => item.code === current.code && item.version > current.version,
+      (item) => item.code === current.code && item.version > current.version &&
+        (expectedStatus === CarePackageStatus.DRAFT || item.status !== CarePackageStatus.DRAFT),
     );
     if (newerVersionExists) {
       throw new ConflictException(
