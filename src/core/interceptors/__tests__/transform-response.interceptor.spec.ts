@@ -1,5 +1,5 @@
 import { of, lastValueFrom } from 'rxjs';
-import { ExecutionContext, CallHandler } from '@nestjs/common';
+import { ExecutionContext, CallHandler, StreamableFile } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { TransformResponseInterceptor } from '../transform-response.interceptor';
 import { BYPASS_TRANSFORM_KEY, BypassTransform } from '../../decorators/bypass-transform.decorator';
@@ -178,5 +178,18 @@ describe('TransformResponseInterceptor', () => {
 
     expect(result).toEqual({ success: true });
     expect((result as any).data).toBeUndefined();
+  });
+
+  it('không bọc StreamableFile vào JSON envelope kể cả khi không gắn @BypassTransform()', async () => {
+    jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+
+    const context = createMockContext({ url: '/api/v1/patients/p-1/documents/d-1/file' });
+    const file = new StreamableFile(Buffer.from('PDF_BINARY_DATA'));
+    const handler: CallHandler = {
+      handle: () => of(file),
+    };
+
+    const result = await lastValueFrom(interceptor.intercept(context, handler));
+    expect(result).toBe(file);
   });
 });

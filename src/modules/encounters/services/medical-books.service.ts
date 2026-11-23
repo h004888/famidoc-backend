@@ -119,9 +119,18 @@ function documentScope(
 const documentFolder = (patientId: string) => `medical-books/${patientId}`;
 
 function storedDocumentExtension(patientId: string, key: string) {
-  const prefix = `${documentFolder(patientId)}/`;
-  if (!key.startsWith(prefix)) return null;
-  return /^[-\w]+\.(pdf|png|jpg)$/.exec(key.slice(prefix.length))?.[1] ?? null;
+  const allowedPrefixes = [
+    `${documentFolder(patientId)}/`,
+    `patient-documents/${patientId}/`,
+  ];
+  const matchedPrefix = allowedPrefixes.find((prefix) =>
+    key.startsWith(prefix),
+  );
+  if (!matchedPrefix) return null;
+  const ext =
+    /^[-\w]+\.(pdf|png|jpe?g)$/i.exec(key.slice(matchedPrefix.length))?.[1]?.toLowerCase() ??
+    null;
+  return ext === 'jpeg' ? 'jpg' : ext;
 }
 
 function documentInfo(
