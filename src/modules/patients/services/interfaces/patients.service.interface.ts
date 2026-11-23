@@ -1,3 +1,4 @@
+import type { Readable } from 'stream';
 import type { Patient, PatientAllergy, PatientChronicCondition } from '@prisma/client';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
 import type { CreatePatientDto } from '../../dtos/create-patient.dto';
