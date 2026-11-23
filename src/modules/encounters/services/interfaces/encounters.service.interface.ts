@@ -14,6 +14,9 @@ export interface IEncountersService {
   createAdHocEncounter(actor: AuthenticatedUser, dto: CreateAdHocEncounterDto): Promise<unknown>;
   finalizeEncounter(actor: AuthenticatedUser, encounterId: string, dto: FinalizeEncounterDto): Promise<unknown>;
   confirmEncounter(actor: AuthenticatedUser, encounterId: string, dto: ConfirmEncounterDto): Promise<unknown>;
+  markOnTheWay(actor: AuthenticatedUser, encounterId: string): Promise<unknown>;
+  markArrived(actor: AuthenticatedUser, encounterId: string): Promise<unknown>;
+  confirmArrival(actor: AuthenticatedUser, encounterId: string): Promise<unknown>;
   requestReschedule(actor: AuthenticatedUser, encounterId: string, dto: RequestRescheduleDto): Promise<unknown>;
   decideRescheduleRequest(
     actor: AuthenticatedUser,

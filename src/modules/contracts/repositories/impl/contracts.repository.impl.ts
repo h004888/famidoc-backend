@@ -651,6 +651,7 @@ export class PrismaContractsSession implements ContractsSession {
       where: { id: { in: patientIds } },
       include: {
         allergies: true,
+        chronicConditions: { orderBy: { createdAt: 'desc' } },
         documents: true,
       },
       orderBy: { createdAt: 'asc' },

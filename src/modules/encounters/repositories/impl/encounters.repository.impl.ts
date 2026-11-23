@@ -97,6 +97,14 @@ class PrismaEncountersSession implements EncountersSession {
         data: { remainingHomeVisits: { decrement: 1 } },
       });
     } else if (type === 'TELEHEALTH') {
+      const contract = await this.tx.medicalContract.findUnique({
+        where: { id: contractId },
+        include: { servicePackage: true },
+      });
+      const policy = contract?.servicePackage?.videoQuotaPolicy ?? 'FIXED';
+      if (policy === 'UNLIMITED' || policy === 'CONTRACT') {
+        return;
+      }
       await this.tx.medicalContract.update({
         where: { id: contractId },
         data: { remainingTelehealth: { decrement: 1 } },

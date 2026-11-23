@@ -103,9 +103,9 @@ export class EncountersController {
   }
 
   @Patch(':id/confirm')
-  @Roles('FAMILY_REP', 'ADMIN')
+  @Roles('FAMILY_REP', 'DOCTOR', 'ADMIN')
   @ApiOperation({
-    summary: 'Gia đình xác nhận đồng ý lịch khám & đối chiếu ca trực CSYT để đồng bộ lịch',
+    summary: 'Gia đình hoặc Bác sĩ xác nhận đồng ý lịch khám & đối chiếu ca trực để đồng bộ lịch',
   })
   @ApiParam({ name: 'id', description: 'ID của buổi khám' })
   @ApiBody({ type: ConfirmEncounterDto })
@@ -119,10 +119,37 @@ export class EncountersController {
     return this.service.confirmEncounter(req.user, id, dto);
   }
 
+  @Patch(':id/on-the-way')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({ summary: 'Bác sĩ báo đang di chuyển tới nhà gia đình' })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám' })
+  @ResponseMessage('Đã cập nhật trạng thái đang di chuyển')
+  markOnTheWay(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.service.markOnTheWay(req.user, id);
+  }
+
+  @Patch(':id/arrive')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({ summary: 'Bác sĩ check-in đã có mặt tại nhà gia đình' })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám' })
+  @ResponseMessage('Đã check-in có mặt tại nhà gia đình')
+  markArrived(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.service.markArrived(req.user, id);
+  }
+
+  @Patch(':id/confirm-arrival')
+  @Roles('FAMILY_REP', 'ADMIN')
+  @ApiOperation({ summary: 'Gia đình xác nhận 1 chạm bác sĩ đã có mặt tại nhà' })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám' })
+  @ResponseMessage('Đã xác nhận bác sĩ có mặt tại nhà')
+  confirmArrival(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
+    return this.service.confirmArrival(req.user, id);
+  }
+
   @Post(':id/reschedule')
-  @Roles('FAMILY_REP', 'DOCTOR', 'ADMIN')
+  @Roles('FAMILY_REP', 'DOCTOR', 'HEALTHCARE_FACILITY', 'ADMIN')
   @ApiOperation({
-    summary: 'Gia đình hoặc Bác sĩ gửi yêu cầu đổi lịch khám (SLA >= 4 giờ, cần 3 bên đồng ý)',
+    summary: 'Gia đình, Bác sĩ hoặc CSYT gửi yêu cầu đổi lịch khám (SLA >= 4 giờ)',
   })
   @ApiParam({ name: 'id', description: 'ID của buổi khám' })
   @ApiBody({ type: RequestRescheduleDto })

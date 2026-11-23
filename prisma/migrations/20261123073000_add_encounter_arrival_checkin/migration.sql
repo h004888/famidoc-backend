@@ -1,0 +1,9 @@
+-- AlterEnum
+ALTER TYPE "EncounterStatus" ADD VALUE IF NOT EXISTS 'ON_THE_WAY';
+ALTER TYPE "EncounterStatus" ADD VALUE IF NOT EXISTS 'ARRIVED';
+
+-- AlterTable
+ALTER TABLE "encounters"
+ADD COLUMN IF NOT EXISTS "on_the_way_at" TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS "arrived_at" TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS "family_confirmed_arrival_at" TIMESTAMPTZ;

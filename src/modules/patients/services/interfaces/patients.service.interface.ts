@@ -1,9 +1,11 @@
 import type { Readable } from 'stream';
-import type { Patient, PatientAllergy } from '@prisma/client';
+import type { Patient, PatientAllergy, PatientChronicCondition } from '@prisma/client';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
 import type { CreatePatientDto } from '../../dtos/create-patient.dto';
 import type { UpdatePatientDto } from '../../dtos/update-patient.dto';
 import type { CreateAllergyDto } from '../../dtos/create-allergy.dto';
+import type { CreateChronicConditionDto } from '../../dtos/create-chronic-condition.dto';
+import type { UpdateChronicConditionDto } from '../../dtos/update-chronic-condition.dto';
 import type { CreatePatientDocumentDto } from '../../dtos/create-patient-document.dto';
 import type { CreateVitalSignDto } from '../../dtos/create-vital-sign.dto';
 import type { UpdateVitalSignDto } from '../../dtos/update-vital-sign.dto';
@@ -24,6 +26,26 @@ export interface IPatientsService {
   addAllergy(user: AuthenticatedUser, patientId: string, dto: CreateAllergyDto): Promise<PatientAllergy>;
   listAllergies(user: AuthenticatedUser, patientId: string): Promise<PatientAllergy[]>;
   deleteAllergy(user: AuthenticatedUser, patientId: string, allergyId: string): Promise<PatientAllergy>;
+  addChronicCondition(
+    user: AuthenticatedUser,
+    patientId: string,
+    dto: CreateChronicConditionDto,
+  ): Promise<PatientChronicCondition>;
+  listChronicConditions(
+    user: AuthenticatedUser,
+    patientId: string,
+  ): Promise<PatientChronicCondition[]>;
+  updateChronicCondition(
+    user: AuthenticatedUser,
+    patientId: string,
+    conditionId: string,
+    dto: UpdateChronicConditionDto,
+  ): Promise<PatientChronicCondition>;
+  deleteChronicCondition(
+    user: AuthenticatedUser,
+    patientId: string,
+    conditionId: string,
+  ): Promise<PatientChronicCondition>;
   addDocument(
     user: AuthenticatedUser,
     patientId: string,

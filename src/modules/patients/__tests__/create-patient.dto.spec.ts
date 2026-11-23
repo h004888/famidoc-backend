@@ -77,4 +77,44 @@ describe('CreatePatientDto Validation', () => {
       ),
     ).rejects.toThrow();
   });
+
+  it('chấp nhận heightCm, weightKg và chronicConditions có cấu trúc hợp lệ', async () => {
+    const result = await pipe.transform(
+      {
+        ...basePayload,
+        relationshipToRepresentative: 'CHILD',
+        heightCm: 168.5,
+        weightKg: 62,
+        chronicConditions: [
+          {
+            conditionName: 'Tăng huyết áp',
+            icd10Code: 'I10',
+            clinicalStatus: 'CONTROLLED',
+            notes: 'Đang theo dõi định kỳ',
+          },
+        ],
+      },
+      { type: 'body', metatype: CreatePatientDto },
+    );
+    expect(result.heightCm).toBe(168.5);
+    expect(result.weightKg).toBe(62);
+    expect(result.chronicConditions).toHaveLength(1);
+    expect(result.chronicConditions?.[0].conditionName).toBe('Tăng huyết áp');
+  });
+
+  it('từ chối heightCm hoặc weightKg ngoài ngưỡng hợp lệ', async () => {
+    await expect(
+      pipe.transform(
+        { ...basePayload, relationshipToRepresentative: 'CHILD', heightCm: 10 },
+        { type: 'body', metatype: CreatePatientDto },
+      ),
+    ).rejects.toThrow();
+
+    await expect(
+      pipe.transform(
+        { ...basePayload, relationshipToRepresentative: 'CHILD', weightKg: 400 },
+        { type: 'body', metatype: CreatePatientDto },
+      ),
+    ).rejects.toThrow();
+  });
 });
