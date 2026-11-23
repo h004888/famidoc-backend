@@ -34,6 +34,7 @@ export interface IEncountersService {
     options?: { triggeredBy?: string; force?: boolean },
   ): Promise<{ generatedCount: number; encounters: unknown[] }>;
   finalizeCadenceSchedule(actor: AuthenticatedUser, contractId: string): Promise<{ finalizedCount: number; encounters: unknown[] }>;
+  confirmCadenceSchedule(actor: AuthenticatedUser, contractId: string): Promise<{ confirmedCount: number; encounters: unknown[] }>;
   adjustCadenceMilestone(
     actor: AuthenticatedUser,
     encounterId: string,

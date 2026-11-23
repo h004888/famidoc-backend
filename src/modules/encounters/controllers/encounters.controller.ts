@@ -165,9 +165,9 @@ export class EncountersController {
   }
 
   @Patch(':id/reschedule-requests/:requestId/decision')
-  @Roles('FAMILY_REP', 'DOCTOR', 'HEALTHCARE_FACILITY', 'ADMIN')
+  @Roles('FAMILY_REP', 'DOCTOR', 'ADMIN')
   @ApiOperation({
-    summary: 'Phê duyệt (APPROVE) hoặc từ chối (REJECT) yêu cầu đổi lịch 3 bên',
+    summary: 'Phê duyệt (APPROVE) hoặc từ chối (REJECT) yêu cầu đổi lịch 2 bên (Gia đình <-> Bác sĩ)',
   })
   @ApiParam({ name: 'id', description: 'ID của buổi khám' })
   @ApiParam({ name: 'requestId', description: 'ID của yêu cầu đổi lịch' })
@@ -248,6 +248,21 @@ export class EncountersController {
     @Param('contractId') contractId: string,
   ) {
     return this.service.finalizeCadenceSchedule(req.user, contractId);
+  }
+
+  @Post('cadence/confirm/:contractId')
+  @Roles('FAMILY_REP', 'ADMIN')
+  @ApiOperation({
+    summary: 'Gia đình xác nhận hàng loạt toàn bộ các mốc lịch định kỳ bác sĩ đã chốt',
+  })
+  @ApiParam({ name: 'contractId', description: 'ID của hợp đồng y tế' })
+  @ApiResponse({ status: 200, description: 'Xác nhận toàn bộ lộ trình khám định kỳ thành công' })
+  @ResponseMessage('Xác nhận toàn bộ lộ trình khám định kỳ thành công')
+  confirmCadenceSchedule(
+    @Req() req: AuthenticatedRequest,
+    @Param('contractId') contractId: string,
+  ) {
+    return this.service.confirmCadenceSchedule(req.user, contractId);
   }
 
   @Patch('cadence/:id')
