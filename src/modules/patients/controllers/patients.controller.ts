@@ -10,6 +10,7 @@ import {
   Query,
   Req,
   Res,
+  StreamableFile,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -187,23 +188,24 @@ export class PatientsController {
   @ApiOperation({ summary: 'Tải hoặc xem trực tiếp tệp/ảnh tài liệu y tế đã lưu trong kho nội bộ' })
   @ApiParam({ name: 'id', description: 'UUID của bệnh nhân' })
   @ApiParam({ name: 'documentId', description: 'UUID của tài liệu' })
-  @ApiResponse({ status: 200, description: 'Nội dung nhị phân của tệp tài liệu' })
+  @ApiResponse({ status: 200, description: 'Luồng dữ liệu tệp tài liệu' })
   @ApiResponse({ status: 403, description: 'Không có quyền truy cập tài liệu ngoài gia đình' })
-  @ApiResponse({ status: 404, description: 'Không tìm thấy tài liệu' })
+  @ApiResponse({ status: 404, description: 'Không tìm thấy tài liệu hoặc tệp trên kho lưu trữ' })
   async getDocumentFile(
     @Req() req: AuthenticatedRequest,
     @Param('id') id: string,
     @Param('documentId') documentId: string,
-    @Res() res: Response,
-  ) {
-    const { bytes, contentType } = await this.service.getDocumentFile(
-      req.user,
-      id,
-      documentId,
-    );
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<StreamableFile> {
+    const { stream, contentType, contentLength } =
+      await this.service.getDocumentFileStream(req.user, id, documentId);
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', 'inline');
-    res.send(bytes);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    if (typeof contentLength === 'number') {
+      res.setHeader('Content-Length', String(contentLength));
+    }
+    return new StreamableFile(stream);
   }
 
   @Delete(':id/documents/:documentId')

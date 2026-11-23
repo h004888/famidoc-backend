@@ -45,6 +45,13 @@ class PrismaEncountersSession implements EncountersSession {
     return Boolean(member);
   }
 
+  findFirstPatientOfFamily(familyId: string) {
+    return this.tx.patient.findFirst({
+      where: { familyId, status: 'ACTIVE' },
+      select: { id: true, fullName: true },
+    });
+  }
+
   findDoctorByUserId(userId: string) {
     return this.tx.doctor.findUnique({
       where: { userId },

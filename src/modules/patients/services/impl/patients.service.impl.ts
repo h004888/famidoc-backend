@@ -1,3 +1,4 @@
+import type { Readable } from 'stream';
 import {
   BadRequestException,
   ConflictException,
@@ -371,11 +372,11 @@ export class PatientsServiceImpl implements IPatientsService {
     return docs.map((doc) => this.serializeDocument(doc));
   }
 
-  async getDocumentFile(
+  private async resolveInternalDocument(
     user: AuthenticatedUser,
     patientId: string,
     documentId: string,
-  ): Promise<{ bytes: Buffer; contentType: string }> {
+  ): Promise<{ storage: StorageService; document: PatientDocument }> {
     await this.assertPatientAccess(user, patientId);
     if (!this.repository.findDocumentById || !this.storage) {
       throw new NotFoundException('Chức năng tải tệp tài liệu chưa khả dụng');
@@ -387,10 +388,41 @@ export class PatientsServiceImpl implements IPatientsService {
     if (/^https?:\/\//i.test(existing.fileUrl)) {
       throw new BadRequestException('Tài liệu dùng đường dẫn ngoài, không lưu trữ nội bộ');
     }
-    const downloaded = await this.storage.downloadFile(existing.fileUrl);
+    return { storage: this.storage, document: existing };
+  }
+
+  async getDocumentFile(
+    user: AuthenticatedUser,
+    patientId: string,
+    documentId: string,
+  ): Promise<{ bytes: Buffer; contentType: string }> {
+    const { storage, document } = await this.resolveInternalDocument(
+      user,
+      patientId,
+      documentId,
+    );
+    const downloaded = await storage.downloadFile(document.fileUrl);
     return {
       bytes: downloaded.bytes,
-      contentType: existing.mimeType || downloaded.contentType,
+      contentType: document.mimeType || downloaded.contentType,
+    };
+  }
+
+  async getDocumentFileStream(
+    user: AuthenticatedUser,
+    patientId: string,
+    documentId: string,
+  ): Promise<{ stream: Readable; contentType: string; contentLength?: number }> {
+    const { storage, document } = await this.resolveInternalDocument(
+      user,
+      patientId,
+      documentId,
+    );
+    const downloaded = await storage.downloadFileStream(document.fileUrl);
+    return {
+      stream: downloaded.stream,
+      contentType: document.mimeType || downloaded.contentType,
+      contentLength: downloaded.contentLength,
     };
   }
 

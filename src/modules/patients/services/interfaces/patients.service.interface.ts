@@ -60,6 +60,11 @@ export interface IPatientsService {
     patientId: string,
     documentId: string,
   ): Promise<{ bytes: Buffer; contentType: string }>;
+  getDocumentFileStream(
+    user: AuthenticatedUser,
+    patientId: string,
+    documentId: string,
+  ): Promise<{ stream: Readable; contentType: string; contentLength?: number }>;
   deleteDocument(
     user: AuthenticatedUser,
     patientId: string,

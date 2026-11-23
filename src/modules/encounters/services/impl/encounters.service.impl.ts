@@ -51,6 +51,36 @@ export function parseTimeToDate(timeStr: string, baseDate = new Date()): Date {
   return new Date(Date.UTC(1970, 0, 1, h, m, s, 0));
 }
 
+export function calculateCadenceDates(startDate: Date, durationMonths: number, quota: number): Date[] {
+  if (quota <= 0) return [];
+  const results: Date[] = [];
+  const start = new Date(startDate);
+
+  if (quota === 1) {
+    const d = new Date(start);
+    d.setUTCMonth(d.getUTCMonth() + 1);
+    results.push(d);
+    return results;
+  }
+
+  // First milestone: 1 month after activation
+  const d1 = new Date(start);
+  d1.setUTCMonth(d1.getUTCMonth() + 1);
+  results.push(d1);
+
+  const remainingMonths = Math.max(durationMonths - 1, quota - 1);
+  const step = remainingMonths / (quota - 1);
+
+  for (let i = 1; i < quota; i++) {
+    const d = new Date(start);
+    const monthOffset = Math.round(1 + i * step);
+    d.setUTCMonth(d.getUTCMonth() + monthOffset);
+    results.push(d);
+  }
+
+  return results;
+}
+
 export function combineDateAndTime(dateObj: Date, timeObj: Date | string): Date {
   const d = new Date(dateObj);
   let h = 0, m = 0, s = 0;
@@ -367,11 +397,12 @@ export class EncountersServiceImpl implements IEncountersService {
       await session.createAuditLog(actor.id, 'CONFIRM_ENCOUNTER', encounterId);
 
       // Synchronize notifications across Doctor, Family, and Facility
+      const targetDateStr = encounter.scheduledDate.toISOString().slice(0, 10);
       const notifications: Prisma.NotificationUncheckedCreateInput[] = [
         {
           userId: encounter.contract.familyUnit.representativeUserId,
           title: 'Lịch khám đã được xác nhận',
-          content: `Lịch khám ngày ${encounter.scheduledDate.toISOString().slice(0, 10)} đã xác nhận thành công. Hệ thống sẽ nhắc bạn trước 24h và 2h.`,
+          content: `Lịch khám ngày ${targetDateStr} đã xác nhận thành công. Hệ thống sẽ nhắc bạn trước 24h và 2h.`,
           type: 'ENCOUNTER_CONFIRMED',
           referenceId: encounter.id,
         },
@@ -385,7 +416,7 @@ export class EncountersServiceImpl implements IEncountersService {
         notifications.push({
           userId: encounter.doctor.user.id,
           title: 'Gia đình đã xác nhận lịch khám',
-          content: `Lịch khám cho ${patientLabel} ngày ${encounter.scheduledDate.toISOString().slice(0, 10)} đã được xác nhận.`,
+          content: `Lịch khám ngày ${targetDateStr} cho ${patientLabel} đã được xác nhận thành công.`,
           type: 'ENCOUNTER_CONFIRMED',
           referenceId: encounter.id,
         });
@@ -393,10 +424,10 @@ export class EncountersServiceImpl implements IEncountersService {
 
       if (encounter.encounterType !== EncounterType.TELEHEALTH && encounter.contract.facility.user?.id) {
         notifications.push({
-          userId: encounter.contract.facility.user.id,
-          title: 'Đồng bộ lịch khám ngoại viện bác sĩ',
-          content: `Bác sĩ ${encounter.doctor.doctorName} có lịch khám xác nhận ngày ${encounter.scheduledDate.toISOString().slice(0, 10)}.`,
-          type: 'ENCOUNTER_SYNC_FACILITY',
+          userId: encounter.contract.facility.userId,
+          title: 'Đồng bộ lịch khám gia đình',
+          content: `Bác sĩ ${encounter.doctor.doctorName} có lịch khám đã xác nhận vào ngày ${targetDateStr}.`,
+          type: 'ENCOUNTER_CONFIRMED',
           referenceId: encounter.id,
         });
       }
@@ -1052,5 +1083,198 @@ export class EncountersServiceImpl implements IEncountersService {
     }
 
     return { hasConflict: false };
+  }
+
+  async generateContractPeriodicCadence(
+    contractId: string,
+    options?: { triggeredBy?: string; force?: boolean },
+  ): Promise<{ generatedCount: number; encounters: unknown[] }> {
+    return this.repository.transaction(async (session) => {
+      const contract = await session.findContract(contractId);
+      if (!contract) {
+        throw new NotFoundException(`Medical contract ${contractId} not found`);
+      }
+      if (contract.contractStatus !== 'ACTIVE') {
+        throw new BadRequestException('Contract is not active for cadence generation');
+      }
+
+      const quota = contract.servicePackage?.periodicVisitsQuota ?? 0;
+      const durationMonths = contract.servicePackage?.durationMonths ?? 12;
+      if (quota <= 0) {
+        return { generatedCount: 0, encounters: [] };
+      }
+
+      // Check existing periodic encounters for idempotency
+      const [existing] = await session.findEncounters({
+        contractId,
+        category: EncounterCategory.PERIODIC_ROUTINE,
+      });
+
+      if (existing.length > 0 && !options?.force) {
+        return { generatedCount: 0, encounters: existing };
+      }
+
+      // Resolve primary patient
+      let patientId = contract.members[0]?.patientId;
+      if (!patientId) {
+        const p = await session.findFirstPatientOfFamily(contract.familyId);
+        if (p) patientId = p.id;
+      }
+      if (!patientId) {
+        throw new BadRequestException('Contract has no assigned patient or family member');
+      }
+
+      if (!contract.doctorId) {
+        throw new BadRequestException('Contract has no assigned doctor for scheduling');
+      }
+
+      const milestoneDates = calculateCadenceDates(contract.startDate, durationMonths, quota);
+      const createdList = [];
+
+      for (let i = 0; i < milestoneDates.length; i++) {
+        const targetDate = milestoneDates[i];
+        let chosenTime = parseTimeToDate('09:00:00');
+
+        // Check slot availability for doctor (try 09:00, then 10:00, then 14:00)
+        const conflict09 = await this.checkEncounterSlotConflict(session, contract.doctorId, targetDate, chosenTime);
+        if (conflict09.hasConflict) {
+          chosenTime = parseTimeToDate('10:00:00');
+          const conflict10 = await this.checkEncounterSlotConflict(session, contract.doctorId, targetDate, chosenTime);
+          if (conflict10.hasConflict) {
+            chosenTime = parseTimeToDate('14:00:00');
+          }
+        }
+
+        const enc = await session.createEncounter({
+          contractId,
+          doctorId: contract.doctorId,
+          encounterType: EncounterType.HOME_VISIT,
+          category: EncounterCategory.PERIODIC_ROUTINE,
+          visitScope: EncounterVisitScope.FAMILY,
+          scheduledDate: targetDate,
+          scheduledTime: chosenTime,
+          encounterStatus: EncounterStatus.REQUESTED,
+          cancelReason: `Khám định kỳ gia đình lần ${i + 1}/${quota} (khung dự thảo)`,
+          ...(contract.members.length > 0
+            ? {
+                participants: {
+                  create: contract.members.map((m) => ({ patientId: m.patientId })),
+                },
+              }
+            : {}),
+        });
+        createdList.push(enc);
+      }
+
+      // Notify doctor that draft cadence is ready for review
+      if (contract.doctor?.user?.id) {
+        await session.createNotification({
+          userId: contract.doctor.user.id,
+          title: 'Khung lịch khám định kỳ mới cần duyệt',
+          content: `Hệ thống đã tự động tính toán ${createdList.length} mốc khám định kỳ cho hợp đồng ${contract.contractNumber}. Vui lòng kiểm tra và duyệt lịch.`,
+          type: 'APPOINTMENT_REMINDER',
+          referenceId: contractId,
+        });
+      }
+
+      await session.createAuditLog(
+        options?.triggeredBy || contract.doctorId,
+        'GENERATE_PERIODIC_CADENCE',
+        contractId,
+      );
+
+      return { generatedCount: createdList.length, encounters: createdList };
+    });
+  }
+
+  async finalizeCadenceSchedule(actor: AuthenticatedUser, contractId: string) {
+    return this.repository.transaction(async (session) => {
+      const contract = await session.findContract(contractId);
+      if (!contract) throw new NotFoundException('Medical contract not found');
+
+      if (actor.role === 'DOCTOR') {
+        const doc = await session.findDoctorByUserId(actor.id);
+        if (!doc || doc.id !== contract.doctorId) {
+          throw new ForbiddenException('Only the assigned doctor can finalize cadence schedule');
+        }
+      } else if (actor.role !== 'ADMIN') {
+        throw new ForbiddenException('Forbidden');
+      }
+
+      const [encounters] = await session.findEncounters({
+        contractId,
+        category: EncounterCategory.PERIODIC_ROUTINE,
+      });
+
+      const draftEncounters = encounters.filter((e) => e.encounterStatus === EncounterStatus.REQUESTED);
+
+      if (draftEncounters.length === 0) {
+        return { finalizedCount: 0, encounters: [] };
+      }
+
+      const updated = [];
+      for (const draft of draftEncounters) {
+        const up = await session.updateEncounter(draft.id, {
+          encounterStatus: EncounterStatus.REQUESTED,
+          cancelReason: 'Bác sĩ đã chốt khung lịch khám định kỳ',
+        });
+        updated.push(up);
+      }
+
+      // Notify family
+      if (contract.familyUnit?.representativeUser?.id) {
+        await session.createNotification({
+          userId: contract.familyUnit.representativeUser.id,
+          title: 'Bác sĩ đã chốt kế hoạch khám định kỳ',
+          content: `Bác sĩ ${contract.doctor?.user?.fullName || ''} đã chốt khung lịch khám định kỳ ${updated.length} lần trong năm cho gia đình. Vui lòng xem chi tiết lịch hẹn.`,
+          type: 'APPOINTMENT_REMINDER',
+          referenceId: contractId,
+        });
+      }
+
+      await session.createAuditLog(actor.id, 'FINALIZE_CADENCE_SCHEDULE', contractId);
+      return { finalizedCount: updated.length, encounters: updated };
+    });
+  }
+
+  async adjustCadenceMilestone(
+    actor: AuthenticatedUser,
+    encounterId: string,
+    dto: { scheduledDate?: string; scheduledTime?: string; encounterType?: string },
+  ) {
+    return this.repository.transaction(async (session) => {
+      const encounter = await session.findEncounter(encounterId);
+      if (!encounter) throw new NotFoundException('Encounter not found');
+
+      if (actor.role === 'DOCTOR') {
+        const doc = await session.findDoctorByUserId(actor.id);
+        if (!doc || doc.id !== encounter.doctorId) {
+          throw new ForbiddenException('Only assigned doctor can adjust cadence milestone');
+        }
+      } else if (actor.role !== 'ADMIN') {
+        throw new ForbiddenException('Forbidden');
+      }
+
+      const newDate = dto.scheduledDate ? parseDateOnly(dto.scheduledDate) : encounter.scheduledDate;
+      const newTime = dto.scheduledTime ? parseTimeToDate(dto.scheduledTime) : encounter.scheduledTime;
+      const newType = dto.encounterType ? (dto.encounterType as EncounterType) : encounter.encounterType;
+
+      const conflict = await this.checkEncounterSlotConflict(
+        session,
+        encounter.doctorId,
+        newDate,
+        newTime,
+        encounterId,
+      );
+
+      const updated = await session.updateEncounter(encounterId, {
+        scheduledDate: newDate,
+        scheduledTime: newTime,
+        encounterType: newType,
+      });
+
+      await session.createAuditLog(actor.id, 'ADJUST_CADENCE_MILESTONE', encounterId);
+      return updated;
+    });
   }
 }

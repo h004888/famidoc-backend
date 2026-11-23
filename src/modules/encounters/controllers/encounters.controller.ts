@@ -35,6 +35,7 @@ import { ConfirmEncounterDto } from '../dtos/confirm-encounter.dto';
 import { RequestRescheduleDto } from '../dtos/request-reschedule.dto';
 import { DecideRescheduleRequestDto } from '../dtos/decide-reschedule-request.dto';
 import { ListEncountersQueryDto } from '../dtos/list-encounters-query.dto';
+import { AdjustCadenceMilestoneDto } from '../dtos/adjust-cadence-milestone.dto';
 
 @ApiTags('Encounters & Examination Scheduling')
 @ApiBearerAuth('JWT-auth')
@@ -232,5 +233,55 @@ export class EncountersController {
   @ResponseMessage('Lấy thông tin buổi khám thành công')
   getEncounterDetail(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     return this.service.getEncounterDetail(req.user, id);
+  }
+
+  @Post('cadence/finalize/:contractId')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({
+    summary: 'Bác sĩ chốt toàn bộ khung lịch khám định kỳ theo gói cho gia đình',
+  })
+  @ApiParam({ name: 'contractId', description: 'ID của hợp đồng y tế' })
+  @ApiResponse({ status: 200, description: 'Chốt khung lịch định kỳ thành công' })
+  @ResponseMessage('Chốt khung lịch định kỳ thành công')
+  finalizeCadenceSchedule(
+    @Req() req: AuthenticatedRequest,
+    @Param('contractId') contractId: string,
+  ) {
+    return this.service.finalizeCadenceSchedule(req.user, contractId);
+  }
+
+  @Patch('cadence/:id')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({
+    summary: 'Bác sĩ điều chỉnh một mốc khám định kỳ trong khung lịch dự kiến',
+  })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám định kỳ' })
+  @ApiBody({ type: AdjustCadenceMilestoneDto })
+  @ApiResponse({ status: 200, description: 'Cập nhật mốc khám định kỳ thành công' })
+  @ResponseMessage('Cập nhật mốc khám định kỳ thành công')
+  adjustCadenceMilestone(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: AdjustCadenceMilestoneDto,
+  ) {
+    return this.service.adjustCadenceMilestone(req.user, id, dto);
+  }
+
+  @Post('cadence/backfill/:contractId')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({
+    summary: 'Tạo bù khung lịch khám định kỳ cho hợp đồng đang ACTIVE chưa có lịch',
+  })
+  @ApiParam({ name: 'contractId', description: 'ID của hợp đồng y tế' })
+  @ApiResponse({ status: 201, description: 'Tạo bù khung lịch định kỳ thành công' })
+  @ResponseMessage('Tạo bù khung lịch định kỳ thành công')
+  backfillCadence(
+    @Req() req: AuthenticatedRequest,
+    @Param('contractId') contractId: string,
+  ) {
+    return this.service.generateContractPeriodicCadence(contractId, {
+      triggeredBy: req.user.id,
+      force: false,
+    });
   }
 }

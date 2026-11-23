@@ -29,4 +29,14 @@ export interface IEncountersService {
   getFamilyTimetable(actor: AuthenticatedUser, query: ListEncountersQueryDto): Promise<unknown>;
   getFacilityScheduleBoard(actor: AuthenticatedUser, fromDate?: string, toDate?: string): Promise<unknown>;
   getEncounterDetail(actor: AuthenticatedUser, encounterId: string): Promise<unknown>;
+  generateContractPeriodicCadence(
+    contractId: string,
+    options?: { triggeredBy?: string; force?: boolean },
+  ): Promise<{ generatedCount: number; encounters: unknown[] }>;
+  finalizeCadenceSchedule(actor: AuthenticatedUser, contractId: string): Promise<{ finalizedCount: number; encounters: unknown[] }>;
+  adjustCadenceMilestone(
+    actor: AuthenticatedUser,
+    encounterId: string,
+    dto: { scheduledDate?: string; scheduledTime?: string; encounterType?: string },
+  ): Promise<unknown>;
 }

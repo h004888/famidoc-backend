@@ -7,6 +7,7 @@ import {
 import { EncounterCategory, EncounterStatus, EncounterType } from '@prisma/client';
 import {
   EncountersServiceImpl,
+  calculateCadenceDates,
   combineDateAndTime,
   getTimeWindowMinutes,
   parseDateOnly,
@@ -488,6 +489,121 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       expect(res.facilityId).toBe('facility-1');
       expect(res.encounters).toBeDefined();
       expect(res.pendingRescheduleRequests).toBeDefined();
+    });
+  });
+
+  describe('Periodic Cadence Scheduling & Doctor Review', () => {
+    it('calculateCadenceDates calculates evenly spaced milestones', () => {
+      const start = new Date('2026-01-01T00:00:00.000Z');
+      const dates = calculateCadenceDates(start, 12, 4);
+      expect(dates).toHaveLength(4);
+      // First milestone: 1 month after activation (February)
+      expect(dates[0].getUTCMonth()).toBe(1);
+      // Last milestone later than preceding
+      expect(dates[3].getTime()).toBeGreaterThan(dates[2].getTime());
+    });
+
+    it('generateContractPeriodicCadence generates draft encounters for active contract', async () => {
+      const activeContract = {
+        ...sampleContract,
+        startDate: new Date('2026-01-01T00:00:00.000Z'),
+        servicePackage: { durationMonths: 12, periodicVisitsQuota: 4 },
+        members: [{ patientId: 'patient-1' }],
+        doctor: { user: { id: 'user-doctor-1' } },
+        contractNumber: 'HD-2026-001',
+      };
+      (mockSession.findContract as jest.Mock).mockResolvedValueOnce(activeContract);
+      (mockSession.findEncounters as jest.Mock).mockResolvedValueOnce([[], 0]);
+      (mockSession.findDoctorOverlappingEncounters as jest.Mock).mockResolvedValue([]);
+      (mockSession.createEncounter as jest.Mock).mockImplementation((data) =>
+        Promise.resolve({ id: `enc-${Math.random()}`, ...data }),
+      );
+
+      const result = await service.generateContractPeriodicCadence('contract-1');
+      expect(result.generatedCount).toBe(4);
+      expect(mockSession.createEncounter).toHaveBeenCalledTimes(4);
+      expect(mockSession.createNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user-doctor-1',
+          title: expect.stringContaining('Khung lịch khám định kỳ mới'),
+        }),
+      );
+    });
+
+    it('generateContractPeriodicCadence returns existing encounters if already generated (idempotent)', async () => {
+      (mockSession.findContract as jest.Mock).mockResolvedValueOnce({
+        ...sampleContract,
+        servicePackage: { durationMonths: 12, periodicVisitsQuota: 4 },
+      });
+      (mockSession.findEncounters as jest.Mock).mockResolvedValueOnce([[sampleEncounter], 1]);
+
+      const result = await service.generateContractPeriodicCadence('contract-1');
+      expect(result.generatedCount).toBe(0);
+      expect(result.encounters).toHaveLength(1);
+      expect(mockSession.createEncounter).not.toHaveBeenCalled();
+    });
+
+    it('finalizeCadenceSchedule updates all cadence drafts and notifies family', async () => {
+      const draftEnc = {
+        ...sampleEncounter,
+        id: 'draft-1',
+        encounterStatus: EncounterStatus.REQUESTED,
+      };
+      (mockSession.findContract as jest.Mock).mockResolvedValueOnce({
+        ...sampleContract,
+        familyUnit: { representativeUser: { id: 'user-family-1' } },
+        doctor: { user: { fullName: 'BS Nguyễn Văn A' } },
+      });
+      (mockSession.findDoctorByUserId as jest.Mock).mockResolvedValueOnce({
+        id: 'doctor-1',
+        userId: 'user-doctor-1',
+      });
+      (mockSession.findEncounters as jest.Mock).mockResolvedValueOnce([[draftEnc], 1]);
+      (mockSession.updateEncounter as jest.Mock).mockResolvedValueOnce({
+        ...draftEnc,
+        encounterStatus: EncounterStatus.REQUESTED,
+      });
+
+      const res = await service.finalizeCadenceSchedule(doctorActor, 'contract-1');
+      expect(res.finalizedCount).toBe(1);
+      expect(mockSession.updateEncounter).toHaveBeenCalledWith(
+        'draft-1',
+        expect.objectContaining({
+          encounterStatus: EncounterStatus.REQUESTED,
+        }),
+      );
+      expect(mockSession.createNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user-family-1',
+          title: expect.stringContaining('chốt kế hoạch khám định kỳ'),
+        }),
+      );
+    });
+
+    it('adjustCadenceMilestone updates scheduled date and checks doctor availability', async () => {
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce(sampleEncounter);
+      (mockSession.findDoctorByUserId as jest.Mock).mockResolvedValueOnce({
+        id: 'doctor-1',
+        userId: 'user-doctor-1',
+      });
+      (mockSession.findDoctorOverlappingEncounters as jest.Mock).mockResolvedValue([]);
+      (mockSession.updateEncounter as jest.Mock).mockImplementation((_id, data) =>
+        Promise.resolve({ ...sampleEncounter, ...data }),
+      );
+
+      const res = await service.adjustCadenceMilestone(doctorActor, 'encounter-1', {
+        scheduledDate: '2026-06-15',
+        scheduledTime: '10:30:00',
+      });
+
+      expect(res).toBeDefined();
+      expect(mockSession.updateEncounter).toHaveBeenCalledWith(
+        'encounter-1',
+        expect.objectContaining({
+          scheduledDate: new Date(Date.UTC(2026, 5, 15)),
+          scheduledTime: new Date(Date.UTC(1970, 0, 1, 10, 30, 0)),
+        }),
+      );
     });
   });
 });
