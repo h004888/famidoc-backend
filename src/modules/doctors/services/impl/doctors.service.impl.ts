@@ -15,6 +15,7 @@ import { PrismaService } from '../../../../core/database/prisma.service';
 import { StorageService } from '../../../../core/services/storage.service';
 import { validateUploadedDocumentFile } from '../../../../core/validation/document-file.validator';
 import {
+  getVietnamMonthWindow,
   todayInVietnam,
   toVietnamCalendarDate,
 } from '../../../../core/business/business-helpers';
@@ -37,6 +38,7 @@ import type { CreateFacilityDto } from '../../dtos/create-facility.dto';
 import type { SubmitFacilityLegalProfileDto } from '../../dtos/submit-facility-legal-profile.dto';
 import type { VerifyFacilityLegalDto } from '../../dtos/verify-facility-legal.dto';
 import type { FacilityResponseDto } from '../../dtos/facility-response.dto';
+import type { FacilityOverviewResponseDto } from '../../dtos/facility-overview-response.dto';
 import { DoctorClinicalTier } from '@prisma/client';
 import {
   computeQuotaMetrics,
@@ -2166,6 +2168,245 @@ export class DoctorsServiceImpl implements IDoctorsService {
       hasActiveStaffingContract: Boolean(activeStaffing),
       hasHistoricalStaffingContract: Boolean(activeStaffing || historicalStaffing),
     });
+  }
+
+  async getMyFacilityOverview(
+    actor: AuthenticatedUser,
+  ): Promise<FacilityOverviewResponseDto> {
+    if (actor.role !== 'HEALTHCARE_FACILITY') {
+      throw new ForbiddenException(
+        'Chỉ tài khoản Cơ sở y tế mới có quyền xem tổng quan vận hành của mình',
+      );
+    }
+
+    const facility = await this.prisma.healthcareFacility.findUnique({
+      where: { userId: actor.id },
+      select: { id: true },
+    });
+
+    if (!facility) {
+      throw new NotFoundException(
+        'Không tìm thấy thông tin cơ sở y tế liên kết với tài khoản này',
+      );
+    }
+
+    const vnNow = new Date(Date.now() + 7 * 3_600_000);
+    const year = vnNow.getUTCFullYear();
+    const month = vnNow.getUTCMonth() + 1;
+    const monthDateStart = new Date(Date.UTC(year, month - 1, 1));
+    const monthDateEnd = new Date(Date.UTC(year, month, 1));
+    const monthWindow = getVietnamMonthWindow(year, month);
+    const today = todayInVietnam();
+
+    const [
+      doctors,
+      activeB2bContract,
+      encounterGroups,
+      paidInvoices,
+      recentEncountersRaw,
+      pendingRescheduleCount,
+    ] = await Promise.all([
+      this.prisma.doctor?.findMany({
+        where: { facilityId: facility.id },
+        select: {
+          id: true,
+          onboardingStatus: true,
+          activePanelCount: true,
+          maxPanelCapacity: true,
+        },
+      }) ?? Promise.resolve([]),
+      this.prisma.b2bStaffingContract?.findFirst({
+        where: {
+          facilityId: facility.id,
+          status: 'ACTIVE',
+          startDate: { lte: today },
+          endDate: { gte: today },
+        },
+        orderBy: { endDate: 'desc' },
+        select: {
+          contractCode: true,
+          facilityRevenueRate: true,
+          platformCommissionRate: true,
+          endDate: true,
+        },
+      }) ?? Promise.resolve(null),
+      this.prisma.encounter?.groupBy({
+        by: ['encounterType', 'encounterStatus'],
+        where: {
+          doctor: { facilityId: facility.id },
+          scheduledDate: { gte: monthDateStart, lt: monthDateEnd },
+        },
+        _count: { _all: true },
+      }) ?? Promise.resolve([]),
+      this.prisma.invoice?.aggregate({
+        where: {
+          environment: 'LIVE',
+          paymentStatus: 'PAID',
+          paidAt: { gte: monthWindow.start, lt: monthWindow.end },
+          contract: { facilityId: facility.id, isDemo: false },
+        },
+        _sum: { totalPayable: true },
+        _count: { _all: true },
+      }) ?? Promise.resolve({ _sum: { totalPayable: null }, _count: { _all: 0 } }),
+      this.prisma.encounter?.findMany({
+        where: { doctor: { facilityId: facility.id } },
+        orderBy: [
+          { scheduledDate: 'desc' },
+          { scheduledTime: 'desc' },
+          { createdAt: 'desc' },
+        ],
+        take: 5,
+        include: {
+          doctor: { select: { doctorName: true, specialty: true } },
+          contract: { select: { contractNumber: true } },
+          participants: {
+            include: { patient: { select: { fullName: true } } },
+          },
+        },
+      }) ?? Promise.resolve([]),
+      this.prisma.encounterRescheduleRequest?.count({
+        where: {
+          status: 'PENDING',
+          facilityDecision: 'PENDING',
+          encounter: { doctor: { facilityId: facility.id } },
+        },
+      }) ?? Promise.resolve(0),
+    ]);
+
+    const doctorIds = doctors.map((d) => d.id);
+    const activeHeldMap =
+      doctorIds.length > 0 && typeof this.prisma.medicalContract?.findMany === 'function'
+        ? await countActiveAndHeldMap(this.prisma, doctorIds)
+        : null;
+
+    let activeDoctors = 0;
+    let pendingDoctors = 0;
+    let activePanelCount = 0;
+    let maxPanelCapacity = 0;
+
+    for (const doc of doctors) {
+      if (doc.onboardingStatus === 'ACTIVE') {
+        activeDoctors += 1;
+        maxPanelCapacity += Number(doc.maxPanelCapacity ?? 0);
+      } else if (
+        doc.onboardingStatus === 'PENDING_SUBMISSION' ||
+        doc.onboardingStatus === 'PENDING_FACILITY_REVIEW' ||
+        doc.onboardingStatus === 'FACILITY_VERIFIED'
+      ) {
+        pendingDoctors += 1;
+      }
+      activePanelCount += activeHeldMap
+        ? (activeHeldMap.get(doc.id) ?? 0)
+        : Number(doc.activePanelCount ?? 0);
+    }
+
+    const panelUtilizationPercent =
+      maxPanelCapacity > 0
+        ? Math.min(100, Math.round((activePanelCount / maxPanelCapacity) * 100))
+        : 0;
+
+    const byChannel = {
+      HOME_VISIT: 0,
+      TELEHEALTH: 0,
+      FACILITY_VISIT: 0,
+    };
+    let encTotal = 0;
+    let completed = 0;
+    let inProgress = 0;
+    let confirmed = 0;
+    let requested = 0;
+    let cancelled = 0;
+
+    for (const row of encounterGroups) {
+      const count = row._count._all;
+      encTotal += count;
+      if (row.encounterType in byChannel) {
+        byChannel[row.encounterType as keyof typeof byChannel] += count;
+      }
+      if (row.encounterStatus === 'COMPLETED') completed += count;
+      else if (row.encounterStatus === 'IN_PROGRESS') inProgress += count;
+      else if (row.encounterStatus === 'CONFIRMED') confirmed += count;
+      else if (row.encounterStatus === 'REQUESTED') requested += count;
+      else if (row.encounterStatus === 'CANCELLED') cancelled += count;
+    }
+
+    const completionRatePercent =
+      encTotal > 0 ? Math.round((completed / encTotal) * 100) : 0;
+
+    const facilitySharePercent = activeB2bContract
+      ? Number(activeB2bContract.facilityRevenueRate)
+      : 85;
+    const platformSharePercent = activeB2bContract
+      ? Number(activeB2bContract.platformCommissionRate)
+      : 15;
+    const grossVnd = Math.round(Number(paidInvoices._sum?.totalPayable ?? 0));
+    const platformFeeVnd = Math.floor((grossVnd * platformSharePercent) / 100);
+    const facilityShareVnd = grossVnd - platformFeeVnd;
+    const invoiceCount = Number(paidInvoices._count?._all ?? 0);
+
+    const recentEncounters = recentEncountersRaw.map((enc: any) => ({
+      id: enc.id,
+      encounterType: enc.encounterType,
+      encounterStatus: enc.encounterStatus,
+      scheduledDate:
+        enc.scheduledDate instanceof Date
+          ? enc.scheduledDate.toISOString().slice(0, 10)
+          : String(enc.scheduledDate ?? '').slice(0, 10),
+      scheduledTime:
+        enc.scheduledTime instanceof Date
+          ? enc.scheduledTime.toISOString().slice(11, 16)
+          : String(enc.scheduledTime ?? '').slice(0, 5),
+      doctorName: enc.doctor?.doctorName ?? 'Bác sĩ phụ trách',
+      specialty: enc.doctor?.specialty ?? '',
+      patientNames: Array.isArray(enc.participants)
+        ? enc.participants
+            .map((p: any) => p?.patient?.fullName)
+            .filter((name: unknown): name is string => Boolean(name))
+        : [],
+      contractNumber: enc.contract?.contractNumber ?? null,
+    }));
+
+    return {
+      doctors: {
+        total: doctors.length,
+        active: activeDoctors,
+        pending: pendingDoctors,
+        activePanelCount,
+        maxPanelCapacity,
+        panelUtilizationPercent,
+      },
+      encounters: {
+        month,
+        year,
+        total: encTotal,
+        completed,
+        inProgress,
+        confirmed,
+        requested,
+        cancelled,
+        completionRatePercent,
+        byChannel,
+      },
+      revenue: {
+        month,
+        year,
+        grossVnd,
+        facilityShareVnd,
+        platformFeeVnd,
+        invoiceCount,
+        facilitySharePercent,
+        platformSharePercent,
+        activeB2bContractCode: activeB2bContract?.contractCode ?? null,
+        activeB2bValidTo:
+          activeB2bContract?.endDate instanceof Date
+            ? activeB2bContract.endDate.toISOString().slice(0, 10)
+            : activeB2bContract?.endDate
+              ? String(activeB2bContract.endDate).slice(0, 10)
+              : null,
+      },
+      recentEncounters,
+      pendingRescheduleCount: Number(pendingRescheduleCount ?? 0),
+    };
   }
 
   async getFacilityLegalDocument(

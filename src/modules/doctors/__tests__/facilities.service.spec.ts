@@ -721,4 +721,121 @@ describe('Facilities Onboarding Service (Admin-Led Provisioning & Legal Verifica
       expect(res.hasHistoricalStaffingContract).toBe(true);
     });
   });
+
+  describe('Step 6: getMyFacilityOverview', () => {
+    it('aggregates doctors, panel cap, current-month UTC+7 encounters, LIVE revenue with B2B split, recent encounters, and pending reschedules', async () => {
+      jest.useFakeTimers();
+      try {
+        // 2026-11-22T18:00:00Z = 2026-11-23 01:00:00 UTC+7 (November 2026 in Vietnam)
+        jest.setSystemTime(new Date('2026-11-22T18:00:00.000Z'));
+
+        prismaService.healthcareFacility.findUnique.mockResolvedValue({ id: 'fac-uuid-1' });
+        prismaService.doctor = {
+          findMany: jest.fn().mockResolvedValue([
+            { id: 'doc-1', onboardingStatus: 'ACTIVE', activePanelCount: 2, maxPanelCapacity: 5 },
+            { id: 'doc-2', onboardingStatus: 'ACTIVE', activePanelCount: 1, maxPanelCapacity: 5 },
+            { id: 'doc-3', onboardingStatus: 'PENDING_SUBMISSION', activePanelCount: 0, maxPanelCapacity: 5 },
+          ]),
+        };
+        prismaService.medicalContract = {
+          findMany: jest.fn().mockResolvedValue([
+            { doctorId: 'doc-1' },
+            { doctorId: 'doc-1' },
+            { doctorId: 'doc-2' },
+          ]),
+        };
+        prismaService.b2bStaffingContract.findFirst.mockResolvedValue({
+          contractCode: 'B2B-CAMAU-2026',
+          facilityRevenueRate: 80,
+          platformCommissionRate: 20,
+          endDate: new Date('2027-11-20T00:00:00.000Z'),
+        });
+        prismaService.encounter = {
+          groupBy: jest.fn().mockResolvedValue([
+            { encounterType: 'TELEHEALTH', encounterStatus: 'COMPLETED', _count: { _all: 2 } },
+            { encounterType: 'HOME_VISIT', encounterStatus: 'CONFIRMED', _count: { _all: 1 } },
+            { encounterType: 'FACILITY_VISIT', encounterStatus: 'CANCELLED', _count: { _all: 1 } },
+          ]),
+          findMany: jest.fn().mockResolvedValue([
+            {
+              id: 'enc-1',
+              encounterType: 'TELEHEALTH',
+              encounterStatus: 'CONFIRMED',
+              scheduledDate: new Date('2026-11-22T00:00:00.000Z'),
+              scheduledTime: new Date('1970-01-01T09:30:00.000Z'),
+              doctor: { doctorName: 'BS. Nguyễn Văn An', specialty: 'Y học gia đình' },
+              contract: { contractNumber: 'HD-2026-0001' },
+              participants: [{ patient: { fullName: 'Lê Văn Nam' } }],
+            },
+          ]),
+        };
+        prismaService.invoice = {
+          aggregate: jest.fn().mockResolvedValue({
+            _sum: { totalPayable: 10_000_000 },
+            _count: { _all: 2 },
+          }),
+        };
+        prismaService.encounterRescheduleRequest = {
+          count: jest.fn().mockResolvedValue(3),
+        };
+
+        const overview = await service.getMyFacilityOverview(facilityUser);
+
+        expect(overview.doctors).toEqual({
+          total: 3,
+          active: 2,
+          pending: 1,
+          activePanelCount: 3,
+          maxPanelCapacity: 10,
+          panelUtilizationPercent: 30,
+        });
+        expect(overview.encounters).toEqual({
+          month: 11,
+          year: 2026,
+          total: 4,
+          completed: 2,
+          inProgress: 0,
+          confirmed: 1,
+          requested: 0,
+          cancelled: 1,
+          completionRatePercent: 50,
+          byChannel: { HOME_VISIT: 1, TELEHEALTH: 2, FACILITY_VISIT: 1 },
+        });
+        expect(overview.revenue).toEqual({
+          month: 11,
+          year: 2026,
+          grossVnd: 10_000_000,
+          facilityShareVnd: 8_000_000,
+          platformFeeVnd: 2_000_000,
+          invoiceCount: 2,
+          facilitySharePercent: 80,
+          platformSharePercent: 20,
+          activeB2bContractCode: 'B2B-CAMAU-2026',
+          activeB2bValidTo: '2027-11-20',
+        });
+        expect(overview.recentEncounters).toEqual([
+          {
+            id: 'enc-1',
+            encounterType: 'TELEHEALTH',
+            encounterStatus: 'CONFIRMED',
+            scheduledDate: '2026-11-22',
+            scheduledTime: '09:30',
+            doctorName: 'BS. Nguyễn Văn An',
+            specialty: 'Y học gia đình',
+            patientNames: ['Lê Văn Nam'],
+            contractNumber: 'HD-2026-0001',
+          },
+        ]);
+        expect(overview.pendingRescheduleCount).toBe(3);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('rejects non-facility roles with ForbiddenException', async () => {
+      await expect(service.getMyFacilityOverview(adminUser)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+  });
 });
