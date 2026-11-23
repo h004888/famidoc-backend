@@ -1,11 +1,12 @@
 import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { buildActiveAndHeldWhere } from '../contracts/pricing/doctor-quota.helper';
 import { Prisma } from '@prisma/client';
+import { getVietnamMonthWindow, todayInVietnam } from '../../core/business/business-helpers';
 import { PrismaService } from '../../core/database/prisma.service';
 import { moneyToNumber, serializable } from '../../core/database/prisma-transaction';
 import type { AuthenticatedUser } from '../../core/auth/authenticated-request';
 import { AUTH_SERVICE_TOKEN, type IAuthService } from '../auth/services/interfaces/auth.service.interface';
-import type { AdminAccountStatusDto, AdminAuditQuery, AdminComplaintsQuery, AdminOverviewQuery, AdminUsersQuery } from './admin.dto';
+import type { AdminAccountStatusDto, AdminAuditQuery, AdminComplaintsQuery, AdminFinanceReportQuery, AdminOverviewQuery, AdminUsersQuery } from './admin.dto';
 
 const userFields = { id: true, fullName: true, email: true, phone: true, role: true, status: true, createdAt: true } as const;
 const accountActions = ['ADMIN_SUSPEND_USER', 'ADMIN_RESTORE_USER'];
@@ -194,6 +195,56 @@ export class AdminService {
       this.db.complaint.count({ where }),
     ]);
     return { items, total, page, limit };
+  }
+
+  async financeReport({ year, environment }: AdminFinanceReportQuery) {
+    const now = new Date();
+    const reportYear = year ?? todayInVietnam(now).getUTCFullYear();
+    const { start } = getVietnamMonthWindow(reportYear, 1);
+    const { start: end } = getVietnamMonthWindow(reportYear + 1, 1);
+
+    const rows = await this.db.$queryRaw<{
+      month: number;
+      receivedVnd: Prisma.Decimal;
+      paidVnd: Prisma.Decimal;
+    }[]>`
+      WITH cash_movements AS (
+        SELECT paid_at AS occurred_at, total_payable AS amount, TRUE AS is_income
+        FROM invoices
+        WHERE environment = ${environment} AND payment_status = 'PAID'
+          AND paid_at >= ${start} AND paid_at < ${end} AND paid_at <= ${now}
+        UNION ALL
+        SELECT settled_at, facility_payout_amount, FALSE
+        FROM facility_settlements
+        WHERE environment = ${environment} AND disbursement_status = 'SETTLED'
+          AND settled_at >= ${start} AND settled_at < ${end} AND settled_at <= ${now}
+      )
+      SELECT EXTRACT(MONTH FROM occurred_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::integer AS month,
+        COALESCE(SUM(amount) FILTER (WHERE is_income), 0) AS "receivedVnd",
+        COALESCE(SUM(amount) FILTER (WHERE NOT is_income), 0) AS "paidVnd"
+      FROM cash_movements
+      GROUP BY month
+    `;
+
+    const byMonth = new Map(rows.map((row) => [row.month, row]));
+    const months = Array.from({ length: 12 }, (_, index) => {
+      const month = index + 1;
+      const row = byMonth.get(month);
+      return {
+        month,
+        receivedVnd: row ? moneyToNumber(row.receivedVnd) : 0,
+        paidVnd: row ? moneyToNumber(row.paidVnd) : 0,
+      };
+    });
+    const receivedVnd = moneyToNumber(rows.reduce((sum, row) => sum.plus(row.receivedVnd), new Prisma.Decimal(0)));
+    const paidVnd = moneyToNumber(rows.reduce((sum, row) => sum.plus(row.paidVnd), new Prisma.Decimal(0)));
+
+    return {
+      year: reportYear,
+      environment,
+      totals: { receivedVnd, paidVnd, netVnd: receivedVnd - paidVnd },
+      months,
+    };
   }
 
   async overview(period: AdminOverviewQuery['period'], environment: AdminOverviewQuery['environment'] = 'LIVE') {

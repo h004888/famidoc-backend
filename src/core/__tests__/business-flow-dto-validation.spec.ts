@@ -24,6 +24,7 @@ const confirmTransfer = {
   action: 'CONFIRM_TRANSFER',
   settlementId: id,
   bankTransferOrderId: 'DEMO-TRANSFER',
+  transferMemo: 'CHI TRA THANG 10',
   amountPaidVnd: 100,
   paidAt: '2026-11-10T15:00:00+07:00',
   evidenceKey: `${id}/settlements/proof.pdf`,

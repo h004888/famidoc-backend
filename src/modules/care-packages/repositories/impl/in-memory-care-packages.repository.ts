@@ -104,10 +104,19 @@ export class InMemoryCarePackagesRepository implements CarePackagesRepository {
   }
 
   publish(id: string): Promise<CarePackage> {
+    return this.activate(id, CarePackageStatus.DRAFT);
+  }
+
+  reopen(id: string): Promise<CarePackage> {
+    return this.activate(id, CarePackageStatus.DEPRECATED);
+  }
+
+  private activate(id: string, expectedStatus: CarePackageStatus.DRAFT | CarePackageStatus.DEPRECATED): Promise<CarePackage> {
     const current = this.requirePackage(id);
-    // Không công bố lại ACTIVE hoặc phục hồi trực tiếp bản đã ngừng bán.
-    if (current.status !== CarePackageStatus.DRAFT) {
-      throw new ConflictException('Only draft packages can be published');
+    if (current.status !== expectedStatus) {
+      throw new ConflictException(expectedStatus === CarePackageStatus.DRAFT
+        ? 'Only draft packages can be published'
+        : 'Chỉ có thể mở bán lại gói đã ngừng bán. Hãy tải lại danh mục.');
     }
     // Chặn công bố bản cũ khi cùng mã đã có phiên bản mới hơn.
     const newerVersionExists = [...this.packages.values()].some(
@@ -115,10 +124,13 @@ export class InMemoryCarePackagesRepository implements CarePackagesRepository {
     );
     if (newerVersionExists) {
       throw new ConflictException(
-        'Only the latest package version can be published',
+        expectedStatus === CarePackageStatus.DRAFT
+          ? 'Only the latest package version can be published'
+          : 'Gói đã có phiên bản mới hơn. Vui lòng mở bán phiên bản mới nhất.',
       );
     }
 
+    validateCarePackageTerms(current);
     const now = new Date().toISOString();
     // Ngừng bán bản ACTIVE cũ nhưng giữ nguyên giá/quyền lợi để tham chiếu lịch sử.
     for (const item of this.packages.values()) {
@@ -141,6 +153,7 @@ export class InMemoryCarePackagesRepository implements CarePackagesRepository {
       ...current,
       status: CarePackageStatus.ACTIVE,
       publishedAt: now,
+      retiredAt: null,
       updatedAt: now,
     };
     this.packages.set(id, published);

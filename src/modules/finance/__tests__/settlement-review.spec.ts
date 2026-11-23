@@ -161,16 +161,23 @@ describe('Facility settlement review and transfer evidence', () => {
     });
     findSettlements.mockResolvedValueOnce([]);
 
-    await service.executeMonthlySettlement(admin, {
+    const result = await service.executeMonthlySettlement(admin, {
       action: 'PREPARE',
       year: 2026,
       month: 10,
       environment: 'LIVE',
     });
 
+    expect(result).toMatchObject({ year: 2026, month: 10, settlementFrequency: 'MONTHLY', transferExecuted: false });
+    expect(findEligibleInvoices).toHaveBeenCalledWith(expect.objectContaining({
+      start: new Date('2026-09-30T17:00:00Z'),
+      end: new Date('2026-10-31T17:00:00Z'),
+    }));
     expect(createSettlement).toHaveBeenCalledWith(
       expect.objectContaining({
         facilityId: 'own-facility',
+        month: 10,
+        year: 2026,
         bankDestination: {
           bankName: 'Vietcombank - Ngân hàng TMCP Ngoại thương Việt Nam',
           bankBin: '970436',

@@ -13,6 +13,46 @@ import type {
   PaymentTransactionResult,
 } from '../../entities/payment.entity';
 export const PAYMENTS_SERVICE_TOKEN = Symbol('IPaymentsService');
+export interface PaymentEligibility {
+  eligible: boolean;
+  message?: string;
+  blockingReasons: string[];
+}
+
+export interface FamilyPaymentRequestItem {
+  id: string;
+  contractId: string;
+  contractNumber: string;
+  contractStatus: string;
+  packageName: string;
+  facilityName: string;
+  paymentCode: string;
+  transferContent: string;
+  amountVnd: number;
+  status: string;
+  expectedAccountNumber: string | null;
+  expectedGateway: string | null;
+  createdAt: string;
+  expiresAt: string;
+  paidAt: string | null;
+  latestTransaction: {
+    id: string;
+    providerTransactionId: string;
+    amountReceived: number;
+    paymentTime: string;
+    outcome: string;
+    reason: string | null;
+    referenceCode: string;
+    gateway: string;
+  } | null;
+  openSupportCase: {
+    id: string;
+    caseCode: string;
+    status: string;
+    updatedAt: string;
+  } | null;
+}
+
 export interface IPaymentsService {
   createVietQRPayment(
     contractId: string,
@@ -20,6 +60,8 @@ export interface IPaymentsService {
     actor?: AuthenticatedUser,
   ): Promise<PaymentRequest>;
   createAdminPaymentRequest(dto: AdminPaymentRequestDto, actor: AuthenticatedUser, ip?: string): Promise<PaymentRequest>;
+  getAdminPaymentEligibility(contractId: string, addendumId: string | undefined, actor: AuthenticatedUser): Promise<PaymentEligibility>;
+  listMyPaymentRequests(actor: AuthenticatedUser): Promise<FamilyPaymentRequestItem[]>;
   getPaymentStatus(
     id: string,
     actor?: AuthenticatedUser,

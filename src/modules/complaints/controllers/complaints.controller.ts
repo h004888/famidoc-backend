@@ -7,14 +7,19 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Req,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
   ApiOperation,
   ApiParam,
   ApiResponse,
@@ -23,6 +28,7 @@ import {
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
 import {
+  ListComplaintsQueryDto,
   ResolveComplaintDto,
   SubmitIncidentComplaintDto,
 } from '../dtos/complaint.dto';
@@ -47,6 +53,41 @@ export class ComplaintsController {
     @Inject(COMPLAINTS_SERVICE_TOKEN)
     private readonly service: IComplaintsService,
   ) {}
+
+  @Get()
+  @ApiOperation({
+    summary: 'Xem danh sách khiếu nại thuộc phạm vi phân quyền của tài khoản hiện tại',
+  })
+  @ApiResponse({ status: 200, description: 'Danh sách khiếu nại phân trang' })
+  listComplaints(
+    @Req() req: AuthenticatedRequest,
+    @Query() query: ListComplaintsQueryDto,
+  ) {
+    return this.service.listComplaints(req.user, query);
+  }
+
+  @Post('evidence')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024, files: 1, fields: 0 },
+    }),
+  )
+  @ApiOperation({ summary: 'Tải lên tệp bằng chứng cho khiếu nại (PDF, PNG, JPEG tối đa 5 MB)' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Tải tệp bằng chứng thành công' })
+  uploadEvidence(
+    @Req() req: AuthenticatedRequest,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.service.uploadComplaintEvidence(req.user, file);
+  }
 
   @Post()
   @ApiOperation({ summary: 'Gửi khiếu nại sự cố liên quan đến dịch vụ hoặc bác sĩ' })

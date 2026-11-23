@@ -5,6 +5,7 @@ import {
   HttpStatus,
   Inject,
   Get,
+  Header,
   Param,
   ParseUUIDPipe,
   Post,
@@ -67,6 +68,25 @@ export class PaymentsController {
   @ApiOperation({ summary: 'Cấp mã thu tiền với số tiền và mô tả do Admin điều chỉnh' })
   createAdminPayment(@Body() dto: AdminPaymentRequestDto, @Req() req: AuthenticatedRequest) {
     return this.service.createAdminPaymentRequest(dto, req.user, req.ip);
+  }
+
+  @Get('admin/eligibility')
+  @Roles('ADMIN')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({ summary: 'Kiểm tra điều kiện tạo mã thu tiền cho hợp đồng hoặc phụ lục' })
+  getAdminPaymentEligibility(@Query() query: CreatePaymentRequestDto, @Req() req: AuthenticatedRequest) {
+    return this.service.getAdminPaymentEligibility(query.contractId, query.addendumId, req.user);
+  }
+
+  @Get('my-requests')
+  @Roles('FAMILY_REP')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({
+    summary:
+      'Gia đình xem danh sách các yêu cầu thanh toán gần đây kèm giao dịch SePay mới nhất và trạng thái hỗ trợ chuyển khoản',
+  })
+  listMyPaymentRequests(@Req() req: AuthenticatedRequest) {
+    return this.service.listMyPaymentRequests(req.user);
   }
 
   @Get([':paymentId/status', 'requests/:paymentId'])

@@ -143,6 +143,20 @@ describe('StandardApiResponseFilter (RFC 9457 Compliance)', () => {
     expect(json.error.blockingReasons).toEqual(['DOCTOR_VERIFICATION_REQUIRED']);
   });
 
+  it('giữ mã hồ sơ đã có trong phản hồi báo trùng 409', () => {
+    const { host, getJson, getStatus } = createMockArgumentsHost({
+      url: '/api/v1/support-cases/payment-issue',
+    });
+
+    filter.catch(new ConflictException({
+      message: 'Hồ sơ đã tồn tại.',
+      existingCaseId: '88888888-8888-4888-8888-888888888888',
+    }), host);
+
+    expect(getStatus()).toBe(HttpStatus.CONFLICT);
+    expect(getJson().error.existingCaseId).toBe('88888888-8888-4888-8888-888888888888');
+  });
+
   it('không gắn blockingReasons khi payload không có hoặc là mảng rỗng', () => {
     const withoutReasons = createMockArgumentsHost({ url: '/api/v1/payments/requests' });
     filter.catch(new ConflictException('Contract is not ready for payment'), withoutReasons.host);

@@ -20,5 +20,6 @@ export interface ICarePackagesService {
   update(id: string, dto: UpdateCarePackageDto): Promise<CarePackage>;
   createVersion(id: string): Promise<CarePackage>;
   publish(id: string): Promise<CarePackage>;
+  reopen(id: string): Promise<CarePackage>;
   retire(id: string): Promise<CarePackage>;
 }

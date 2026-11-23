@@ -37,7 +37,7 @@ export class PaymentsConfig {
   assertContractEnvironment(isDemo: boolean) {
     if ((this.getEnvironment() === 'TEST') !== isDemo)
       throw new ConflictException(
-        'Demo contracts and live contracts must use separate payment environments',
+        'Hợp đồng dữ liệu thử và hợp đồng thật phải dùng hai môi trường thanh toán riêng biệt.',
       );
   }
   getDestination(): PaymentDestination {

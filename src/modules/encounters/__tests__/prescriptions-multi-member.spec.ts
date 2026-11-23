@@ -5,6 +5,23 @@ describe('PrescriptionsService multi-member family visit', () => {
     const createdEmrs: Array<{ id: string; encounterId: string; patientId: string }> = [];
     const createdPrescriptions: Array<{ emrId: string; prescriptionCode: string }> = [];
 
+    const exam = {
+      chiefComplaint: 'Khám định kỳ',
+      clinicalFindings: 'Ổn định',
+      icd10Code: 'Z00',
+      icd10Diagnosis: 'Khám sức khỏe tổng quát',
+      treatmentPlan: 'Theo dõi định kỳ',
+    };
+    const patients = [
+      { id: 'pat-1', fullName: 'Thành viên 1' },
+      { id: 'pat-2', fullName: 'Thành viên 2' },
+    ].map((patient) => ({
+      ...patient,
+      familyId: 'fam-1',
+      dateOfBirth: new Date('1990-01-01'),
+      gender: 'MALE',
+    }));
+
     const mockTx: any = {
       encounter: {
         findFirst: jest.fn().mockImplementation(async () => ({
@@ -12,10 +29,12 @@ describe('PrescriptionsService multi-member family visit', () => {
           encounterType: 'HOME_VISIT',
           scheduledDate: new Date('2026-11-21T00:00:00.000Z'),
           scheduledTime: new Date('1970-01-01T08:30:00.000Z'),
-          participants: [
-            { patient: { id: 'pat-1', fullName: 'Thành viên 1', familyId: 'fam-1' } },
-            { patient: { id: 'pat-2', fullName: 'Thành viên 2', familyId: 'fam-1' } },
-          ],
+          participants: patients.map((patient) => ({ patient })),
+          doctor: {
+            doctorName: 'Bác sĩ',
+            user: { phone: '0901234567' },
+            facility: { facilityName: 'CSYT', address: 'Địa chỉ CSYT' },
+          },
           contract: {
             familyId: 'fam-1',
             familyUnit: {
@@ -44,6 +63,10 @@ describe('PrescriptionsService multi-member family visit', () => {
         }),
       },
       clinicalEmr: {
+        findUniqueOrThrow: jest.fn().mockImplementation(async ({ where }) => {
+          const record = createdEmrs.find(({ id }) => id === where.id);
+          return { ...exam, patient: patients.find(({ id }) => id === record?.patientId) };
+        }),
         create: jest.fn().mockImplementation(async ({ data }: any) => {
           const record = {
             id: `emr-${data.patientId}`,
@@ -75,20 +98,15 @@ describe('PrescriptionsService multi-member family visit', () => {
 
     const service = new PrescriptionsService(mockPrisma);
     const doctorActor: any = { id: 'doc-user-1', role: 'DOCTOR' };
-    const exam = {
-      chiefComplaint: 'Khám định kỳ',
-      clinicalFindings: 'Ổn định',
-      icd10Code: 'Z00',
-      icd10Diagnosis: 'Khám sức khỏe tổng quát',
-      treatmentPlan: 'Theo dõi định kỳ',
-    };
     const prescription = {
       recipientUserId: 'rep-1',
       recipientAuthorized: true as const,
       instructions: 'Uống sau ăn',
+      clinicalContext: { address: 'Địa chỉ mẫu', phone: '0901234567' },
       details: [
         {
-          medicationName: 'Vitamin C',
+          medicationName: 'Tên thuốc mẫu',
+          activeIngredient: 'Hoạt chất mẫu',
           dosage: '1 viên',
           frequency: '1 lần/ngày',
           quantity: 10,
@@ -113,9 +131,13 @@ describe('PrescriptionsService multi-member family visit', () => {
     });
 
     expect(createdEmrs).toHaveLength(2);
-    expect(createdPrescriptions.map((p) => p.prescriptionCode)).toEqual([
-      'FMD-emr-pat-1',
-      'FMD-emr-pat-2',
+    expect(createdPrescriptions.map((p) => p.emrId)).toEqual([
+      'emr-pat-1',
+      'emr-pat-2',
     ]);
+    expect(new Set(createdPrescriptions.map((p) => p.prescriptionCode)).size).toBe(2);
+    expect(
+      mockTx.prescription.create.mock.calls.map(([{ data }]) => data.recordSnapshot.patient.id),
+    ).toEqual(['pat-1', 'pat-2']);
   });
 });

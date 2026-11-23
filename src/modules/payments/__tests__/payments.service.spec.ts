@@ -80,7 +80,8 @@ describe('PaymentsServiceImpl (simulation)', () => {
     // Giá giả: 100.000/1 tháng/2 người, thêm người 50.000/tháng, tối đa 4 người.
     const item = await packages.create({
       code: 'DEMO',
-      name: 'Demo',
+      name: 'Demo package',
+      description: 'Example care package description.',
       durationMonths: 1,
       priceVnd: 100_000,
       includedMembers: 2,
@@ -89,7 +90,6 @@ describe('PaymentsServiceImpl (simulation)', () => {
       quotaPeriod: QuotaPeriod.PER_TERM,
       quotas: { videoConsultations: 5, homeVisits: 0, facilityVisits: 0 },
     });
-    await packages.publish(item.id);
     packageId = item.id;
   });
 

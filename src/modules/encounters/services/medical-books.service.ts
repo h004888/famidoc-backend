@@ -174,6 +174,51 @@ export class MedicalBooksService {
     };
   }
 
+  async familyPrescriptionVisits(
+    actor: AuthenticatedUser,
+    familyId: string,
+    date: string,
+  ) {
+    const family = await this.prisma.familyUnit.findFirst({
+      where: { id: familyId, ...familyScope(actor) },
+      select: { id: true },
+    });
+    if (!family)
+      throw new NotFoundException('Không tìm thấy sổ khám gia đình.');
+    const rows = await this.prisma.encounter.findMany({
+      where: {
+        AND: [
+          visitScope(actor),
+          {
+            contract: { familyId },
+            scheduledDate: new Date(`${date}T00:00:00Z`),
+          },
+        ],
+      },
+      select: {
+        id: true,
+        participants: {
+          where: { patient: { familyId } },
+          select: { patientId: true },
+        },
+        clinicalEmrs: {
+          where: { patient: { familyId } },
+          select: { patientId: true },
+        },
+      },
+      orderBy: [{ scheduledTime: 'desc' }, { id: 'asc' }],
+    });
+    const visits = rows.flatMap(({ id, participants, clinicalEmrs }) => {
+      const patientIds = new Set(
+        [...participants, ...clinicalEmrs].map(({ patientId }) => patientId),
+      );
+      return [...patientIds].map((patientId) =>
+        this.visitDetail(actor, id, patientId),
+      );
+    });
+    return { items: await Promise.all(visits) };
+  }
+
   async patientVisits(
     actor: AuthenticatedUser,
     familyId: string,
@@ -352,7 +397,14 @@ export class MedicalBooksService {
         ...visitSelect,
         visitScope: true,
         participants: {
-          select: { patient: { select: { ...patientSelect, familyId: true } } },
+          select: { patient: { select: { ...patientSelect, familyId: true, gender: true } } },
+        },
+        doctor: {
+          select: {
+            doctorName: true,
+            facility: { select: { facilityName: true, address: true } },
+            user: { select: { phone: true } },
+          },
         },
         contract: {
           select: {
@@ -378,7 +430,7 @@ export class MedicalBooksService {
           select: {
             id: true,
             patientId: true,
-            patient: { select: { ...patientSelect, familyId: true } },
+            patient: { select: { ...patientSelect, familyId: true, gender: true } },
             chiefComplaint: true,
             clinicalFindings: true,
             icd10Code: true,
@@ -389,12 +441,18 @@ export class MedicalBooksService {
             prescriptions: {
               where: isDoctor ? undefined : { recipientUserId: actor.id },
               orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-              take: 1,
               select: {
                 id: true,
                 prescriptionCode: true,
                 status: true,
                 instructions: true,
+                clinicalContext: true,
+                prescribedDate: true,
+                validUntil: true,
+                recordSnapshot: true,
+                replacementReason: true,
+                replaces: { select: { id: true, prescriptionCode: true } },
+                replacedBy: { select: { id: true, prescriptionCode: true } },
                 details: {
                   omit: { prescriptionId: true, lineNumber: true },
                   orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
@@ -429,6 +487,16 @@ export class MedicalBooksService {
         clinicalEmr.id,
       );
     }
+    const prescriptionView = (record: NonNullable<typeof prescription>) => ({
+      ...record,
+      status:
+        record.status === 'ISSUED' &&
+        record.validUntil &&
+        record.validUntil.toISOString().slice(0, 10) <
+          new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10)
+          ? 'EXPIRED'
+          : record.status,
+    });
     return {
       ...entry,
       participants: participants.map((p) => ({
@@ -442,6 +510,7 @@ export class MedicalBooksService {
         relationshipToHead: resolvedPatient.relationshipToHead,
       },
       doctorName: doctor.doctorName,
+      facility: { ...doctor.facility, phone: doctor.user.phone },
       recipient:
         isDoctor &&
         recipient.role === 'FAMILY_REP' &&
@@ -459,15 +528,9 @@ export class MedicalBooksService {
             treatmentPlan: clinicalEmr.treatmentPlan,
           }
         : null,
-      prescription: prescription
-        ? {
-            id: prescription.id,
-            prescriptionCode: prescription.prescriptionCode,
-            status: prescription.status,
-            instructions: prescription.instructions,
-            details: prescription.details,
-          }
-        : null,
+      prescription: prescription ? prescriptionView(prescription) : null,
+      prescriptionHistory:
+        clinicalEmr?.prescriptions.slice(1).map(prescriptionView) ?? [],
     };
   }
 }
