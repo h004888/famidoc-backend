@@ -15,6 +15,7 @@ import { PrismaService } from '../../../../core/database/prisma.service';
 import { StorageService } from '../../../../core/services/storage.service';
 import { validateUploadedDocumentFile } from '../../../../core/validation/document-file.validator';
 import {
+  getVietnamMonthWindow,
   todayInVietnam,
   toVietnamCalendarDate,
 } from '../../../../core/business/business-helpers';
@@ -37,12 +38,24 @@ import type { CreateFacilityDto } from '../../dtos/create-facility.dto';
 import type { SubmitFacilityLegalProfileDto } from '../../dtos/submit-facility-legal-profile.dto';
 import type { VerifyFacilityLegalDto } from '../../dtos/verify-facility-legal.dto';
 import type { FacilityResponseDto } from '../../dtos/facility-response.dto';
+import type { FacilityOverviewResponseDto } from '../../dtos/facility-overview-response.dto';
 import { DoctorClinicalTier } from '@prisma/client';
 import {
   computeQuotaMetrics,
   countActiveAndHeldMap,
 } from '../../../contracts/pricing/doctor-quota.helper';
 import { inferDoctorClinicalTier } from '../../utils/doctor-clinical-tier.util';
+import { resolveAppPublicUrl } from '../../../../core/mailer/templates/famidoc-email-layout';
+import {
+  buildDoctorLevel2ApprovedEmail,
+  buildDoctorLevel2ApprovedFacilityNoticeEmail,
+  buildDoctorLevel2RejectedEmail,
+  buildDoctorLevel2RejectedFacilityNoticeEmail,
+  buildDoctorProvisioningEmail,
+  buildFacilityLegalApprovedEmail,
+  buildFacilityLegalRejectedEmail,
+  buildFacilityProvisioningEmail,
+} from '../../../../core/mailer/templates/onboarding-email.templates';
 import type { ListDoctorsQueryDto } from '../../dtos/list-doctors-query.dto';
 import {
   MAX_BULK_IMPORT_CONFIRM_BATCH,
@@ -126,10 +139,16 @@ export class DoctorsServiceImpl implements IDoctorsService {
     }
 
     try {
+      const emailPayload = buildDoctorProvisioningEmail({
+        email: params.email,
+        doctorName: params.doctorName,
+        facilityName: params.facilityName,
+        initialPassword: params.initialPassword,
+        loginUrl: resolveAppPublicUrl('/login'),
+      });
       await this.mailerService.sendMail({
         to: params.email,
-        subject: 'Thư mời kích hoạt tài khoản Bác sĩ gia đình - FamiDoc',
-        text: `Kính gửi Bác sĩ ${params.doctorName},\n\nTài khoản của bạn tại hệ thống FamiDoc đã được tạo bởi ${params.facilityName}.\n\nThông tin đăng nhập:\n- Email: ${params.email}\n- Mật khẩu khởi tạo: ${params.initialPassword}\n\nVui lòng đăng nhập để nộp hồ sơ chuyên môn kèm đủ 3 tài liệu bắt buộc (Chứng chỉ hành nghề, Bằng tốt nghiệp chuyên môn, Chứng chỉ Y học gia đình) và đổi mật khẩu để tăng cường bảo mật.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+        ...emailPayload,
       });
       return { mailSent: true };
     } catch (err) {
@@ -1313,14 +1332,17 @@ export class DoctorsServiceImpl implements IDoctorsService {
           })
         : null;
 
+      const loginUrl = resolveAppPublicUrl('/login');
+
       if (dto.approved) {
         if (docUser?.email) {
           try {
             await this.mailerService.sendMail({
               to: docUser.email,
-              subject:
-                'Hồ sơ bác sĩ của bạn đã được phê duyệt thành công - FamiDoc',
-              text: `Kính gửi Bác sĩ ${doctor.doctorName},\n\nHồ sơ văn bằng và chứng chỉ hành nghề của bạn đã được Quản trị viên FamiDoc phê duyệt cấp 2. Tài khoản của bạn đã chuyển sang trạng thái ACTIVE và sẵn sàng tiếp nhận bệnh nhân.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+              ...buildDoctorLevel2ApprovedEmail({
+                doctorName: doctor.doctorName,
+                loginUrl,
+              }),
             });
           } catch (err) {
             this.logger.warn(
@@ -1333,8 +1355,11 @@ export class DoctorsServiceImpl implements IDoctorsService {
           try {
             await this.mailerService.sendMail({
               to: facUser.email,
-              subject: `Bác sĩ ${doctor.doctorName} đã hoàn tất thẩm định 2 cấp - FamiDoc`,
-              text: `Kính gửi ${doctor.facility.facilityName},\n\nBác sĩ ${doctor.doctorName} đã vượt qua thẩm định Cấp 2 của Quản trị viên FamiDoc và chính thức hoạt động (ACTIVE) trên hệ thống.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+              ...buildDoctorLevel2ApprovedFacilityNoticeEmail({
+                facilityName: doctor.facility.facilityName,
+                doctorName: doctor.doctorName,
+                loginUrl,
+              }),
             });
           } catch (err) {
             this.logger.warn(
@@ -1347,9 +1372,11 @@ export class DoctorsServiceImpl implements IDoctorsService {
           try {
             await this.mailerService.sendMail({
               to: docUser.email,
-              subject:
-                'Hồ sơ chuyên môn bác sĩ cần bổ sung (Thẩm định Cấp 2) - FamiDoc',
-              text: `Kính gửi Bác sĩ ${doctor.doctorName},\n\nHồ sơ văn bằng và chứng chỉ hành nghề của bạn chưa đạt yêu cầu ở bước hậu kiểm Cấp 2.\nLý do: ${rejectionReason}\n\nVui lòng đăng nhập vào cổng Bác sĩ FamiDoc để cập nhật lại hồ sơ và gửi thẩm định lại.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+              ...buildDoctorLevel2RejectedEmail({
+                doctorName: doctor.doctorName,
+                rejectionReason: rejectionReason ?? '',
+                loginUrl,
+              }),
             });
           } catch (err) {
             this.logger.warn(
@@ -1362,8 +1389,12 @@ export class DoctorsServiceImpl implements IDoctorsService {
           try {
             await this.mailerService.sendMail({
               to: facUser.email,
-              subject: `Hồ sơ bác sĩ ${doctor.doctorName} bị từ chối ở Thẩm định Cấp 2 - FamiDoc`,
-              text: `Kính gửi ${doctor.facility.facilityName},\n\nHồ sơ bác sĩ ${doctor.doctorName} chưa đạt phê duyệt Cấp 2 của Quản trị viên FamiDoc.\nLý do: ${rejectionReason}\n\nBác sĩ cần bổ sung lại hồ sơ để Cơ sở y tế thẩm định Cấp 1 lại trước khi trình duyệt Cấp 2.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+              ...buildDoctorLevel2RejectedFacilityNoticeEmail({
+                facilityName: doctor.facility.facilityName,
+                doctorName: doctor.doctorName,
+                rejectionReason: rejectionReason ?? '',
+                loginUrl,
+              }),
             });
           } catch (err) {
             this.logger.warn(
@@ -1699,8 +1730,13 @@ export class DoctorsServiceImpl implements IDoctorsService {
       try {
         await this.mailerService.sendMail({
           to: email,
-          subject: 'Thông báo cấp tài khoản Cơ sở y tế đối tác - FamiDoc',
-          text: `Kính gửi ${representativeName || facilityName},\n\nQuản trị viên FamiDoc đã khởi tạo tài khoản cổng đối tác cho ${facilityName}.\n\nThông tin đăng nhập:\n- Email: ${email}\n- Mật khẩu khởi tạo: ${initialPassword}\n\nVui lòng đăng nhập vào hệ thống để nộp hồ sơ pháp lý (Giấy phép hoạt động, Mã số thuế, Tài khoản ngân hàng) và đổi mật khẩu để tăng cường bảo mật.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+          ...buildFacilityProvisioningEmail({
+            recipientName: representativeName,
+            facilityName,
+            email,
+            initialPassword,
+            loginUrl: resolveAppPublicUrl('/login'),
+          }),
         });
       } catch {
         // Silently ignore mail errors in dev
@@ -2026,9 +2062,11 @@ export class DoctorsServiceImpl implements IDoctorsService {
           try {
             await this.mailerService.sendMail({
               to: facility.user.email,
-              subject:
-                'Chúc mừng! Hồ sơ pháp lý cơ sở y tế đã được kích hoạt thành công - FamiDoc',
-              text: `Kính gửi ${facility.user.fullName || facility.facilityName},\n\nHồ sơ pháp lý và tài khoản ngân hàng của quý cơ sở đã được Quản trị viên FamiDoc thẩm định và kích hoạt thành công (ACTIVE).\n\nQuý cơ sở hiện đã có thể tiếp nhận và ký hợp đồng cung ứng nhân lực B2B từ Quản trị viên.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+              ...buildFacilityLegalApprovedEmail({
+                recipientName: facility.user.fullName,
+                facilityName: facility.facilityName,
+                loginUrl: resolveAppPublicUrl('/login'),
+              }),
             });
           } catch {
             // Silently ignore mail errors in dev
@@ -2069,8 +2107,12 @@ export class DoctorsServiceImpl implements IDoctorsService {
           try {
             await this.mailerService.sendMail({
               to: facility.user.email,
-              subject: 'Yêu cầu bổ sung hồ sơ pháp lý Cơ sở y tế - FamiDoc',
-              text: `Kính gửi ${facility.user.fullName || facility.facilityName},\n\nHồ sơ pháp lý của quý cơ sở chưa đạt yêu cầu thẩm định.\nLý do: ${reason}\n\nVui lòng đăng nhập vào cổng đối tác để cập nhật thông tin và tải lại tài liệu hợp lệ.\n\nTrân trọng,\nĐội ngũ FamiDoc`,
+              ...buildFacilityLegalRejectedEmail({
+                recipientName: facility.user.fullName,
+                facilityName: facility.facilityName,
+                reason,
+                loginUrl: resolveAppPublicUrl('/login'),
+              }),
             });
           } catch {
             // Silently ignore mail errors in dev
@@ -2126,6 +2168,245 @@ export class DoctorsServiceImpl implements IDoctorsService {
       hasActiveStaffingContract: Boolean(activeStaffing),
       hasHistoricalStaffingContract: Boolean(activeStaffing || historicalStaffing),
     });
+  }
+
+  async getMyFacilityOverview(
+    actor: AuthenticatedUser,
+  ): Promise<FacilityOverviewResponseDto> {
+    if (actor.role !== 'HEALTHCARE_FACILITY') {
+      throw new ForbiddenException(
+        'Chỉ tài khoản Cơ sở y tế mới có quyền xem tổng quan vận hành của mình',
+      );
+    }
+
+    const facility = await this.prisma.healthcareFacility.findUnique({
+      where: { userId: actor.id },
+      select: { id: true },
+    });
+
+    if (!facility) {
+      throw new NotFoundException(
+        'Không tìm thấy thông tin cơ sở y tế liên kết với tài khoản này',
+      );
+    }
+
+    const vnNow = new Date(Date.now() + 7 * 3_600_000);
+    const year = vnNow.getUTCFullYear();
+    const month = vnNow.getUTCMonth() + 1;
+    const monthDateStart = new Date(Date.UTC(year, month - 1, 1));
+    const monthDateEnd = new Date(Date.UTC(year, month, 1));
+    const monthWindow = getVietnamMonthWindow(year, month);
+    const today = todayInVietnam();
+
+    const [
+      doctors,
+      activeB2bContract,
+      encounterGroups,
+      paidInvoices,
+      recentEncountersRaw,
+      pendingRescheduleCount,
+    ] = await Promise.all([
+      this.prisma.doctor?.findMany({
+        where: { facilityId: facility.id },
+        select: {
+          id: true,
+          onboardingStatus: true,
+          activePanelCount: true,
+          maxPanelCapacity: true,
+        },
+      }) ?? Promise.resolve([]),
+      this.prisma.b2bStaffingContract?.findFirst({
+        where: {
+          facilityId: facility.id,
+          status: 'ACTIVE',
+          startDate: { lte: today },
+          endDate: { gte: today },
+        },
+        orderBy: { endDate: 'desc' },
+        select: {
+          contractCode: true,
+          facilityRevenueRate: true,
+          platformCommissionRate: true,
+          endDate: true,
+        },
+      }) ?? Promise.resolve(null),
+      this.prisma.encounter?.groupBy({
+        by: ['encounterType', 'encounterStatus'],
+        where: {
+          doctor: { facilityId: facility.id },
+          scheduledDate: { gte: monthDateStart, lt: monthDateEnd },
+        },
+        _count: { _all: true },
+      }) ?? Promise.resolve([]),
+      this.prisma.invoice?.aggregate({
+        where: {
+          environment: 'LIVE',
+          paymentStatus: 'PAID',
+          paidAt: { gte: monthWindow.start, lt: monthWindow.end },
+          contract: { facilityId: facility.id, isDemo: false },
+        },
+        _sum: { totalPayable: true },
+        _count: { _all: true },
+      }) ?? Promise.resolve({ _sum: { totalPayable: null }, _count: { _all: 0 } }),
+      this.prisma.encounter?.findMany({
+        where: { doctor: { facilityId: facility.id } },
+        orderBy: [
+          { scheduledDate: 'desc' },
+          { scheduledTime: 'desc' },
+          { createdAt: 'desc' },
+        ],
+        take: 5,
+        include: {
+          doctor: { select: { doctorName: true, specialty: true } },
+          contract: { select: { contractNumber: true } },
+          participants: {
+            include: { patient: { select: { fullName: true } } },
+          },
+        },
+      }) ?? Promise.resolve([]),
+      this.prisma.encounterRescheduleRequest?.count({
+        where: {
+          status: 'PENDING',
+          facilityDecision: 'PENDING',
+          encounter: { doctor: { facilityId: facility.id } },
+        },
+      }) ?? Promise.resolve(0),
+    ]);
+
+    const doctorIds = doctors.map((d) => d.id);
+    const activeHeldMap =
+      doctorIds.length > 0 && typeof this.prisma.medicalContract?.findMany === 'function'
+        ? await countActiveAndHeldMap(this.prisma, doctorIds)
+        : null;
+
+    let activeDoctors = 0;
+    let pendingDoctors = 0;
+    let activePanelCount = 0;
+    let maxPanelCapacity = 0;
+
+    for (const doc of doctors) {
+      if (doc.onboardingStatus === 'ACTIVE') {
+        activeDoctors += 1;
+        maxPanelCapacity += Number(doc.maxPanelCapacity ?? 0);
+      } else if (
+        doc.onboardingStatus === 'PENDING_SUBMISSION' ||
+        doc.onboardingStatus === 'PENDING_FACILITY_REVIEW' ||
+        doc.onboardingStatus === 'FACILITY_VERIFIED'
+      ) {
+        pendingDoctors += 1;
+      }
+      activePanelCount += activeHeldMap
+        ? (activeHeldMap.get(doc.id) ?? 0)
+        : Number(doc.activePanelCount ?? 0);
+    }
+
+    const panelUtilizationPercent =
+      maxPanelCapacity > 0
+        ? Math.min(100, Math.round((activePanelCount / maxPanelCapacity) * 100))
+        : 0;
+
+    const byChannel = {
+      HOME_VISIT: 0,
+      TELEHEALTH: 0,
+      FACILITY_VISIT: 0,
+    };
+    let encTotal = 0;
+    let completed = 0;
+    let inProgress = 0;
+    let confirmed = 0;
+    let requested = 0;
+    let cancelled = 0;
+
+    for (const row of encounterGroups) {
+      const count = row._count._all;
+      encTotal += count;
+      if (row.encounterType in byChannel) {
+        byChannel[row.encounterType as keyof typeof byChannel] += count;
+      }
+      if (row.encounterStatus === 'COMPLETED') completed += count;
+      else if (row.encounterStatus === 'IN_PROGRESS') inProgress += count;
+      else if (row.encounterStatus === 'CONFIRMED') confirmed += count;
+      else if (row.encounterStatus === 'REQUESTED') requested += count;
+      else if (row.encounterStatus === 'CANCELLED') cancelled += count;
+    }
+
+    const completionRatePercent =
+      encTotal > 0 ? Math.round((completed / encTotal) * 100) : 0;
+
+    const facilitySharePercent = activeB2bContract
+      ? Number(activeB2bContract.facilityRevenueRate)
+      : 85;
+    const platformSharePercent = activeB2bContract
+      ? Number(activeB2bContract.platformCommissionRate)
+      : 15;
+    const grossVnd = Math.round(Number(paidInvoices._sum?.totalPayable ?? 0));
+    const platformFeeVnd = Math.floor((grossVnd * platformSharePercent) / 100);
+    const facilityShareVnd = grossVnd - platformFeeVnd;
+    const invoiceCount = Number(paidInvoices._count?._all ?? 0);
+
+    const recentEncounters = recentEncountersRaw.map((enc: any) => ({
+      id: enc.id,
+      encounterType: enc.encounterType,
+      encounterStatus: enc.encounterStatus,
+      scheduledDate:
+        enc.scheduledDate instanceof Date
+          ? enc.scheduledDate.toISOString().slice(0, 10)
+          : String(enc.scheduledDate ?? '').slice(0, 10),
+      scheduledTime:
+        enc.scheduledTime instanceof Date
+          ? enc.scheduledTime.toISOString().slice(11, 16)
+          : String(enc.scheduledTime ?? '').slice(0, 5),
+      doctorName: enc.doctor?.doctorName ?? 'Bác sĩ phụ trách',
+      specialty: enc.doctor?.specialty ?? '',
+      patientNames: Array.isArray(enc.participants)
+        ? enc.participants
+            .map((p: any) => p?.patient?.fullName)
+            .filter((name: unknown): name is string => Boolean(name))
+        : [],
+      contractNumber: enc.contract?.contractNumber ?? null,
+    }));
+
+    return {
+      doctors: {
+        total: doctors.length,
+        active: activeDoctors,
+        pending: pendingDoctors,
+        activePanelCount,
+        maxPanelCapacity,
+        panelUtilizationPercent,
+      },
+      encounters: {
+        month,
+        year,
+        total: encTotal,
+        completed,
+        inProgress,
+        confirmed,
+        requested,
+        cancelled,
+        completionRatePercent,
+        byChannel,
+      },
+      revenue: {
+        month,
+        year,
+        grossVnd,
+        facilityShareVnd,
+        platformFeeVnd,
+        invoiceCount,
+        facilitySharePercent,
+        platformSharePercent,
+        activeB2bContractCode: activeB2bContract?.contractCode ?? null,
+        activeB2bValidTo:
+          activeB2bContract?.endDate instanceof Date
+            ? activeB2bContract.endDate.toISOString().slice(0, 10)
+            : activeB2bContract?.endDate
+              ? String(activeB2bContract.endDate).slice(0, 10)
+              : null,
+      },
+      recentEncounters,
+      pendingRescheduleCount: Number(pendingRescheduleCount ?? 0),
+    };
   }
 
   async getFacilityLegalDocument(

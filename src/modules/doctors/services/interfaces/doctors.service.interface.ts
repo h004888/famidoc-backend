@@ -10,6 +10,7 @@ import type { CreateFacilityDto } from '../../dtos/create-facility.dto';
 import type { SubmitFacilityLegalProfileDto } from '../../dtos/submit-facility-legal-profile.dto';
 import type { VerifyFacilityLegalDto } from '../../dtos/verify-facility-legal.dto';
 import type { FacilityResponseDto } from '../../dtos/facility-response.dto';
+import type { FacilityOverviewResponseDto } from '../../dtos/facility-overview-response.dto';
 import type { ListDoctorsQueryDto } from '../../dtos/list-doctors-query.dto';
 import type {
   BulkImportDoctorsPreviewResponseDto,
@@ -65,6 +66,10 @@ export interface IDoctorsService {
   ): Promise<FacilityResponseDto>;
 
   getMyFacility(actor: AuthenticatedUser): Promise<FacilityResponseDto>;
+
+  getMyFacilityOverview(
+    actor: AuthenticatedUser,
+  ): Promise<FacilityOverviewResponseDto>;
 
   listFacilitiesForAdmin(
     actor: AuthenticatedUser,

@@ -22,7 +22,7 @@ export function resolvePlatformLegalIdentity(
   return {
     companyName:
       process.env.FAMIDOC_LEGAL_COMPANY_NAME?.trim() ||
-      'Nền tảng Y tế Gia đình FamiDoc',
+      'FamiDoc - Nền tảng quản lý bác sĩ gia đình và chăm sóc sức khỏe',
     taxCode: process.env.FAMIDOC_LEGAL_TAX_CODE?.trim() || '0109998888',
     address:
       process.env.FAMIDOC_LEGAL_ADDRESS?.trim() ||

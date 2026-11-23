@@ -17,6 +17,11 @@ import {
 import type { AuthenticatedUser } from '../../../core/auth/authenticated-request';
 import { PrismaService } from '../../../core/database/prisma.service';
 import { CoreMailerService } from '../../../core/mailer/core-mailer.service';
+import { resolveAppPublicUrl } from '../../../core/mailer/templates/famidoc-email-layout';
+import {
+  buildMatchingQueueAssignedEmail,
+  buildMatchingQueueIntakeEmail,
+} from '../../../core/mailer/templates/matching-email.templates';
 import {
   buildActiveAndHeldWhere,
   computeQuotaMetrics,
@@ -554,8 +559,14 @@ export class DoctorMatchingService
     if (userEmail && this.mailer) {
       await this.sendEmailSafely({
         to: userEmail,
-        subject: '[FamiDoc] Đã tiếp nhận yêu cầu tìm bác sĩ vào hàng chờ điều phối',
-        text: `Xin chào ${userName ?? 'Quý khách'},\n\nYêu cầu tìm bác sĩ gia đình cho gói ${params.pkg.packageName} (${params.memberCount} thành viên) đã được chuyển vào hàng chờ điều phối của Quản trị viên FamiDoc (mã yêu cầu: ${queueRequest.id}).\nChúng tôi sẽ phân công bác sĩ phù hợp và gửi thông báo cho bạn trong vòng ${slaHours} giờ.\n`,
+        ...buildMatchingQueueIntakeEmail({
+          recipientName: userName,
+          queueRequestId: queueRequest.id,
+          packageName: params.pkg.packageName,
+          memberCount: params.memberCount,
+          slaHours,
+          trackingUrl: resolveAppPublicUrl('/booking'),
+        }),
       });
     }
 
@@ -1105,14 +1116,17 @@ export class DoctorMatchingService
     });
 
     if (result.targetEmail && this.mailer) {
-      const baseUrl = (process.env.APP_PUBLIC_URL || '').replace(/\/+$/, '');
-      const confirmLink = baseUrl
-        ? `${baseUrl}/booking?queueId=${result.updated.id}`
-        : `/booking?queueId=${result.updated.id}`;
       await this.sendEmailSafely({
         to: result.targetEmail,
-        subject: '[FamiDoc] Đã phân công bác sĩ gia đình — Mời xác nhận hợp đồng',
-        text: `Xin chào ${result.targetName},\n\nQuản trị viên FamiDoc đã phân công bác sĩ ${result.doctorName} (${result.facilityName}) cho gói ${result.packageName}.\nVui lòng truy cập ${confirmLink} để xem thông tin bác sĩ và xác nhận khởi tạo hợp đồng 4 bên.\n`,
+        ...buildMatchingQueueAssignedEmail({
+          recipientName: result.targetName,
+          doctorName: result.doctorName,
+          facilityName: result.facilityName,
+          packageName: result.packageName,
+          confirmUrl: resolveAppPublicUrl(
+            `/booking?queueId=${result.updated.id}`,
+          ),
+        }),
       });
     }
 
@@ -1168,6 +1182,7 @@ export class DoctorMatchingService
     to: string;
     subject: string;
     text: string;
+    html?: string;
   }) {
     if (!this.mailer?.sendMail) return;
     try {

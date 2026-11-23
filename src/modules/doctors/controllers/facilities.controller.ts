@@ -33,6 +33,7 @@ import { Roles, RolesGuard } from '../../../core/auth/roles.guard';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
 import { SubmitFacilityLegalProfileDto } from '../dtos/submit-facility-legal-profile.dto';
 import { FacilityResponseDto } from '../dtos/facility-response.dto';
+import { FacilityOverviewResponseDto } from '../dtos/facility-overview-response.dto';
 import {
   DOCTORS_SERVICE_TOKEN,
   type IDoctorsService,
@@ -79,6 +80,25 @@ export class FacilitiesController {
   })
   getMyFacility(@Req() req: AuthenticatedRequest): Promise<FacilityResponseDto> {
     return this.service.getMyFacility(req.user);
+  }
+
+  @Get('me/overview')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('HEALTHCARE_FACILITY')
+  @AllowOnboarding()
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Cơ sở y tế xem số liệu tổng hợp vận hành theo thời gian thực',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Số liệu tổng hợp vận hành của cơ sở y tế đang đăng nhập.',
+    type: FacilityOverviewResponseDto,
+  })
+  getMyFacilityOverview(
+    @Req() req: AuthenticatedRequest,
+  ): Promise<FacilityOverviewResponseDto> {
+    return this.service.getMyFacilityOverview(req.user);
   }
 
   @Put('me/legal-profile')

@@ -133,6 +133,42 @@ describe('Doctors & Facilities Controllers', () => {
         contentType: 'application/pdf',
       }),
       getMyFacility: jest.fn(),
+      getMyFacilityOverview: jest.fn().mockResolvedValue({
+        doctors: {
+          total: 2,
+          active: 2,
+          pending: 0,
+          activePanelCount: 1,
+          maxPanelCapacity: 10,
+          panelUtilizationPercent: 10,
+        },
+        encounters: {
+          month: 11,
+          year: 2026,
+          total: 1,
+          completed: 0,
+          inProgress: 0,
+          confirmed: 1,
+          requested: 0,
+          cancelled: 0,
+          completionRatePercent: 0,
+          byChannel: { HOME_VISIT: 0, TELEHEALTH: 1, FACILITY_VISIT: 0 },
+        },
+        revenue: {
+          month: 11,
+          year: 2026,
+          grossVnd: 0,
+          facilityShareVnd: 0,
+          platformFeeVnd: 0,
+          invoiceCount: 0,
+          facilitySharePercent: 85,
+          platformSharePercent: 15,
+          activeB2bContractCode: 'B2B-2026-001',
+          activeB2bValidTo: '2027-11-20',
+        },
+        recentEncounters: [],
+        pendingRescheduleCount: 0,
+      }),
       listFacilitiesForAdmin: jest.fn(),
       getFacilityDetailForAdmin: jest.fn(),
     };
@@ -419,6 +455,54 @@ describe('Doctors & Facilities Controllers', () => {
           'unknown',
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('FacilitiesController - getMyFacilityOverview', () => {
+    it('delegates GET /api/v1/facilities/me/overview to service.getMyFacilityOverview and enforces HEALTHCARE_FACILITY role metadata', async () => {
+      const result = await facilitiesController.getMyFacilityOverview(mockFacilityReq);
+      expect(service.getMyFacilityOverview).toHaveBeenCalledWith(mockFacilityReq.user);
+      expect(result.doctors.total).toBe(2);
+
+      const allowedRoles = Reflect.getMetadata(
+        'allowedRoles',
+        FacilitiesController.prototype.getMyFacilityOverview,
+      );
+      expect(allowedRoles).toEqual(['HEALTHCARE_FACILITY']);
+    });
+
+    it('rejects non-facility roles via RolesGuard with ForbiddenException (403)', () => {
+      const reflector = {
+        getAllAndOverride: jest.fn().mockReturnValue(
+          Reflect.getMetadata(
+            'allowedRoles',
+            FacilitiesController.prototype.getMyFacilityOverview,
+          ),
+        ),
+      } as any;
+      const guard = new RolesGuard(reflector);
+
+      expect(
+        guard.canActivate({
+          getHandler: () => FacilitiesController.prototype.getMyFacilityOverview,
+          getClass: () => FacilitiesController,
+          switchToHttp: () => ({
+            getRequest: () => mockFacilityReq,
+          }),
+        } as any),
+      ).toBe(true);
+
+      for (const nonFacilityReq of [mockAdminReq, mockDoctorReq]) {
+        expect(() =>
+          guard.canActivate({
+            getHandler: () => FacilitiesController.prototype.getMyFacilityOverview,
+            getClass: () => FacilitiesController,
+            switchToHttp: () => ({
+              getRequest: () => nonFacilityReq,
+            }),
+          } as any),
+        ).toThrow('Insufficient role');
+      }
     });
   });
 
