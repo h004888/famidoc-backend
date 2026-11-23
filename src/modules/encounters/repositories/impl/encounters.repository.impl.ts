@@ -151,6 +151,37 @@ class PrismaEncountersSession implements EncountersSession {
   findPendingRescheduleRequests(where: Prisma.EncounterRescheduleRequestWhereInput) {
     return this.tx.encounterRescheduleRequest.findMany({
       where: { ...where, status: 'PENDING' },
+      include: {
+        encounter: {
+          select: {
+            id: true,
+            contractId: true,
+            encounterType: true,
+            category: true,
+            visitScope: true,
+            scheduledDate: true,
+            scheduledTime: true,
+            encounterStatus: true,
+            doctor: { select: { id: true, doctorName: true } },
+            participants: {
+              include: { patient: { select: { id: true, fullName: true } } },
+            },
+            contract: {
+              select: {
+                id: true,
+                contractNumber: true,
+                familyUnit: {
+                  select: {
+                    id: true,
+                    homeAddress: true,
+                    representativeUser: { select: { id: true, fullName: true, phone: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }

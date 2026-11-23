@@ -5,6 +5,7 @@ import { todayInVietnam } from '../../../../core/business/business-helpers';
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
@@ -423,10 +424,18 @@ class PrismaPaymentsSession implements PaymentsSession {
     });
 
     if (justActivated) {
-      await this.autoScheduleFirstVisit?.scheduleOnContractActivated(
-        this.tx,
-        contract.id,
-      );
+      try {
+        await this.autoScheduleFirstVisit?.scheduleOnContractActivated(
+          this.tx,
+          contract.id,
+        );
+      } catch (err) {
+        new Logger(PaymentsRepositoryImpl.name).warn(
+          `Automatic cadence draft generation failed for contract ${contract.id}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
     }
   }
   async findRequest(id: string) {
