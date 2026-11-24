@@ -43,6 +43,15 @@ export class MatchDoctorsIntakeDto {
   requestedTier?: DoctorClinicalTier;
 
   @ApiPropertyOptional({
+    description: 'Học hàm / học vị bác sĩ mong muốn (ví dụ: BS, BSNT, ThS.BS, BS.CKI, BS.CKII, TS.BS, PGS.TS.BS, GS.TS.BS)',
+    example: 'BS.CKI',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  requestedAcademicTitle?: string;
+
+  @ApiPropertyOptional({
     type: [String],
     description: 'Nhóm đối tượng trong hộ gia đình (ví dụ: Trẻ nhỏ, Người cao tuổi)',
     example: ['Trẻ nhỏ (< 12 tuổi)', 'Người cao tuổi (> 60 tuổi)'],

@@ -78,6 +78,29 @@ export interface IContractsService {
     actor: AuthenticatedUser,
     dto: CreateMedicalContractDto,
   ): Promise<ContractSummary>;
+  previewFourPartyDraftPdf(
+    actor: AuthenticatedUser,
+    dto: CreateMedicalContractDto,
+  ): Promise<Buffer>;
+  rejectEscrowContract(
+    actor: AuthenticatedUser,
+    contractId: string,
+    reason: string,
+  ): Promise<any>;
+  replaceDoctorWithCredit(
+    actor: AuthenticatedUser,
+    sourceContractId: string,
+    doctorId: string,
+  ): Promise<ContractSummary>;
+  createRefundRequest(
+    actor: AuthenticatedUser,
+    contractId: string,
+    payload: { bankName: string; accountNumber: string; accountHolder: string },
+  ): Promise<any>;
+  getRefundRequest(
+    actor: AuthenticatedUser,
+    contractId: string,
+  ): Promise<any>;
   signInitialMedicalContract(
     actor: AuthenticatedUser,
     id: string,

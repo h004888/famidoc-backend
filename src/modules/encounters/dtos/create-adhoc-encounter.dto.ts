@@ -53,21 +53,38 @@ export class CreateAdHocEncounterDto {
   @IsNotEmpty()
   desiredDate!: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Giờ mong muốn khám (định dạng HH:mm hoặc HH:mm:ss)',
     example: '14:30:00',
   })
   @Matches(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, {
     message: 'desiredTime must be in HH:mm or HH:mm:ss format',
   })
-  @IsNotEmpty()
-  desiredTime!: string;
+  @IsOptional()
+  desiredTime?: string;
 
-  @ApiProperty({
-    description: 'Triệu chứng hoặc lý do cần khám đột xuất',
+  @ApiPropertyOptional({
+    description: 'Khung buổi mong muốn: MORNING (Sáng 08:00-11:30) hoặc AFTERNOON (Chiều 13:30-17:30)',
+    enum: ['MORNING', 'AFTERNOON'],
+  })
+  @IsString()
+  @IsOptional()
+  slotWindow?: 'MORNING' | 'AFTERNOON';
+
+  @ApiPropertyOptional({
+    description: 'Chip chủ đề hỏi nhanh 1 chạm',
+    type: [String],
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  quickTags?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Triệu chứng hoặc lý do cần khám đột xuất (tùy chọn)',
     example: 'Bệnh nhân có triệu chứng sốt cao và ho khan 2 ngày nay',
   })
   @IsString()
-  @IsNotEmpty()
-  reason!: string;
+  @IsOptional()
+  reason?: string;
 }

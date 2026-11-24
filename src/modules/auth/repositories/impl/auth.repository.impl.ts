@@ -210,30 +210,6 @@ export class AuthRepositoryImpl
     });
   }
 
-  async updateFailedAttempts(
-    userId: string,
-    attempts: number,
-    lockedUntil?: Date | null,
-  ): Promise<void> {
-    await this.prismaService.user.update({
-      where: { id: userId },
-      data: {
-        failedLoginAttempts: attempts,
-        lockedUntil: lockedUntil ?? null,
-      },
-    });
-  }
-
-  async resetFailedAttempts(userId: string): Promise<void> {
-    await this.prismaService.user.update({
-      where: { id: userId },
-      data: {
-        failedLoginAttempts: 0,
-        lockedUntil: null,
-      },
-    });
-  }
-
   private toAuthSessionRecord(row: any): AuthSessionRecord {
     return row as AuthSessionRecord;
   }

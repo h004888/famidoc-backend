@@ -27,6 +27,8 @@ export interface ITelehealthRepository {
     roomSid: string;
     startedAt: Date;
     shouldStartEncounter: boolean;
+    actorRole?: string;
+    joinedAt?: Date;
   }): Promise<TelehealthSession>;
   updateSessionTelemetry(params: {
     sessionId: string;
@@ -37,6 +39,8 @@ export interface ITelehealthRepository {
     sessionId: string;
     endedAt: Date;
     durationSeconds: number;
+    closedByRole?: string;
+    transitionToWrapUp?: boolean;
   }): Promise<TelehealthSession>;
   findSessionByRoomSid(roomSid: string): Promise<TelehealthSession | null>;
   ensureSessionStartedByRoomSid(roomSid: string, startedAt: Date): Promise<TelehealthSession | null>;

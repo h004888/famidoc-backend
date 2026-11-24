@@ -20,7 +20,6 @@ import { CoreMailerService } from '../../../core/mailer/core-mailer.service';
 import { resolveAppPublicUrl } from '../../../core/mailer/templates/famidoc-email-layout';
 import {
   buildMatchingQueueAssignedEmail,
-  buildMatchingQueueIntakeEmail,
 } from '../../../core/mailer/templates/matching-email.templates';
 import {
   buildActiveAndHeldWhere,
@@ -37,24 +36,67 @@ import { sanitizeMatchingText } from '../utils/pii-sanitizer.util';
 import { JevClientService } from './jev-client.service';
 import { MatchingConfigService } from './matching-config.service';
 
-const DEFAULT_MIN_FIT_THRESHOLD = 0.6;
 const DEFAULT_FIT_WEIGHT = 0.7;
 const DEFAULT_VACANCY_WEIGHT = 0.3;
 const DEFAULT_MAX_JEV_CANDIDATES = 10;
-const DEFAULT_QUEUE_SLA_HOURS = 24;
 const DEFAULT_SESSION_TTL_HOURS = 24;
 
-export interface MatchedDoctorPreview {
-  outcome: 'MATCHED';
-  matchingSessionId: string;
-  expiresAt: Date;
-  jevModelVersion: string;
+export interface MatchedDoctorSummary {
+  id: string;
+  doctorName: string;
+  specialty: string;
+  academicTitle: string | null;
+  experienceYears: number;
+  clinicalTier: DoctorClinicalTier;
+  ratingAvg: number;
+  totalReviews: number;
+  remainingSlots: number;
+  maxPanelCapacity: number;
+  avatarUrl: string | null;
+}
+
+export interface MatchedFacilitySummary {
+  id: string;
+  facilityName: string;
+  address: string;
+  hotline: string;
+}
+
+export interface MatchingComparisonRow {
+  criterion: string;
+  familyNeed: string;
+  doctorMatch: string;
+  isMatched: boolean;
+}
+
+export interface MatchedDoctorAlternative {
+  rank: number;
   scores: {
     jevFitScore: number;
     vacancyScore: number;
     compositeScore: number;
   };
   rationale: string;
+  shortReason: string;
+  doctor: MatchedDoctorSummary;
+  facility: MatchedFacilitySummary;
+}
+
+export interface MatchedDoctorPreview {
+  outcome: 'MATCHED';
+  matchingSessionId: string;
+  expiresAt: Date;
+  jevModelVersion: string;
+  rankingSource: 'AI' | 'FALLBACK';
+  relaxedAcademicTitle: boolean;
+  requestedAcademicTitle: string | null;
+  scores: {
+    jevFitScore: number;
+    vacancyScore: number;
+    compositeScore: number;
+  };
+  rationale: string;
+  comparisonRows: MatchingComparisonRow[];
   package: {
     id: string;
     packageCode: string;
@@ -68,36 +110,217 @@ export interface MatchedDoctorPreview {
     telehealthQuota: number;
   };
   memberCount: number;
-  doctor: {
-    id: string;
-    doctorName: string;
-    specialty: string;
-    academicTitle: string | null;
-    experienceYears: number;
-    clinicalTier: DoctorClinicalTier;
-    ratingAvg: number;
-    totalReviews: number;
-    remainingSlots: number;
-    maxPanelCapacity: number;
-    avatarUrl: string | null;
-  };
-  facility: {
-    id: string;
-    facilityName: string;
-    address: string;
-    hotline: string;
-  };
+  doctor: MatchedDoctorSummary;
+  facility: MatchedFacilitySummary;
+  alternatives: MatchedDoctorAlternative[];
 }
 
-export interface QueuedMatchingResult {
-  outcome: 'QUEUED';
-  queueRequestId: string;
-  status: MatchingQueueStatus;
-  fallbackReason: string;
-  slaExpiresAt: Date;
+export interface PlatformFullMatchingResult {
+  outcome: 'PLATFORM_FULL';
   packageId: string;
   memberCount: number;
+  hotline: string;
   message: string;
+}
+
+const MATCHING_AGE_GROUPS = [
+  { id: 'children', label: 'Trẻ nhỏ (<12 tuổi)' },
+  { id: 'adults', label: 'Người lớn (12–59 tuổi)' },
+  { id: 'elderly', label: 'Người cao tuổi (≥60 tuổi)' },
+  { id: 'maternity', label: 'Mẹ bầu & sau sinh' },
+] as const;
+
+const MATCHING_CARE_CATEGORIES = [
+  {
+    id: 'routine_family',
+    label: 'Khám định kỳ cả nhà',
+    specialtyKeywords: ['gia đình', 'đa khoa', 'nội tổng quát'],
+  },
+  {
+    id: 'cardiology',
+    label: 'Tim mạch · Huyết áp',
+    specialtyKeywords: ['tim mạch', 'nội', 'lão khoa'],
+  },
+  {
+    id: 'endocrinology',
+    label: 'Tiểu đường · Nội tiết',
+    specialtyKeywords: ['nội tiết', 'nội', 'gia đình'],
+  },
+  {
+    id: 'pediatrics',
+    label: 'Nhi · Dinh dưỡng',
+    specialtyKeywords: ['nhi', 'dinh dưỡng'],
+  },
+  {
+    id: 'respiratory_ent',
+    label: 'Hô hấp · Tai mũi họng',
+    specialtyKeywords: ['hô hấp', 'tai mũi họng', 'nội'],
+  },
+  {
+    id: 'musculoskeletal_rehab',
+    label: 'Xương khớp · Phục hồi',
+    specialtyKeywords: ['cơ xương khớp', 'phục hồi chức năng', 'chấn thương'],
+  },
+] as const;
+
+const MATCHING_ACADEMIC_TITLES = [
+  { value: 'BS', label: 'Bác sĩ (BS)', desc: 'Bác sĩ đa khoa có chứng chỉ hành nghề' },
+  { value: 'BSNT', label: 'Bác sĩ Nội trú (BSNT)', desc: 'Đào tạo nội trú chuyên sâu tại bệnh viện lớn' },
+  { value: 'ThS.BS', label: 'Thạc sĩ Bác sĩ (ThS.BS)', desc: 'Trình độ Thạc sĩ Y học' },
+  { value: 'BS.CKI', label: 'Bác sĩ Chuyên khoa I (BS.CKI)', desc: 'Chuyên khoa cấp I thực hành lâm sàng' },
+  { value: 'BS.CKII', label: 'Bác sĩ Chuyên khoa II (BS.CKII)', desc: 'Chuyên khoa cấp II chuyên sâu' },
+  { value: 'TS.BS', label: 'Tiến sĩ Bác sĩ (TS.BS)', desc: 'Học vị Tiến sĩ Y học' },
+  { value: 'PGS.TS.BS', label: 'Phó Giáo sư · Tiến sĩ (PGS.TS.BS)', desc: 'Học hàm Phó Giáo sư' },
+  { value: 'GS.TS.BS', label: 'Giáo sư · Tiến sĩ (GS.TS.BS)', desc: 'Học hàm Giáo sư' },
+] as const;
+
+const PROVINCES_V2_URL = 'https://provinces.open-api.vn/api/v2/?depth=2';
+const PROVINCES_V2_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+interface ProvinceV2Ward {
+  name: string;
+}
+
+interface ProvinceV2Item {
+  name: string;
+  wards?: ProvinceV2Ward[];
+}
+
+function normalizeCityLabel(raw: string): string {
+  const cleaned = raw.trim();
+  if (/^(tp\.?\s*hcm|hcm|tp\.?\s*hồ chí minh|thành phố hồ chí minh|hồ chí minh)$/i.test(cleaned)) {
+    return 'Hồ Chí Minh';
+  }
+  if (/^(hn|hà nội|tp\.?\s*hà nội|thành phố hà nội)$/i.test(cleaned)) {
+    return 'Hà Nội';
+  }
+  if (/^(đn|đà nẵng|tp\.?\s*đà nẵng|thành phố đà nẵng)$/i.test(cleaned)) {
+    return 'Đà Nẵng';
+  }
+  return cleaned
+    .replace(/^(thành phố|tỉnh|tp\.?)\s+/i, '')
+    .trim();
+}
+
+function normalizeWardLabel(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^(phường|xã|thị trấn|quận|huyện|thành phố|thị xã)\s+/i, '')
+    .trim()
+    .toLowerCase();
+}
+
+function computeAreaMatchScore(
+  facilityAddress: string,
+  districtArea: string | null,
+): number {
+  if (!districtArea) return 0;
+  const addrLower = facilityAddress.toLowerCase();
+  const rawLower = districtArea.trim().toLowerCase();
+  if (addrLower.includes(rawLower)) {
+    return 2;
+  }
+
+  const parts = districtArea
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  if (parts.length >= 2) {
+    const wardNorm = normalizeWardLabel(parts[0]!);
+    const cityNorm = normalizeCityLabel(parts[parts.length - 1]!).toLowerCase();
+    const hasCity = Boolean(cityNorm) && addrLower.includes(cityNorm);
+    const hasWard = Boolean(wardNorm) && addrLower.includes(wardNorm);
+    if (hasCity && hasWard) return 2;
+    if (hasCity) return 1;
+    if (hasWard) return 1;
+    return 0;
+  }
+
+  const singleCity = normalizeCityLabel(districtArea).toLowerCase();
+  if (singleCity && addrLower.includes(singleCity)) return 1;
+  const singleWard = normalizeWardLabel(districtArea);
+  if (singleWard && addrLower.includes(singleWard)) return 1;
+  return 0;
+}
+
+function computeSpecialtyKeywordMatch(
+  doc: {
+    specialty: string;
+    bio: string | null;
+    treatedCases: Array<{ summary: string }>;
+  },
+  careCategories: string[],
+): number {
+  if (careCategories.length === 0) return 0;
+  const keywords = new Set<string>();
+  for (const cat of careCategories) {
+    const lowerCat = cat.toLowerCase();
+    for (const token of lowerCat.split(/[·,/]+/)) {
+      const cleaned = token.trim();
+      if (cleaned.length >= 2) keywords.add(cleaned);
+    }
+    const matchedDef = MATCHING_CARE_CATEGORIES.find(
+      (def) => def.label.toLowerCase() === lowerCat,
+    );
+    if (matchedDef) {
+      for (const kw of matchedDef.specialtyKeywords) {
+        keywords.add(kw.toLowerCase());
+      }
+    }
+  }
+  const haystack = [
+    doc.specialty,
+    doc.bio ?? '',
+    ...doc.treatedCases.map((tc) => tc.summary),
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  let score = 0;
+  for (const kw of keywords) {
+    if (haystack.includes(kw)) score += 1;
+  }
+  return score;
+}
+
+function buildFallbackRationale(params: {
+  specialty: string;
+  experienceYears: number;
+  facilityName: string;
+  facilityAddress: string;
+  areaMatch: number;
+  specialtyKeywordMatch: number;
+  remainingSlots: number;
+  maxCapacity: number;
+}): string {
+  const parts: string[] = [];
+  if (params.areaMatch >= 2) {
+    parts.push(`Đúng khu vực bạn chọn (${params.facilityAddress})`);
+  } else if (params.areaMatch === 1) {
+    parts.push(`Cùng tỉnh/thành phố (${params.facilityAddress})`);
+  }
+  if (params.specialtyKeywordMatch > 0) {
+    parts.push(`Sát nhu cầu với chuyên khoa ${params.specialty}`);
+  } else {
+    parts.push(`Chuyên khoa ${params.specialty} (${params.experienceYears} năm kinh nghiệm)`);
+  }
+  parts.push(
+    `Còn ${params.remainingSlots}/${params.maxCapacity} chỗ trống tại ${params.facilityName}`,
+  );
+  return parts.join(' · ');
+}
+
+function parseAddressArea(address: string): { city: string; district: string } | null {
+  const parts = address
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return null;
+  const city = normalizeCityLabel(parts[parts.length - 1]!);
+  const district = parts[parts.length - 2]!;
+  if (!city || !district) return null;
+  return { city, district };
 }
 
 @Injectable()
@@ -105,6 +328,10 @@ export class DoctorMatchingService
   implements OnApplicationBootstrap, OnModuleDestroy
 {
   private timer?: NodeJS.Timeout;
+  private provincesV2Cache: {
+    expiresAt: number;
+    areas: Array<{ city: string; districts: string[] }>;
+  } | null = null;
   private readonly logger = new Logger(DoctorMatchingService.name);
 
   constructor(
@@ -141,10 +368,121 @@ export class DoctorMatchingService
     return Number.isFinite(num) && num >= 0 ? num : fallback;
   }
 
+  private async fetchProvincesV2Areas(): Promise<
+    Array<{ city: string; districts: string[] }> | null
+  > {
+    if (
+      this.provincesV2Cache &&
+      this.provincesV2Cache.expiresAt > Date.now()
+    ) {
+      return this.provincesV2Cache.areas;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await fetch(PROVINCES_V2_URL, {
+        signal: controller.signal,
+      });
+      if (!response.ok) return null;
+      const payload = (await response.json()) as ProvinceV2Item[];
+      if (!Array.isArray(payload) || payload.length === 0) return null;
+
+      const areas = payload
+        .filter((item) => Boolean(item?.name))
+        .map((item) => ({
+          city: item.name.trim(),
+          districts: Array.isArray(item.wards)
+            ? item.wards
+                .map((w) => w?.name?.trim())
+                .filter((name): name is string => Boolean(name))
+                .sort((a, b) => a.localeCompare(b, 'vi'))
+            : [],
+        }))
+        .sort((a, b) => a.city.localeCompare(b.city, 'vi'));
+
+      this.provincesV2Cache = {
+        expiresAt: Date.now() + PROVINCES_V2_CACHE_TTL_MS,
+        areas,
+      };
+      return areas;
+    } catch (err) {
+      this.logger.warn(
+        `Không thể tải danh mục hành chính v2 từ provinces.open-api.vn: ${(err as Error)?.message ?? err}`,
+      );
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async getMatchingOptions() {
+    const v2Areas = await this.fetchProvincesV2Areas();
+    if (v2Areas && v2Areas.length > 0) {
+      return {
+        areas: v2Areas,
+        ageGroups: MATCHING_AGE_GROUPS,
+        careCategories: MATCHING_CARE_CATEGORIES,
+        academicTitles: MATCHING_ACADEMIC_TITLES,
+      };
+    }
+
+    const activeDoctors = await this.prisma.doctor.findMany({
+      where: {
+        onboardingStatus: 'ACTIVE',
+        facility: { verificationStatus: 'ACTIVE' },
+      },
+      select: {
+        id: true,
+        activePanelCount: true,
+        maxPanelCapacity: true,
+        facility: {
+          select: {
+            address: true,
+          },
+        },
+      },
+    });
+
+    const activeHeldMap = await countActiveAndHeldMap(
+      this.prisma,
+      activeDoctors.map((d) => d.id),
+    );
+
+    const cityDistrictMap = new Map<string, Set<string>>();
+    for (const doc of activeDoctors) {
+      const heldCount = activeHeldMap.get(doc.id) ?? doc.activePanelCount ?? 0;
+      const quota = computeQuotaMetrics(doc.maxPanelCapacity, heldCount);
+      if (quota.isQuotaFull) continue;
+
+      const parsed = parseAddressArea(doc.facility.address);
+      if (!parsed) continue;
+
+      if (!cityDistrictMap.has(parsed.city)) {
+        cityDistrictMap.set(parsed.city, new Set());
+      }
+      cityDistrictMap.get(parsed.city)!.add(parsed.district);
+    }
+
+    const areas = Array.from(cityDistrictMap.entries())
+      .map(([city, districts]) => ({
+        city,
+        districts: Array.from(districts).sort((a, b) => a.localeCompare(b, 'vi')),
+      }))
+      .sort((a, b) => a.city.localeCompare(b.city, 'vi'));
+
+    return {
+      areas,
+      ageGroups: MATCHING_AGE_GROUPS,
+      careCategories: MATCHING_CARE_CATEGORIES,
+      academicTitles: MATCHING_ACADEMIC_TITLES,
+    };
+  }
+
   async matchDoctors(
     actor: AuthenticatedUser | undefined,
     dto: MatchDoctorsIntakeDto,
-  ): Promise<MatchedDoctorPreview | QueuedMatchingResult> {
+  ): Promise<MatchedDoctorPreview | PlatformFullMatchingResult> {
     const pkg = await this.prisma.servicePackage.findUnique({
       where: { id: dto.packageId },
     });
@@ -181,72 +519,125 @@ export class DoctorMatchingService
       );
     }
 
-    // 1. SQL Pre-filter: bác sĩ ACTIVE, CSYT ACTIVE, khớp trình độ nếu có
-    const candidateRows = await this.prisma.doctor.findMany({
+    // 1. Truy vấn nới lỏng 2 tầng (Progressive 2-Tier Query)
+    const requestedAcademicTitle = dto.requestedAcademicTitle?.trim() || null;
+    const doctorInclude = {
+      facility: {
+        select: {
+          id: true,
+          facilityName: true,
+          address: true,
+          hotline: true,
+        },
+      },
+      user: { select: { avatarUrl: true } },
+      treatedCases: {
+        where: { status: 'APPROVED' as const },
+        take: 3,
+        orderBy: { createdAt: 'desc' as const },
+        select: { summary: true },
+      },
+    };
+
+    const tier1Rows = await this.prisma.doctor.findMany({
       where: {
         onboardingStatus: 'ACTIVE',
         facility: { verificationStatus: 'ACTIVE' },
         ...(dto.requestedTier ? { clinicalTier: dto.requestedTier } : {}),
+        ...(requestedAcademicTitle
+          ? {
+              academicTitle: {
+                contains: requestedAcademicTitle,
+                mode: 'insensitive',
+              },
+            }
+          : {}),
       },
-      include: {
-        facility: {
-          select: {
-            id: true,
-            facilityName: true,
-            address: true,
-            hotline: true,
-          },
-        },
-        user: { select: { avatarUrl: true } },
-        treatedCases: {
-          where: { status: 'APPROVED' },
-          take: 3,
-          orderBy: { createdAt: 'desc' },
-          select: { summary: true },
-        },
-      },
+      include: doctorInclude,
     });
+
+    const hasQualificationFilter = Boolean(
+      requestedAcademicTitle || dto.requestedTier,
+    );
+    const tier1Ids = new Set(tier1Rows.map((d) => d.id));
+    let relaxedAcademicTitle = false;
+    let combinedRows = tier1Rows.map((doc) => ({ doc, tierRank: 1 as 1 | 2 }));
+
+    if (hasQualificationFilter && tier1Rows.length < 4) {
+      const tier2Rows = await this.prisma.doctor.findMany({
+        where: {
+          onboardingStatus: 'ACTIVE',
+          facility: { verificationStatus: 'ACTIVE' },
+          ...(tier1Ids.size > 0
+            ? { id: { notIn: Array.from(tier1Ids) } }
+            : {}),
+        },
+        include: doctorInclude,
+      });
+      const newTier2Rows = tier2Rows.filter((d) => !tier1Ids.has(d.id));
+      if (newTier2Rows.length > 0) {
+        relaxedAcademicTitle = true;
+        combinedRows = [
+          ...combinedRows,
+          ...newTier2Rows.map((doc) => ({ doc, tierRank: 2 as 1 | 2 })),
+        ];
+      }
+    }
 
     const activeHeldMap = await countActiveAndHeldMap(
       this.prisma,
-      candidateRows.map((c) => c.id),
+      combinedRows.map((c) => c.doc.id),
     );
 
-    const openCandidates = candidateRows
-      .map((doc) => {
+    const openCandidates = combinedRows
+      .map(({ doc, tierRank }) => {
         const heldCount = activeHeldMap.get(doc.id) ?? doc.activePanelCount ?? 0;
         const quota = computeQuotaMetrics(doc.maxPanelCapacity, heldCount);
         const vacancyScore =
           quota.maxCapacity > 0 ? quota.remainingSlots / quota.maxCapacity : 0;
-        const areaMatch =
-          districtArea &&
-          doc.facility.address
-            .toLowerCase()
-            .includes(districtArea.toLowerCase())
-            ? 1
-            : 0;
+        const areaMatch = computeAreaMatchScore(
+          doc.facility.address,
+          districtArea,
+        );
+        const specialtyKeywordMatch = computeSpecialtyKeywordMatch(
+          doc,
+          careCategories,
+        );
         return {
           doc,
+          tierRank,
           quota,
           vacancyScore,
           areaMatch,
+          specialtyKeywordMatch,
         };
       })
       .filter((item) => !item.quota.isQuotaFull)
       .sort((a, b) => {
+        if (a.tierRank !== b.tierRank) return a.tierRank - b.tierRank;
         if (a.areaMatch !== b.areaMatch) return b.areaMatch - a.areaMatch;
+        if (a.specialtyKeywordMatch !== b.specialtyKeywordMatch) {
+          return b.specialtyKeywordMatch - a.specialtyKeywordMatch;
+        }
         if (a.vacancyScore !== b.vacancyScore) {
           return b.vacancyScore - a.vacancyScore;
         }
         return Number(b.doc.ratingAvg) - Number(a.doc.ratingAvg);
       });
 
+    if (
+      hasQualificationFilter &&
+      openCandidates.some((c) => c.tierRank === 2)
+    ) {
+      relaxedAcademicTitle = true;
+    }
+
     const runtimeConfig = this.matchingConfig
       ? await this.matchingConfig.getEffectiveConfig()
       : null;
 
     const maxJevCandidates = Math.max(
-      1,
+      4,
       Math.floor(
         runtimeConfig?.maxCandidates ??
           this.resolveNumberEnv(
@@ -265,18 +656,14 @@ export class DoctorMatchingService
     const expiresAt = new Date(now.getTime() + sessionTtlHours * 3_600_000);
 
     if (shortlisted.length === 0) {
-      return this.createQueueFallback({
-        actor,
-        pkg,
+      return {
+        outcome: 'PLATFORM_FULL',
+        packageId: pkg.id,
         memberCount: dto.memberCount,
-        requestedTier: dto.requestedTier ?? null,
-        ageGroups,
-        careCategories,
-        districtArea,
-        sanitizedDescription,
-        fallbackReason: 'NO_ELIGIBLE_CANDIDATES',
-        expiresAt,
-      });
+        hotline: '1900 8821',
+        message:
+          'Hiện toàn bộ bác sĩ trên hệ thống đều đã kín lịch nhận gia đình. Vui lòng gọi Hotline 1900 8821 để được hỗ trợ hoặc xem lại danh sách bác sĩ sau.',
+      };
     }
 
     // 2. Đánh giá phù hợp bằng TypeSafe Jev (Zero-PII)
@@ -304,28 +691,7 @@ export class DoctorMatchingService
       })),
     });
 
-    if (!jevResult.ok) {
-      return this.createQueueFallback({
-        actor,
-        pkg,
-        memberCount: dto.memberCount,
-        requestedTier: dto.requestedTier ?? null,
-        ageGroups,
-        careCategories,
-        districtArea,
-        sanitizedDescription,
-        fallbackReason: jevResult.errorReason || 'JEV_UNAVAILABLE',
-        expiresAt,
-      });
-    }
-
-    // 3. Lọc ngưỡng tối thiểu + xếp hạng trọng số 70% Jev Fit + 30% Vacancy
-    const minFit =
-      runtimeConfig?.minFitThreshold ??
-      this.resolveNumberEnv(
-        'JEV_MIN_FIT_THRESHOLD',
-        DEFAULT_MIN_FIT_THRESHOLD,
-      );
+    // 3. Xếp hạng Top 1 + Top 2-4 (AI hoặc Fallback tất định khi AI lỗi/tắt)
     const fitWeight =
       runtimeConfig?.fitWeight ??
       this.resolveNumberEnv('JEV_FIT_WEIGHT', DEFAULT_FIT_WEIGHT);
@@ -333,55 +699,96 @@ export class DoctorMatchingService
       runtimeConfig?.vacancyWeight ??
       this.resolveNumberEnv('JEV_VACANCY_WEIGHT', DEFAULT_VACANCY_WEIGHT);
 
-    const scoreMap = new Map(
-      jevResult.scores.map((item) => [item.doctorId, item]),
-    );
+    let rankingSource: 'AI' | 'FALLBACK' = 'AI';
+    let jevModelVersion = jevResult.modelVersion || 'deterministic-fallback';
 
-    const ranked = shortlisted
-      .map((candidate) => {
-        const jevEntry = scoreMap.get(candidate.doc.id);
-        const jevFitScore = jevEntry?.fitScore ?? 0;
-        const compositeScore =
-          fitWeight * jevFitScore + vacancyWeight * candidate.vacancyScore;
-        return {
-          ...candidate,
-          jevFitScore,
-          compositeScore,
-          rationale: jevEntry?.rationale,
-        };
-      })
-      .filter((entry) => entry.jevFitScore >= minFit)
-      .sort((a, b) => {
-        if (b.compositeScore !== a.compositeScore) {
-          return b.compositeScore - a.compositeScore;
-        }
-        if (b.vacancyScore !== a.vacancyScore) {
-          return b.vacancyScore - a.vacancyScore;
-        }
-        return Number(b.doc.ratingAvg) - Number(a.doc.ratingAvg);
-      });
+    let ranked: Array<
+      (typeof shortlisted)[number] & {
+        jevFitScore: number;
+        compositeScore: number;
+        rationale: string;
+      }
+    >;
 
-    if (ranked.length === 0) {
-      return this.createQueueFallback({
-        actor,
-        pkg,
-        memberCount: dto.memberCount,
-        requestedTier: dto.requestedTier ?? null,
-        ageGroups,
-        careCategories,
-        districtArea,
-        sanitizedDescription,
-        fallbackReason: 'BELOW_FIT_THRESHOLD',
-        expiresAt,
-        jevModelVersion: jevResult.modelVersion,
-      });
+    if (jevResult.ok) {
+      const scoreMap = new Map(
+        jevResult.scores.map((item) => [item.doctorId, item]),
+      );
+      ranked = shortlisted
+        .map((candidate) => {
+          const jevEntry = scoreMap.get(candidate.doc.id);
+          const jevFitScore = jevEntry?.fitScore ?? 0;
+          const compositeScore =
+            fitWeight * jevFitScore + vacancyWeight * candidate.vacancyScore;
+          const fitPercent = Math.round(jevFitScore * 100);
+          const rationale =
+            jevEntry?.rationale ||
+            `Độ phù hợp ${fitPercent}% với chuyên khoa ${candidate.doc.specialty} (${candidate.doc.experienceYears} năm kinh nghiệm), còn ${candidate.quota.remainingSlots}/${candidate.quota.maxCapacity} slot hộ gia đình tại ${candidate.doc.facility.facilityName}.`;
+          return {
+            ...candidate,
+            jevFitScore,
+            compositeScore,
+            rationale,
+          };
+        })
+        .sort((a, b) => {
+          if (b.compositeScore !== a.compositeScore) {
+            return b.compositeScore - a.compositeScore;
+          }
+          if (b.areaMatch !== a.areaMatch) {
+            return b.areaMatch - a.areaMatch;
+          }
+          if (b.vacancyScore !== a.vacancyScore) {
+            return b.vacancyScore - a.vacancyScore;
+          }
+          return Number(b.doc.ratingAvg) - Number(a.doc.ratingAvg);
+        });
+    } else {
+      rankingSource = 'FALLBACK';
+      jevModelVersion = 'deterministic-fallback';
+      ranked = [...shortlisted]
+        .sort((a, b) => {
+          if (a.areaMatch !== b.areaMatch) return b.areaMatch - a.areaMatch;
+          if (a.specialtyKeywordMatch !== b.specialtyKeywordMatch) {
+            return b.specialtyKeywordMatch - a.specialtyKeywordMatch;
+          }
+          if (a.vacancyScore !== b.vacancyScore) {
+            return b.vacancyScore - a.vacancyScore;
+          }
+          return Number(b.doc.ratingAvg) - Number(a.doc.ratingAvg);
+        })
+        .map((candidate) => {
+          const areaFactor = candidate.areaMatch / 2;
+          const keywordFactor = Math.min(1, candidate.specialtyKeywordMatch / 3);
+          const jevFitScore = Number(
+            (0.5 * areaFactor + 0.5 * keywordFactor).toFixed(4),
+          );
+          const compositeScore = Number(
+            (
+              fitWeight * jevFitScore +
+              vacancyWeight * candidate.vacancyScore
+            ).toFixed(4),
+          );
+          return {
+            ...candidate,
+            jevFitScore,
+            compositeScore,
+            rationale: buildFallbackRationale({
+              specialty: candidate.doc.specialty,
+              experienceYears: candidate.doc.experienceYears,
+              facilityName: candidate.doc.facility.facilityName,
+              facilityAddress: candidate.doc.facility.address,
+              areaMatch: candidate.areaMatch,
+              specialtyKeywordMatch: candidate.specialtyKeywordMatch,
+              remainingSlots: candidate.quota.remainingSlots,
+              maxCapacity: candidate.quota.maxCapacity,
+            }),
+          };
+        });
     }
 
-    const winner = ranked[0];
-    const fitPercent = Math.round(winner.jevFitScore * 100);
-    const defaultRationale =
-      winner.rationale ||
-      `Độ phù hợp ${fitPercent}% với chuyên khoa ${winner.doc.specialty} (${winner.doc.experienceYears} năm kinh nghiệm), còn ${winner.quota.remainingSlots}/${winner.quota.maxCapacity} slot hộ gia đình tại ${winner.doc.facility.facilityName}.`;
+    const winner = ranked[0]!;
+    const defaultRationale = winner.rationale;
 
     const sessionRecord = await this.prisma.matchingSession.create({
       data: {
@@ -396,12 +803,12 @@ export class DoctorMatchingService
         sanitizedDescription,
         matchedDoctorId: winner.doc.id,
         inferredFacilityId: winner.doc.facility.id,
-        jevModelVersion: jevResult.modelVersion,
+        jevModelVersion,
         jevFitScore: winner.jevFitScore.toFixed(4),
         vacancyScore: winner.vacancyScore.toFixed(4),
         compositeScore: winner.compositeScore.toFixed(4),
         rationale: defaultRationale,
-        candidateSnapshots: ranked.slice(0, 5).map((r) => ({
+        candidateSnapshots: ranked.slice(0, 4).map((r) => ({
           doctorId: r.doc.id,
           jevFitScore: Number(r.jevFitScore.toFixed(4)),
           vacancyScore: Number(r.vacancyScore.toFixed(4)),
@@ -412,17 +819,114 @@ export class DoctorMatchingService
       },
     });
 
+    const toDoctorSummary = (
+      entry: (typeof ranked)[number],
+    ): MatchedDoctorSummary => ({
+      id: entry.doc.id,
+      doctorName: entry.doc.doctorName,
+      specialty: entry.doc.specialty,
+      academicTitle: entry.doc.academicTitle,
+      experienceYears: entry.doc.experienceYears,
+      clinicalTier: entry.doc.clinicalTier,
+      ratingAvg: Number(entry.doc.ratingAvg),
+      totalReviews: entry.doc.totalReviews,
+      remainingSlots: entry.quota.remainingSlots,
+      maxPanelCapacity: entry.quota.maxCapacity,
+      avatarUrl: entry.doc.user?.avatarUrl ?? null,
+    });
+
+    const buildAlternativeReason = (entry: (typeof ranked)[number]): string => {
+      if (entry.tierRank > winner.tierRank && requestedAcademicTitle) {
+        return `Kinh nghiệm tốt (${entry.doc.experienceYears} năm), nhưng khác học vị ${requestedAcademicTitle} bạn ưu tiên.`;
+      }
+      if (entry.areaMatch < winner.areaMatch && districtArea) {
+        return `Sát chuyên môn nhưng hiện ở khác khu vực bạn chọn (${entry.doc.facility.address}).`;
+      }
+      if (entry.specialtyKeywordMatch < winner.specialtyKeywordMatch) {
+        return `Bác sĩ ${entry.doc.specialty} giàu kinh nghiệm, nhưng chuyên khoa ít sát nhu cầu chính hơn Top 1.`;
+      }
+      if (entry.vacancyScore < winner.vacancyScore) {
+        return `Phù hợp nhu cầu gia đình nhưng còn ít lịch trống hơn bác sĩ Top 1.`;
+      }
+      return `Lựa chọn phù hợp tiếp theo tại ${entry.doc.facility.facilityName} (${entry.doc.experienceYears} năm kinh nghiệm).`;
+    };
+
+    const comparisonRows: MatchingComparisonRow[] = [
+      {
+        criterion: 'Nhu cầu sức khỏe',
+        familyNeed:
+          careCategories.length > 0
+            ? careCategories.join(', ')
+            : 'Chăm sóc sức khỏe gia đình',
+        doctorMatch:
+          winner.specialtyKeywordMatch > 0
+            ? `Khớp chuyên khoa ${winner.doc.specialty}`
+            : `Chuyên khoa ${winner.doc.specialty} (${winner.doc.experienceYears} năm KN)`,
+        isMatched: winner.specialtyKeywordMatch > 0 || winner.jevFitScore >= 0.6,
+      },
+      {
+        criterion: 'Khu vực sống',
+        familyNeed: districtArea || 'Mọi khu vực',
+        doctorMatch:
+          winner.areaMatch >= 2
+            ? `Đúng khu vực (${winner.doc.facility.address})`
+            : winner.areaMatch === 1
+              ? `Cùng tỉnh/TP (${winner.doc.facility.address})`
+              : districtArea
+                ? `Hỗ trợ từ xa (${winner.doc.facility.address})`
+                : winner.doc.facility.address,
+        isMatched: !districtArea || winner.areaMatch >= 1,
+      },
+      {
+        criterion: 'Học hàm / Học vị',
+        familyNeed: requestedAcademicTitle || 'Linh hoạt phù hợp nhất',
+        doctorMatch:
+          !requestedAcademicTitle || winner.tierRank === 1
+            ? `Đúng học vị ${winner.doc.academicTitle || 'BS'}`
+            : `Mở rộng sang ${winner.doc.academicTitle || 'BS'}`,
+        isMatched: !requestedAcademicTitle || winner.tierRank === 1,
+      },
+      {
+        criterion: 'Lịch nhận hộ',
+        familyNeed: 'Cần tiếp nhận ngay',
+        doctorMatch:
+          winner.vacancyScore >= 0.5
+            ? 'Đang còn nhiều lịch trống'
+            : 'Đang còn lịch trống nhận gia đình',
+        isMatched: true,
+      },
+    ];
+
+    const alternatives: MatchedDoctorAlternative[] = ranked
+      .slice(1, 4)
+      .map((entry, idx) => ({
+        rank: idx + 2,
+        scores: {
+          jevFitScore: Number(entry.jevFitScore.toFixed(4)),
+          vacancyScore: Number(entry.vacancyScore.toFixed(4)),
+          compositeScore: Number(entry.compositeScore.toFixed(4)),
+        },
+        rationale: entry.rationale,
+        shortReason: buildAlternativeReason(entry),
+        doctor: toDoctorSummary(entry),
+        facility: entry.doc.facility,
+      }));
+
     return {
       outcome: 'MATCHED',
       matchingSessionId: sessionRecord.id,
       expiresAt: sessionRecord.expiresAt,
-      jevModelVersion: jevResult.modelVersion,
+      jevModelVersion,
+      rankingSource,
+      relaxedAcademicTitle,
+      requestedAcademicTitle,
       scores: {
         jevFitScore: Number(winner.jevFitScore.toFixed(4)),
         vacancyScore: Number(winner.vacancyScore.toFixed(4)),
         compositeScore: Number(winner.compositeScore.toFixed(4)),
       },
       rationale: defaultRationale,
+      comparisonRows,
       package: {
         id: pkg.id,
         packageCode: pkg.packageCode,
@@ -436,150 +940,9 @@ export class DoctorMatchingService
         telehealthQuota: pkg.telehealthQuota,
       },
       memberCount: dto.memberCount,
-      doctor: {
-        id: winner.doc.id,
-        doctorName: winner.doc.doctorName,
-        specialty: winner.doc.specialty,
-        academicTitle: winner.doc.academicTitle,
-        experienceYears: winner.doc.experienceYears,
-        clinicalTier: winner.doc.clinicalTier,
-        ratingAvg: Number(winner.doc.ratingAvg),
-        totalReviews: winner.doc.totalReviews,
-        remainingSlots: winner.quota.remainingSlots,
-        maxPanelCapacity: winner.quota.maxCapacity,
-        avatarUrl: winner.doc.user?.avatarUrl ?? null,
-      },
+      doctor: toDoctorSummary(winner),
       facility: winner.doc.facility,
-    };
-  }
-
-  private async createQueueFallback(params: {
-    actor: AuthenticatedUser | undefined;
-    pkg: { id: string; packageName: string };
-    memberCount: number;
-    requestedTier: DoctorClinicalTier | null;
-    ageGroups: string[];
-    careCategories: string[];
-    districtArea: string | null;
-    sanitizedDescription: string;
-    fallbackReason: string;
-    expiresAt: Date;
-    jevModelVersion?: string;
-  }): Promise<QueuedMatchingResult> {
-    const slaHours = this.resolveNumberEnv(
-      'QUEUE_SLA_HOURS',
-      DEFAULT_QUEUE_SLA_HOURS,
-    );
-    const slaExpiresAt = new Date(Date.now() + slaHours * 3_600_000);
-
-    const { queueRequest, userEmail, userName } =
-      await this.prisma.$transaction(async (tx) => {
-        const session = await tx.matchingSession.create({
-          data: {
-            userId: params.actor?.id ?? null,
-            familyId: params.actor?.familyUnitId ?? null,
-            packageId: params.pkg.id,
-            memberCount: params.memberCount,
-            requestedTier: params.requestedTier,
-            ageGroups: params.ageGroups as unknown as Prisma.InputJsonValue,
-            careCategories:
-              params.careCategories as unknown as Prisma.InputJsonValue,
-            districtArea: params.districtArea,
-            sanitizedDescription: params.sanitizedDescription,
-            jevModelVersion: params.jevModelVersion ?? null,
-            status: 'QUEUED',
-            expiresAt: params.expiresAt,
-          },
-        });
-
-        const queue = await tx.matchingQueueRequest.create({
-          data: {
-            matchingSessionId: session.id,
-            userId: params.actor?.id ?? null,
-            familyId: params.actor?.familyUnitId ?? null,
-            packageId: params.pkg.id,
-            memberCount: params.memberCount,
-            requestedTier: params.requestedTier,
-            ageGroups: params.ageGroups as unknown as Prisma.InputJsonValue,
-            careCategories:
-              params.careCategories as unknown as Prisma.InputJsonValue,
-            districtArea: params.districtArea,
-            sanitizedDescription: params.sanitizedDescription,
-            fallbackReason: params.fallbackReason,
-            status: 'QUEUED',
-            slaExpiresAt,
-          },
-        });
-
-        let recipientEmail: string | null = null;
-        let recipientName: string | null = null;
-
-        if (params.actor?.id) {
-          const user = await tx.user.findUnique({
-            where: { id: params.actor.id },
-            select: { id: true, email: true, fullName: true },
-          });
-          recipientEmail = user?.email ?? null;
-          recipientName = user?.fullName ?? null;
-
-          await tx.notification.create({
-            data: {
-              userId: params.actor.id,
-              title: 'Yêu cầu tìm bác sĩ đã vào hàng chờ điều phối',
-              content: `Hệ thống đã ghi nhận yêu cầu gói ${params.pkg.packageName} (${params.memberCount} thành viên) vào hàng chờ Quản trị viên điều phối trong vòng ${slaHours} giờ.`,
-              type: 'MATCHING_QUEUE_CREATED',
-              referenceId: queue.id,
-            },
-          });
-        }
-
-        const admins = await tx.user.findMany({
-          where: { role: 'ADMIN', status: 'ACTIVE' },
-          select: { id: true },
-        });
-        if (admins.length > 0) {
-          await tx.notification.createMany({
-            data: admins.map((admin) => ({
-              userId: admin.id,
-              title: 'Có yêu cầu tìm bác sĩ mới trong hàng chờ điều phối',
-              content: `Yêu cầu gói ${params.pkg.packageName} (${params.memberCount} thành viên) cần điều phối thủ công (${params.fallbackReason}).`,
-              type: 'MATCHING_QUEUE_ADMIN_ALERT',
-              referenceId: queue.id,
-            })),
-          });
-        }
-
-        return {
-          queueRequest: queue,
-          userEmail: recipientEmail,
-          userName: recipientName,
-        };
-      });
-
-    if (userEmail && this.mailer) {
-      await this.sendEmailSafely({
-        to: userEmail,
-        ...buildMatchingQueueIntakeEmail({
-          recipientName: userName,
-          queueRequestId: queueRequest.id,
-          packageName: params.pkg.packageName,
-          memberCount: params.memberCount,
-          slaHours,
-          trackingUrl: resolveAppPublicUrl('/booking'),
-        }),
-      });
-    }
-
-    return {
-      outcome: 'QUEUED',
-      queueRequestId: queueRequest.id,
-      status: queueRequest.status,
-      fallbackReason: queueRequest.fallbackReason,
-      slaExpiresAt: queueRequest.slaExpiresAt,
-      packageId: params.pkg.id,
-      memberCount: params.memberCount,
-      message:
-        'Hiện chưa có bác sĩ đạt ngưỡng phù hợp tự động. Yêu cầu đã được chuyển tới Hàng chờ điều phối Admin.',
+      alternatives,
     };
   }
 

@@ -71,6 +71,22 @@ export class LivekitClientService {
     }
   }
 
+  async deleteRoom(roomName: string): Promise<void> {
+    const cfg = this.getConfig();
+    if (!cfg.livekitUrl || !cfg.apiKey || !cfg.apiSecret) {
+      return;
+    }
+
+    try {
+      const client = new RoomServiceClient(cfg.livekitUrl, cfg.apiKey, cfg.apiSecret);
+      await client.deleteRoom(roomName);
+    } catch (error) {
+      this.logger.warn(
+        `Không thể đóng phòng LiveKit ${roomName}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
   async receiveWebhook(rawBody: string, authHeader?: string) {
     const cfg = this.assertConfigured();
     const receiver = new WebhookReceiver(cfg.apiKey, cfg.apiSecret);

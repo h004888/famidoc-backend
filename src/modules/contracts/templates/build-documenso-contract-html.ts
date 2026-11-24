@@ -77,6 +77,8 @@ export interface BuildDocumensoContractHtmlInput {
     email?: string | null;
   } | null;
   additionalTerms?: string | null;
+  homeVisitAddress?: string | null;
+  isDraftPreview?: boolean;
 }
 
 function formatVnd(value: number | string | null | undefined): string {
@@ -177,6 +179,13 @@ export function buildDocumensoContractHtml(input: BuildDocumensoContractHtmlInpu
     const escaped = escapeHtml(values[fieldName]);
     const placeholder = `{{${fieldName}}}`;
     html = html.split(placeholder).join(escaped);
+  }
+
+  if (input.isDraftPreview) {
+    const watermarkHtml = `<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:9999;opacity:0.12;transform:rotate(-32deg);font-size:72px;font-weight:800;letter-spacing:10px;color:#0f172a;text-transform:uppercase;">BẢN NHÁP</div>`;
+    html = html.includes('</body>')
+      ? html.replace('</body>', `${watermarkHtml}</body>`)
+      : `${html}${watermarkHtml}`;
   }
 
   return html;

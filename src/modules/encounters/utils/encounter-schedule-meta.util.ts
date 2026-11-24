@@ -3,19 +3,23 @@ import { EncounterCategory, EncounterStatus } from '@prisma/client';
 export type PendingScheduleStage =
   | 'CADENCE_DRAFT'
   | 'AWAITING_FAMILY_CONFIRM'
-  | 'AWAITING_DOCTOR_REVIEW';
+  | 'AWAITING_DOCTOR_REVIEW'
+  | 'MANUAL_SLOT_REQUIRED';
 
 export type EncounterScheduleStage =
   | PendingScheduleStage
+  | 'AUTO_CONFIRMED'
+  | 'DOCTOR_MANUAL_CONFIRMED'
   | 'CONFIRMED'
   | 'IN_PROGRESS'
   | 'COMPLETED'
   | 'CANCELLED';
 
 export interface EncounterScheduleMeta {
-  stage: PendingScheduleStage;
+  stage: PendingScheduleStage | 'AUTO_CONFIRMED' | 'DOCTOR_MANUAL_CONFIRMED';
   milestoneIndex?: number;
   totalMilestones?: number;
+  slotWindow?: 'MORNING' | 'AFTERNOON';
 }
 
 export interface ParsedEncounterScheduleMeta {
@@ -30,6 +34,7 @@ const VALID_PENDING_STAGES: ReadonlySet<string> = new Set([
   'CADENCE_DRAFT',
   'AWAITING_FAMILY_CONFIRM',
   'AWAITING_DOCTOR_REVIEW',
+  'MANUAL_SLOT_REQUIRED',
 ]);
 
 export function stripScheduleMetaPrefix(raw?: string | null): string | null {
@@ -51,6 +56,7 @@ export function serializeEncounterScheduleMeta(
     ...(typeof meta.totalMilestones === 'number'
       ? { totalMilestones: meta.totalMilestones }
       : {}),
+    ...(meta.slotWindow ? { slotWindow: meta.slotWindow } : {}),
   };
   const cleanNote = stripScheduleMetaPrefix(note);
   const prefix = `[SCHEDULE_META:${JSON.stringify(payload)}]`;

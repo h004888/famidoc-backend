@@ -35,6 +35,7 @@ import { ConfirmEncounterDto } from '../dtos/confirm-encounter.dto';
 import { RequestRescheduleDto } from '../dtos/request-reschedule.dto';
 import { DecideRescheduleRequestDto } from '../dtos/decide-reschedule-request.dto';
 import { ListEncountersQueryDto } from '../dtos/list-encounters-query.dto';
+import { DoctorManualScheduleDto } from '../dtos/doctor-manual-schedule.dto';
 import { AdjustCadenceMilestoneDto } from '../dtos/adjust-cadence-milestone.dto';
 
 @ApiTags('Encounters & Examination Scheduling')
@@ -119,6 +120,19 @@ export class EncountersController {
     return this.service.confirmEncounter(req.user, id, dto);
   }
 
+  @Patch(':id/cancel')
+  @Roles('FAMILY_REP', 'DOCTOR', 'ADMIN')
+  @ApiOperation({ summary: 'Hủy lịch khám và hoàn trả lượt nếu đủ điều kiện cutoff' })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám' })
+  @ResponseMessage('Hủy lịch khám thành công')
+  cancelEncounter(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body('reason') reason?: string,
+  ) {
+    return (this.service as any).cancelEncounter(req.user, id, reason);
+  }
+
   @Patch(':id/on-the-way')
   @Roles('DOCTOR', 'ADMIN')
   @ApiOperation({ summary: 'Bác sĩ báo đang di chuyển tới nhà gia đình' })
@@ -182,6 +196,18 @@ export class EncountersController {
     return this.service.decideRescheduleRequest(req.user, id, requestId, dto);
   }
 
+  @Patch(':id/reschedule-requests/:requestId/withdraw')
+  @Roles('FAMILY_REP', 'DOCTOR', 'ADMIN')
+  @ApiOperation({ summary: 'Bên gửi tự thu hồi yêu cầu đổi lịch đang chờ duyệt (nhả khung tạm giữ)' })
+  @ResponseMessage('Đã thu hồi đề xuất đổi lịch')
+  withdrawRescheduleRequest(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('requestId') requestId: string,
+  ) {
+    return this.service.withdrawRescheduleRequest(req.user, id, requestId);
+  }
+
   @Get('reschedule-requests/pending')
   @Roles('FAMILY_REP', 'DOCTOR', 'HEALTHCARE_FACILITY', 'ADMIN')
   @ApiOperation({ summary: 'Danh sách yêu cầu đổi lịch đang chờ duyệt theo vai trò' })
@@ -199,6 +225,67 @@ export class EncountersController {
     @Query() query: ListEncountersQueryDto,
   ) {
     return this.service.getDoctorTimetable(req.user, query);
+  }
+
+  @Get('doctors/:doctorId/monthly-availability')
+  @Roles('FAMILY_REP', 'DOCTOR', 'HEALTHCARE_FACILITY', 'ADMIN')
+  @ApiOperation({ summary: 'Lấy tình trạng 2 khung Sáng/Chiều cả tháng của Bác sĩ' })
+  @ResponseMessage('Lấy lịch trống theo tháng thành công')
+  getDoctorMonthlyAvailability(
+    @Req() req: AuthenticatedRequest,
+    @Param('doctorId') doctorId: string,
+    @Query('month') month: string,
+    @Query('contractId') contractId?: string,
+    @Query('excludeEncounterId') excludeEncounterId?: string,
+  ) {
+    return this.service.getDoctorMonthlyAvailability(
+      req.user,
+      doctorId,
+      month,
+      contractId,
+      excludeEncounterId,
+    );
+  }
+
+  @Get('doctors/:doctorId/video-availability')
+  @Roles('FAMILY_REP', 'DOCTOR', 'HEALTHCARE_FACILITY', 'ADMIN')
+  @ApiOperation({ summary: 'Lấy tình trạng 2 khung Sáng/Chiều đặt Tư vấn Video theo tháng của Bác sĩ' })
+  @ResponseMessage('Lấy lịch trống Tư vấn Video theo tháng thành công')
+  getDoctorVideoAvailability(
+    @Req() req: AuthenticatedRequest,
+    @Param('doctorId') doctorId: string,
+    @Query('month') month: string,
+    @Query('contractId') contractId?: string,
+  ) {
+    return (this.service as any).getDoctorVideoAvailability(
+      req.user,
+      doctorId,
+      month,
+      contractId,
+    );
+  }
+
+  @Patch(':id/doctor-manual-schedule')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({ summary: 'Bác sĩ tự xếp tay ngày & khung cho mốc kín lịch (EF3)' })
+  @ResponseMessage('Chốt lịch xếp tay thành công')
+  doctorManualSchedule(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: DoctorManualScheduleDto,
+  ) {
+    return this.service.doctorManualSchedule(req.user, id, dto);
+  }
+
+  @Post('contracts/:contractId/retry-auto-schedule')
+  @Roles('HEALTHCARE_FACILITY', 'FAMILY_REP', 'ADMIN')
+  @ApiOperation({ summary: 'Chạy lại xếp lịch tự động sau khi bổ sung thông tin (EF1)' })
+  @ResponseMessage('Đã kích hoạt xếp lịch tự động lại thành công')
+  retryContractAutoSchedule(
+    @Req() req: AuthenticatedRequest,
+    @Param('contractId') contractId: string,
+  ) {
+    return this.service.retryContractAutoSchedule(req.user, contractId);
   }
 
   @Get('timetable/family')

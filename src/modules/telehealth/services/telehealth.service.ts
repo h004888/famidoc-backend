@@ -79,11 +79,32 @@ export class TelehealthService {
     this.assertTelehealthJoinable(encounter);
 
     const roomSid = encounter.telehealthSession?.roomSid ?? this.buildRoomSid(encounterId);
+    const now = new Date();
+    if (
+      encounter.encounterStatus === EncounterStatus.CONFIRMED &&
+      encounter.scheduledDate &&
+      encounter.scheduledTime
+    ) {
+      const dateStr = encounter.scheduledDate.toISOString().slice(0, 10);
+      const timeStr = encounter.scheduledTime.toISOString().slice(11, 19);
+      const scheduledUtcMs = new Date(`${dateStr}T${timeStr}Z`).getTime() - 7 * 60 * 60 * 1000;
+      const openAtMs = scheduledUtcMs - 15 * 60 * 1000;
+      const closeAtMs = scheduledUtcMs + 15 * 60 * 1000;
+      if (now.getTime() < openAtMs) {
+        throw new ConflictException('Phòng khám Video chỉ mở trước giờ hẹn 15 phút.');
+      }
+      if (now.getTime() > closeAtMs) {
+        throw new ConflictException('Đã quá cửa sổ 15 phút vào phòng khám Video.');
+      }
+    }
+
     const session = await this.telehealthRepository.upsertSessionAndStartEncounter({
       encounterId,
       roomSid,
-      startedAt: new Date(),
+      startedAt: now,
       shouldStartEncounter: encounter.encounterStatus === EncounterStatus.CONFIRMED,
+      actorRole: actor.role,
+      joinedAt: now,
     });
 
     const participantIdentity = `${actor.role}:${actor.id}`;
@@ -130,6 +151,11 @@ export class TelehealthService {
   }
 
   async endSession(encounterId: string, actor: TelehealthActor): Promise<TelehealthSession> {
+    if (!['DOCTOR', 'ADMIN'].includes(actor.role)) {
+      throw new ForbiddenException(
+        'Chỉ Bác sĩ phụ trách mới có quyền kết thúc hẳn buổi Tư vấn Video.',
+      );
+    }
     const encounter = await this.authorizeEncounterAccess(encounterId, actor);
     if (!encounter.telehealthSession) {
       throw new NotFoundException('Phiên khám trực tuyến chưa được khởi tạo.');
@@ -140,6 +166,13 @@ export class TelehealthService {
       return session;
     }
 
+    await this.livekitClient.sendRoomData(session.roomSid, {
+      type: 'SESSION_ENDED',
+      encounterId,
+      closedByRole: actor.role,
+    });
+    await this.livekitClient.deleteRoom(session.roomSid);
+
     const endedAt = new Date();
     const startedAt = session.startedAt ?? endedAt;
     const durationSeconds = Math.max(0, Math.floor((endedAt.getTime() - startedAt.getTime()) / 1000));
@@ -148,6 +181,8 @@ export class TelehealthService {
       sessionId: session.id,
       endedAt,
       durationSeconds,
+      closedByRole: actor.role,
+      transitionToWrapUp: true,
     });
   }
 

@@ -152,10 +152,12 @@ describe('DocumensoWebhookAndSync', () => {
     );
 
     expect(result.signedRoles).toEqual(['FAMILY_REP']);
+    expect(result.contractStatus).toBe('PENDING_APPROVAL');
     expect(result.signedPdfUrl).toBeNull();
+    expect(paymentNoticeMock.sendPaymentNotice).not.toHaveBeenCalled();
   });
 
-  it('applySignedRecipients(): trả signedPdfUrl = null khi mới có 3/4 chữ ký', async () => {
+  it('applySignedRecipients(): giữ PENDING_APPROVAL và trả signedPdfUrl = null khi mới có 3/4 chữ ký', async () => {
     existingSignatures = [
       { signerRole: 'FAMILY_REP' },
       { signerRole: 'HEALTHCARE_FACILITY' },
@@ -176,9 +178,10 @@ describe('DocumensoWebhookAndSync', () => {
     expect(result.signedRoles).toHaveLength(3);
     expect(result.contractStatus).toBe('PENDING_APPROVAL');
     expect(result.signedPdfUrl).toBeNull();
+    expect(paymentNoticeMock.sendPaymentNotice).not.toHaveBeenCalled();
   });
 
-  it('syncContractFromDocumenso(): trả signedPdfUrl = null khi hợp đồng chưa đủ 4/4 chữ ký', async () => {
+  it('syncContractFromDocumenso(): giữ PENDING_APPROVAL và trả signedPdfUrl = null khi hợp đồng chưa đủ 4/4 chữ ký', async () => {
     jest.spyOn(client, 'getEnvelope').mockResolvedValue({
       id: 'envelope_1',
       status: 'PENDING',
@@ -195,6 +198,7 @@ describe('DocumensoWebhookAndSync', () => {
     const result = await service.syncContractFromDocumenso('contract-1', '127.0.0.1');
 
     expect(result.signedRoles).toHaveLength(3);
+    expect(result.contractStatus).toBe('PENDING_APPROVAL');
     expect(result.signedPdfUrl).toBeNull();
     expect(paymentNoticeMock.sendPaymentNotice).not.toHaveBeenCalled();
   });

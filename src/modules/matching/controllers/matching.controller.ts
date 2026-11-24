@@ -56,6 +56,15 @@ export class MatchingController {
     private readonly jevClientService: JevClientService,
   ) {}
 
+  @Get('matching/options')
+  @ApiOperation({
+    summary:
+      'Lấy danh mục động cho bước gợi ý bác sĩ: khu vực có CSYT/BS còn slot, nhóm tuổi, nhu cầu chăm sóc và học hàm/học vị',
+  })
+  getMatchingOptions() {
+    return this.matchingService.getMatchingOptions();
+  }
+
   @Post('matching/doctors')
   @UseGuards(OptionalJwtAuthGuard)
   @HttpCode(HttpStatus.OK)

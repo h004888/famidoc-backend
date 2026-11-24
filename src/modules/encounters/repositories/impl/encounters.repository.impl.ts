@@ -112,6 +112,59 @@ class PrismaEncountersSession implements EncountersSession {
     }
   }
 
+  async holdTelehealthQuota(contractId: string) {
+    await this.tx.medicalContract.update({
+      where: { id: contractId },
+      data: { heldTelehealth: { increment: 1 } },
+    });
+  }
+
+  async releaseTelehealthQuota(contractId: string) {
+    await this.tx.medicalContract.updateMany({
+      where: { id: contractId, heldTelehealth: { gt: 0 } },
+      data: { heldTelehealth: { decrement: 1 } },
+    });
+  }
+
+  async commitHeldTelehealthQuota(contractId: string) {
+    const contract = await this.tx.medicalContract.findUnique({
+      where: { id: contractId },
+      include: { servicePackage: true },
+    });
+    const policy = contract?.servicePackage?.videoQuotaPolicy ?? 'FIXED';
+    if (policy === 'UNLIMITED' || policy === 'CONTRACT') {
+      return;
+    }
+    const released = await this.tx.medicalContract.updateMany({
+      where: { id: contractId, heldTelehealth: { gt: 0 } },
+      data: {
+        heldTelehealth: { decrement: 1 },
+        remainingTelehealth: { decrement: 1 },
+      },
+    });
+    if (released.count === 0) {
+      await this.tx.medicalContract.updateMany({
+        where: { id: contractId, remainingTelehealth: { gt: 0 } },
+        data: { remainingTelehealth: { decrement: 1 } },
+      });
+    }
+  }
+
+  async refundTelehealthQuota(contractId: string) {
+    const contract = await this.tx.medicalContract.findUnique({
+      where: { id: contractId },
+      include: { servicePackage: true },
+    });
+    const policy = contract?.servicePackage?.videoQuotaPolicy ?? 'FIXED';
+    if (policy === 'UNLIMITED' || policy === 'CONTRACT') {
+      return;
+    }
+    await this.tx.medicalContract.update({
+      where: { id: contractId },
+      data: { remainingTelehealth: { increment: 1 } },
+    });
+  }
+
   findDoctorOverlappingEncounters(
     doctorId: string,
     scheduledDate: Date,

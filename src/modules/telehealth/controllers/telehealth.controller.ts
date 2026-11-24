@@ -115,4 +115,14 @@ export class TelehealthController {
     );
     res.send(result.buffer);
   }
+
+  @Get(':encounterId/snapshot')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({ summary: 'Lấy tóm tắt sức khỏe hộ gia đình (Family Clinical Snapshot) cho phòng Video' })
+  getFamilyClinicalSnapshot(
+    @Param('encounterId', ParseUUIDPipe) encounterId: string,
+    @Req() req: { user: TelehealthActor },
+  ) {
+    return (this.telehealthService as any).getFamilyClinicalSnapshot(encounterId, req.user);
+  }
 }

@@ -101,6 +101,15 @@ export class CreateMedicalContractDto {
   @IsUUID('4')
   @IsOptional()
   queueRequestId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Địa chỉ thăm khám tại nhà của hộ gia đình (tùy chọn, có thể bổ sung sau)',
+    example: 'Số 12, Phố ABC, Quận XYZ, Hà Nội',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  homeVisitAddress?: string;
 }
 
 export class CreateFourPartyContractDto extends CreateMedicalContractDto {}

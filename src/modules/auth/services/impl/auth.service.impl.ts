@@ -428,34 +428,16 @@ export class AuthServiceImpl implements IAuthService {
     clientIp?: string,
     userAgent?: string,
   ): Promise<LoginSuccessResponse> {
-    const LOCKOUT_DURATION_SECONDS = 1800; // 30 minutes (SRS Security Section IV.2.3)
     const email = (dto.email || '').trim().toLowerCase();
     if (!email) {
       throw new BadRequestException('Vui lòng cung cấp email đăng nhập');
     }
     try {
-      if (this.redisClient && typeof this.redisClient.get === 'function') {
-        const isLocked = await this.redisClient.get(
-          `login:lock:${email}`,
-        );
-        if (isLocked) {
-          throw new ForbiddenException(
-            'Account temporarily locked. Please try again in 30 minutes',
-          );
-        }
-      }
-
       const user: AuthEntity | null = await this.authRepository.findByEmail(email);
 
       if (!user) {
         throw new UnauthorizedException(
           'Incorrect username or password. Please check again.',
-        );
-      }
-
-      if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
-        throw new ForbiddenException(
-          'Account temporarily locked. Please try again in 30 minutes',
         );
       }
 
@@ -474,45 +456,9 @@ export class AuthServiceImpl implements IAuthService {
         user.passwordHash,
       );
       if (!isValid) {
-        let failCount = (user.failedLoginAttempts || 0) + 1;
-        if (this.redisClient && typeof this.redisClient.incr === 'function') {
-          failCount = await this.redisClient.incr(`login:fail:${email}`);
-          if (
-            failCount === 1 &&
-            typeof this.redisClient.expire === 'function'
-          ) {
-            await this.redisClient.expire(
-              `login:fail:${email}`,
-              LOCKOUT_DURATION_SECONDS,
-            );
-          }
-        }
-        const lockedUntil =
-          failCount >= 5
-            ? new Date(Date.now() + LOCKOUT_DURATION_SECONDS * 1000)
-            : null;
-        if (failCount >= 5 && this.redisClient) {
-          await this.redisClient.set?.(
-            `login:lock:${email}`,
-            '1',
-            'EX',
-            LOCKOUT_DURATION_SECONDS,
-          );
-        }
-
-        await this.authRepository.updateFailedAttempts(user.id, failCount, lockedUntil);
-
         throw new UnauthorizedException(
           'Incorrect username or password. Please check again.',
         );
-      }
-
-      if (this.redisClient) {
-        await this.redisClient.del?.(`login:fail:${email}`);
-      }
-
-      if (user.failedLoginAttempts && user.failedLoginAttempts > 0) {
-        await this.authRepository.resetFailedAttempts(user.id);
       }
 
       const rememberMe = dto.rememberMe === true;
@@ -783,16 +729,6 @@ export class AuthServiceImpl implements IAuthService {
       );
       await this.redisClient.del?.(`otp:reset:${email}`);
       await this.redisClient.del?.(`otp:cooldown:reset:${email}`);
-      await this.redisClient.del?.(`login:lock:${email}`);
-      await this.redisClient.del?.(`login:fail:${email}`);
-      if (user.phone) {
-        await this.redisClient.del?.(`login:lock:${user.phone}`);
-        await this.redisClient.del?.(`login:fail:${user.phone}`);
-      }
-    }
-
-    if (user.failedLoginAttempts && user.failedLoginAttempts > 0) {
-      await this.authRepository.resetFailedAttempts(user.id);
     }
 
     return {
@@ -835,18 +771,6 @@ export class AuthServiceImpl implements IAuthService {
         'EX',
         7 * 86400,
       );
-      if (user.email) {
-        await this.redisClient.del?.(`login:lock:${user.email}`);
-        await this.redisClient.del?.(`login:fail:${user.email}`);
-      }
-      if (user.phone) {
-        await this.redisClient.del?.(`login:lock:${user.phone}`);
-        await this.redisClient.del?.(`login:fail:${user.phone}`);
-      }
-    }
-
-    if (user.failedLoginAttempts && user.failedLoginAttempts > 0) {
-      await this.authRepository.resetFailedAttempts(user.id);
     }
 
     return {

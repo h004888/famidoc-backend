@@ -120,6 +120,7 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
           facilityId: mockFacility.id,
           doctorId: mockDoctor.id,
           memberCount: 4,
+          homeVisitAddress: 'Số 12, Phố ABC, Quận XYZ, Hà Nội',
           additionalTerms: 'Ưu tiên lịch khám cuối tuần',
         },
         { type: 'body', metatype: CreateMedicalContractDto },
