@@ -399,11 +399,31 @@ export class DocumensoSyncService {
       let shouldSendPaymentNotice = false;
       const updateData: Prisma.MedicalContractUpdateInput = {};
 
-      if (allFourSigned && contract.contractStatus === 'PENDING_APPROVAL') {
-        updateData.contractStatus = 'PENDING_PAYMENT';
-        updateData.documensoSignedAt = new Date();
-        finalStatus = 'PENDING_PAYMENT';
-        shouldSendPaymentNotice = true;
+      if (
+        allFourSigned &&
+        contract.contractStatus === 'PENDING_APPROVAL'
+      ) {
+        if ((contract as { creditSourceContractId?: string | null }).creditSourceContractId) {
+          updateData.contractStatus = 'PAID_PENDING_APPROVAL';
+          updateData.approvalDeadlineAt = new Date(
+            Date.now() + 24 * 60 * 60 * 1000,
+          );
+          finalStatus = 'PAID_PENDING_APPROVAL';
+        } else {
+          updateData.contractStatus = 'PENDING_PAYMENT';
+          finalStatus = 'PENDING_PAYMENT';
+          shouldSendPaymentNotice = true;
+        }
+      } else if (
+        allFourSigned &&
+        contract.contractStatus === 'PAID_PENDING_APPROVAL'
+      ) {
+        const now = new Date();
+        updateData.contractStatus = 'ACTIVE';
+        updateData.documensoSignedAt = now;
+        updateData.startDate = now;
+        updateData.platformSignRetryPending = false;
+        finalStatus = 'ACTIVE';
       }
 
       if (Object.keys(updateData).length > 0) {
@@ -420,11 +440,14 @@ export class DocumensoSyncService {
           contractId: contract.id,
           contractStatus: finalStatus,
           signedRoles: Array.from(signedRoles),
-          signedPdfUrl: resolveSignedPdfUrl(contract.id, {
-            documensoItemId: contract.documensoItemId,
-            contractStatus: finalStatus,
-            signedRoles,
-          }),
+          signedPdfUrl:
+            allFourSigned || finalStatus === 'ACTIVE'
+              ? resolveSignedPdfUrl(contract.id, {
+                  documensoItemId: contract.documensoItemId,
+                  contractStatus: finalStatus,
+                  signedRoles,
+                })
+              : null,
         } satisfies DocumensoSyncResult,
       };
     });

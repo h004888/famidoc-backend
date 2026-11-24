@@ -6,15 +6,23 @@ import {
   EncounterVisitScope,
   Prisma,
 } from '@prisma/client';
-import {
-  APPOINTMENT_DURATION_MINUTES,
-  calculateCadenceDates,
-  getTimeWindowMinutes,
-  parseTimeToDate,
-} from './encounters.service.impl';
+import { calculateCadenceDates } from './encounters.service.impl';
 import { serializeEncounterScheduleMeta } from '../../utils/encounter-schedule-meta.util';
+import {
+  buildDayShiftOffsets,
+  evaluateSlotWindowAvailability,
+  isDayOffDate,
+  slotWindowToScheduledTime,
+  type SlotEncounterSummary,
+  type SlotWindow,
+} from '../../utils/two-slot-schedule.util';
 
-const CANDIDATE_SLOTS = ['08:30', '09:30', '10:30', '14:00', '15:00', '16:00'];
+const ACTIVE_BOOKED_STATUSES: EncounterStatus[] = [
+  EncounterStatus.CONFIRMED,
+  EncounterStatus.ON_THE_WAY,
+  EncounterStatus.ARRIVED,
+  EncounterStatus.IN_PROGRESS,
+];
 
 @Injectable()
 export class AutoScheduleFirstVisitService {
@@ -33,8 +41,9 @@ export class AutoScheduleFirstVisitService {
         members: true,
       },
     });
-    if (!contract || !contract.doctorId) return [];
+    if (!contract) return [];
 
+    // EF2: Idempotency check — skip if non-cancelled PERIODIC_ROUTINE already exists
     const existing = await tx.encounter.findFirst({
       where: {
         contractId,
@@ -45,26 +54,61 @@ export class AutoScheduleFirstVisitService {
     });
     if (existing) return [];
 
-    const encounterType =
-      contract.remainingHomeVisits > 0
-        ? EncounterType.HOME_VISIT
-        : contract.remainingTelehealth > 0
-          ? EncounterType.TELEHEALTH
-          : null;
-    if (!encounterType) return [];
+    // AF1: Only auto-schedule HOME_VISIT; Telehealth/Online is never auto-scheduled
+    if (contract.remainingHomeVisits <= 0) {
+      return [];
+    }
 
     const packageQuota = contract.servicePackage?.periodicVisitsQuota ?? 0;
     const quota =
       packageQuota > 0
-        ? packageQuota
-        : encounterType === EncounterType.HOME_VISIT
-          ? contract.remainingHomeVisits
-          : contract.remainingTelehealth;
-
+        ? Math.min(packageQuota, contract.remainingHomeVisits)
+        : contract.remainingHomeVisits;
     if (quota <= 0) return [];
+
+    // EF1: Validate required data (doctorId, homeAddress, active members)
+    const homeAddress = contract.familyUnit?.homeAddress?.trim() || '';
+    const hasMembers = Array.isArray(contract.members) && contract.members.length > 0;
+    if (!contract.doctorId || !homeAddress || !hasMembers) {
+      const missingReasons: string[] = [];
+      if (!contract.doctorId) missingReasons.push('Bác sĩ phụ trách');
+      if (!homeAddress) missingReasons.push('Địa chỉ khám tại nhà');
+      if (!hasMembers) missingReasons.push('Thành viên gia đình');
+
+      const missingNotifications: Prisma.NotificationUncheckedCreateInput[] = [];
+      const contractCode = contract.contractNumber || contract.id.slice(0, 8);
+      if (contract.facility?.userId) {
+        missingNotifications.push({
+          userId: contract.facility.userId,
+          title: 'Hợp đồng chưa thể xếp lịch tự động (Thiếu thông tin)',
+          content: `HĐ ${contractCode} đã kích hoạt nhưng thiếu: ${missingReasons.join(', ')}. Vui lòng bổ sung và bấm xếp lịch lại.`,
+          type: 'ENCOUNTER_AUTO_SCHEDULE_MISSING_DATA',
+          referenceId: contract.id,
+        });
+      }
+      if (contract.familyUnit?.representativeUserId) {
+        missingNotifications.push({
+          userId: contract.familyUnit.representativeUserId,
+          title: 'Cần bổ sung thông tin để xếp lịch Khám tại nhà',
+          content: `HĐ ${contractCode} đã kích hoạt nhưng còn thiếu: ${missingReasons.join(', ')}.`,
+          type: 'ENCOUNTER_AUTO_SCHEDULE_MISSING_DATA',
+          referenceId: contract.id,
+        });
+      }
+      if (missingNotifications.length > 0) {
+        await tx.notification.createMany({ data: missingNotifications });
+      }
+      return [];
+    }
+
+    // Concurrency lock per doctor within this transaction
+    if (typeof (tx as { $executeRaw?: unknown }).$executeRaw === 'function') {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${contract.doctorId}))`;
+    }
 
     const durationMonths = contract.servicePackage?.durationMonths ?? 12;
     const baseStart = contract.startDate ? new Date(contract.startDate) : now;
+    const endBoundary = contract.endDate ? new Date(contract.endDate) : null;
     const milestoneDates = calculateCadenceDates(
       baseStart,
       durationMonths,
@@ -73,97 +117,209 @@ export class AutoScheduleFirstVisitService {
     );
 
     const createdEncounters = [];
-    const bookedByDay = new Map<string, number[]>();
+    let manualRequiredCount = 0;
+    const doctorDayCache = new Map<string, SlotEncounterSummary[]>();
+    const familyBusyDays = new Set<string>();
+    const dayShiftOffsets = buildDayShiftOffsets(7);
+
+    const loadDoctorDayEncounters = async (
+      dateObj: Date,
+      dayKey: string,
+    ): Promise<SlotEncounterSummary[]> => {
+      const cached = doctorDayCache.get(dayKey);
+      if (cached) return cached;
+      const rows = await tx.encounter.findMany({
+        where: {
+          doctorId: contract.doctorId!,
+          scheduledDate: dateObj,
+          encounterStatus: { in: ACTIVE_BOOKED_STATUSES },
+        },
+        select: {
+          encounterType: true,
+          scheduledTime: true,
+          contract: { select: { familyId: true } },
+        },
+      });
+      const mapped: SlotEncounterSummary[] = rows.map((r) => ({
+        encounterType: r.encounterType,
+        scheduledTime: r.scheduledTime,
+      }));
+      if (rows.some((r) => contract.familyId && r.contract?.familyId === contract.familyId)) {
+        familyBusyDays.add(dayKey);
+      }
+      doctorDayCache.set(dayKey, mapped);
+      return mapped;
+    };
+
+    const hasFamilyVisitOnDay = async (
+      dateObj: Date,
+      dayKey: string,
+    ): Promise<boolean> => {
+      if (familyBusyDays.has(dayKey)) return true;
+      if (!contract.familyId) return false;
+      const existingFam = await tx.encounter.findFirst({
+        where: {
+          scheduledDate: dateObj,
+          encounterStatus: { in: ACTIVE_BOOKED_STATUSES },
+          contract: { familyId: contract.familyId },
+        },
+        select: { id: true },
+      });
+      if (existingFam) {
+        familyBusyDays.add(dayKey);
+        return true;
+      }
+      return false;
+    };
 
     for (let i = 0; i < milestoneDates.length; i++) {
       const targetDate = milestoneDates[i];
-      const dayKey = targetDate.toISOString().slice(0, 10);
+      let chosenDate: Date | null = null;
+      let chosenSlot: SlotWindow | null = null;
 
-      let occupiedStartMinutes = bookedByDay.get(dayKey);
-      if (!occupiedStartMinutes) {
-        const existingEncounters = await tx.encounter.findMany({
-          where: {
+      // AF3 (±3) then AF4 (±7)
+      for (const offset of dayShiftOffsets) {
+        const candidate = new Date(
+          Date.UTC(
+            targetDate.getUTCFullYear(),
+            targetDate.getUTCMonth(),
+            targetDate.getUTCDate() + offset,
+            0,
+            0,
+            0,
+            0,
+          ),
+        );
+        if (candidate.getTime() < baseStart.getTime()) continue;
+        if (endBoundary && candidate.getTime() >= endBoundary.getTime()) continue;
+
+        // Rule 1: Skip Sundays & holidays
+        if (isDayOffDate(candidate).isDayOff) continue;
+
+        const dayKey = candidate.toISOString().slice(0, 10);
+
+        // Rule 2: 1 family max 1 visit per day
+        if (await hasFamilyVisitOnDay(candidate, dayKey)) continue;
+
+        // Rule 3: 1 day 2 slots, max 1 family per slot (+ AF2 Telehealth gap check)
+        const dayEncounters = await loadDoctorDayEncounters(candidate, dayKey);
+        const morning = evaluateSlotWindowAvailability('MORNING', dayEncounters);
+        const afternoon = evaluateSlotWindowAvailability('AFTERNOON', dayEncounters);
+
+        if (!morning.available && !afternoon.available) continue;
+
+        if (morning.available && afternoon.available) {
+          // AF2: Prefer the slot without Telehealth; otherwise alternate evenly
+          if (morning.hasTelehealth && !afternoon.hasTelehealth) {
+            chosenSlot = 'AFTERNOON';
+          } else if (afternoon.hasTelehealth && !morning.hasTelehealth) {
+            chosenSlot = 'MORNING';
+          } else {
+            chosenSlot = i % 2 === 0 ? 'MORNING' : 'AFTERNOON';
+          }
+        } else {
+          chosenSlot = morning.available ? 'MORNING' : 'AFTERNOON';
+        }
+
+        chosenDate = candidate;
+        break;
+      }
+
+      if (chosenDate && chosenSlot) {
+        const dayKey = chosenDate.toISOString().slice(0, 10);
+        const chosenTime = slotWindowToScheduledTime(chosenSlot);
+        const cached = doctorDayCache.get(dayKey) ?? [];
+        cached.push({
+          encounterType: EncounterType.HOME_VISIT,
+          scheduledTime: chosenTime,
+        });
+        doctorDayCache.set(dayKey, cached);
+        familyBusyDays.add(dayKey);
+
+        const milestoneNote = serializeEncounterScheduleMeta(
+          {
+            stage: 'AUTO_CONFIRMED',
+            milestoneIndex: i + 1,
+            totalMilestones: milestoneDates.length,
+            slotWindow: chosenSlot,
+          },
+          `Khám tại nhà định kỳ lần ${i + 1}/${milestoneDates.length} (${chosenSlot === 'MORNING' ? 'Khung Sáng 08:00-11:30' : 'Khung Chiều 13:30-17:30'})`,
+        );
+
+        const encounter = await tx.encounter.create({
+          data: {
+            contractId: contract.id,
             doctorId: contract.doctorId,
-            scheduledDate: targetDate,
-            encounterStatus: {
-              in: [
-                EncounterStatus.CONFIRMED,
-                EncounterStatus.REQUESTED,
-                EncounterStatus.IN_PROGRESS,
-              ],
+            encounterType: EncounterType.HOME_VISIT,
+            category: EncounterCategory.PERIODIC_ROUTINE,
+            visitScope: EncounterVisitScope.FAMILY,
+            scheduledDate: chosenDate,
+            scheduledTime: chosenTime,
+            encounterStatus: EncounterStatus.CONFIRMED,
+            cancelReason: milestoneNote,
+            participants: {
+              create: contract.members.map((m) => ({
+                patientId: m.patientId,
+              })),
             },
           },
         });
-        occupiedStartMinutes = existingEncounters.map((e) =>
-          getTimeWindowMinutes(e.scheduledTime),
+        createdEncounters.push(encounter);
+      } else {
+        // EF3: All ±7 days full -> create MANUAL_SLOT_REQUIRED for Doctor to schedule manually
+        manualRequiredCount++;
+        const milestoneNote = serializeEncounterScheduleMeta(
+          {
+            stage: 'MANUAL_SLOT_REQUIRED',
+            milestoneIndex: i + 1,
+            totalMilestones: milestoneDates.length,
+          },
+          `Mốc ${i + 1}/${milestoneDates.length} kín lịch ±7 ngày — Chờ Bác sĩ tự xếp tay`,
         );
-        bookedByDay.set(dayKey, occupiedStartMinutes);
-      }
 
-      let chosenTimeStr = CANDIDATE_SLOTS[0];
-      for (const slot of CANDIDATE_SLOTS) {
-        const slotTime = parseTimeToDate(slot);
-        const startMin = getTimeWindowMinutes(slotTime);
-        const endMin = startMin + APPOINTMENT_DURATION_MINUTES;
-
-        const hasConflict = occupiedStartMinutes.some((eStart) => {
-          const eEnd = eStart + APPOINTMENT_DURATION_MINUTES;
-          return startMin < eEnd && endMin > eStart;
+        const encounter = await tx.encounter.create({
+          data: {
+            contractId: contract.id,
+            doctorId: contract.doctorId,
+            encounterType: EncounterType.HOME_VISIT,
+            category: EncounterCategory.PERIODIC_ROUTINE,
+            visitScope: EncounterVisitScope.FAMILY,
+            scheduledDate: targetDate,
+            scheduledTime: slotWindowToScheduledTime('MORNING'),
+            encounterStatus: EncounterStatus.REQUESTED,
+            cancelReason: milestoneNote,
+            participants: {
+              create: contract.members.map((m) => ({
+                patientId: m.patientId,
+              })),
+            },
+          },
         });
-        if (!hasConflict) {
-          chosenTimeStr = slot;
-          break;
-        }
+        createdEncounters.push(encounter);
       }
-
-      const chosenTime = parseTimeToDate(chosenTimeStr);
-      occupiedStartMinutes.push(getTimeWindowMinutes(chosenTime));
-
-      const milestoneNote = serializeEncounterScheduleMeta(
-        {
-          stage: 'CADENCE_DRAFT',
-          milestoneIndex: i + 1,
-          totalMilestones: milestoneDates.length,
-        },
-        `Khám định kỳ gia đình lần ${i + 1}/${milestoneDates.length} (khung dự thảo mặc định theo gói)`,
-      );
-
-      const encounter = await tx.encounter.create({
-        data: {
-          contractId: contract.id,
-          doctorId: contract.doctorId,
-          encounterType,
-          category: EncounterCategory.PERIODIC_ROUTINE,
-          visitScope: EncounterVisitScope.FAMILY,
-          scheduledDate: targetDate,
-          scheduledTime: chosenTime,
-          encounterStatus: EncounterStatus.REQUESTED,
-          cancelReason: milestoneNote,
-          ...(contract.members.length > 0
-            ? {
-                participants: {
-                  create: contract.members.map((m) => ({
-                    patientId: m.patientId,
-                  })),
-                },
-              }
-            : {}),
-        },
-      });
-      createdEncounters.push(encounter);
     }
 
     const notifications: Prisma.NotificationUncheckedCreateInput[] = [];
     const familyLabel =
       contract.familyUnit?.representativeUser?.fullName || 'Hộ gia đình mới';
     const contractCode = contract.contractNumber || contract.id.slice(0, 8);
+    const confirmedCount = createdEncounters.length - manualRequiredCount;
 
     if (contract.doctor?.user?.id) {
       notifications.push({
         userId: contract.doctor.user.id,
-        title: 'Khung lịch khám định kỳ mặc định mới cần duyệt',
-        content: `Hệ thống đã tự động tạo ${createdEncounters.length} mốc khám định kỳ dự thảo cho ${familyLabel} (HĐ ${contractCode}). Vui lòng rà soát, điều chỉnh nếu cần và chốt gửi gia đình.`,
-        type: 'ENCOUNTER_CADENCE_DRAFT_READY',
+        title:
+          manualRequiredCount > 0
+            ? 'Có lịch Khám tại nhà mới & mốc cần Bác sĩ tự xếp tay'
+            : 'Lịch Khám tại nhà mới đã được xếp vào lịch',
+        content:
+          manualRequiredCount > 0
+            ? `Hệ thống đã chốt ${confirmedCount} buổi Khám tại nhà cho ${familyLabel} (HĐ ${contractCode}) và có ${manualRequiredCount} mốc kín lịch cần Bác sĩ tự xếp tay.`
+            : `Hệ thống đã chốt sẵn ${confirmedCount} buổi Khám tại nhà cho ${familyLabel} (HĐ ${contractCode}) theo 2 khung Sáng/Chiều.`,
+        type:
+          manualRequiredCount > 0
+            ? 'ENCOUNTER_MANUAL_SCHEDULE_REQUIRED'
+            : 'ENCOUNTER_AUTO_CONFIRMED',
         referenceId: contract.id,
       });
     }
@@ -171,9 +327,12 @@ export class AutoScheduleFirstVisitService {
     if (contract.familyUnit?.representativeUserId) {
       notifications.push({
         userId: contract.familyUnit.representativeUserId,
-        title: 'Hợp đồng đã kích hoạt — Đang lập lộ trình khám định kỳ',
-        content: `Hệ thống đã khởi tạo ${createdEncounters.length} mốc khám định kỳ dự kiến theo gói chăm sóc và gửi Bác sĩ phụ trách rà soát. Bạn sẽ nhận thông báo xác nhận ngay khi Bác sĩ chốt lịch.`,
-        type: 'ENCOUNTER_CADENCE_DRAFT_READY',
+        title: 'Thanh toán thành công — Lịch Khám tại nhà đã được xếp sẵn',
+        content:
+          manualRequiredCount > 0
+            ? `Hệ thống đã chốt sẵn ${confirmedCount} buổi Khám tại nhà và còn ${manualRequiredCount} mốc đang chờ Bác sĩ chọn khung giờ phù hợp.`
+            : `Hệ thống đã chốt sẵn ${confirmedCount} buổi Khám tại nhà theo gói chăm sóc (mỗi ngày tối đa 1 lượt). Bạn có thể đề xuất đổi lịch nếu bận đột xuất.`,
+        type: 'ENCOUNTER_AUTO_CONFIRMED',
         referenceId: contract.id,
       });
     }

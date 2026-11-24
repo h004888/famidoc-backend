@@ -117,9 +117,19 @@ enum PatientDocumentType {
 enum MedicalContractStatus {
   PENDING_APPROVAL
   PENDING_PAYMENT
+  PAID_PENDING_APPROVAL
+  APPROVAL_REJECTED
+  APPROVAL_EXPIRED
   ACTIVE
   EXPIRED
   TERMINATED
+}
+
+enum ContractRefundRequestStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  REJECTED
 }
 
 enum SignerRole {
@@ -721,6 +731,13 @@ model MedicalContract {
   documensoItemId      String?  @map("documenso_item_id") @db.VarChar(100)
   documensoSignedAt    DateTime? @map("documenso_signed_at") @db.Timestamptz()
   additionalTerms      String?  @map("additional_terms") @db.Text
+  homeVisitAddress     String?  @map("home_visit_address") @db.VarChar(500)
+  approvalDeadlineAt   DateTime? @map("approval_deadline_at") @db.Timestamptz()
+  rejectionReason      String?  @map("rejection_reason") @db.Text
+  creditSourceContractId String? @unique @map("credit_source_contract_id") @db.Uuid
+  creditSourceContract MedicalContract? @relation("ContractCreditTransfer", fields: [creditSourceContractId], references: [id], onDelete: Restrict)
+  creditTransferTarget MedicalContract? @relation("ContractCreditTransfer")
+  platformSignRetryPending Boolean @default(false) @map("platform_sign_retry_pending")
 
   // Relations
   familyUnit     FamilyUnit          @relation(fields: [familyId], references: [id], onDelete: Restrict)
@@ -737,6 +754,7 @@ model MedicalContract {
   supportCases         SupportCase[]
   matchingSession      MatchingSession?
   matchingQueueRequest MatchingQueueRequest?
+  refundRequest        ContractRefundRequest?
 
   // BR-06 & GB-19: Mỗi hộ gia đình chỉ có duy nhất 1 hợp đồng ACTIVE
   // Lưu ý: Chỉ mục UNIQUE có điều kiện WHERE contract_status = 'ACTIVE' được tạo ở tầng PostgreSQL migration:
@@ -744,6 +762,23 @@ model MedicalContract {
   @@index([familyId], map: "idx_medical_contracts_family_id")
   @@index([doctorId, contractStatus, holdExpiresAt], map: "idx_medical_contracts_doctor_quota")
   @@map("medical_contracts")
+}
+
+model ContractRefundRequest {
+  id            String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  refundCode    String                      @unique @map("refund_code") @db.VarChar(50)
+  contractId    String                      @unique @map("contract_id") @db.Uuid
+  amountVnd     Decimal                     @map("amount_vnd") @db.Decimal(12, 2)
+  bankName      String                      @map("bank_name") @db.VarChar(120)
+  accountNumber String                      @map("account_number") @db.VarChar(50)
+  accountHolder String                      @map("account_holder") @db.VarChar(150)
+  status        ContractRefundRequestStatus @default(PENDING)
+  createdAt     DateTime                    @default(now()) @map("created_at") @db.Timestamptz()
+  processedAt   DateTime?                   @map("processed_at") @db.Timestamptz()
+
+  contract MedicalContract @relation(fields: [contractId], references: [id], onDelete: Restrict)
+
+  @@map("contract_refund_requests")
 }
 
 model ContractMember {

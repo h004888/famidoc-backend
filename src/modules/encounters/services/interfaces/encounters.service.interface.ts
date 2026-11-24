@@ -40,4 +40,25 @@ export interface IEncountersService {
     encounterId: string,
     dto: { scheduledDate?: string; scheduledTime?: string; encounterType?: string },
   ): Promise<unknown>;
+  getDoctorMonthlyAvailability(
+    actor: AuthenticatedUser,
+    doctorId: string,
+    month: string,
+    contractId?: string,
+    excludeEncounterId?: string,
+  ): Promise<unknown>;
+  withdrawRescheduleRequest(
+    actor: AuthenticatedUser,
+    encounterId: string,
+    requestId: string,
+  ): Promise<unknown>;
+  doctorManualSchedule(
+    actor: AuthenticatedUser,
+    encounterId: string,
+    dto: { proposedDate: string; slotWindow: 'MORNING' | 'AFTERNOON' },
+  ): Promise<unknown>;
+  retryContractAutoSchedule(
+    actor: AuthenticatedUser,
+    contractId: string,
+  ): Promise<unknown>;
 }

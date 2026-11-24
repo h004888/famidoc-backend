@@ -182,6 +182,28 @@ export class ContractsController {
     return this.service.getFamilyGateStatus(req.user);
   }
 
+  @Post('four-party/preview-pdf')
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_REP')
+  @ApiOperation({
+    summary:
+      'Xem trước bản nháp PDF hợp đồng 4 bên (stateless, có watermark BẢN NHÁP)',
+  })
+  async previewFourPartyDraftPdf(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: CreateMedicalContractDto,
+    @Res() res: Response,
+  ) {
+    const pdfBuffer = await this.service.previewFourPartyDraftPdf(req.user, dto);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader(
+      'Content-Disposition',
+      'inline; filename="hop-dong-ban-nhap.pdf"',
+    );
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(pdfBuffer);
+  }
+
   @Get('medical/:id/signing-session')
   @UseGuards(RolesGuard)
   @Roles('FAMILY_REP', 'HEALTHCARE_FACILITY', 'DOCTOR', 'ADMIN')
@@ -215,6 +237,62 @@ export class ContractsController {
       id,
       req.ip ?? 'documenso-sync',
     );
+  }
+
+  @Post('four-party/:id/reject')
+  @UseGuards(RolesGuard)
+  @Roles('HEALTHCARE_FACILITY', 'DOCTOR', 'ADMIN')
+  @ApiOperation({
+    summary: 'Từ chối tiếp nhận hợp đồng đang chờ duyệt (PAID_PENDING_APPROVAL)',
+  })
+  rejectEscrowContract(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() body: { reason?: string },
+  ) {
+    return this.service.rejectEscrowContract(req.user, id, body?.reason ?? '');
+  }
+
+  @Post('four-party/:id/replace-doctor')
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_REP')
+  @ApiOperation({
+    summary: 'Đổi bác sĩ thay thế & bảo lưu 100% tiền tạm giữ (credit transfer)',
+  })
+  replaceDoctorWithCredit(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() body: { doctorId: string },
+  ) {
+    return this.service.replaceDoctorWithCredit(req.user, id, body.doctorId);
+  }
+
+  @Post('four-party/:id/refund-request')
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_REP')
+  @ApiOperation({
+    summary: 'Gửi yêu cầu hoàn tiền 100% cho hợp đồng bị từ chối hoặc quá hạn 24h',
+  })
+  createRefundRequest(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body()
+    body: { bankName: string; accountNumber: string; accountHolder: string },
+  ) {
+    return this.service.createRefundRequest(req.user, id, body);
+  }
+
+  @Get('four-party/:id/refund-request')
+  @UseGuards(RolesGuard)
+  @Roles('FAMILY_REP', 'ADMIN')
+  @ApiOperation({
+    summary: 'Xem trạng thái yêu cầu hoàn tiền 100% của hợp đồng',
+  })
+  getRefundRequest(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.service.getRefundRequest(req.user, id);
   }
 
   @Get('medical/:id/signed-pdf')

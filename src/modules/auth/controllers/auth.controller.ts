@@ -125,10 +125,6 @@ export class AuthController {
     description: 'Đăng nhập thành công, trả về JWT Access Token',
   })
   @ApiResponse({ status: 401, description: 'Sai tên đăng nhập hoặc mật khẩu' })
-  @ApiResponse({
-    status: 403,
-    description: 'Tài khoản bị tạm khóa 30 phút do sai quá 5 lần',
-  })
   login(@Body() dto: LoginDto, @Req() req: any) {
     return this.authService.login(
       dto,

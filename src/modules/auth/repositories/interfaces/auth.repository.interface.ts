@@ -112,12 +112,6 @@ export interface IAuthRepository
     email: string,
   ): Promise<void>;
   updatePassword(userId: string, passwordHash: string): Promise<void>;
-  updateFailedAttempts(
-    userId: string,
-    attempts: number,
-    lockedUntil?: Date | null,
-  ): Promise<void>;
-  resetFailedAttempts(userId: string): Promise<void>;
   createAuthSession(data: CreateAuthSessionData): Promise<AuthSessionRecord>;
   findAuthSessionByTokenHash(
     tokenHash: string,

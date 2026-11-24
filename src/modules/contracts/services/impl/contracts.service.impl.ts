@@ -8,6 +8,8 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleDestroy,
+  OnModuleInit,
   Optional,
 } from '@nestjs/common';
 import {
@@ -100,9 +102,25 @@ interface TerminationConsent {
   termsHash: string;
 }
 @Injectable()
-export class ContractsServiceImpl implements IContractsService {
+export class ContractsServiceImpl
+  implements IContractsService, OnModuleInit, OnModuleDestroy
+{
   private readonly documentRenderer: ContractDocumentRendererService;
   private readonly logger = new Logger(ContractsServiceImpl.name);
+  private escrowExpiryTimer?: NodeJS.Timeout;
+
+  onModuleInit() {
+    this.escrowExpiryTimer = setInterval(
+      () => void this.expireOverdueEscrowApprovals().catch(() => undefined),
+      5 * 60 * 1000,
+    );
+  }
+
+  onModuleDestroy() {
+    if (this.escrowExpiryTimer) {
+      clearInterval(this.escrowExpiryTimer);
+    }
+  }
 
   constructor(
     @Inject(CONTRACTS_REPOSITORY_TOKEN)
@@ -164,6 +182,288 @@ export class ContractsServiceImpl implements IContractsService {
     }
 
     return { doctor, activeAndHeldCount, maxCap };
+  }
+
+  async previewFourPartyDraftPdf(
+    actor: AuthenticatedUser,
+    dto: CreateMedicalContractDto,
+  ): Promise<Buffer> {
+    if (!this.pdfRenderer) {
+      throw new BadRequestException('Trình kết xuất PDF chưa sẵn sàng');
+    }
+    return this.repository.transaction(async (session) => {
+      let targetFamilyId = actor.familyUnitId || dto.familyId;
+      if (!targetFamilyId && actor.role === 'FAMILY_REP') {
+        const repFamily =
+          await session.findFamilyByRepresentativeUserId?.(actor.id);
+        targetFamilyId = repFamily?.id;
+      }
+      if (!targetFamilyId) {
+        throw new BadRequestException(
+          'Tài khoản đại diện gia đình chưa liên kết với hộ gia đình',
+        );
+      }
+
+      const [family, pkg, doctor, admin] = await Promise.all([
+        session.findFamilyById(targetFamilyId),
+        session.findPackage(dto.packageId),
+        dto.doctorId ? session.findDoctorById(dto.doctorId) : null,
+        session.findFirstActiveAdminUser?.() ?? null,
+      ]);
+
+      if (!family) {
+        throw new NotFoundException('Không tìm thấy thông tin hộ gia đình');
+      }
+      if (!pkg) {
+        throw new NotFoundException('Không tìm thấy gói dịch vụ chăm sóc');
+      }
+      const targetFacilityId = doctor?.facilityId ?? dto.facilityId;
+      if (!targetFacilityId) {
+        throw new BadRequestException(
+          'Không xác định được cơ sở y tế phụ trách',
+        );
+      }
+      const facility = await session.findFacilityById(targetFacilityId);
+      if (!facility) {
+        throw new NotFoundException('Không tìm thấy cơ sở y tế phụ trách');
+      }
+
+      const memberCount = Math.max(
+        dto.memberCount ?? pkg.includedMembers,
+        pkg.includedMembers,
+      );
+      const extraMembers = Math.max(0, memberCount - pkg.includedMembers);
+      const basePriceVnd = Number(pkg.basePrice ?? 0);
+      const additionalMemberUnitPriceVnd =
+        Number(pkg.additionalMemberMonthlyPrice ?? 0) * pkg.durationMonths;
+      const additionalMemberTotalVnd =
+        extraMembers * additionalMemberUnitPriceVnd;
+      const totalPriceVnd = basePriceVnd + additionalMemberTotalVnd;
+
+      const html = buildDocumensoContractHtml({
+        contractNumber: 'BAN-NHAP',
+        createdAt: new Date(),
+        durationMonths: pkg.durationMonths,
+        pkg: {
+          packageName: pkg.packageName,
+          lineageCode: pkg.packageCode ?? 'FAMIDOC',
+          includedMembers: pkg.includedMembers,
+          periodicVisitsQuota: pkg.periodicVisitsQuota,
+          telehealthQuota: pkg.telehealthQuota,
+          description: pkg.description,
+        },
+        pricing: {
+          basePriceVnd,
+          additionalMemberTotalVnd,
+          additionalMemberUnitPriceVnd,
+          totalPriceVnd,
+        },
+        memberCount,
+        family,
+        facility,
+        doctor,
+        admin,
+        additionalTerms: dto.additionalTerms,
+        homeVisitAddress: dto.homeVisitAddress,
+        isDraftPreview: true,
+      });
+
+      return this.pdfRenderer!.renderPdf(html);
+    });
+  }
+
+  async rejectEscrowContract(
+    actor: AuthenticatedUser,
+    contractId: string,
+    reason: string,
+  ) {
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) {
+      throw new BadRequestException('Vui lòng nhập lý do từ chối hợp đồng');
+    }
+    const prismaClient = (this.repository as any).prisma;
+    const contract = await prismaClient.medicalContract.findUnique({
+      where: { id: contractId },
+    });
+    if (!contract) {
+      throw new NotFoundException('Không tìm thấy hợp đồng');
+    }
+    if (contract.contractStatus !== 'PAID_PENDING_APPROVAL') {
+      throw new ConflictException(
+        'Chỉ có thể từ chối hợp đồng đang ở trạng thái chờ phê duyệt',
+      );
+    }
+    const updated = await prismaClient.medicalContract.update({
+      where: { id: contractId },
+      data: {
+        contractStatus: 'APPROVAL_REJECTED',
+        rejectionReason: trimmedReason,
+      },
+    });
+    if (contract.documensoEnvelopeId && this.documensoClient) {
+      await this.documensoClient
+        .deleteEnvelope(contract.documensoEnvelopeId)
+        .catch(() => undefined);
+    }
+    return updated;
+  }
+
+  async replaceDoctorWithCredit(
+    actor: AuthenticatedUser,
+    sourceContractId: string,
+    doctorId: string,
+  ): Promise<ContractSummary> {
+    if (!doctorId) {
+      throw new BadRequestException('Vui lòng chọn bác sĩ thay thế');
+    }
+    const prismaClient = (this.repository as any).prisma;
+    const source = await prismaClient.medicalContract.findUnique({
+      where: { id: sourceContractId },
+      include: {
+        creditTransferTarget: true,
+        refundRequest: true,
+      },
+    });
+    if (!source) {
+      throw new NotFoundException('Không tìm thấy hợp đồng nguồn');
+    }
+    if (
+      source.contractStatus !== 'APPROVAL_REJECTED' &&
+      source.contractStatus !== 'APPROVAL_EXPIRED'
+    ) {
+      throw new ConflictException(
+        'Chỉ được đổi bác sĩ bảo lưu tiền cho hợp đồng bị từ chối hoặc quá hạn 24h',
+      );
+    }
+    if (source.creditTransferTarget || source.refundRequest) {
+      throw new ConflictException(
+        'Khoản tiền tạm giữ của hợp đồng này đã được sử dụng hoặc đang hoàn trả',
+      );
+    }
+
+    const created = await this.createInitialMedicalContract(actor, {
+      packageId: source.packageId,
+      doctorId,
+      memberCount: source.memberCount,
+      homeVisitAddress:
+        source.homeVisitAddress ?? 'Theo địa chỉ hộ gia đình đã đăng ký',
+      additionalTerms: source.additionalTerms ?? undefined,
+    });
+
+    await prismaClient.medicalContract.update({
+      where: { id: created.id },
+      data: { creditSourceContractId: source.id },
+    });
+
+    return {
+      ...created,
+      creditSourceContractId: source.id,
+    } as ContractSummary;
+  }
+
+  async createRefundRequest(
+    actor: AuthenticatedUser,
+    contractId: string,
+    payload: { bankName: string; accountNumber: string; accountHolder: string },
+  ) {
+    if (
+      !payload.bankName?.trim() ||
+      !payload.accountNumber?.trim() ||
+      !payload.accountHolder?.trim()
+    ) {
+      throw new BadRequestException(
+        'Vui lòng nhập đầy đủ ngân hàng, số tài khoản và tên chủ tài khoản',
+      );
+    }
+
+    const prismaClient = (this.repository as any).prisma;
+    return prismaClient.$transaction(async (tx: any) => {
+      const source = await tx.medicalContract.findUnique({
+        where: { id: contractId },
+        include: { creditTransferTarget: true, refundRequest: true },
+      });
+      if (!source) {
+        throw new NotFoundException('Không tìm thấy hợp đồng');
+      }
+      if (
+        source.contractStatus !== 'APPROVAL_REJECTED' &&
+        source.contractStatus !== 'APPROVAL_EXPIRED'
+      ) {
+        throw new ConflictException(
+          'Chỉ có thể yêu cầu hoàn tiền cho hợp đồng bị từ chối hoặc quá hạn 24h',
+        );
+      }
+      if (source.creditTransferTarget || source.refundRequest) {
+        throw new ConflictException(
+          'Khoản tiền tạm giữ của hợp đồng này đã được sử dụng hoặc đã gửi yêu cầu hoàn tiền',
+        );
+      }
+      const refundCode = `RF-${Date.now().toString().slice(-8)}`;
+      return tx.contractRefundRequest.create({
+        data: {
+          refundCode,
+          contractId: source.id,
+          amountVnd: source.totalAmount,
+          bankName: payload.bankName.trim(),
+          accountNumber: payload.accountNumber.trim(),
+          accountHolder: payload.accountHolder.trim().toUpperCase(),
+          status: 'PENDING',
+        },
+      });
+    });
+  }
+
+  async getRefundRequest(actor: AuthenticatedUser, contractId: string) {
+    const prismaClient = (this.repository as any).prisma;
+    const refund = await prismaClient.contractRefundRequest.findUnique({
+      where: { contractId },
+    });
+    if (!refund) {
+      throw new NotFoundException('Chưa có yêu cầu hoàn tiền cho hợp đồng này');
+    }
+    return refund;
+  }
+
+  async expireOverdueEscrowApprovals(): Promise<number> {
+    const prismaClient = (this.repository as any).prisma;
+    if (!prismaClient?.medicalContract?.findMany) return 0;
+
+    const now = new Date();
+    const overdueContracts = await prismaClient.medicalContract.findMany({
+      where: {
+        contractStatus: 'PAID_PENDING_APPROVAL',
+        platformSignRetryPending: false,
+        approvalDeadlineAt: { lte: now },
+      },
+      select: { id: true, documensoEnvelopeId: true },
+    });
+
+    let expiredCount = 0;
+    for (const item of overdueContracts) {
+      const updated = await prismaClient.medicalContract.updateMany({
+        where: {
+          id: item.id,
+          contractStatus: 'PAID_PENDING_APPROVAL',
+          platformSignRetryPending: false,
+        },
+        data: {
+          contractStatus: 'APPROVAL_EXPIRED',
+          rejectionReason: 'Hồ sơ đã quá thời hạn phản hồi 24 giờ từ Cơ sở y tế / Bác sĩ.',
+        },
+      });
+      if (updated.count > 0) {
+        expiredCount += 1;
+        if (item.documensoEnvelopeId && this.documensoClient) {
+          await this.documensoClient
+            .deleteEnvelope(item.documensoEnvelopeId)
+            .catch(() => undefined);
+        }
+      }
+    }
+    if (expiredCount > 0) {
+      this.logger.log(`Đã tự động hết hạn ${expiredCount} hợp đồng quá SLA 24 giờ.`);
+    }
+    return expiredCount;
   }
 
   async createInitialMedicalContract(

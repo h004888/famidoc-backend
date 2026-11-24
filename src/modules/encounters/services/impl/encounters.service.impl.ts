@@ -33,6 +33,14 @@ import {
   parseEncounterScheduleMeta,
   serializeEncounterScheduleMeta,
 } from '../../utils/encounter-schedule-meta.util';
+import {
+  evaluateSlotWindowAvailability,
+  isDayOffDate,
+  mapTimeToSlotWindow,
+  slotWindowToScheduledTime,
+  type SlotEncounterSummary,
+} from '../../utils/two-slot-schedule.util';
+import { AutoScheduleFirstVisitService } from './auto-schedule-first-visit.service';
 
 export const APPOINTMENT_DURATION_MINUTES = 45;
 export const RESCHEDULE_MIN_NOTICE_HOURS = 4;
@@ -653,49 +661,154 @@ export class EncountersServiceImpl implements IEncountersService {
         }
       }
 
-      if (encounter.rescheduleCount >= MAX_RESCHEDULE_COUNT) {
-        throw new BadRequestException(
-          `Maximum reschedule limit (${MAX_RESCHEDULE_COUNT} times) exceeded. Please contact the healthcare facility hotline.`,
-        );
+      const tx = (session as unknown as { tx?: Prisma.TransactionClient }).tx;
+      if (tx) {
+        await this.expireStaleRescheduleRequests(tx);
+        if (typeof (tx as { $executeRaw?: unknown }).$executeRaw === 'function') {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${encounter.doctorId}))`;
+        }
       }
 
+      // BR-4: Không giới hạn tổng số lần đổi lịch
       const existingPending = await session.findPendingRescheduleRequestByEncounter(encounterId);
       if (existingPending) {
-        throw new ConflictException('This encounter already has a pending reschedule request');
+        throw new ConflictException('Buổi khám này đang có 1 yêu cầu đổi lịch chờ phản hồi');
       }
 
-      // Check remaining time before examination (4-hour SLA rule)
-      const scheduledDateTime = combineDateAndTime(encounter.scheduledDate, encounter.scheduledTime);
+      // BR-1: Báo trước ít nhất 1 ngày (trước 20:00 tối hôm trước ngày khám cũ theo giờ VN UTC+7)
       const now = new Date();
-      const diffHours = (scheduledDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+      const deadlineUtc = new Date(
+        Date.UTC(
+          encounter.scheduledDate.getUTCFullYear(),
+          encounter.scheduledDate.getUTCMonth(),
+          encounter.scheduledDate.getUTCDate() - 1,
+          13, // 20:00 UTC+7 = 13:00 UTC
+          0,
+          0,
+          0,
+        ),
+      );
 
-      if (diffHours < RESCHEDULE_MIN_NOTICE_HOURS) {
-        await session.createAuditLog(actor.id, 'RESCHEDULE_REJECTED_UNDER_4H', encounterId);
+      if (now.getTime() > deadlineUtc.getTime()) {
+        await session.createAuditLog(actor.id, 'RESCHEDULE_REJECTED_PAST_DEADLINE', encounterId);
         await session.createNotification({
           userId: actor.id,
-          title: 'Yêu cầu đổi lịch bị từ chối do không đủ thời gian báo trước',
-          content: 'Yêu cầu đổi lịch phải được gửi trước ít nhất 4 giờ. Vui lòng liên hệ Hotline hỗ trợ để được can thiệp khẩn cấp.',
+          title: 'Yêu cầu đổi lịch bị từ chối do quá thời hạn báo trước',
+          content:
+            'Yêu cầu đổi lịch phải được gửi trước 20:00 tối hôm trước ngày khám. Vui lòng liên hệ Hotline hỗ trợ nếu có việc khẩn cấp.',
           type: 'RESCHEDULE_REJECTED_UNDER_4H',
           referenceId: encounter.id,
         });
 
         throw new BadRequestException(
-          'Automatically rejected the rescheduling request due to insufficient advance notice (< 4 hours). Please contact the support hotline.',
+          'Yêu cầu đổi lịch phải được gửi trước 20:00 tối hôm trước ngày khám cũ.',
         );
       }
 
       const proposedDate = parseDateOnly(dto.proposedDate);
       const proposedTime = parseTimeToDate(dto.proposedTime);
 
-      const conflict = await this.checkEncounterSlotConflict(
-        session,
-        encounter.doctorId,
-        proposedDate,
-        proposedTime,
-        encounter.id,
+      // BR-1 áp dụng cho cả ngày mới: Không cho chọn quá khứ, không cho chọn hôm nay, và sau 20:00 không cho chọn ngày mai
+      const proposedDeadlineUtc = new Date(
+        Date.UTC(
+          proposedDate.getUTCFullYear(),
+          proposedDate.getUTCMonth(),
+          proposedDate.getUTCDate() - 1,
+          13, // 20:00 UTC+7 = 13:00 UTC
+          0,
+          0,
+          0,
+        ),
       );
-      if (conflict.hasConflict) {
-        throw new ConflictException(conflict.reason);
+      if (now.getTime() > proposedDeadlineUtc.getTime()) {
+        throw new BadRequestException(
+          'Không thể đổi lịch vào ngày hôm nay hoặc quá khứ (ngày mới phải đặt trước 20:00 tối hôm trước).',
+        );
+      }
+      const dayOff = isDayOffDate(proposedDate);
+      if (dayOff.isDayOff) {
+        throw new BadRequestException(dayOff.reason || 'Ngày đã chọn là ngày nghỉ');
+      }
+
+      const isHomeVisit = encounter.encounterType === EncounterType.HOME_VISIT;
+      if (isHomeVisit && tx) {
+        // BR-2 (Soft-lock) & BR-5 (Cho phép đổi khung trong cùng 1 ngày bằng cách loại trừ encounter.id)
+        const [dayEncounters, pendingSoftLocks] = await Promise.all([
+          tx.encounter.findMany({
+            where: {
+              doctorId: encounter.doctorId,
+              scheduledDate: proposedDate,
+              id: { not: encounter.id },
+              encounterStatus: {
+                in: [
+                  EncounterStatus.CONFIRMED,
+                  EncounterStatus.ON_THE_WAY,
+                  EncounterStatus.ARRIVED,
+                  EncounterStatus.IN_PROGRESS,
+                ],
+              },
+            },
+            select: {
+              encounterType: true,
+              scheduledTime: true,
+              contract: { select: { familyId: true } },
+            },
+          }),
+          tx.encounterRescheduleRequest.findMany({
+            where: {
+              status: 'PENDING',
+              proposedDate,
+              encounter: { doctorId: encounter.doctorId, id: { not: encounter.id } },
+            },
+            select: {
+              proposedTime: true,
+              encounter: { select: { encounterType: true } },
+            },
+          }),
+        ]);
+
+        const contractInfo = await tx.medicalContract.findUnique({
+          where: { id: encounter.contractId },
+          select: { familyId: true },
+        });
+        if (
+          contractInfo?.familyId &&
+          dayEncounters.some((e) => e.contract?.familyId === contractInfo.familyId)
+        ) {
+          throw new ConflictException(
+            'Gia đình đã có 1 lượt khám khác trong ngày này (quy tắc tối đa 1 lượt/ngày)',
+          );
+        }
+
+        const combinedSlots: SlotEncounterSummary[] = [
+          ...dayEncounters.map((e) => ({
+            encounterType: e.encounterType,
+            scheduledTime: e.scheduledTime,
+          })),
+          ...pendingSoftLocks.map((r) => ({
+            encounterType: r.encounter.encounterType,
+            scheduledTime: r.proposedTime,
+          })),
+        ];
+
+        const targetSlot = mapTimeToSlotWindow(proposedTime);
+        const slotCheck = evaluateSlotWindowAvailability(targetSlot, combinedSlots);
+        if (!slotCheck.available) {
+          throw new ConflictException(
+            slotCheck.reason || 'Khung giờ này Bác sĩ đã kín hoặc đang được tạm giữ chờ xác nhận',
+          );
+        }
+      } else {
+        const conflict = await this.checkEncounterSlotConflict(
+          session,
+          encounter.doctorId,
+          proposedDate,
+          proposedTime,
+          encounter.id,
+        );
+        if (conflict.hasConflict) {
+          throw new ConflictException(conflict.reason);
+        }
       }
 
       const isTelehealth = encounter.encounterType === EncounterType.TELEHEALTH;
@@ -794,6 +907,11 @@ export class EncountersServiceImpl implements IEncountersService {
     }
 
     return this.repository.transaction(async (session) => {
+      const tx = (session as unknown as { tx?: Prisma.TransactionClient }).tx;
+      if (tx) {
+        await this.expireStaleRescheduleRequests(tx);
+      }
+
       const encounter = await session.findEncounter(encounterId);
       if (!encounter) throw new NotFoundException('Encounter not found');
 
@@ -802,7 +920,9 @@ export class EncountersServiceImpl implements IEncountersService {
         throw new NotFoundException('Reschedule request not found');
       }
       if (request.status !== 'PENDING') {
-        throw new ConflictException('Reschedule request is already resolved');
+        throw new ConflictException(
+          'Yêu cầu đổi lịch đã được xử lý hoặc đã tự động hết hạn sau 24 giờ',
+        );
       }
 
       if (actor.role === 'FAMILY_REP' && encounter.contract.familyUnit.representativeUserId !== actor.id) {
@@ -963,6 +1083,10 @@ export class EncountersServiceImpl implements IEncountersService {
 
   async getPendingRescheduleRequests(actor: AuthenticatedUser) {
     return this.repository.transaction(async (session) => {
+      const tx = (session as unknown as { tx?: Prisma.TransactionClient }).tx;
+      if (tx) {
+        await this.expireStaleRescheduleRequests(tx);
+      }
       if (actor.role === 'FAMILY_REP') {
         return session.findPendingRescheduleRequests({
           encounter: { contract: { familyUnit: { representativeUserId: actor.id } } },
@@ -1540,6 +1664,340 @@ export class EncountersServiceImpl implements IEncountersService {
 
       await session.createAuditLog(actor.id, 'ADJUST_CADENCE_MILESTONE', encounterId);
       return enrichEncounterWithScheduleMeta(updated);
+    });
+  }
+
+  private async expireStaleRescheduleRequests(tx: Prisma.TransactionClient) {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    await tx.encounterRescheduleRequest.updateMany({
+      where: {
+        status: 'PENDING',
+        createdAt: { lte: cutoff },
+      },
+      data: {
+        status: 'CANCELLED',
+        resolvedAt: new Date(),
+      },
+    });
+  }
+
+  async withdrawRescheduleRequest(
+    actor: AuthenticatedUser,
+    encounterId: string,
+    requestId: string,
+  ) {
+    return this.repository.transaction(async (session) => {
+      const tx = (session as unknown as { tx?: Prisma.TransactionClient }).tx;
+      if (tx) {
+        await this.expireStaleRescheduleRequests(tx);
+      }
+      const encounter = await session.findEncounter(encounterId);
+      if (!encounter) throw new NotFoundException('Encounter not found');
+
+      const request = await session.findRescheduleRequestById(requestId);
+      if (!request || request.encounterId !== encounterId) {
+        throw new NotFoundException('Reschedule request not found');
+      }
+      if (request.status !== 'PENDING') {
+        throw new ConflictException('Yêu cầu đổi lịch không còn ở trạng thái chờ duyệt');
+      }
+      if (actor.role !== 'ADMIN' && request.requestedByUserId !== actor.id) {
+        throw new ForbiddenException('Chỉ người gửi mới có quyền thu hồi đề xuất đổi lịch');
+      }
+
+      const updated = await session.updateRescheduleRequest(requestId, {
+        status: 'CANCELLED',
+        resolvedAt: new Date(),
+      });
+      await session.createAuditLog(actor.id, 'RESCHEDULE_WITHDRAWN', requestId);
+
+      const targetUserId =
+        request.requestedByRole === 'FAMILY_REP'
+          ? encounter.doctor.user?.id
+          : encounter.contract.familyUnit.representativeUserId;
+      if (targetUserId) {
+        await session.createNotification({
+          userId: targetUserId,
+          title: 'Đề xuất đổi lịch đã được thu hồi',
+          content: 'Bên gửi đã thu hồi yêu cầu đổi lịch. Lịch khám cũ vẫn được giữ nguyên.',
+          type: 'ENCOUNTER_RESCHEDULE_WITHDRAWN',
+          referenceId: encounter.id,
+        });
+      }
+      return updated;
+    });
+  }
+
+  async getDoctorMonthlyAvailability(
+    actor: AuthenticatedUser,
+    doctorId: string,
+    month: string,
+    contractId?: string,
+    excludeEncounterId?: string,
+  ) {
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      throw new BadRequestException('month must be in YYYY-MM format');
+    }
+    const [yearStr, monthStr] = month.split('-');
+    const year = Number(yearStr);
+    const monthIndex = Number(monthStr) - 1;
+    const daysInMonth = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+    const isDoctorOrAdmin = actor.role === 'DOCTOR' || actor.role === 'ADMIN';
+
+    return this.repository.transaction(async (session) => {
+      const tx = (session as unknown as { tx?: Prisma.TransactionClient }).tx;
+      if (tx) {
+        await this.expireStaleRescheduleRequests(tx);
+      }
+      let targetFamilyId: string | null = null;
+      if (contractId && tx) {
+        const c = await tx.medicalContract.findUnique({
+          where: { id: contractId },
+          select: { familyId: true },
+        });
+        targetFamilyId = c?.familyId ?? null;
+      }
+
+      const startDate = new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0, 0));
+      const endDate = new Date(Date.UTC(year, monthIndex, daysInMonth, 23, 59, 59, 999));
+
+      const [encounters, pendingSoftLocks] = tx
+        ? await Promise.all([
+            tx.encounter.findMany({
+              where: {
+                doctorId,
+                scheduledDate: { gte: startDate, lte: endDate },
+                encounterStatus: {
+                  in: [
+                    EncounterStatus.CONFIRMED,
+                    EncounterStatus.ON_THE_WAY,
+                    EncounterStatus.ARRIVED,
+                    EncounterStatus.IN_PROGRESS,
+                  ],
+                },
+              },
+              select: {
+                id: true,
+                scheduledDate: true,
+                scheduledTime: true,
+                encounterType: true,
+                contract: {
+                  select: {
+                    familyId: true,
+                    familyUnit: {
+                      select: { representativeUser: { select: { fullName: true } } },
+                    },
+                  },
+                },
+              },
+            }),
+            tx.encounterRescheduleRequest.findMany({
+              where: {
+                status: 'PENDING',
+                proposedDate: { gte: startDate, lte: endDate },
+                encounter: {
+                  doctorId,
+                  ...(excludeEncounterId ? { id: { not: excludeEncounterId } } : {}),
+                },
+              },
+              select: {
+                proposedDate: true,
+                proposedTime: true,
+                encounter: { select: { encounterType: true } },
+              },
+            }),
+          ])
+        : [[], []];
+
+      const byDay = new Map<string, SlotEncounterSummary[]>();
+      const familyBusyDays = new Set<string>();
+
+      for (const e of encounters) {
+        const dKey = e.scheduledDate.toISOString().slice(0, 10);
+        const list = byDay.get(dKey) ?? [];
+        const repName = e.contract?.familyUnit?.representativeUser?.fullName;
+        list.push({
+          encounterType: e.encounterType,
+          scheduledTime: e.scheduledTime,
+          familyLabel: isDoctorOrAdmin ? (repName ? `Hộ ${repName}` : 'Hộ gia đình') : null,
+        });
+        byDay.set(dKey, list);
+        // BR-5: Loại trừ chính buổi đang đổi để cho phép đổi khung Sáng <-> Chiều trong cùng ngày
+        if (
+          targetFamilyId &&
+          e.contract?.familyId === targetFamilyId &&
+          e.id !== excludeEncounterId
+        ) {
+          familyBusyDays.add(dKey);
+        }
+      }
+
+      // BR-2: Đưa các yêu cầu PENDING (soft-lock) vào danh sách slot đã tạm giữ
+      for (const req of pendingSoftLocks) {
+        const dKey = req.proposedDate.toISOString().slice(0, 10);
+        const list = byDay.get(dKey) ?? [];
+        list.push({
+          encounterType: req.encounter.encounterType,
+          scheduledTime: req.proposedTime,
+          familyLabel: isDoctorOrAdmin ? 'Đang tạm giữ đổi lịch' : null,
+        });
+        byDay.set(dKey, list);
+      }
+
+      const days = [];
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateObj = new Date(Date.UTC(year, monthIndex, d, 0, 0, 0, 0));
+        const iso = dateObj.toISOString().slice(0, 10);
+        const dayOff = isDayOffDate(dateObj);
+        const dayList = byDay.get(iso) ?? [];
+        const morning = evaluateSlotWindowAvailability('MORNING', dayList);
+        const afternoon = evaluateSlotWindowAvailability('AFTERNOON', dayList);
+
+        days.push({
+          date: iso,
+          isDayOff: dayOff.isDayOff,
+          dayOffReason: dayOff.reason ?? null,
+          familyHasVisit: familyBusyDays.has(iso),
+          morning: {
+            available: !dayOff.isDayOff && morning.available,
+            reason: dayOff.isDayOff ? dayOff.reason : (morning.reason ?? null),
+            label: isDoctorOrAdmin ? (morning.occupiedByLabel ?? null) : null,
+          },
+          afternoon: {
+            available: !dayOff.isDayOff && afternoon.available,
+            reason: dayOff.isDayOff ? dayOff.reason : (afternoon.reason ?? null),
+            label: isDoctorOrAdmin ? (afternoon.occupiedByLabel ?? null) : null,
+          },
+        });
+      }
+
+      return { month, doctorId, days };
+    });
+  }
+
+  async doctorManualSchedule(
+    actor: AuthenticatedUser,
+    encounterId: string,
+    dto: { proposedDate: string; slotWindow: 'MORNING' | 'AFTERNOON' },
+  ) {
+    return this.repository.transaction(async (session) => {
+      const encounter = await session.findEncounter(encounterId);
+      if (!encounter) {
+        throw new NotFoundException('Encounter not found');
+      }
+
+      const tx = (session as unknown as { tx?: Prisma.TransactionClient }).tx;
+      if (tx && typeof (tx as { $executeRaw?: unknown }).$executeRaw === 'function') {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${encounter.doctorId}))`;
+      }
+
+      const targetDate = parseDateOnly(dto.proposedDate);
+      const nowManual = new Date();
+      const targetDeadlineUtc = new Date(
+        Date.UTC(
+          targetDate.getUTCFullYear(),
+          targetDate.getUTCMonth(),
+          targetDate.getUTCDate() - 1,
+          13, // 20:00 UTC+7 = 13:00 UTC
+          0,
+          0,
+          0,
+        ),
+      );
+      if (nowManual.getTime() > targetDeadlineUtc.getTime()) {
+        throw new BadRequestException(
+          'Không thể xếp lịch vào ngày hôm nay hoặc quá khứ (phải xếp trước 20:00 tối hôm trước).',
+        );
+      }
+      const dayOff = isDayOffDate(targetDate);
+      if (dayOff.isDayOff) {
+        throw new BadRequestException(dayOff.reason || 'Ngày đã chọn là ngày nghỉ');
+      }
+
+      if (tx) {
+        const dayEncounters = await tx.encounter.findMany({
+          where: {
+            doctorId: encounter.doctorId,
+            scheduledDate: targetDate,
+            id: { not: encounterId },
+            encounterStatus: {
+              in: [
+                EncounterStatus.CONFIRMED,
+                EncounterStatus.ON_THE_WAY,
+                EncounterStatus.ARRIVED,
+                EncounterStatus.IN_PROGRESS,
+              ],
+            },
+          },
+          select: {
+            encounterType: true,
+            scheduledTime: true,
+            contract: { select: { familyId: true } },
+          },
+        });
+
+        const contract = await tx.medicalContract.findUnique({
+          where: { id: encounter.contractId },
+          select: { familyId: true },
+        });
+        if (
+          contract?.familyId &&
+          dayEncounters.some((e) => e.contract?.familyId === contract.familyId)
+        ) {
+          throw new ConflictException(
+            'Gia đình đã có 1 lượt khám trong ngày này (tối đa 1 lượt/ngày)',
+          );
+        }
+
+        const slotCheck = evaluateSlotWindowAvailability(
+          dto.slotWindow,
+          dayEncounters.map((e) => ({
+            encounterType: e.encounterType,
+            scheduledTime: e.scheduledTime,
+          })),
+        );
+        if (!slotCheck.available) {
+          throw new ConflictException(
+            slotCheck.reason || 'Khung giờ này Bác sĩ đã kín lịch',
+          );
+        }
+      }
+
+      const parsed = parseEncounterScheduleMeta(encounter);
+      const scheduledTime = slotWindowToScheduledTime(dto.slotWindow);
+      const updated = await session.updateEncounter(encounterId, {
+        scheduledDate: targetDate,
+        scheduledTime,
+        encounterStatus: EncounterStatus.CONFIRMED,
+        cancelReason: serializeEncounterScheduleMeta(
+          {
+            stage: 'DOCTOR_MANUAL_CONFIRMED',
+            slotWindow: dto.slotWindow,
+            ...(parsed.milestoneIndex !== null ? { milestoneIndex: parsed.milestoneIndex } : {}),
+            ...(parsed.totalMilestones !== null ? { totalMilestones: parsed.totalMilestones } : {}),
+          },
+          `Bác sĩ đã xếp lịch thủ công (${dto.slotWindow === 'MORNING' ? 'Khung Sáng 08:00-11:30' : 'Khung Chiều 13:30-17:30'})`,
+        ),
+      });
+
+      await session.createAuditLog(actor.id, 'DOCTOR_MANUAL_SCHEDULE', encounterId);
+      return enrichEncounterWithScheduleMeta(updated);
+    });
+  }
+
+  async retryContractAutoSchedule(actor: AuthenticatedUser, contractId: string) {
+    return this.repository.transaction(async (session) => {
+      const tx = (session as unknown as { tx?: Prisma.TransactionClient }).tx;
+      if (!tx) {
+        throw new BadRequestException('Transaction client unavailable');
+      }
+      const autoScheduler = new AutoScheduleFirstVisitService();
+      const created = await autoScheduler.scheduleOnContractActivated(tx, contractId);
+      await session.createAuditLog(actor.id, 'RETRY_AUTO_SCHEDULE', contractId);
+      return {
+        scheduledCount: created.length,
+        encounters: created.map((e) => enrichEncounterWithScheduleMeta(e)),
+      };
     });
   }
 }

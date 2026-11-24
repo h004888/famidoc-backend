@@ -324,10 +324,11 @@ describe('MatchingConfigService & System One Admin Test (Tasks 4.3 & 4.4)', () =
       careCategories: ['Tim mạch'],
     });
 
-    // Vì ngưỡng runtime đặt 0.85 nên điểm 0.75 bị chuyển sang QUEUED
-    expect(res.outcome).toBe('QUEUED');
-    if (res.outcome === 'QUEUED') {
-      expect(res.fallbackReason).toBe('BELOW_FIT_THRESHOLD');
+    // Luồng mới không cắt ngưỡng chuyển QUEUED mà vẫn trả MATCHED với trọng số runtime
+    expect(res.outcome).toBe('MATCHED');
+    if (res.outcome === 'MATCHED') {
+      expect(res.rankingSource).toBe('AI');
+      expect(res.scores.compositeScore).toBeCloseTo(0.805, 3);
     }
   });
 });

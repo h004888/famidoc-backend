@@ -196,8 +196,13 @@ describe('DoctorMatchingService & Admin Queue (Tasks 4.1 & 4.2)', () => {
     if (result.outcome === 'MATCHED') {
       expect(result.doctor.id).toBe('doc-b');
       expect(result.facility.id).toBe('fac-b');
+      expect(result.rankingSource).toBe('AI');
+      expect(result.relaxedAcademicTitle).toBe(false);
       expect(result.scores.compositeScore).toBeCloseTo(0.83, 3);
       expect(result.matchingSessionId).toBe('match-sess-1');
+      expect(result.alternatives).toHaveLength(1);
+      expect(result.alternatives[0]?.doctor.id).toBe('doc-a');
+      expect(result.alternatives[0]?.rank).toBe(2);
     }
 
     // Đảm bảo đã khử PII trước khi gọi TypeSafe Jev
@@ -205,7 +210,7 @@ describe('DoctorMatchingService & Admin Queue (Tasks 4.1 & 4.2)', () => {
     expect(sentInput.sanitizedDescription).not.toContain('0901234567');
   });
 
-  it('routes to Admin Queue with notification & email when all Jev scores fall below 0.60', async () => {
+  it('keeps Top 1 + alternatives without routing to Admin Queue even when Jev scores are below 0.60', async () => {
     const { service, jevClientMock, prismaMock, mailerMock } = createHarness();
     jevClientMock.scoreCandidates.mockResolvedValue({
       ok: true,
@@ -222,46 +227,80 @@ describe('DoctorMatchingService & Admin Queue (Tasks 4.1 & 4.2)', () => {
       careCategories: ['Chăm sóc giảm nhẹ'],
     });
 
-    expect(result.outcome).toBe('QUEUED');
-    if (result.outcome === 'QUEUED') {
-      expect(result.fallbackReason).toBe('BELOW_FIT_THRESHOLD');
-      expect(result.status).toBe(MatchingQueueStatus.QUEUED);
+    expect(result.outcome).toBe('MATCHED');
+    if (result.outcome === 'MATCHED') {
+      expect(result.rankingSource).toBe('AI');
+      expect(result.doctor.id).toBe('doc-b');
+      expect(result.alternatives).toHaveLength(1);
     }
-    expect(prismaMock.notification.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          userId: 'user-fam-1',
-          type: 'MATCHING_QUEUE_CREATED',
-        }),
-      }),
-    );
-    expect(mailerMock.sendMail).toHaveBeenCalledTimes(1);
-    expect(mailerMock.sendMail).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: 'family@famidoc.vn',
-        subject:
-          'FamiDoc - Đã tiếp nhận yêu cầu tìm bác sĩ vào hàng chờ điều phối',
-        text: expect.stringContaining('Gói Đồng Hành'),
-        html: expect.stringContaining('Gói Đồng Hành'),
-      }),
-    );
+    expect(prismaMock.matchingQueueRequest.create).not.toHaveBeenCalled();
+    expect(mailerMock.sendMail).not.toHaveBeenCalled();
   });
 
-  it('skips Jev call and creates queue request when zero candidates pass SQL pre-filter', async () => {
+  it('falls back to deterministic ranking when Jev AI fails or times out', async () => {
     const { service, jevClientMock, prismaMock } = createHarness();
-    prismaMock.doctor.findMany.mockResolvedValue([]);
+    jevClientMock.scoreCandidates.mockResolvedValue({
+      ok: false,
+      modelVersion: 'jev-1.14.0',
+      scores: [],
+      errorReason: 'TIMEOUT',
+    });
 
     const result = await service.matchDoctors(familyUser, {
       packageId: 'pkg-1',
       memberCount: 4,
-      requestedTier: DoctorClinicalTier.SENIOR,
+      careCategories: ['Tim mạch · Huyết áp'],
+      districtArea: 'Quận 1, TP. Hồ Chí Minh',
+    });
+
+    expect(result.outcome).toBe('MATCHED');
+    if (result.outcome === 'MATCHED') {
+      expect(result.rankingSource).toBe('FALLBACK');
+      expect(result.doctor.id).toBe('doc-a');
+      expect(result.alternatives).toHaveLength(1);
+    }
+    expect(prismaMock.matchingQueueRequest.create).not.toHaveBeenCalled();
+  });
+
+  it('uses progressive 2-tier query when requestedAcademicTitle has fewer than 4 candidates and returns PLATFORM_FULL when 0 open doctors exist', async () => {
+    const { service, jevClientMock, prismaMock } = createHarness();
+    prismaMock.doctor.findMany
+      .mockResolvedValueOnce([]) // Tier 1 (GS.TS.BS) = 0
+      .mockResolvedValueOnce([candidateA, candidateB]); // Tier 2 fallback
+    jevClientMock.scoreCandidates.mockResolvedValue({
+      ok: true,
+      modelVersion: 'jev-1.14.0',
+      scores: [
+        { doctorId: 'doc-a', fitScore: 0.8 },
+        { doctorId: 'doc-b', fitScore: 0.85 },
+      ],
+    });
+
+    const relaxedResult = await service.matchDoctors(familyUser, {
+      packageId: 'pkg-1',
+      memberCount: 4,
+      requestedAcademicTitle: 'GS.TS.BS',
+      careCategories: ['Tim mạch · Huyết áp'],
+    });
+
+    expect(relaxedResult.outcome).toBe('MATCHED');
+    if (relaxedResult.outcome === 'MATCHED') {
+      expect(relaxedResult.relaxedAcademicTitle).toBe(true);
+      expect(relaxedResult.requestedAcademicTitle).toBe('GS.TS.BS');
+      expect(relaxedResult.doctor.id).toBe('doc-b');
+    }
+
+    // Toàn sàn hết slot -> PLATFORM_FULL
+    prismaMock.doctor.findMany.mockResolvedValue([]);
+    const fullResult = await service.matchDoctors(familyUser, {
+      packageId: 'pkg-1',
+      memberCount: 4,
       careCategories: ['Tim mạch'],
     });
 
-    expect(jevClientMock.scoreCandidates).not.toHaveBeenCalled();
-    expect(result.outcome).toBe('QUEUED');
-    if (result.outcome === 'QUEUED') {
-      expect(result.fallbackReason).toBe('NO_ELIGIBLE_CANDIDATES');
+    expect(fullResult.outcome).toBe('PLATFORM_FULL');
+    if (fullResult.outcome === 'PLATFORM_FULL') {
+      expect(fullResult.hotline).toBe('1900 8821');
     }
   });
 

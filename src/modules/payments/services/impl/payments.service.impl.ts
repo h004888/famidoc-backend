@@ -788,7 +788,38 @@ export class PaymentsServiceImpl implements IPaymentsService {
         payment.contractId,
         payment.addendumId,
       );
-      const activation = await this.activateInTransaction(session, contract);
+      let activation;
+      if (
+        !payment.addendumId &&
+        this.prisma &&
+        (contract as { status?: string }).status === 'PENDING_PAYMENT'
+      ) {
+        const sigCount = await this.prisma.contractSignature.count({
+          where: { contractId: contract.id },
+        });
+        if (sigCount < 4) {
+          const paidAtMs = payment.paidAt
+            ? Date.parse(payment.paidAt)
+            : Date.now();
+          await this.prisma.medicalContract.update({
+            where: { id: contract.id },
+            data: {
+              contractStatus: 'PAID_PENDING_APPROVAL',
+              approvalDeadlineAt: new Date(paidAtMs + 24 * 60 * 60 * 1000),
+            },
+          });
+          activation = {
+            contractId: contract.id,
+            status: BillingContractStatus.PENDING,
+            activated: false,
+            blockingReasons: ['AWAITING_FACILITY_AND_DOCTOR_APPROVAL'],
+          };
+        } else {
+          activation = await this.activateInTransaction(session, contract);
+        }
+      } else {
+        activation = await this.activateInTransaction(session, contract);
+      }
       console.log('[DEBUG_CP11][WEBHOOK_CONTRACT_ACTIVATION_RESULT]', {
         contractId: activation.contractId,
         status: activation.status,

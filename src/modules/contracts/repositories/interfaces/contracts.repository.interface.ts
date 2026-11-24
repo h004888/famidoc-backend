@@ -46,7 +46,18 @@ export type ChangeContract = Prisma.MedicalContractGetPayload<{
   include: typeof CONTRACT_CHANGE_INCLUDE;
 }>;
 export const MEDICAL_CONTRACT_DETAIL_INCLUDE = {
-  familyUnit: true,
+  familyUnit: {
+    include: {
+      representativeUser: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          phone: true,
+        },
+      },
+    },
+  },
   facility: true,
   doctor: { include: { user: true } },
   servicePackage: true,
