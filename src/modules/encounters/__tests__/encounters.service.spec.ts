@@ -109,6 +109,9 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
         Promise.resolve({ ...sampleEncounter, ...data }),
       ),
       decrementContractQuota: jest.fn().mockResolvedValue(undefined),
+      holdTelehealthQuota: jest.fn().mockResolvedValue(undefined),
+      releaseTelehealthQuota: jest.fn().mockResolvedValue(undefined),
+      consumeHeldTelehealthQuota: jest.fn().mockResolvedValue(undefined),
       findDoctorOverlappingEncounters: jest.fn().mockResolvedValue([]),
       findPendingRescheduleRequestByEncounter: jest.fn().mockResolvedValue(null),
       findRescheduleRequestById: jest.fn().mockResolvedValue(null),
@@ -290,9 +293,12 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       const res = await service.confirmEncounter(familyActor, 'encounter-1', { confirmed: true });
 
       expect(mockSession.decrementContractQuota).toHaveBeenCalledWith('contract-1', EncounterType.HOME_VISIT);
-      expect(mockSession.updateEncounter).toHaveBeenCalledWith('encounter-1', {
-        encounterStatus: EncounterStatus.CONFIRMED,
-      });
+      expect(mockSession.updateEncounter).toHaveBeenCalledWith(
+        'encounter-1',
+        expect.objectContaining({
+          encounterStatus: EncounterStatus.CONFIRMED,
+        }),
+      );
       expect(mockSession.createNotifications).toHaveBeenCalled();
       expect((res as any).encounterStatus).toBe(EncounterStatus.CONFIRMED);
     });
@@ -402,7 +408,7 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       });
 
       const res: any = await service.requestReschedule(doctorActor, 'encounter-1', {
-        proposedDate: '2026-12-06',
+        proposedDate: '2026-12-07',
         proposedTime: '10:30:00',
         rescheduleReason: 'Bác sĩ kẹt lịch trực cấp cứu',
       });
@@ -419,7 +425,7 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       expect(res.status).toBe('PENDING');
     });
 
-    it('TC-U08: Rejects when reschedule count exceeds maximum limit (>= 3)', async () => {
+    it('TC-U08: Allows reschedule request when reschedule count >= 3 (BR-4: unlimited reschedules)', async () => {
       (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
         ...sampleEncounter,
         encounterStatus: EncounterStatus.CONFIRMED,
@@ -427,13 +433,12 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
         scheduledDate: new Date(Date.now() + 24 * 3600_000),
       });
 
-      await expect(
-        service.requestReschedule(familyActor, 'encounter-1', {
-          proposedDate: '2026-12-05',
-          proposedTime: '10:00:00',
-          rescheduleReason: 'Đổi lần thứ 4',
-        }),
-      ).rejects.toThrow(BadRequestException);
+      const res: any = await service.requestReschedule(familyActor, 'encounter-1', {
+        proposedDate: '2026-12-05',
+        proposedTime: '10:00:00',
+        rescheduleReason: 'Đổi lần thứ 4',
+      });
+      expect(res.status).toBe('PENDING');
     });
   });
 
