@@ -591,6 +591,24 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
       );
     });
 
+    it('getSigningSession(): chặn cấp phiên ký mới khi hợp đồng PENDING_APPROVAL đã tới hoặc quá signingDeadlineAt', async () => {
+      const contract = makeContractRecord({
+        contractStatus: 'PENDING_APPROVAL',
+        signingDeadlineAt: new Date(Date.now() - 1000),
+      });
+      const sessionMock: any = {
+        findContractForUpdate: jest.fn().mockResolvedValue(contract),
+      };
+      const repoMock = {
+        transaction: jest.fn().mockImplementation(async (cb) => cb(sessionMock)),
+      };
+      const service = new ContractsServiceImpl(repoMock as any);
+
+      await expect(
+        service.getSigningSession(familyUser, contract.id),
+      ).rejects.toThrow(ConflictException);
+    });
+
     it('downloadSignedPdf(): báo 404 khi chưa có documensoItemId', async () => {
       const contractWithoutItem = makeContractRecord({ documensoItemId: null });
       const sessionMock: any = {

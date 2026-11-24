@@ -128,6 +128,7 @@ export interface ContractsSession {
     id: string,
     status: 'EXPIRED' | 'TERMINATED' | 'PENDING_PAYMENT',
     reason?: string,
+    renewHold?: boolean,
   ): Promise<void>;
   refreshDoctorPanel(doctorId: string): Promise<void>;
   findPendingTermination(
@@ -155,6 +156,7 @@ export interface ContractsSession {
   ): Promise<ContractSignature>;
   saveSignature?(
     data: Prisma.ContractSignatureUncheckedCreateInput,
+    signingDeadlineAt?: Date | null,
   ): Promise<ContractSignature>;
   recordChange(
     actorId: string,

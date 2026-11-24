@@ -118,6 +118,9 @@ describe('Doctor Quota Holds, TTL Cleanup, Facility Inference & Dual-Track Linki
     });
 
     expect(result.facilityId).toBe('fac-inferred-1');
+    const [draft] = createMedicalContract.mock.calls[0];
+    expect(draft.signingDeadlineAt.getTime() - draft.createdAt.getTime()).toBe(86_400_000);
+    expect(draft.holdExpiresAt).toEqual(draft.signingDeadlineAt);
     expect(sessionMock.findFacilityById).toHaveBeenCalledWith('fac-inferred-1');
     expect(createMedicalContract).toHaveBeenCalledWith(
       expect.objectContaining({

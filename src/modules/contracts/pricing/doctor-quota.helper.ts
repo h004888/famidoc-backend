@@ -33,6 +33,7 @@ export function buildActiveAndHeldWhere(
       : {}),
     OR: [
       { contractStatus: 'ACTIVE' },
+      { contractStatus: 'PENDING_APPROVAL', signingDeadlineAt: { not: null } },
       {
         contractStatus: { in: ['PENDING_APPROVAL', 'PENDING_PAYMENT'] },
         OR: [{ holdExpiresAt: null }, { holdExpiresAt: { gt: now } }],

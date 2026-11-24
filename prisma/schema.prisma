@@ -712,6 +712,7 @@ model MedicalContract {
   endDate             DateTime              @map("end_date") @db.Date
   contractStatus      MedicalContractStatus @default(PENDING_APPROVAL) @map("contract_status")
   holdExpiresAt       DateTime?             @map("hold_expires_at") @db.Timestamptz()
+  signingDeadlineAt   DateTime?             @map("signing_deadline_at") @db.Timestamptz()
   terminationReason   String?               @map("termination_reason") @db.Text
   terminatedAt        DateTime?             @map("terminated_at") @db.Timestamptz()
   createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz()
@@ -749,6 +750,7 @@ model MedicalContract {
   servicePackage ServicePackage      @relation(fields: [packageId], references: [id], onDelete: Restrict)
   signatures     ContractSignature[]
   documensoSigners ContractDocumensoSigner[]
+  signingNotices ContractSigningNotice[]
   addenda        ContractAddendum[]
   members        ContractMember[]
   encounters     Encounter[]
@@ -764,6 +766,7 @@ model MedicalContract {
   // CREATE UNIQUE INDEX idx_unique_active_contract_per_family ON medical_contracts (family_id) WHERE contract_status = 'ACTIVE';
   @@index([familyId], map: "idx_medical_contracts_family_id")
   @@index([doctorId, contractStatus, holdExpiresAt], map: "idx_medical_contracts_doctor_quota")
+  @@index([contractStatus, signingDeadlineAt], map: "idx_medical_contracts_signing_deadline")
   @@map("medical_contracts")
 }
 
@@ -818,6 +821,19 @@ model ContractSignature {
   // Hai unique index có điều kiện trong migration: chữ ký hợp đồng và chữ ký từng phụ lục.
   @@index([contractId])
   @@map("contract_signatures")
+}
+
+model ContractSigningNotice {
+  contractId String @map("contract_id") @db.Uuid
+  role SignerRole
+  kind String
+  nextAttemptAt DateTime @map("next_attempt_at") @db.Timestamptz()
+  finishedAt DateTime? @map("finished_at") @db.Timestamptz()
+  contract MedicalContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@id([contractId, role, kind])
+  @@index([finishedAt, nextAttemptAt])
+  @@map("contract_signing_notices")
 }
 
 model ContractDocumensoSigner {

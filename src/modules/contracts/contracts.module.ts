@@ -12,6 +12,7 @@ import { ContractPdfRendererService } from './services/contract-pdf-renderer.ser
 import { DocumensoClientService } from './services/documenso-client.service';
 import { DocumensoSyncService } from './services/documenso-sync.service';
 import { ContractHoldCleanupService } from './services/contract-hold-cleanup.service';
+import { SigningDeadlineWorker } from './services/signing-deadline-worker.service';
 
 @Module({
   imports: [AuthAccessModule],
@@ -25,6 +26,7 @@ import { ContractHoldCleanupService } from './services/contract-hold-cleanup.ser
     DocumensoClientService,
     DocumensoSyncService,
     ContractHoldCleanupService,
+    SigningDeadlineWorker,
   ],
   exports: [
     ContractDocumentRendererService,
