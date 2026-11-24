@@ -23,6 +23,7 @@ import type { AuthenticatedUser } from '../../../../core/auth/authenticated-requ
 import {
   createTermsHash,
   getContractSignerRole,
+  isValidHomeVisitAddress,
   todayInVietnam,
 } from '../../../../core/business/business-helpers';
 import { moneyToNumber } from '../../../../core/database/prisma-transaction';
@@ -647,6 +648,27 @@ export class ContractsServiceImpl
         );
       }
 
+      if (
+        dto.homeVisitAddress !== undefined &&
+        !isValidHomeVisitAddress(dto.homeVisitAddress)
+      ) {
+        throw new BadRequestException(
+          'Vui lòng nhập đầy đủ địa chỉ Khám tại nhà hợp lệ',
+        );
+      }
+      const resolvedHomeVisitAddress = isValidHomeVisitAddress(
+        dto.homeVisitAddress,
+      )
+        ? dto.homeVisitAddress.trim()
+        : isValidHomeVisitAddress(family.homeAddress)
+          ? family.homeAddress.trim()
+          : '';
+      if (!isValidHomeVisitAddress(resolvedHomeVisitAddress)) {
+        throw new BadRequestException(
+          'Vui lòng nhập đầy đủ địa chỉ Khám tại nhà hợp lệ',
+        );
+      }
+
       // Hợp đồng cũ chỉ được coi là thay thế hợp lệ khi còn bản nháp chưa thanh toán.
       if (dto.replaceContractId) {
         await this.requireReplaceableDraft(
@@ -743,6 +765,7 @@ export class ContractsServiceImpl
         doctor,
         admin,
         additionalTerms: dto.additionalTerms,
+        homeVisitAddress: resolvedHomeVisitAddress,
       };
 
       this.assertRealPartyDataIfStrict(contractInput);
@@ -761,6 +784,7 @@ export class ContractsServiceImpl
         snapshot,
         today,
         contractNumber,
+        resolvedHomeVisitAddress,
         contractInput,
       };
     };
@@ -816,9 +840,17 @@ export class ContractsServiceImpl
         memberCount: prepared.memberCount,
         isDemo: false,
         additionalTerms: dto.additionalTerms?.trim() || null,
+        homeVisitAddress: prepared.resolvedHomeVisitAddress,
         documensoEnvelopeId: documensoEnvelope?.envelopeId ?? null,
         documensoItemId: documensoEnvelope?.envelopeItemId ?? null,
       });
+
+      if (!isValidHomeVisitAddress(prepared.family.homeAddress)) {
+        await session.updateFamilyHomeAddress?.(
+          prepared.targetFamilyId,
+          prepared.resolvedHomeVisitAddress,
+        );
+      }
 
       if (documensoEnvelope) {
         await this.saveDocumensoSignersForContract(

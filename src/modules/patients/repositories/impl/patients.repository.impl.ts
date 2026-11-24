@@ -224,6 +224,11 @@ export class PatientsRepositoryImpl implements IPatientsRepository {
           patientId: patient.id,
         },
       });
+      await this.syncPatientToUpcomingPeriodicEncounters(
+        tx,
+        activeContract.id,
+        patient.id,
+      );
       return patient;
     });
   }
@@ -259,7 +264,50 @@ export class PatientsRepositoryImpl implements IPatientsRepository {
           patientId: patient.id,
         },
       });
+      await this.syncPatientToUpcomingPeriodicEncounters(
+        tx,
+        contractId,
+        patient.id,
+      );
       return patient;
+    });
+  }
+
+  private async syncPatientToUpcomingPeriodicEncounters(
+    tx: Prisma.TransactionClient,
+    contractId: string,
+    patientId: string,
+  ): Promise<void> {
+    const txAny = tx as unknown as {
+      encounter?: { findMany?: typeof tx.encounter.findMany };
+      encounterParticipant?: {
+        createMany?: typeof tx.encounterParticipant.createMany;
+      };
+    };
+    if (!txAny.encounter?.findMany || !txAny.encounterParticipant?.createMany) {
+      return;
+    }
+
+    const upcomingPeriodicEncounters = await tx.encounter.findMany({
+      where: {
+        contractId,
+        category: 'PERIODIC_ROUTINE',
+        visitScope: 'FAMILY',
+        encounterStatus: { in: ['REQUESTED', 'CONFIRMED'] },
+      },
+      select: { id: true },
+    });
+
+    if (upcomingPeriodicEncounters.length === 0) {
+      return;
+    }
+
+    await tx.encounterParticipant.createMany({
+      data: upcomingPeriodicEncounters.map((enc) => ({
+        encounterId: enc.id,
+        patientId,
+      })),
+      skipDuplicates: true,
     });
   }
 

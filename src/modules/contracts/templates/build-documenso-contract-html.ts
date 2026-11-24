@@ -115,7 +115,10 @@ export function buildDocumensoContractFieldValues(
     contract_number: input.contractNumber,
     created_date_vi: formatDateVi(now),
     party_a_name: rep?.fullName || `Đại diện hộ ${input.family.familyCode || ''}`.trim(),
-    party_a_address: input.family.address || 'Theo hồ sơ hộ gia đình trên FamiDoc',
+    party_a_address:
+      input.homeVisitAddress?.trim() ||
+      input.family.address ||
+      'Theo hồ sơ hộ gia đình trên FamiDoc',
     party_a_phone: rep?.phone || 'Theo tài khoản FamiDoc',
     party_a_email: rep?.email || 'Chưa cập nhật',
     party_b_facility_name: input.facility.facilityName,
@@ -158,7 +161,11 @@ export function buildDocumensoContractFieldValues(
     extra_member_total_vnd: formatVnd(input.pricing.additionalMemberTotalVnd),
     total_price_vnd: formatVnd(input.pricing.totalPriceVnd),
     payment_window_hours: '24',
-    service_area: input.family.address || input.facility.address || 'Việt Nam (Theo phạm vi CSYT)',
+    service_area:
+      input.homeVisitAddress?.trim() ||
+      input.family.address ||
+      input.facility.address ||
+      'Việt Nam (Theo phạm vi CSYT)',
     additional_terms:
       input.additionalTerms?.trim() || 'Không có thỏa thuận bổ sung nào khác.',
   };

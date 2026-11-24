@@ -103,10 +103,11 @@ describe('AutoScheduleFirstVisitService (Two-Slot Auto-Confirm & Exceptions)', (
     expect(mockTx.encounter.create).not.toHaveBeenCalled();
   });
 
-  it('EF1: notifies facility & family and skips when homeAddress or doctorId or members missing', async () => {
+  it('EF1: notifies facility & family and skips when homeAddress is missing or placeholder or doctorId missing', async () => {
     mockTx.medicalContract.findUnique.mockResolvedValueOnce({
       ...baseContract,
-      familyUnit: { ...baseContract.familyUnit, homeAddress: '' },
+      homeVisitAddress: null,
+      familyUnit: { ...baseContract.familyUnit, homeAddress: 'Chưa cập nhật địa chỉ' },
     });
 
     const result = await service.scheduleOnContractActivated(mockTx, 'contract-1');
@@ -119,6 +120,31 @@ describe('AutoScheduleFirstVisitService (Two-Slot Auto-Confirm & Exceptions)', (
           type: 'ENCOUNTER_AUTO_SCHEDULE_MISSING_DATA',
         }),
       ]),
+    });
+  });
+
+  it('auto-schedules when contract.members is empty (post-payment member onboarding) and contract.homeVisitAddress is valid', async () => {
+    mockTx.medicalContract.findUnique.mockResolvedValueOnce({
+      ...baseContract,
+      homeVisitAddress: 'Số 10 Nguyễn Trãi, Phường Thượng Đình, Thành phố Hà Nội',
+      familyUnit: { ...baseContract.familyUnit, homeAddress: 'Chưa cập nhật địa chỉ' },
+      members: [],
+    });
+    mockTx.patient = {
+      findMany: jest.fn().mockResolvedValue([{ id: 'pat-head' }]),
+    };
+
+    const result = await service.scheduleOnContractActivated(mockTx, 'contract-1');
+    expect(result).toHaveLength(4);
+    expect(mockTx.notification.createMany).toHaveBeenCalledWith({
+      data: expect.arrayContaining([
+        expect.objectContaining({
+          type: 'ENCOUNTER_AUTO_CONFIRMED',
+        }),
+      ]),
+    });
+    expect(mockTx.encounter.create.mock.calls[0][0].data.participants).toEqual({
+      create: [{ patientId: 'pat-head' }],
     });
   });
 

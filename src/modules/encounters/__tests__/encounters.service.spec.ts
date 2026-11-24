@@ -371,12 +371,12 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
     });
 
     it('TC-H03: Family creates reschedule request when >= 4 hours -> auto approves family & facility informational, pending doctor', async () => {
-      const tomorrow = new Date(Date.now() + 24 * 3600_000);
+      const twoDaysAhead = new Date(Date.now() + 48 * 3600_000);
       (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
         ...sampleEncounter,
         encounterStatus: EncounterStatus.CONFIRMED,
-        scheduledDate: tomorrow,
-        scheduledTime: tomorrow,
+        scheduledDate: twoDaysAhead,
+        scheduledTime: twoDaysAhead,
       });
 
       const res: any = await service.requestReschedule(familyActor, 'encounter-1', {
@@ -399,12 +399,12 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
     });
 
     it('Doctor creates reschedule request -> auto approves doctor, pending family', async () => {
-      const tomorrow = new Date(Date.now() + 24 * 3600_000);
+      const twoDaysAhead = new Date(Date.now() + 48 * 3600_000);
       (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
         ...sampleEncounter,
         encounterStatus: EncounterStatus.CONFIRMED,
-        scheduledDate: tomorrow,
-        scheduledTime: tomorrow,
+        scheduledDate: twoDaysAhead,
+        scheduledTime: twoDaysAhead,
       });
 
       const res: any = await service.requestReschedule(doctorActor, 'encounter-1', {
@@ -430,7 +430,7 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
         ...sampleEncounter,
         encounterStatus: EncounterStatus.CONFIRMED,
         rescheduleCount: 3,
-        scheduledDate: new Date(Date.now() + 24 * 3600_000),
+        scheduledDate: new Date(Date.now() + 48 * 3600_000),
       });
 
       const res: any = await service.requestReschedule(familyActor, 'encounter-1', {

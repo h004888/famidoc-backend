@@ -372,6 +372,13 @@ export class PrismaContractsSession implements ContractsSession {
     });
   }
 
+  async updateFamilyHomeAddress(familyId: string, homeAddress: string) {
+    await this.tx.familyUnit.update({
+      where: { id: familyId },
+      data: { homeAddress },
+    });
+  }
+
   async findFirstActiveAdminUser() {
     // Ưu tiên tài khoản ADMIN thật (ACTIVE, không phải demo / email .invalid) để tránh lấy nhầm dữ liệu seed
     const realAdmin = await this.tx.user.findFirst({

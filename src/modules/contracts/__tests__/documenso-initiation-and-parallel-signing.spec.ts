@@ -70,6 +70,7 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
     id: 'fam-1',
     familyCode: 'FAM-001',
     representativeUserId: 'user-family-1',
+    homeAddress: '123 Đường Láng, Phường Láng Thượng, Thành phố Hà Nội',
     status: 'ACTIVE',
     representativeUser: {
       id: 'user-family-1',

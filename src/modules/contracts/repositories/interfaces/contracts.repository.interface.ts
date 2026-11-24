@@ -177,6 +177,7 @@ export interface ContractsSession {
   findDoctorByUserId(userId: string): Promise<any | null>;
   findFamilyById(id: string): Promise<any | null>;
   findFamilyByRepresentativeUserId(userId: string): Promise<any | null>;
+  updateFamilyHomeAddress?(familyId: string, homeAddress: string): Promise<void>;
   findPatientsByIdsAndFamilyId(
     patientIds: string[],
     familyId: string,
