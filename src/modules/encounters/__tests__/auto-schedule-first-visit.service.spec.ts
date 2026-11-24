@@ -5,6 +5,7 @@ import {
   EncounterVisitScope,
 } from '@prisma/client';
 import { AutoScheduleFirstVisitService } from '../services/impl/auto-schedule-first-visit.service';
+import { calculateCadenceDates } from '../services/impl/encounters.service.impl';
 import { parseEncounterScheduleMeta } from '../utils/encounter-schedule-meta.util';
 
 describe('AutoScheduleFirstVisitService (Two-Slot Auto-Confirm & Exceptions)', () => {
@@ -178,5 +179,75 @@ describe('AutoScheduleFirstVisitService (Two-Slot Auto-Confirm & Exceptions)', (
     expect(firstData.encounterStatus).toBe(EncounterStatus.REQUESTED);
     const parsed = parseEncounterScheduleMeta(firstData);
     expect(parsed.scheduleStage).toBe('MANUAL_SLOT_REQUIRED');
+  });
+
+  it('calculateCadenceDates rải đều 10 buổi trong gói 1 tháng (không dồn về endDate - 1) và không trùng ngày nghỉ/lễ', () => {
+    const start = new Date('2026-05-01T00:00:00.000Z');
+    const end = new Date('2026-06-01T00:00:00.000Z');
+    const dates = calculateCadenceDates(start, 1, 10, end);
+
+    expect(dates).toHaveLength(10);
+    const isoList = dates.map((d) => d.toISOString().slice(0, 10));
+    expect(new Set(isoList).size).toBe(10);
+    expect(isoList.every((iso) => iso >= '2026-05-01' && iso < '2026-06-01')).toBe(true);
+    expect(isoList).not.toContain('2026-05-01'); // Ngày lễ 05-01
+
+    const spanDays = (dates[9].getTime() - dates[0].getTime()) / (24 * 60 * 60 * 1000);
+    expect(spanDays).toBeGreaterThanOrEqual(20);
+  });
+
+  it('calculateCadenceDates rải đều 12 buổi cho gói 12 tháng, tất cả < endDate và không rơi vào Chủ nhật', () => {
+    const start = new Date('2026-01-01T00:00:00.000Z');
+    const end = new Date('2027-01-01T00:00:00.000Z');
+    const dates = calculateCadenceDates(start, 12, 12, end);
+
+    expect(dates).toHaveLength(12);
+    const isoList = dates.map((d) => d.toISOString().slice(0, 10));
+    expect(new Set(isoList).size).toBe(12);
+    expect(dates.every((d) => d.getTime() < end.getTime())).toBe(true);
+    expect(dates.every((d) => d.getUTCDay() !== 0)).toBe(true);
+  });
+
+  it('gói 1 tháng 15 buổi: dù 7 ngày cuối tháng bị kín, vẫn mở rộng quét toàn bộ [startDate, endDate) để CONFIRMED đủ 15 buổi khác ngày', async () => {
+    mockTx.medicalContract.findUnique.mockResolvedValueOnce({
+      ...baseContract,
+      remainingHomeVisits: 15,
+      startDate: new Date('2026-06-01T00:00:00.000Z'),
+      endDate: new Date('2026-07-01T00:00:00.000Z'),
+      servicePackage: {
+        durationMonths: 1,
+        periodicVisitsQuota: 15,
+      },
+    });
+    mockTx.encounter.findMany.mockImplementation(async ({ where }: any) => {
+      const iso = where?.scheduledDate?.toISOString().slice(0, 10) ?? '';
+      if (iso >= '2026-06-23') {
+        return [
+          {
+            encounterType: EncounterType.HOME_VISIT,
+            scheduledTime: new Date('1970-01-01T08:00:00.000Z'),
+            contract: { familyId: 'other-1' },
+          },
+          {
+            encounterType: EncounterType.HOME_VISIT,
+            scheduledTime: new Date('1970-01-01T13:30:00.000Z'),
+            contract: { familyId: 'other-2' },
+          },
+        ];
+      }
+      return [];
+    });
+
+    const result = await service.scheduleOnContractActivated(mockTx, 'contract-1');
+    expect(result).toHaveLength(15);
+    const createdDates = mockTx.encounter.create.mock.calls.map((c: any) =>
+      c[0].data.scheduledDate.toISOString().slice(0, 10),
+    );
+    expect(new Set(createdDates).size).toBe(15);
+    expect(
+      mockTx.encounter.create.mock.calls.every(
+        (c: any) => c[0].data.encounterStatus === EncounterStatus.CONFIRMED,
+      ),
+    ).toBe(true);
   });
 });

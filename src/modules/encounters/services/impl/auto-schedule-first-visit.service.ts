@@ -13,6 +13,7 @@ import {
   buildDayShiftOffsets,
   evaluateSlotWindowAvailability,
   isDayOffDate,
+  listWorkingDaysInRange,
   slotWindowToScheduledTime,
   type SlotEncounterSummary,
   type SlotWindow,
@@ -127,7 +128,18 @@ export class AutoScheduleFirstVisitService {
 
     const durationMonths = contract.servicePackage?.durationMonths ?? 12;
     const baseStart = contract.startDate ? new Date(contract.startDate) : now;
+    const baseStartMidnight = new Date(
+      Date.UTC(baseStart.getUTCFullYear(), baseStart.getUTCMonth(), baseStart.getUTCDate(), 0, 0, 0, 0),
+    );
     const endBoundary = contract.endDate ? new Date(contract.endDate) : null;
+    const effectiveEndBoundary =
+      endBoundary ??
+      (() => {
+        const d = new Date(baseStartMidnight);
+        d.setUTCMonth(d.getUTCMonth() + Math.max(1, durationMonths));
+        return d;
+      })();
+    const allWorkingDays = listWorkingDaysInRange(baseStartMidnight, effectiveEndBoundary);
     const milestoneDates = calculateCadenceDates(
       baseStart,
       durationMonths,
@@ -196,7 +208,44 @@ export class AutoScheduleFirstVisitService {
       let chosenDate: Date | null = null;
       let chosenSlot: SlotWindow | null = null;
 
-      // AF3 (±3) then AF4 (±7)
+      // AF3 (±3) then AF4 (±7), then expand across full [baseStart, endBoundary)
+      const trySelectSlotOnDate = async (
+        candidate: Date,
+      ): Promise<{ date: Date; slot: SlotWindow } | null> => {
+        if (candidate.getTime() < baseStartMidnight.getTime()) return null;
+        if (endBoundary && candidate.getTime() >= endBoundary.getTime()) return null;
+        if (isDayOffDate(candidate).isDayOff) return null;
+
+        const dayKey = candidate.toISOString().slice(0, 10);
+
+        // Rule 2: 1 family max 1 visit per day
+        if (await hasFamilyVisitOnDay(candidate, dayKey)) return null;
+
+        // Rule 3: 1 day 2 slots, max 1 family per slot (+ AF2 Telehealth gap check)
+        const dayEncounters = await loadDoctorDayEncounters(candidate, dayKey);
+        const morning = evaluateSlotWindowAvailability('MORNING', dayEncounters);
+        const afternoon = evaluateSlotWindowAvailability('AFTERNOON', dayEncounters);
+
+        if (!morning.available && !afternoon.available) return null;
+
+        let slot: SlotWindow;
+        if (morning.available && afternoon.available) {
+          // AF2: Prefer the slot without Telehealth; otherwise alternate evenly
+          if (morning.hasTelehealth && !afternoon.hasTelehealth) {
+            slot = 'AFTERNOON';
+          } else if (afternoon.hasTelehealth && !morning.hasTelehealth) {
+            slot = 'MORNING';
+          } else {
+            slot = i % 2 === 0 ? 'MORNING' : 'AFTERNOON';
+          }
+        } else {
+          slot = morning.available ? 'MORNING' : 'AFTERNOON';
+        }
+
+        return { date: candidate, slot };
+      };
+
+      const checkedKeys = new Set<string>();
       for (const offset of dayShiftOffsets) {
         const candidate = new Date(
           Date.UTC(
@@ -209,39 +258,31 @@ export class AutoScheduleFirstVisitService {
             0,
           ),
         );
-        if (candidate.getTime() < baseStart.getTime()) continue;
-        if (endBoundary && candidate.getTime() >= endBoundary.getTime()) continue;
-
-        // Rule 1: Skip Sundays & holidays
-        if (isDayOffDate(candidate).isDayOff) continue;
-
-        const dayKey = candidate.toISOString().slice(0, 10);
-
-        // Rule 2: 1 family max 1 visit per day
-        if (await hasFamilyVisitOnDay(candidate, dayKey)) continue;
-
-        // Rule 3: 1 day 2 slots, max 1 family per slot (+ AF2 Telehealth gap check)
-        const dayEncounters = await loadDoctorDayEncounters(candidate, dayKey);
-        const morning = evaluateSlotWindowAvailability('MORNING', dayEncounters);
-        const afternoon = evaluateSlotWindowAvailability('AFTERNOON', dayEncounters);
-
-        if (!morning.available && !afternoon.available) continue;
-
-        if (morning.available && afternoon.available) {
-          // AF2: Prefer the slot without Telehealth; otherwise alternate evenly
-          if (morning.hasTelehealth && !afternoon.hasTelehealth) {
-            chosenSlot = 'AFTERNOON';
-          } else if (afternoon.hasTelehealth && !morning.hasTelehealth) {
-            chosenSlot = 'MORNING';
-          } else {
-            chosenSlot = i % 2 === 0 ? 'MORNING' : 'AFTERNOON';
-          }
-        } else {
-          chosenSlot = morning.available ? 'MORNING' : 'AFTERNOON';
+        checkedKeys.add(candidate.toISOString().slice(0, 10));
+        const picked = await trySelectSlotOnDate(candidate);
+        if (picked) {
+          chosenDate = picked.date;
+          chosenSlot = picked.slot;
+          break;
         }
+      }
 
-        chosenDate = candidate;
-        break;
+      if (!chosenDate) {
+        const remainingWorkingDays = allWorkingDays
+          .filter((d) => !checkedKeys.has(d.toISOString().slice(0, 10)))
+          .sort(
+            (a, b) =>
+              Math.abs(a.getTime() - targetDate.getTime()) -
+              Math.abs(b.getTime() - targetDate.getTime()),
+          );
+        for (const candidate of remainingWorkingDays) {
+          const picked = await trySelectSlotOnDate(candidate);
+          if (picked) {
+            chosenDate = picked.date;
+            chosenSlot = picked.slot;
+            break;
+          }
+        }
       }
 
       if (chosenDate && chosenSlot) {

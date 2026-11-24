@@ -35,4 +35,11 @@ export function validateCarePackageTerms(terms: CarePackageTerms): void {
       'A package must include at least one consultation or visit',
     );
   }
+  // 1 gia đình tối đa 1 lượt khám tại nhà/ngày; 1 tháng tối đa ~20 ngày làm việc an toàn (có buffer).
+  const durationMonths = Math.max(1, terms.durationMonths ?? 1);
+  if (Math.ceil(terms.quotas.homeVisits / durationMonths) > 20) {
+    throw new BadRequestException(
+      'Số lượt Khám tại nhà trung bình mỗi tháng của gói không được vượt quá 20 buổi/tháng.',
+    );
+  }
 }

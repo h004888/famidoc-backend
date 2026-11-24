@@ -31,7 +31,8 @@ export const SLOT_WINDOWS: Record<
   },
 };
 
-export const TELEHEALTH_DEFAULT_DURATION_MINUTES = 45;
+export const VIDEO_CONSULTATION_DURATION_MINUTES = 30;
+export const TELEHEALTH_DEFAULT_DURATION_MINUTES = VIDEO_CONSULTATION_DURATION_MINUTES;
 export const MIN_CONTINUOUS_GAP_FOR_HOME_VISIT_MINUTES = 120;
 
 const FIXED_VN_HOLIDAYS = new Set(['01-01', '04-30', '05-01', '09-02']);
@@ -152,7 +153,6 @@ export function buildDayShiftOffsets(maxDays: number): number[] {
   return offsets;
 }
 
-export const VIDEO_CONSULTATION_DURATION_MINUTES = 30;
 export const HOME_VISIT_BUFFER_MINUTES = 30;
 export const VIDEO_SAME_DAY_CUTOFF_BEFORE_END_MINUTES = 120;
 export const VIDEO_LEAD_TIME_MINUTES = 120;
@@ -254,4 +254,64 @@ export function evaluateVideoSlotWindowAvailability(
         ? undefined
         : `Khung ${slot === 'MORNING' ? 'Sáng' : 'Chiều'} đã kín lịch`,
   };
+}
+
+/**
+ * Ưu tiên gom ca Tư vấn Video vào khung đã có sẵn Video (và còn trống)
+ * để bảo toàn khung còn lại liên mạch cho Khám tại nhà (chống phân mảnh).
+ */
+export function pickPreferredVideoSlotWindow(
+  morning: Pick<VideoSlotAvailabilityResult, 'available' | 'candidateTimes'>,
+  afternoon: Pick<VideoSlotAvailabilityResult, 'available' | 'candidateTimes'>,
+  encountersInDay: SlotEncounterSummary[],
+): SlotWindow | null {
+  if (!morning.available && !afternoon.available) return null;
+  if (morning.available && !afternoon.available) return 'MORNING';
+  if (!morning.available && afternoon.available) return 'AFTERNOON';
+
+  const isVideo = (e: SlotEncounterSummary) =>
+    e.encounterType === 'TELEHEALTH' || e.encounterType === 'TELEMEDICINE';
+  const morningHasVideo = encountersInDay.some(
+    (e) => isVideo(e) && mapTimeToSlotWindow(e.scheduledTime) === 'MORNING',
+  );
+  const afternoonHasVideo = encountersInDay.some(
+    (e) => isVideo(e) && mapTimeToSlotWindow(e.scheduledTime) === 'AFTERNOON',
+  );
+
+  if (morningHasVideo && !afternoonHasVideo) return 'MORNING';
+  if (afternoonHasVideo && !morningHasVideo) return 'AFTERNOON';
+  return 'MORNING';
+}
+
+/**
+ * Liệt kê tất cả các ngày làm việc (không phải Chủ nhật hoặc ngày lễ cố định)
+ * trong nửa khoảng [startDate, endDate).
+ */
+export function listWorkingDaysInRange(startDate: Date, endDate: Date): Date[] {
+  const startUtc = Date.UTC(
+    startDate.getUTCFullYear(),
+    startDate.getUTCMonth(),
+    startDate.getUTCDate(),
+    0,
+    0,
+    0,
+    0,
+  );
+  const endUtc = Date.UTC(
+    endDate.getUTCFullYear(),
+    endDate.getUTCMonth(),
+    endDate.getUTCDate(),
+    0,
+    0,
+    0,
+    0,
+  );
+  const days: Date[] = [];
+  for (let ms = startUtc; ms < endUtc; ms += 24 * 60 * 60 * 1000) {
+    const d = new Date(ms);
+    if (!isDayOffDate(d).isDayOff) {
+      days.push(d);
+    }
+  }
+  return days;
 }
