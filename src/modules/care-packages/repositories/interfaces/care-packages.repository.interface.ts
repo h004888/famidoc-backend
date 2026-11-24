@@ -26,6 +26,7 @@ export const DEMO_CARE_PACKAGE_CODES = [
 
 export interface CarePackagesListOptions {
   excludeDemo?: boolean;
+  excludeDrafts?: boolean;
   ascendingPrice?: boolean;
 }
 

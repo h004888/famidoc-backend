@@ -8,6 +8,7 @@ import { QuotaPeriod } from '../entities/care-package.entity';
 import { InMemoryCarePackagesRepository } from '../repositories/impl/in-memory-care-packages.repository';
 import { DEMO_CARE_PACKAGE_IDS } from '../repositories/interfaces/care-packages.repository.interface';
 import { CreateCarePackageDto } from '../dtos/create-care-package.dto';
+import { AdminListCarePackagesDto } from '../dtos/list-care-packages.dto';
 import { UpdateCarePackageDto } from '../dtos/update-care-package.dto';
 import { carePackagesValidationPipe } from '../care-packages-validation.pipe';
 
@@ -186,6 +187,9 @@ describe('CarePackagesServiceImpl', () => {
     expect(updated.priceVnd).toBe(200_000);
     expect(updated.id).toBe(item.id);
     expect(updated.version).toBe(1);
+    expect(updated.status).toBe('ACTIVE');
+    expect((await service.listAdmin({ page: 1, limit: 20 })).total).toBe(1);
+    await expect(service.getPublic(item.id)).resolves.toMatchObject({ priceVnd: 200_000 });
     await expect(service.publish(item.id)).rejects.toBeInstanceOf(
       ConflictException,
     );
@@ -257,8 +261,9 @@ describe('CarePackagesServiceImpl', () => {
     expect((await service.getAdmin(item.id)).priceVnd).toBe(100_000);
   });
 
-  it('reopens a retired package with the same identity and terms', async () => {
+  it.each([false, true])('reopens the same retired package with a legacy draft present=%s', async (hasDraft) => {
     const item = await service.create(makeInput());
+    const draft = hasDraft ? await service.createVersion(item.id) : null;
     await service.retire(item.id);
 
     const reopened = await service.reopen(item.id);
@@ -269,6 +274,7 @@ describe('CarePackagesServiceImpl', () => {
     });
     expect(await service.getPublic(item.id)).toEqual(reopened);
     expect((await service.listPublic({ page: 1, limit: 20 })).items).toHaveLength(1);
+    if (draft) expect((await service.getAdmin(draft.id)).status).toBe('DRAFT');
   });
 
   it('rejects reopening a draft, an active package, or a superseded version', async () => {
@@ -293,6 +299,31 @@ describe('CarePackagesServiceImpl', () => {
     expect((await service.listAdmin({ page: 100, limit: 1 })).items).toEqual(
       [],
     );
+  });
+
+  it('hides legacy drafts and lists active packages before cheaper retired ones across pages', async () => {
+    const active = await service.create(makeInput({ code: 'CURRENT', priceVnd: 200_000 }));
+    const draft = await service.createVersion(active.id);
+    const retired = await service.create(makeInput({ code: 'RETIRED', priceVnd: 150_000 }));
+    await service.retire(retired.id);
+    await service.update(draft.id, { priceVnd: 100_000 });
+
+    const query = await carePackagesValidationPipe.transform(
+      { page: '1', limit: '1', excludeDrafts: 'true' },
+      { type: 'query', metatype: AdminListCarePackagesDto },
+    );
+    expect(await service.listAdmin(query)).toMatchObject({
+      total: 2,
+      items: [expect.objectContaining({ id: active.id, status: 'ACTIVE' })],
+    });
+    expect(await service.listAdmin({ page: 2, limit: 1, excludeDrafts: true })).toMatchObject({
+      total: 2,
+      items: [expect.objectContaining({ id: retired.id, status: 'DEPRECATED' })],
+    });
+    expect(await service.listAdmin({ page: 1, limit: 1 })).toMatchObject({
+      total: 3,
+      items: [expect.objectContaining({ id: draft.id, status: 'DRAFT' })],
+    });
   });
 
   it('excludes demo packages and sorts the full admin catalog by price before pagination', async () => {

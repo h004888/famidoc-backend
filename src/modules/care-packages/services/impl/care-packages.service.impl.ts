@@ -47,6 +47,7 @@ export class CarePackagesServiceImpl {
   listAdmin(query: AdminListCarePackagesDto) {
     return this.repository.list(query.page, query.limit, query.status, {
       excludeDemo: true,
+      excludeDrafts: query.excludeDrafts,
       ascendingPrice: true,
     });
   }
