@@ -1,6 +1,11 @@
 import type { ContractSummary } from '../../entities/contract-change.entity';
 import { calculateContractTermsHash } from '../../pricing/contract-terms-hash';
 import {
+  DEFAULT_MAX_PANEL_CAPACITY,
+  DOCTOR_USABLE_MONTHLY_HOME_SLOTS,
+  computeMonthlyHomeVisitDemand,
+} from '../../pricing/doctor-quota.helper';
+import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
@@ -151,12 +156,14 @@ export class ContractsServiceImpl
     session: ContractsSession,
     doctorId: string,
     exceptContractId?: string,
+    requestedMonthlyHomeSlots = 0,
   ): Promise<{ doctor: any; activeAndHeldCount: number; maxCap: number }> {
     const locked = session.lockDoctorAndCountActiveAndHeld
       ? await session.lockDoctorAndCountActiveAndHeld(doctorId, exceptContractId)
       : null;
     let doctor = locked?.doctor ?? null;
     let activeAndHeldCount = locked?.activeAndHeldCount ?? 0;
+    const usedMonthlyHomeSlots = locked?.usedMonthlyHomeSlots ?? 0;
 
     if (!locked && !session.lockDoctorAndCountActiveAndHeld) {
       doctor = await session.findDoctorById(doctorId);
@@ -175,11 +182,25 @@ export class ContractsServiceImpl
     const maxCap =
       typeof doctor.maxPanelCapacity === 'number' && doctor.maxPanelCapacity > 0
         ? doctor.maxPanelCapacity
-        : 30;
+        : DEFAULT_MAX_PANEL_CAPACITY;
 
     if (activeAndHeldCount >= maxCap) {
       throw new ConflictException(
         `Bác sĩ đã đạt giới hạn tối đa số hộ gia đình phụ trách (${maxCap}/${maxCap}). Vui lòng chọn bác sĩ khác`,
+      );
+    }
+
+    if (
+      requestedMonthlyHomeSlots > 0 &&
+      usedMonthlyHomeSlots + requestedMonthlyHomeSlots >
+        DOCTOR_USABLE_MONTHLY_HOME_SLOTS
+    ) {
+      const remainingMonthlySlots = Math.max(
+        0,
+        DOCTOR_USABLE_MONTHLY_HOME_SLOTS - usedMonthlyHomeSlots,
+      );
+      throw new ConflictException(
+        `Bác sĩ chỉ còn ${remainingMonthlySlots}/${DOCTOR_USABLE_MONTHLY_HOME_SLOTS} khung Khám tại nhà khả dụng trong tháng (gói yêu cầu ${requestedMonthlyHomeSlots} khung/tháng). Vui lòng chọn bác sĩ khác hoặc gói có số lượt khám thấp hơn.`,
       );
     }
 
@@ -603,11 +624,16 @@ export class ContractsServiceImpl
 
       let doctor: any = null;
       let resolvedFacilityId = dto.facilityId;
+      const requestedMonthlyHomeSlots = computeMonthlyHomeVisitDemand(
+        pkg.periodicVisitsQuota,
+        pkg.durationMonths,
+      );
       if (effectiveDoctorId) {
         const checked = await this.lockAndVerifyDoctorQuota(
           session,
           effectiveDoctorId,
           dto.replaceContractId,
+          requestedMonthlyHomeSlots,
         );
         doctor = checked.doctor;
         if (dto.facilityId && dto.facilityId !== doctor.facilityId) {
@@ -820,6 +846,11 @@ export class ContractsServiceImpl
         await this.lockAndVerifyDoctorQuota(
           session,
           prepared.effectiveDoctorId,
+          undefined,
+          computeMonthlyHomeVisitDemand(
+            prepared.pkg.periodicVisitsQuota,
+            prepared.pkg.durationMonths,
+          ),
         );
       }
 

@@ -434,4 +434,95 @@ describe('Doctor Quota Holds, TTL Cleanup, Facility Inference & Dual-Track Linki
       }),
     ).rejects.toThrow(BadRequestException);
   });
+
+  it('blocks family #3 when 2 existing families already occupy 40/40 monthly home-visit slots (even if panel count is 2/5)', async () => {
+    const pkg1m8 = {
+      ...mockPackage,
+      durationMonths: 1,
+      periodicVisitsQuota: 8,
+    };
+    const sessionMock = {
+      findPackage: jest.fn().mockResolvedValue(pkg1m8),
+      lockDoctorAndCountActiveAndHeld: jest.fn().mockResolvedValue({
+        doctor: { ...mockDoctor, maxPanelCapacity: 5 },
+        activeAndHeldCount: 2,
+        usedMonthlyHomeSlots: 40,
+      }),
+    };
+
+    const service = new ContractsServiceImpl({
+      transaction: jest.fn().mockImplementation(async (cb) => cb(sessionMock as any)),
+    });
+
+    await expect(
+      service.createInitialMedicalContract(familyRepUser, {
+        packageId: 'pkg-1',
+        doctorId: 'doc-1',
+        memberCount: 4,
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('allows family #3 when usedMonthlyHomeSlots (32) + requested (8) <= 40', async () => {
+    const pkg1m8 = {
+      ...mockPackage,
+      durationMonths: 1,
+      periodicVisitsQuota: 8,
+    };
+    const createMedicalContract = jest.fn().mockImplementation(async (data) => ({
+      id: 'contract-fam3',
+      ...data,
+      familyUnit: mockFamily,
+      facility: mockFacility,
+      doctor: { ...mockDoctor, maxPanelCapacity: 5 },
+      servicePackage: pkg1m8,
+    }));
+    const sessionMock = {
+      findPackage: jest.fn().mockResolvedValue(pkg1m8),
+      lockDoctorAndCountActiveAndHeld: jest.fn().mockResolvedValue({
+        doctor: { ...mockDoctor, maxPanelCapacity: 5 },
+        activeAndHeldCount: 2,
+        usedMonthlyHomeSlots: 32,
+      }),
+      findFacilityById: jest.fn().mockResolvedValue(mockFacility),
+      findActiveStaffingContract: jest.fn().mockResolvedValue({ id: 'staff-1', status: 'ACTIVE' }),
+      findFamilyById: jest.fn().mockResolvedValue(mockFamily),
+      createMedicalContract,
+      recordChange: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const service = new ContractsServiceImpl({
+      transaction: jest.fn().mockImplementation(async (cb) => cb(sessionMock as any)),
+    });
+
+    const created = await service.createInitialMedicalContract(familyRepUser, {
+      packageId: 'pkg-1',
+      doctorId: 'doc-1',
+      memberCount: 4,
+    });
+    expect(created.id).toBe('contract-fam3');
+  });
+
+  it('uses default maxPanelCapacity = 5 when doctor.maxPanelCapacity is null/0', async () => {
+    const sessionMock = {
+      findPackage: jest.fn().mockResolvedValue(mockPackage),
+      lockDoctorAndCountActiveAndHeld: jest.fn().mockResolvedValue({
+        doctor: { ...mockDoctor, maxPanelCapacity: null },
+        activeAndHeldCount: 5,
+        usedMonthlyHomeSlots: 20,
+      }),
+    };
+
+    const service = new ContractsServiceImpl({
+      transaction: jest.fn().mockImplementation(async (cb) => cb(sessionMock as any)),
+    });
+
+    await expect(
+      service.createInitialMedicalContract(familyRepUser, {
+        packageId: 'pkg-1',
+        doctorId: 'doc-1',
+        memberCount: 4,
+      }),
+    ).rejects.toThrow(ConflictException);
+  });
 });

@@ -171,7 +171,11 @@ export interface ContractsSession {
   lockDoctorAndCountActiveAndHeld?(
     doctorId: string,
     exceptContractId?: string,
-  ): Promise<{ doctor: any; activeAndHeldCount: number } | null>;
+  ): Promise<{
+    doctor: any;
+    activeAndHeldCount: number;
+    usedMonthlyHomeSlots?: number;
+  } | null>;
   findMatchingSessionById?(id: string): Promise<any | null>;
   markMatchingSessionConfirmed?(id: string, contractId: string): Promise<void>;
   findMatchingQueueRequestById?(id: string): Promise<any | null>;

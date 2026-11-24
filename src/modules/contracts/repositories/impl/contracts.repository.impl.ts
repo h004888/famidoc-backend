@@ -311,13 +311,37 @@ export class PrismaContractsSession implements ContractsSession {
       .$queryRaw`SELECT id FROM doctors WHERE id=${doctorId}::uuid FOR UPDATE`;
     const doctor = await this.findDoctorById(doctorId);
     if (!doctor) return null;
-    const activeAndHeldCount = await this.tx.medicalContract.count({
+    if (typeof this.tx.medicalContract.findMany !== 'function') {
+      const activeAndHeldCount = await this.tx.medicalContract.count({
+        where: buildActiveAndHeldWhere(doctorId, {
+          now: new Date(),
+          exceptContractId,
+        }),
+      });
+      return { doctor, activeAndHeldCount, usedMonthlyHomeSlots: 0 };
+    }
+    const activeAndHeldContracts = await this.tx.medicalContract.findMany({
       where: buildActiveAndHeldWhere(doctorId, {
         now: new Date(),
         exceptContractId,
       }),
+      select: {
+        servicePackage: {
+          select: {
+            periodicVisitsQuota: true,
+            durationMonths: true,
+          },
+        },
+      },
     });
-    return { doctor, activeAndHeldCount };
+    const activeAndHeldCount = activeAndHeldContracts.length;
+    const usedMonthlyHomeSlots = activeAndHeldContracts.reduce((sum, c) => {
+      const visits = Math.max(0, Number(c.servicePackage?.periodicVisitsQuota ?? 0));
+      if (visits === 0) return sum;
+      const months = Math.max(1, Number(c.servicePackage?.durationMonths ?? 1));
+      return sum + Math.ceil(visits / months);
+    }, 0);
+    return { doctor, activeAndHeldCount, usedMonthlyHomeSlots };
   }
 
   findMatchingSessionById(id: string) {

@@ -39,6 +39,7 @@ import {
 import {
   evaluateSlotWindowAvailability,
   isDayOffDate,
+  listWorkingDaysInRange,
   mapTimeToSlotWindow,
   slotWindowToScheduledTime,
   type SlotEncounterSummary,
@@ -102,31 +103,60 @@ export function calculateCadenceDates(
   endDate?: Date,
 ): Date[] {
   if (quota <= 0) return [];
-  const results: Date[] = [];
-  const start = new Date(startDate);
+  const startMidnight = new Date(
+    Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate(), 0, 0, 0, 0),
+  );
+  const rawEnd = endDate
+    ? new Date(Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate(), 0, 0, 0, 0))
+    : (() => {
+        const d = new Date(startMidnight);
+        d.setUTCMonth(d.getUTCMonth() + Math.max(1, durationMonths));
+        return d;
+      })();
+
+  const effectiveSpreadStart =
+    durationMonths >= 2 && quota <= durationMonths
+      ? (() => {
+          const d1 = new Date(startMidnight);
+          d1.setUTCMonth(d1.getUTCMonth() + 1);
+          return d1.getTime() < rawEnd.getTime() ? d1 : startMidnight;
+        })()
+      : startMidnight;
+
+  const workingDays = listWorkingDaysInRange(effectiveSpreadStart, rawEnd);
+  if (workingDays.length === 0) {
+    return Array.from({ length: quota }, () => normalizeMilestoneDate(startMidnight, rawEnd));
+  }
 
   if (quota === 1) {
-    const d = new Date(start);
-    d.setUTCMonth(d.getUTCMonth() + 1);
-    results.push(normalizeMilestoneDate(d, endDate));
+    if (durationMonths >= 2) {
+      return [workingDays[0]];
+    }
+    const idx = workingDays.length >= 3 ? Math.floor(workingDays.length / 2) : workingDays.length - 1;
+    return [workingDays[idx]];
+  }
+
+  const results: Date[] = [];
+  if (workingDays.length >= quota) {
+    // Rải đều trên các ngày làm việc trong [startDate, endDate), tránh trùng ngày
+    for (let i = 0; i < quota; i++) {
+      const remainingToPick = quota - i;
+      const minIdx = i === 0 ? 0 : Math.max(0, results.length > 0 ? workingDays.indexOf(results[results.length - 1]) + 1 : 0);
+      const maxIdx = workingDays.length - remainingToPick;
+      const idealIdx = Math.round((i * (workingDays.length - 1)) / (quota - 1));
+      const clampedIdx = Math.max(minIdx, Math.min(maxIdx, idealIdx));
+      results.push(workingDays[clampedIdx]);
+    }
     return results;
   }
 
-  // First milestone: 1 month after activation
-  const d1 = new Date(start);
-  d1.setUTCMonth(d1.getUTCMonth() + 1);
-  results.push(normalizeMilestoneDate(d1, endDate));
-
-  const remainingMonths = Math.max(durationMonths - 1, quota - 1);
-  const step = remainingMonths / (quota - 1);
-
-  for (let i = 1; i < quota; i++) {
-    const d = new Date(start);
-    const monthOffset = Math.round(1 + i * step);
-    d.setUTCMonth(d.getUTCMonth() + monthOffset);
-    results.push(normalizeMilestoneDate(d, endDate));
+  for (let i = 0; i < quota; i++) {
+    const idx = Math.min(
+      workingDays.length - 1,
+      Math.floor((i * workingDays.length) / quota),
+    );
+    results.push(workingDays[idx]);
   }
-
   return results;
 }
 
@@ -857,6 +887,44 @@ export class EncountersServiceImpl implements IEncountersService {
       const dayOff = isDayOffDate(proposedDate);
       if (dayOff.isDayOff) {
         throw new BadRequestException(dayOff.reason || 'Ngày đã chọn là ngày nghỉ');
+      }
+
+      const contractStart = encounter.contract?.startDate
+        ? new Date(
+            Date.UTC(
+              encounter.contract.startDate.getUTCFullYear(),
+              encounter.contract.startDate.getUTCMonth(),
+              encounter.contract.startDate.getUTCDate(),
+              0,
+              0,
+              0,
+              0,
+            ),
+          )
+        : null;
+      const contractEnd = encounter.contract?.endDate
+        ? new Date(
+            Date.UTC(
+              encounter.contract.endDate.getUTCFullYear(),
+              encounter.contract.endDate.getUTCMonth(),
+              encounter.contract.endDate.getUTCDate(),
+              0,
+              0,
+              0,
+              0,
+            ),
+          )
+        : null;
+
+      if (contractStart && proposedDate.getTime() < contractStart.getTime()) {
+        throw new BadRequestException(
+          'Ngày đề xuất đổi lịch nằm trước ngày bắt đầu hiệu lực của hợp đồng.',
+        );
+      }
+      if (contractEnd && proposedDate.getTime() >= contractEnd.getTime()) {
+        throw new BadRequestException(
+          'Ngày đề xuất đổi lịch vượt quá thời hạn hiệu lực của gói chăm sóc.',
+        );
       }
 
       const isHomeVisit = encounter.encounterType === EncounterType.HOME_VISIT;
@@ -1879,12 +1947,16 @@ export class EncountersServiceImpl implements IEncountersService {
         await this.expireStaleRescheduleRequests(tx);
       }
       let targetFamilyId: string | null = null;
+      let contractStartIso: string | null = null;
+      let contractEndIso: string | null = null;
       if (contractId && tx) {
         const c = await tx.medicalContract.findUnique({
           where: { id: contractId },
-          select: { familyId: true },
+          select: { familyId: true, startDate: true, endDate: true },
         });
         targetFamilyId = c?.familyId ?? null;
+        contractStartIso = c?.startDate ? c.startDate.toISOString().slice(0, 10) : null;
+        contractEndIso = c?.endDate ? c.endDate.toISOString().slice(0, 10) : null;
       }
 
       const startDate = new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0, 0));
@@ -1978,6 +2050,12 @@ export class EncountersServiceImpl implements IEncountersService {
         const dateObj = new Date(Date.UTC(year, monthIndex, d, 0, 0, 0, 0));
         const iso = dateObj.toISOString().slice(0, 10);
         const dayOff = isDayOffDate(dateObj);
+        const isOutOfContract =
+          (contractStartIso !== null && iso < contractStartIso) ||
+          (contractEndIso !== null && iso >= contractEndIso);
+        const outOfContractReason = isOutOfContract
+          ? 'Ngoài thời hạn hiệu lực gói chăm sóc'
+          : null;
         const dayList = byDay.get(iso) ?? [];
         const morning = evaluateSlotWindowAvailability('MORNING', dayList);
         const afternoon = evaluateSlotWindowAvailability('AFTERNOON', dayList);
@@ -1986,21 +2064,37 @@ export class EncountersServiceImpl implements IEncountersService {
           date: iso,
           isDayOff: dayOff.isDayOff,
           dayOffReason: dayOff.reason ?? null,
+          isOutOfContract,
+          outOfContractReason,
           familyHasVisit: familyBusyDays.has(iso),
           morning: {
-            available: !dayOff.isDayOff && morning.available,
-            reason: dayOff.isDayOff ? dayOff.reason : (morning.reason ?? null),
+            available: !dayOff.isDayOff && !isOutOfContract && morning.available,
+            reason: isOutOfContract
+              ? outOfContractReason
+              : dayOff.isDayOff
+                ? dayOff.reason
+                : (morning.reason ?? null),
             label: isDoctorOrAdmin ? (morning.occupiedByLabel ?? null) : null,
           },
           afternoon: {
-            available: !dayOff.isDayOff && afternoon.available,
-            reason: dayOff.isDayOff ? dayOff.reason : (afternoon.reason ?? null),
+            available: !dayOff.isDayOff && !isOutOfContract && afternoon.available,
+            reason: isOutOfContract
+              ? outOfContractReason
+              : dayOff.isDayOff
+                ? dayOff.reason
+                : (afternoon.reason ?? null),
             label: isDoctorOrAdmin ? (afternoon.occupiedByLabel ?? null) : null,
           },
         });
       }
 
-      return { month, doctorId, days };
+      return {
+        month,
+        doctorId,
+        contractStartDate: contractStartIso,
+        contractEndDate: contractEndIso,
+        days,
+      };
     });
   }
 

@@ -1,7 +1,22 @@
 import type { Prisma } from '@prisma/client';
 
 const DEFAULT_CONTRACT_HOLD_TTL_HOURS = 24;
-const DEFAULT_MAX_PANEL_CAPACITY = 5;
+export const DEFAULT_MAX_PANEL_CAPACITY = 5;
+/**
+ * 1 bác sĩ làm việc tối thiểu 24 ngày/tháng x 2 khung (Sáng/Chiều) = 48 khung.
+ * Trừ 8 khung (~17% safety buffer) cho đổi lịch / đột xuất -> quỹ khả dụng = 40 khung/tháng.
+ */
+export const DOCTOR_USABLE_MONTHLY_HOME_SLOTS = 40;
+
+export function computeMonthlyHomeVisitDemand(
+  periodicVisitsQuota: number | null | undefined,
+  durationMonths: number | null | undefined,
+): number {
+  const visits = Math.max(0, Number(periodicVisitsQuota ?? 0));
+  if (visits === 0) return 0;
+  const months = Math.max(1, Number(durationMonths ?? 1));
+  return Math.ceil(visits / months);
+}
 
 export function resolveContractHoldTtlHours(): number {
   const raw = Number(process.env.CONTRACT_HOLD_TTL_HOURS);
@@ -63,6 +78,67 @@ export function computeQuotaMetrics(
     remainingSlots,
     isQuotaFull: remainingSlots === 0,
   };
+}
+
+export interface DoctorPanelLoad {
+  activeAndHeldCount: number;
+  usedMonthlyHomeSlots: number;
+}
+
+/**
+ * Đếm hàng loạt số hợp đồng ACTIVE + giữ chỗ PENDING_* còn hạn
+ * kèm tổng quỹ khung Khám tại nhà/tháng đang chiếm dụng theo danh sách doctorId.
+ */
+export async function countActiveAndHeldLoadMap(
+  prisma: {
+    medicalContract: {
+      findMany: (args: {
+        where: Prisma.MedicalContractWhereInput;
+        select: {
+          doctorId: true;
+          servicePackage?: { select: { periodicVisitsQuota: true; durationMonths: true } };
+        };
+      }) => Promise<
+        Array<{
+          doctorId: string | null;
+          servicePackage?: { periodicVisitsQuota?: number | null; durationMonths?: number | null } | null;
+        }>
+      >;
+    };
+  },
+  doctorIds: string[],
+  now = new Date(),
+): Promise<Map<string, DoctorPanelLoad>> {
+  const loads = new Map<string, DoctorPanelLoad>();
+  if (doctorIds.length === 0) return loads;
+
+  const rows = await prisma.medicalContract.findMany({
+    where: {
+      doctorId: { in: doctorIds },
+      ...buildActiveAndHeldWhere(undefined, { now }),
+    },
+    select: {
+      doctorId: true,
+      servicePackage: {
+        select: { periodicVisitsQuota: true, durationMonths: true },
+      },
+    },
+  });
+
+  for (const row of rows) {
+    if (!row.doctorId) continue;
+    const prev = loads.get(row.doctorId) ?? {
+      activeAndHeldCount: 0,
+      usedMonthlyHomeSlots: 0,
+    };
+    prev.activeAndHeldCount += 1;
+    prev.usedMonthlyHomeSlots += computeMonthlyHomeVisitDemand(
+      row.servicePackage?.periodicVisitsQuota,
+      row.servicePackage?.durationMonths,
+    );
+    loads.set(row.doctorId, prev);
+  }
+  return loads;
 }
 
 /**

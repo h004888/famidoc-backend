@@ -739,4 +739,61 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       ).rejects.toThrow(ConflictException);
     });
   });
+
+  describe('Contract Expiry Enforcement on Monthly Availability & Reschedule', () => {
+    it('getDoctorMonthlyAvailability đánh dấu isOutOfContract=true và available=false cho ngày >= contract.endDate', async () => {
+      (mockSession as any).tx = {
+        encounterRescheduleRequest: {
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+        medicalContract: {
+          findUnique: jest.fn().mockResolvedValue({
+            familyId: 'family-1',
+            startDate: new Date('2026-05-01T00:00:00.000Z'),
+            endDate: new Date('2026-06-01T00:00:00.000Z'),
+          }),
+        },
+        encounter: {
+          findMany: jest.fn().mockResolvedValue([]),
+        },
+      };
+
+      const res: any = await service.getDoctorMonthlyAvailability(
+        familyActor,
+        'doctor-1',
+        '2026-06',
+        'contract-1',
+      );
+
+      expect(res.contractEndDate).toBe('2026-06-01');
+      const day1 = res.days.find((d: any) => d.date === '2026-06-01');
+      expect(day1.isOutOfContract).toBe(true);
+      expect(day1.morning.available).toBe(false);
+      expect(day1.afternoon.available).toBe(false);
+    });
+
+    it('requestReschedule ném BadRequestException khi proposedDate >= contract.endDate', async () => {
+      const futureEncounter = {
+        ...sampleEncounter,
+        encounterStatus: EncounterStatus.CONFIRMED,
+        scheduledDate: new Date('2099-05-20T00:00:00.000Z'),
+        contract: {
+          ...sampleEncounter.contract,
+          startDate: new Date('2099-05-01T00:00:00.000Z'),
+          endDate: new Date('2099-06-01T00:00:00.000Z'),
+        },
+      };
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce(futureEncounter);
+      (mockSession.findPendingRescheduleRequestByEncounter as jest.Mock).mockResolvedValueOnce(null);
+
+      await expect(
+        service.requestReschedule(familyActor, 'encounter-1', {
+          proposedDate: '2099-06-05',
+          proposedTime: '08:00',
+          rescheduleReason: 'Đổi lịch sang tháng sau',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
 });

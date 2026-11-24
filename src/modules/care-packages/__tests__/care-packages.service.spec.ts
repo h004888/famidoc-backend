@@ -411,4 +411,25 @@ describe('CarePackagesServiceImpl', () => {
     expect(quote.pricing.totalPriceVnd).toBe(200_000);
     expect((await service.getAdmin(first.id)).priceVnd).toBe(100_000);
   });
+
+  it('rejects packages whose monthly home-visit density exceeds 20 visits/month', async () => {
+    await expect(
+      service.create(
+        makeInput({
+          durationMonths: 1,
+          quotas: { videoConsultations: 0, homeVisits: 21, facilityVisits: 0 },
+        }),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('allows packages with unlimited/high videoConsultations when homeVisits <= 20/month', async () => {
+    const item = await service.create(
+      makeInput({
+        durationMonths: 1,
+        quotas: { videoConsultations: 50, homeVisits: 8, facilityVisits: 0 },
+      }),
+    );
+    expect(item.quotas.videoConsultations).toBe(50);
+  });
 });

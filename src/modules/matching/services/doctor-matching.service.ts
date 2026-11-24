@@ -22,8 +22,11 @@ import {
   buildMatchingQueueAssignedEmail,
 } from '../../../core/mailer/templates/matching-email.templates';
 import {
+  DOCTOR_USABLE_MONTHLY_HOME_SLOTS,
   buildActiveAndHeldWhere,
+  computeMonthlyHomeVisitDemand,
   computeQuotaMetrics,
+  countActiveAndHeldLoadMap,
   countActiveAndHeldMap,
 } from '../../contracts/pricing/doctor-quota.helper';
 import type {
@@ -584,15 +587,25 @@ export class DoctorMatchingService
       }
     }
 
-    const activeHeldMap = await countActiveAndHeldMap(
+    const activeLoadMap = await countActiveAndHeldLoadMap(
       this.prisma,
       combinedRows.map((c) => c.doc.id),
+    );
+    const packageMonthlyHomeDemand = computeMonthlyHomeVisitDemand(
+      pkg?.periodicVisitsQuota,
+      pkg?.durationMonths,
     );
 
     const openCandidates = combinedRows
       .map(({ doc, tierRank }) => {
-        const heldCount = activeHeldMap.get(doc.id) ?? doc.activePanelCount ?? 0;
+        const load = activeLoadMap.get(doc.id);
+        const heldCount = load?.activeAndHeldCount ?? doc.activePanelCount ?? 0;
+        const usedMonthlyHomeSlots = load?.usedMonthlyHomeSlots ?? 0;
         const quota = computeQuotaMetrics(doc.maxPanelCapacity, heldCount);
+        const hasEnoughMonthlyHomeSlots =
+          packageMonthlyHomeDemand === 0 ||
+          usedMonthlyHomeSlots + packageMonthlyHomeDemand <=
+            DOCTOR_USABLE_MONTHLY_HOME_SLOTS;
         const vacancyScore =
           quota.maxCapacity > 0 ? quota.remainingSlots / quota.maxCapacity : 0;
         const areaMatch = computeAreaMatchScore(
@@ -607,12 +620,13 @@ export class DoctorMatchingService
           doc,
           tierRank,
           quota,
+          hasEnoughMonthlyHomeSlots,
           vacancyScore,
           areaMatch,
           specialtyKeywordMatch,
         };
       })
-      .filter((item) => !item.quota.isQuotaFull)
+      .filter((item) => !item.quota.isQuotaFull && item.hasEnoughMonthlyHomeSlots)
       .sort((a, b) => {
         if (a.tierRank !== b.tierRank) return a.tierRank - b.tierRank;
         if (a.areaMatch !== b.areaMatch) return b.areaMatch - a.areaMatch;
