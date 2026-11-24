@@ -175,7 +175,7 @@ export function doctorVisitScope(
   return {
     doctor: activePrescribingDoctor(userId),
     OR: [
-      { encounterStatus: { in: ['IN_PROGRESS', 'COMPLETED'] } },
+      { encounterStatus: { in: ['IN_PROGRESS', 'WRAP_UP', 'COMPLETED'] } },
       {
         encounterStatus: 'CONFIRMED',
         OR: [

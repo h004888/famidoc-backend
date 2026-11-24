@@ -46,6 +46,7 @@ describe('TelehealthService - Session Lifecycle', () => {
       createParticipantToken: jest.fn().mockResolvedValue('jwt-token-123'),
       getPublicUrl: jest.fn().mockReturnValue('wss://rtc.famidoc.online'),
       sendRoomData: jest.fn(),
+      deleteRoom: jest.fn().mockResolvedValue(undefined),
       receiveWebhook: jest.fn(),
     } as any;
     storage = {

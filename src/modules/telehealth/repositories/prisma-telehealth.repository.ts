@@ -23,24 +23,34 @@ export class PrismaTelehealthRepository implements ITelehealthRepository {
     roomSid: string;
     startedAt: Date;
     shouldStartEncounter: boolean;
+    actorRole?: string;
+    joinedAt?: Date;
   }): Promise<TelehealthSession> {
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.telehealthSession.findUnique({
         where: { encounterId: params.encounterId },
       });
 
+      const joinTimestamp = params.joinedAt ?? params.startedAt;
+      const isDoctor = params.actorRole === 'DOCTOR';
+      const isFamily = params.actorRole === 'FAMILY_REP';
+
       const session = existing
-        ? existing.startedAt
-          ? existing
-          : await tx.telehealthSession.update({
-              where: { id: existing.id },
-              data: { startedAt: params.startedAt },
-            })
+        ? await tx.telehealthSession.update({
+            where: { id: existing.id },
+            data: {
+              ...(existing.startedAt ? {} : { startedAt: params.startedAt }),
+              ...(isDoctor && !existing.doctorJoinedAt ? { doctorJoinedAt: joinTimestamp } : {}),
+              ...(isFamily && !existing.familyJoinedAt ? { familyJoinedAt: joinTimestamp } : {}),
+            },
+          })
         : await tx.telehealthSession.create({
             data: {
               encounterId: params.encounterId,
               roomSid: params.roomSid,
               startedAt: params.startedAt,
+              ...(isDoctor ? { doctorJoinedAt: joinTimestamp } : {}),
+              ...(isFamily ? { familyJoinedAt: joinTimestamp } : {}),
             },
           });
 
@@ -80,20 +90,41 @@ export class PrismaTelehealthRepository implements ITelehealthRepository {
     sessionId: string;
     endedAt: Date;
     durationSeconds: number;
+    closedByRole?: string;
+    transitionToWrapUp?: boolean;
   }): Promise<TelehealthSession> {
-    await this.prisma.telehealthSession.updateMany({
-      where: {
-        id: params.sessionId,
-        endedAt: null,
-      },
-      data: {
-        endedAt: params.endedAt,
-        durationSeconds: params.durationSeconds,
-      },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      await tx.telehealthSession.updateMany({
+        where: {
+          id: params.sessionId,
+          endedAt: null,
+        },
+        data: {
+          endedAt: params.endedAt,
+          durationSeconds: params.durationSeconds,
+          ...(params.closedByRole ? { closedByRole: params.closedByRole } : {}),
+        },
+      });
 
-    return this.prisma.telehealthSession.findUniqueOrThrow({
-      where: { id: params.sessionId },
+      const session = await tx.telehealthSession.findUniqueOrThrow({
+        where: { id: params.sessionId },
+      });
+
+      if (params.transitionToWrapUp) {
+        await tx.encounter.updateMany({
+          where: {
+            id: session.encounterId,
+            encounterStatus: {
+              in: [EncounterStatus.CONFIRMED, EncounterStatus.IN_PROGRESS],
+            },
+          },
+          data: {
+            encounterStatus: EncounterStatus.WRAP_UP,
+          },
+        });
+      }
+
+      return session;
     });
   }
 

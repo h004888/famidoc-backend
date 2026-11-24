@@ -39,7 +39,8 @@ const FIXED_VN_HOLIDAYS = new Set(['01-01', '04-30', '05-01', '09-02']);
 export function getTimeMinutes(time: Date | string | null | undefined): number {
   if (!time) return 8 * 60;
   if (typeof time === 'string') {
-    const parts = time.split(':').map(Number);
+    const hhmm = time.includes('T') ? time.slice(11, 16) : time;
+    const parts = hhmm.split(':').map(Number);
     return (parts[0] || 0) * 60 + (parts[1] || 0);
   }
   return time.getUTCHours() * 60 + time.getUTCMinutes();
@@ -149,4 +150,108 @@ export function buildDayShiftOffsets(maxDays: number): number[] {
     offsets.push(d, -d);
   }
   return offsets;
+}
+
+export const VIDEO_CONSULTATION_DURATION_MINUTES = 30;
+export const HOME_VISIT_BUFFER_MINUTES = 30;
+export const VIDEO_SAME_DAY_CUTOFF_BEFORE_END_MINUTES = 120;
+export const VIDEO_LEAD_TIME_MINUTES = 120;
+
+export interface VideoSlotAvailabilityResult {
+  available: boolean;
+  candidateTimes: string[];
+  reason?: string;
+}
+
+function formatMinutesToHHmm(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+export function evaluateVideoSlotWindowAvailability(
+  slot: SlotWindow,
+  dateIso: string,
+  encountersInDay: SlotEncounterSummary[],
+  now: Date = new Date(),
+): VideoSlotAvailabilityResult {
+  const win = SLOT_WINDOWS[slot];
+  const inSlot = encountersInDay.filter(
+    (e) => mapTimeToSlotWindow(e.scheduledTime) === slot,
+  );
+
+  const homeVisit = inSlot.find(
+    (e) => e.encounterType !== 'TELEHEALTH' && e.encounterType !== 'TELEMEDICINE',
+  );
+  if (homeVisit) {
+    return {
+      available: false,
+      candidateTimes: [],
+      reason: `Khung ${slot === 'MORNING' ? 'Sáng' : 'Chiều'} đã có lịch Khám tại nhà`,
+    };
+  }
+
+  // Check adjacent HOME_VISIT buffer across the day (e.g. ±30m around home visit)
+  const allHomeVisits = encountersInDay
+    .filter((e) => e.encounterType !== 'TELEHEALTH' && e.encounterType !== 'TELEMEDICINE')
+    .map((e) => {
+      const w = SLOT_WINDOWS[mapTimeToSlotWindow(e.scheduledTime)];
+      return {
+        start: w.startMinutes - HOME_VISIT_BUFFER_MINUTES,
+        end: w.endMinutes + HOME_VISIT_BUFFER_MINUTES,
+      };
+    });
+
+  const busyVideoIntervals = inSlot
+    .filter((e) => e.encounterType === 'TELEHEALTH' || e.encounterType === 'TELEMEDICINE')
+    .map((e) => {
+      const start = getTimeMinutes(e.scheduledTime);
+      return { start, end: start + VIDEO_CONSULTATION_DURATION_MINUTES };
+    });
+
+  // Vietnam time (UTC+7)
+  const vnNow = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  const todayIso = vnNow.toISOString().slice(0, 10);
+  const nowMinutes = vnNow.getUTCHours() * 60 + vnNow.getUTCMinutes();
+
+  if (dateIso < todayIso) {
+    return { available: false, candidateTimes: [], reason: 'Ngày đã qua' };
+  }
+
+  if (dateIso === todayIso) {
+    const cutoffMinutes = win.endMinutes - VIDEO_SAME_DAY_CUTOFF_BEFORE_END_MINUTES;
+    if (nowMinutes > cutoffMinutes) {
+      return {
+        available: false,
+        candidateTimes: [],
+        reason: `Đã quá giờ đặt trong ngày cho khung ${slot === 'MORNING' ? 'Sáng' : 'Chiều'}`,
+      };
+    }
+  }
+
+  const candidateTimes: string[] = [];
+  for (
+    let t = win.startMinutes;
+    t + VIDEO_CONSULTATION_DURATION_MINUTES <= win.endMinutes;
+    t += VIDEO_CONSULTATION_DURATION_MINUTES
+  ) {
+    const end = t + VIDEO_CONSULTATION_DURATION_MINUTES;
+    if (dateIso === todayIso && t < nowMinutes + VIDEO_LEAD_TIME_MINUTES) {
+      continue;
+    }
+    const hitsHomeBuffer = allHomeVisits.some((hv) => t < hv.end && end > hv.start);
+    if (hitsHomeBuffer) continue;
+    const hitsVideo = busyVideoIntervals.some((v) => t < v.end && end > v.start);
+    if (hitsVideo) continue;
+    candidateTimes.push(formatMinutesToHHmm(t));
+  }
+
+  return {
+    available: candidateTimes.length > 0,
+    candidateTimes,
+    reason:
+      candidateTimes.length > 0
+        ? undefined
+        : `Khung ${slot === 'MORNING' ? 'Sáng' : 'Chiều'} đã kín lịch`,
+  };
 }

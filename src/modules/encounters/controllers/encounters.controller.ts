@@ -120,6 +120,19 @@ export class EncountersController {
     return this.service.confirmEncounter(req.user, id, dto);
   }
 
+  @Patch(':id/cancel')
+  @Roles('FAMILY_REP', 'DOCTOR', 'ADMIN')
+  @ApiOperation({ summary: 'Hủy lịch khám và hoàn trả lượt nếu đủ điều kiện cutoff' })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám' })
+  @ResponseMessage('Hủy lịch khám thành công')
+  cancelEncounter(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body('reason') reason?: string,
+  ) {
+    return (this.service as any).cancelEncounter(req.user, id, reason);
+  }
+
   @Patch(':id/on-the-way')
   @Roles('DOCTOR', 'ADMIN')
   @ApiOperation({ summary: 'Bác sĩ báo đang di chuyển tới nhà gia đình' })
@@ -231,6 +244,24 @@ export class EncountersController {
       month,
       contractId,
       excludeEncounterId,
+    );
+  }
+
+  @Get('doctors/:doctorId/video-availability')
+  @Roles('FAMILY_REP', 'DOCTOR', 'HEALTHCARE_FACILITY', 'ADMIN')
+  @ApiOperation({ summary: 'Lấy tình trạng 2 khung Sáng/Chiều đặt Tư vấn Video theo tháng của Bác sĩ' })
+  @ResponseMessage('Lấy lịch trống Tư vấn Video theo tháng thành công')
+  getDoctorVideoAvailability(
+    @Req() req: AuthenticatedRequest,
+    @Param('doctorId') doctorId: string,
+    @Query('month') month: string,
+    @Query('contractId') contractId?: string,
+  ) {
+    return (this.service as any).getDoctorVideoAvailability(
+      req.user,
+      doctorId,
+      month,
+      contractId,
     );
   }
 

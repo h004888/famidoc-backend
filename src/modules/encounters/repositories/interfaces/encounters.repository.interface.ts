@@ -68,6 +68,10 @@ export interface EncountersSession {
   findEncounter(id: string): Promise<EncounterDetail | null>;
   updateEncounter(id: string, data: Prisma.EncounterUncheckedUpdateInput): Promise<Encounter>;
   decrementContractQuota(contractId: string, type: EncounterType): Promise<void>;
+  holdTelehealthQuota(contractId: string): Promise<void>;
+  releaseTelehealthQuota(contractId: string): Promise<void>;
+  commitHeldTelehealthQuota(contractId: string): Promise<void>;
+  refundTelehealthQuota(contractId: string): Promise<void>;
 
   findDoctorOverlappingEncounters(
     doctorId: string,
