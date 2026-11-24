@@ -23,6 +23,7 @@ import type { AuthenticatedUser } from '../../../../core/auth/authenticated-requ
 import {
   createTermsHash,
   getContractSignerRole,
+  isValidHomeVisitAddress,
   todayInVietnam,
 } from '../../../../core/business/business-helpers';
 import { moneyToNumber } from '../../../../core/database/prisma-transaction';
@@ -94,6 +95,7 @@ import {
   calculateMemberAddendum,
   readFrozenContractTerms,
 } from '../../pricing/contract-change-pricing';
+import { assertSigningDeadline } from '../signing-deadline';
 import { computeContractHoldExpiresAt } from '../../pricing/doctor-quota.helper';
 interface TerminationConsent {
   role: SignerRole;
@@ -348,7 +350,7 @@ export class ContractsServiceImpl
       homeVisitAddress:
         source.homeVisitAddress ?? 'Theo địa chỉ hộ gia đình đã đăng ký',
       additionalTerms: source.additionalTerms ?? undefined,
-    });
+    }, { usesExistingCredit: true });
 
     await prismaClient.medicalContract.update({
       where: { id: created.id },
@@ -469,6 +471,7 @@ export class ContractsServiceImpl
   async createInitialMedicalContract(
     actor: AuthenticatedUser,
     dto: CreateMedicalContractDto,
+    options?: { usesExistingCredit: boolean },
   ): Promise<ContractSummary> {
     const patientIds = dto.patientIds ?? [];
     if (dto.matchingSessionId && dto.queueRequestId) {
@@ -647,6 +650,27 @@ export class ContractsServiceImpl
         );
       }
 
+      if (
+        dto.homeVisitAddress !== undefined &&
+        !isValidHomeVisitAddress(dto.homeVisitAddress)
+      ) {
+        throw new BadRequestException(
+          'Vui lòng nhập đầy đủ địa chỉ Khám tại nhà hợp lệ',
+        );
+      }
+      const resolvedHomeVisitAddress = isValidHomeVisitAddress(
+        dto.homeVisitAddress,
+      )
+        ? dto.homeVisitAddress.trim()
+        : isValidHomeVisitAddress(family.homeAddress)
+          ? family.homeAddress.trim()
+          : '';
+      if (!isValidHomeVisitAddress(resolvedHomeVisitAddress)) {
+        throw new BadRequestException(
+          'Vui lòng nhập đầy đủ địa chỉ Khám tại nhà hợp lệ',
+        );
+      }
+
       // Hợp đồng cũ chỉ được coi là thay thế hợp lệ khi còn bản nháp chưa thanh toán.
       if (dto.replaceContractId) {
         await this.requireReplaceableDraft(
@@ -743,6 +767,7 @@ export class ContractsServiceImpl
         doctor,
         admin,
         additionalTerms: dto.additionalTerms,
+        homeVisitAddress: resolvedHomeVisitAddress,
       };
 
       this.assertRealPartyDataIfStrict(contractInput);
@@ -761,6 +786,7 @@ export class ContractsServiceImpl
         snapshot,
         today,
         contractNumber,
+        resolvedHomeVisitAddress,
         contractInput,
       };
     };
@@ -797,7 +823,10 @@ export class ContractsServiceImpl
         );
       }
 
-      const holdExpiresAt = computeContractHoldExpiresAt();
+      const createdAt = new Date();
+      const signingDeadlineAt = options?.usesExistingCredit
+        ? null
+        : new Date(createdAt.getTime() + 24 * 3_600_000);
       const createFn = session.createMedicalContract || session.createUpgrade;
       const item = await createFn.call(session, {
         contractNumber: prepared.contractNumber,
@@ -811,14 +840,24 @@ export class ContractsServiceImpl
         startDate: prepared.today,
         endDate: addContractMonths(prepared.today, prepared.pkg.durationMonths),
         contractStatus: 'PENDING_APPROVAL',
-        holdExpiresAt,
+        createdAt,
+        signingDeadlineAt,
+        holdExpiresAt: signingDeadlineAt ?? computeContractHoldExpiresAt(createdAt),
         billingSnapshot: prepared.snapshot as unknown as Prisma.InputJsonValue,
         memberCount: prepared.memberCount,
         isDemo: false,
         additionalTerms: dto.additionalTerms?.trim() || null,
+        homeVisitAddress: prepared.resolvedHomeVisitAddress,
         documensoEnvelopeId: documensoEnvelope?.envelopeId ?? null,
         documensoItemId: documensoEnvelope?.envelopeItemId ?? null,
       });
+
+      if (!isValidHomeVisitAddress(prepared.family.homeAddress)) {
+        await session.updateFamilyHomeAddress?.(
+          prepared.targetFamilyId,
+          prepared.resolvedHomeVisitAddress,
+        );
+      }
 
       if (documensoEnvelope) {
         await this.saveDocumensoSignersForContract(
@@ -945,23 +984,32 @@ export class ContractsServiceImpl
         signatures.map((s) => s.signerRole),
       );
 
-      const saveSigFn = session.saveSignature || session.saveUpgradeSignature;
-      const item = await saveSigFn.call(session, {
+      const signedAt = new Date();
+      assertSigningDeadline(contract.signingDeadlineAt, signedAt);
+      const signatureData: Prisma.ContractSignatureUncheckedCreateInput = {
         contractId: id,
         termsHash: hash,
         signerRole: role,
         signerUserId: actor.id,
+        ...(contract.signingDeadlineAt ? { signedAt } : {}),
         signatureHash: createTermsHash({
           termsHash: hash,
           userId: actor.id,
           at: new Date().toISOString(),
         }),
         ipAddress: ip.slice(0, 45),
-      });
+      };
+      const item = session.saveSignature
+        ? await session.saveSignature(signatureData, contract.signingDeadlineAt)
+        : await session.saveUpgradeSignature(signatureData);
 
       const isFourthSignature = signatures.length === 3;
       if (isFourthSignature) {
-        await session.updateContractStatus(id, 'PENDING_PAYMENT');
+        if (contract.signingDeadlineAt) {
+          await session.updateContractStatus(id, 'PENDING_PAYMENT', undefined, true);
+        } else {
+          await session.updateContractStatus(id, 'PENDING_PAYMENT');
+        }
       }
 
       await session.recordChange(
@@ -3736,6 +3784,9 @@ export class ContractsServiceImpl
   async getSigningSession(actor: AuthenticatedUser, id: string) {
     const initial = await this.repository.transaction(async (session) => {
       const contract = await this.requirePartyContract(session, id, actor);
+      if (contract.contractStatus === 'PENDING_APPROVAL') {
+        assertSigningDeadline(contract.signingDeadlineAt);
+      }
       const role = getContractSignerRole(contract, actor);
       const signatures = await session.findContractSignatures(id);
       const signedRoles = signatures.map((s) => s.signerRole);
@@ -3831,6 +3882,9 @@ export class ContractsServiceImpl
       try {
         resolved = await this.repository.transaction(async (session) => {
           const locked = await this.requirePartyContract(session, id, actor);
+          if (locked.contractStatus === 'PENDING_APPROVAL') {
+            assertSigningDeadline(locked.signingDeadlineAt);
+          }
           const lockedEnvelopeId = (
             locked as { documensoEnvelopeId?: string | null }
           ).documensoEnvelopeId;
@@ -3952,6 +4006,7 @@ export class ContractsServiceImpl
       resolved = await this.repository.transaction(async (session) => {
         const locked = await this.requirePartyContract(session, id, actor);
         if (locked.contractStatus === 'PENDING_APPROVAL' && !locked.isDemo) {
+          assertSigningDeadline(locked.signingDeadlineAt);
           await session.saveDocumensoSigners?.(matchedRows);
         }
         const signatures = await session.findContractSignatures(id);
@@ -3971,6 +4026,9 @@ export class ContractsServiceImpl
     }
 
     const { contract, signedRoles, signers } = resolved;
+    if (contract.contractStatus === 'PENDING_APPROVAL') {
+      assertSigningDeadline(contract.signingDeadlineAt);
+    }
     const alreadySigned = signedRoles.includes(initial.role);
     const familySigned = signedRoles.includes('FAMILY_REP');
 

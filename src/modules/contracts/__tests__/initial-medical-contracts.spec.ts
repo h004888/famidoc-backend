@@ -84,6 +84,7 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
     id: 'fam-uuid-1',
     familyCode: 'FAM-001',
     representativeUserId: 'user-rep-1',
+    homeAddress: '123 Đường Láng, Phường Láng Thượng, Thành phố Hà Nội',
     status: 'ACTIVE',
   };
 
@@ -520,6 +521,76 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
         'doc-assigned',
       );
       expect(sessionMock.refreshDoctorPanel).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('homeVisitAddress validation & FamilyUnit sync', () => {
+    it('should reject contract initiation with 400 when family has placeholder address and no homeVisitAddress is provided', async () => {
+      sessionMock.findFamilyById.mockResolvedValue({
+        ...mockFamily,
+        homeAddress: 'Chưa cập nhật địa chỉ',
+      });
+
+      await expect(
+        service.createInitialMedicalContract(
+          familyRepUser,
+          {
+            packageId: 'pkg-1',
+            facilityId: 'fac-1',
+            doctorId: 'doc-1',
+            memberCount: 3,
+          },
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject contract initiation with 400 when homeVisitAddress is placeholder string', async () => {
+      await expect(
+        service.createInitialMedicalContract(
+          familyRepUser,
+          {
+            packageId: 'pkg-1',
+            facilityId: 'fac-1',
+            doctorId: 'doc-1',
+            memberCount: 3,
+            homeVisitAddress: 'Chưa cập nhật địa chỉ',
+          },
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should save homeVisitAddress and sync FamilyUnit.homeAddress when family currently has placeholder address', async () => {
+      sessionMock.findFamilyById.mockResolvedValue({
+        ...mockFamily,
+        homeAddress: 'Chưa cập nhật địa chỉ',
+      });
+      sessionMock.updateFamilyHomeAddress = jest.fn().mockResolvedValue(undefined);
+
+      await service.createInitialMedicalContract(
+        familyRepUser,
+        {
+          packageId: 'pkg-1',
+          facilityId: 'fac-1',
+          doctorId: 'doc-1',
+          memberCount: 3,
+          homeVisitAddress: 'Số 10 Nguyễn Trãi, Phường Thượng Đình, Thành phố Hà Nội',
+        },
+        '127.0.0.1',
+      );
+
+      expect(sessionMock.createMedicalContract).toHaveBeenCalledWith(
+        expect.objectContaining({
+          homeVisitAddress:
+            'Số 10 Nguyễn Trãi, Phường Thượng Đình, Thành phố Hà Nội',
+          memberCount: 3,
+        }),
+      );
+      expect(sessionMock.updateFamilyHomeAddress).toHaveBeenCalledWith(
+        'fam-uuid-1',
+        'Số 10 Nguyễn Trãi, Phường Thượng Đình, Thành phố Hà Nội',
+      );
     });
   });
 });

@@ -70,6 +70,7 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
     id: 'fam-1',
     familyCode: 'FAM-001',
     representativeUserId: 'user-family-1',
+    homeAddress: '123 Đường Láng, Phường Láng Thượng, Thành phố Hà Nội',
     status: 'ACTIVE',
     representativeUser: {
       id: 'user-family-1',
@@ -588,6 +589,24 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
       expect(session.signedPdfUrl).toBe(
         '/api/v1/contracts/medical/contract-1/signed-pdf',
       );
+    });
+
+    it('getSigningSession(): chặn cấp phiên ký mới khi hợp đồng PENDING_APPROVAL đã tới hoặc quá signingDeadlineAt', async () => {
+      const contract = makeContractRecord({
+        contractStatus: 'PENDING_APPROVAL',
+        signingDeadlineAt: new Date(Date.now() - 1000),
+      });
+      const sessionMock: any = {
+        findContractForUpdate: jest.fn().mockResolvedValue(contract),
+      };
+      const repoMock = {
+        transaction: jest.fn().mockImplementation(async (cb) => cb(sessionMock)),
+      };
+      const service = new ContractsServiceImpl(repoMock as any);
+
+      await expect(
+        service.getSigningSession(familyUser, contract.id),
+      ).rejects.toThrow(ConflictException);
     });
 
     it('downloadSignedPdf(): báo 404 khi chưa có documensoItemId', async () => {

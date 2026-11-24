@@ -120,6 +120,7 @@ describe('Four-Party Contract & Doctor Assignment (UC-16, UC-23, SD-16, SD-23)',
     id: 'fam-uuid-1',
     familyCode: 'FAM-001',
     representativeUserId: 'user-rep-1',
+    homeAddress: '123 Đường Láng, Phường Láng Thượng, Thành phố Hà Nội',
     status: 'ACTIVE',
   };
 

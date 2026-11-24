@@ -102,13 +102,14 @@ export class DocumensoClientService {
     method: string,
     url: string,
     body?: unknown,
+    allowMissing = false,
   ): Promise<T> {
     const apiToken = this.getApiToken();
     const headers: Record<string, string> = {
       Authorization: apiToken || '',
     };
 
-    const opts: RequestInit = { method, headers };
+    const opts: RequestInit = { method, headers, signal: AbortSignal.timeout(20_000) };
 
     if (body instanceof FormData) {
       opts.body = body;
@@ -132,6 +133,7 @@ export class DocumensoClientService {
     }
 
     const text = await response.text();
+    if (allowMissing && response.status === 404) return undefined as T;
     if (!response.ok) {
       this.logger.error(
         `Documenso ${method} ${url} lỗi HTTP ${response.status}: ${text}`,
@@ -480,6 +482,18 @@ export class DocumensoClientService {
       return;
     }
     await this.rollbackEnvelope(this.getBaseUrl(), envelopeId);
+  }
+
+  async revokeSigningEnvelope(envelopeId: string): Promise<void> {
+    if (!this.isConfigured()) {
+      throw new ServiceUnavailableException('Documenso chưa được cấu hình');
+    }
+    await this.jsonFetch<void>(
+      'POST',
+      `${this.getBaseUrl()}/api/v2/envelope/delete`,
+      { envelopeId },
+      true,
+    );
   }
 
   private async rollbackEnvelope(

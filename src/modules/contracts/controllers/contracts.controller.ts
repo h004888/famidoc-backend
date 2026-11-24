@@ -415,12 +415,12 @@ export class ContractsController {
     status: 404,
     description: 'Không tìm thấy hợp đồng y tế.',
   })
-  findMedicalContractById(
+  async findMedicalContractById(
     @Req() req: AuthenticatedRequest,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Query('forceSync') forceSync?: string,
   ) {
-    return this.service.findMedicalContractById(
+    const contract = await this.service.findMedicalContractById(
       req.user,
       id,
       {
@@ -428,6 +428,9 @@ export class ContractsController {
       },
       req.ip ?? 'unknown',
     );
+    return contract?.signingDeadlineAt
+      ? { ...contract, serverTime: new Date().toISOString() }
+      : contract;
   }
 
   @Get('medical/:id/care-summary')

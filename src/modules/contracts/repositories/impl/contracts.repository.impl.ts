@@ -14,7 +14,8 @@ import {
   notifyContractParties,
   writeBusinessAudit,
 } from '../../../../core/business/business-helpers';
-import { buildActiveAndHeldWhere } from '../../pricing/doctor-quota.helper';
+import { buildActiveAndHeldWhere, computeContractHoldExpiresAt } from '../../pricing/doctor-quota.helper';
+import { queueSigningNotices } from '../../services/signing-deadline';
 import {
   CONTRACT_CHANGE_INCLUDE,
   CHANGE_ADDENDUM_INCLUDE,
@@ -104,11 +105,13 @@ export class PrismaContractsSession implements ContractsSession {
     id: string,
     status: 'EXPIRED' | 'TERMINATED' | 'PENDING_PAYMENT',
     reason?: string,
+    renewHold = false,
   ) {
     await this.tx.medicalContract.update({
       where: { id },
       data: {
         contractStatus: status,
+        ...(renewHold ? { holdExpiresAt: computeContractHoldExpiresAt() } : {}),
         ...(status === 'TERMINATED'
           ? {
               terminationReason: reason,
@@ -244,8 +247,12 @@ export class PrismaContractsSession implements ContractsSession {
   saveUpgradeSignature(data: Prisma.ContractSignatureUncheckedCreateInput) {
     return this.tx.contractSignature.create({ data });
   }
-  saveSignature(data: Prisma.ContractSignatureUncheckedCreateInput) {
-    return this.tx.contractSignature.create({ data });
+  async saveSignature(data: Prisma.ContractSignatureUncheckedCreateInput, signingDeadlineAt?: Date | null) {
+    const signature = await this.tx.contractSignature.create({ data });
+    if (signingDeadlineAt && data.signerRole === 'FAMILY_REP') {
+      await queueSigningNotices(this.tx, data.contractId, signingDeadlineAt);
+    }
+    return signature;
   }
   async recordChange(
     actorId: string,
@@ -369,6 +376,13 @@ export class PrismaContractsSession implements ContractsSession {
     return this.tx.familyUnit.findUnique({
       where: { representativeUserId: userId },
       include: { representativeUser: true },
+    });
+  }
+
+  async updateFamilyHomeAddress(familyId: string, homeAddress: string) {
+    await this.tx.familyUnit.update({
+      where: { id: familyId },
+      data: { homeAddress },
     });
   }
 

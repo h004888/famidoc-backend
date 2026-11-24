@@ -106,4 +106,47 @@ describe('PatientsRepositoryImpl - atomic memberCount lock & metadata', () => {
     ).rejects.toThrow(ConflictException);
     expect(txSelf.patient.create).not.toHaveBeenCalled();
   });
+
+  it('tự động đồng bộ thành viên mới vào encounter_participants của các buổi khám PERIODIC_ROUTINE sắp tới', async () => {
+    const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 'contract-1', member_count: 3 }]),
+      patient: {
+        count: jest.fn().mockResolvedValue(1),
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn().mockResolvedValue({ id: 'pt-new', fullName: dto.fullName }),
+      },
+      contractMember: {
+        create: jest.fn().mockResolvedValue({ id: 'cm-new' }),
+      },
+      encounter: {
+        findMany: jest.fn().mockResolvedValue([{ id: 'enc-1' }, { id: 'enc-2' }]),
+      },
+      encounterParticipant: {
+        createMany: jest.fn().mockResolvedValue({ count: 2 }),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn((cb: (t: typeof tx) => Promise<unknown>) => cb(tx)),
+    } as any;
+
+    const repo = new PatientsRepositoryImpl(prisma);
+    await repo.createWithActiveContractLock(familyId, dto);
+
+    expect(tx.encounter.findMany).toHaveBeenCalledWith({
+      where: {
+        contractId: 'contract-1',
+        category: 'PERIODIC_ROUTINE',
+        visitScope: 'FAMILY',
+        encounterStatus: { in: ['REQUESTED', 'CONFIRMED'] },
+      },
+      select: { id: true },
+    });
+    expect(tx.encounterParticipant.createMany).toHaveBeenCalledWith({
+      data: [
+        { encounterId: 'enc-1', patientId: 'pt-new' },
+        { encounterId: 'enc-2', patientId: 'pt-new' },
+      ],
+      skipDuplicates: true,
+    });
+  });
 });

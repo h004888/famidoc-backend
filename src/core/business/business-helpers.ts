@@ -105,3 +105,17 @@ export async function notifyContractParties(
     })),
   });
 }
+
+export const PLACEHOLDER_HOME_ADDRESS = 'Chưa cập nhật địa chỉ';
+
+export function isValidHomeVisitAddress(
+  address?: string | null,
+): address is string {
+  if (typeof address !== 'string') return false;
+  const trimmed = address.trim();
+  if (!trimmed) return false;
+  return (
+    trimmed.toLocaleLowerCase('vi') !==
+    PLACEHOLDER_HOME_ADDRESS.toLocaleLowerCase('vi')
+  );
+}

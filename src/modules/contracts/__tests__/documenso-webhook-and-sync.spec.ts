@@ -12,10 +12,14 @@ describe('DocumensoWebhookAndSync', () => {
   let signatureCreateMock: jest.Mock;
   let signerUpdateMock: jest.Mock;
   let mockPrisma: any;
+  let signingDeadlineAt: Date | null;
+  let queueNotices: jest.Mock;
 
   beforeEach(() => {
     process.env.DOCUMENSO_WEBHOOK_SECRET = 'whsec_test_secret';
     existingSignatures = [];
+    signingDeadlineAt = null;
+    queueNotices = jest.fn().mockResolvedValue({ count: 6 });
     contractStatus = 'PENDING_APPROVAL';
     contractUpdateMock = jest.fn(async ({ data }: any) => {
       if (data.contractStatus) contractStatus = data.contractStatus;
@@ -49,6 +53,7 @@ describe('DocumensoWebhookAndSync', () => {
             findUnique: jest.fn(async () => ({
               id: 'contract-1',
               contractNumber: 'FD-001',
+              signingDeadlineAt,
               contractStatus,
               documensoEnvelopeId: 'envelope_1',
               documensoItemId: 'item_1',
@@ -74,6 +79,7 @@ describe('DocumensoWebhookAndSync', () => {
             update: contractUpdateMock,
           },
           contractSignature: { create: signatureCreateMock },
+          contractSigningNotice: { createMany: queueNotices },
           contractDocumensoSigner: { update: signerUpdateMock },
           user: { findFirst: jest.fn(async () => ({ id: 'user-admin' })) },
         };
@@ -88,6 +94,30 @@ describe('DocumensoWebhookAndSync', () => {
       client,
       paymentNoticeMock as any,
     );
+  });
+
+  it('uses the signing timestamp, rejects signatures at the deadline and waits for missing evidence', async () => {
+    signingDeadlineAt = new Date(Date.now() - 60_000);
+    const result = await service.applySignedRecipients('contract-1', [
+      { recipientId: 101, signingStatus: 'SIGNED', completedAt: new Date(signingDeadlineAt.getTime() - 1).toISOString() },
+      { recipientId: 102, signingStatus: 'SIGNED', completedAt: signingDeadlineAt.toISOString() },
+      { recipientId: 103, signingStatus: 'SIGNED' },
+      { recipientId: 104, signingStatus: 'NOT_SIGNED' },
+    ], 'test', true);
+    expect(result.signedRoles).toEqual(['FAMILY_REP']);
+    expect(result.signingEvidenceIncomplete).toBe(true);
+    expect(queueNotices).not.toHaveBeenCalled();
+  });
+
+  it('queues notice and reminder once for each remaining role', async () => {
+    signingDeadlineAt = new Date(Date.now() + 2 * 3_600_000);
+    const recipient = { recipientId: 101, signingStatus: 'SIGNED', completedAt: new Date().toISOString() };
+    await service.applySignedRecipients('contract-1', [recipient], 'test');
+    await service.applySignedRecipients('contract-1', [recipient], 'test');
+    expect(queueNotices).toHaveBeenCalledTimes(1);
+    const jobs = queueNotices.mock.calls[0][0].data;
+    expect(jobs.filter(job => job.kind === 'OPEN')).toHaveLength(3);
+    expect(jobs.filter(job => job.kind === 'REMINDER')).toHaveLength(3);
   });
 
   it('handleWebhook(): từ chối HTTP 401 khi sai hoặc thiếu X-Documenso-Secret', async () => {

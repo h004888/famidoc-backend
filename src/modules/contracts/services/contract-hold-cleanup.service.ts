@@ -48,6 +48,7 @@ export class ContractHoldCleanupService
       where: {
         contractStatus: { in: ['PENDING_APPROVAL', 'PENDING_PAYMENT'] },
         holdExpiresAt: { lte: now },
+        OR: [{ signingDeadlineAt: null }, { contractStatus: 'PENDING_PAYMENT' }],
         invoices: {
           none: { paymentStatus: 'PAID' },
         },
@@ -71,6 +72,7 @@ export class ContractHoldCleanupService
             id: draft.id,
             contractStatus: { in: ['PENDING_APPROVAL', 'PENDING_PAYMENT'] },
             holdExpiresAt: { lte: now },
+            OR: [{ signingDeadlineAt: null }, { contractStatus: 'PENDING_PAYMENT' }],
           },
           data: {
             contractStatus: 'TERMINATED',

@@ -91,6 +91,7 @@ describe('Unpaid contract cancellation & replacement', () => {
     id: 'fam-uuid-1',
     familyCode: 'FAM-001',
     representativeUserId: 'user-rep-1',
+    homeAddress: '123 Đường Láng, Phường Láng Thượng, Thành phố Hà Nội',
     status: 'ACTIVE',
   };
 

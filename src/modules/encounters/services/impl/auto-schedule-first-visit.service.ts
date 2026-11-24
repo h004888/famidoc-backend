@@ -7,6 +7,7 @@ import {
   Prisma,
 } from '@prisma/client';
 import { calculateCadenceDates } from './encounters.service.impl';
+import { isValidHomeVisitAddress } from '../../../../core/business/business-helpers';
 import { serializeEncounterScheduleMeta } from '../../utils/encounter-schedule-meta.util';
 import {
   buildDayShiftOffsets,
@@ -66,14 +67,14 @@ export class AutoScheduleFirstVisitService {
         : contract.remainingHomeVisits;
     if (quota <= 0) return [];
 
-    // EF1: Validate required data (doctorId, homeAddress, active members)
-    const homeAddress = contract.familyUnit?.homeAddress?.trim() || '';
-    const hasMembers = Array.isArray(contract.members) && contract.members.length > 0;
-    if (!contract.doctorId || !homeAddress || !hasMembers) {
+    // EF1: Validate required data (doctorId, real homeAddress)
+    const hasAddress =
+      isValidHomeVisitAddress(contract.homeVisitAddress) ||
+      isValidHomeVisitAddress(contract.familyUnit?.homeAddress);
+    if (!contract.doctorId || !hasAddress) {
       const missingReasons: string[] = [];
       if (!contract.doctorId) missingReasons.push('Bác sĩ phụ trách');
-      if (!homeAddress) missingReasons.push('Địa chỉ khám tại nhà');
-      if (!hasMembers) missingReasons.push('Thành viên gia đình');
+      if (!hasAddress) missingReasons.push('Địa chỉ khám tại nhà');
 
       const missingNotifications: Prisma.NotificationUncheckedCreateInput[] = [];
       const contractCode = contract.contractNumber || contract.id.slice(0, 8);
@@ -104,6 +105,24 @@ export class AutoScheduleFirstVisitService {
     // Concurrency lock per doctor within this transaction
     if (typeof (tx as { $executeRaw?: unknown }).$executeRaw === 'function') {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${contract.doctorId}))`;
+    }
+
+    let participantIds = Array.isArray(contract.members)
+      ? contract.members.map((m) => m.patientId)
+      : [];
+    if (
+      participantIds.length === 0 &&
+      contract.familyId &&
+      typeof (tx as { patient?: { findMany?: unknown } }).patient?.findMany ===
+        'function'
+    ) {
+      const familyPatients = await tx.patient.findMany({
+        where: { familyId: contract.familyId, status: 'ACTIVE' },
+        select: { id: true },
+        orderBy: { createdAt: 'asc' },
+        take: contract.memberCount > 0 ? contract.memberCount : undefined,
+      });
+      participantIds = familyPatients.map((p) => p.id);
     }
 
     const durationMonths = contract.servicePackage?.durationMonths ?? 12;
@@ -257,11 +276,15 @@ export class AutoScheduleFirstVisitService {
             scheduledTime: chosenTime,
             encounterStatus: EncounterStatus.CONFIRMED,
             cancelReason: milestoneNote,
-            participants: {
-              create: contract.members.map((m) => ({
-                patientId: m.patientId,
-              })),
-            },
+            ...(participantIds.length > 0
+              ? {
+                  participants: {
+                    create: participantIds.map((patientId) => ({
+                      patientId,
+                    })),
+                  },
+                }
+              : {}),
           },
         });
         createdEncounters.push(encounter);
@@ -288,11 +311,15 @@ export class AutoScheduleFirstVisitService {
             scheduledTime: slotWindowToScheduledTime('MORNING'),
             encounterStatus: EncounterStatus.REQUESTED,
             cancelReason: milestoneNote,
-            participants: {
-              create: contract.members.map((m) => ({
-                patientId: m.patientId,
-              })),
-            },
+            ...(participantIds.length > 0
+              ? {
+                  participants: {
+                    create: participantIds.map((patientId) => ({
+                      patientId,
+                    })),
+                  },
+                }
+              : {}),
           },
         });
         createdEncounters.push(encounter);

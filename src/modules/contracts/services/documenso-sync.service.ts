@@ -11,6 +11,8 @@ import { createTermsHash } from '../../../core/business/business-helpers';
 import { calculateContractTermsHash } from '../pricing/contract-terms-hash';
 import { ContractPaymentNoticeService } from './contract-payment-notice.service';
 import { DocumensoClientService } from './documenso-client.service';
+import { computeContractHoldExpiresAt } from '../pricing/doctor-quota.helper';
+import { queueSigningNotices } from './signing-deadline';
 import {
   hasAllFourSignatures,
   resolveSignedPdfUrl,
@@ -41,6 +43,7 @@ export interface DocumensoWebhookBody {
 }
 
 export interface DocumensoSyncResult {
+  signingEvidenceIncomplete?: boolean;
   synced: boolean;
   contractId: string;
   contractStatus: string;
@@ -190,7 +193,7 @@ export class DocumensoSyncService {
       completedAt: r.signedAt ?? r.completedAt ?? null,
     }));
 
-    return this.applySignedRecipients(contract.id, recipients, ipAddress);
+    return this.applySignedRecipients(contract.id, recipients, ipAddress, true);
   }
 
   /**
@@ -254,6 +257,7 @@ export class DocumensoSyncService {
       completedAt?: string | null;
     }>,
     ipAddress: string,
+    completeSnapshot = false,
   ): Promise<DocumensoSyncResult> {
     const txResult = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM medical_contracts WHERE id = ${contractId}::uuid FOR UPDATE`;
@@ -334,6 +338,14 @@ export class DocumensoSyncService {
         }
       };
 
+      const familyAlreadySigned = signedRoles.has('FAMILY_REP');
+      let signingEvidenceIncomplete = Boolean(
+        contract.signingDeadlineAt && completeSnapshot &&
+        !(['FAMILY_REP', 'HEALTHCARE_FACILITY', 'ASSIGNED_DOCTOR', 'ADMIN'] as const)
+          .every(role => signedRoles.has(role) || matchedEntries.some(({ matched, remote }) =>
+            matched.signerRole === role && Boolean(remote.signingStatus ?? remote.status),
+          )),
+      );
       for (const { remote, matched } of matchedEntries) {
         const remoteStatus = remote.signingStatus ?? remote.status;
         const isCompleted =
@@ -343,6 +355,14 @@ export class DocumensoSyncService {
         if (!isCompleted) continue;
 
         const role = matched.signerRole;
+        if (contract.signingDeadlineAt && !signedRoles.has(role)) {
+          const signedTime = Date.parse(remote.completedAt ?? '');
+          if (!Number.isFinite(signedTime)) {
+            signingEvidenceIncomplete = true;
+            continue;
+          }
+          if (signedTime >= contract.signingDeadlineAt.getTime()) continue;
+        }
         if (role !== 'FAMILY_REP' && !signedRoles.has('FAMILY_REP')) {
           continue;
         }
@@ -394,6 +414,9 @@ export class DocumensoSyncService {
       }
 
       const allFourSigned = hasAllFourSignatures(signedRoles);
+      if (contract.signingDeadlineAt && !familyAlreadySigned && signedRoles.has('FAMILY_REP') && !allFourSigned) {
+        await queueSigningNotices(tx, contract.id, contract.signingDeadlineAt);
+      }
 
       let finalStatus = contract.contractStatus;
       let shouldSendPaymentNotice = false;
@@ -411,6 +434,7 @@ export class DocumensoSyncService {
           finalStatus = 'PAID_PENDING_APPROVAL';
         } else {
           updateData.contractStatus = 'PENDING_PAYMENT';
+          if (contract.signingDeadlineAt) updateData.holdExpiresAt = computeContractHoldExpiresAt();
           finalStatus = 'PENDING_PAYMENT';
           shouldSendPaymentNotice = true;
         }
@@ -437,6 +461,7 @@ export class DocumensoSyncService {
         shouldSendPaymentNotice,
         result: {
           synced: true,
+          ...(signingEvidenceIncomplete ? { signingEvidenceIncomplete: true } : {}),
           contractId: contract.id,
           contractStatus: finalStatus,
           signedRoles: Array.from(signedRoles),
