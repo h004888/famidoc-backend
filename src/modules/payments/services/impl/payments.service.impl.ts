@@ -88,6 +88,149 @@ export class PaymentsServiceImpl implements IPaymentsService {
     @Optional() private readonly prisma?: PrismaService,
   ) {}
 
+  private buildFamilyInvoiceInclude() {
+    return {
+      contract: {
+        select: {
+          id: true,
+          contractNumber: true,
+          contractStatus: true,
+          startDate: true,
+          endDate: true,
+          memberCount: true,
+          facility: { select: { facilityName: true } },
+          servicePackage: { select: { packageName: true } },
+        },
+      },
+      addendum: {
+        select: {
+          addendumNumber: true,
+          addendumType: true,
+        },
+      },
+      paymentTransactions: {
+        orderBy: { paymentTime: 'desc' as const },
+        take: 1,
+      },
+      supportCases: {
+        where: {
+          caseType: 'PAYMENT_ISSUE' as const,
+          status: { in: ['OPEN', 'IN_REVIEW', 'NEED_MORE_INFO'] as ('OPEN' | 'IN_REVIEW' | 'NEED_MORE_INFO')[] },
+        },
+        orderBy: { updatedAt: 'desc' as const },
+        take: 1,
+        select: {
+          id: true,
+          caseCode: true,
+          status: true,
+          updatedAt: true,
+        },
+      },
+    };
+  }
+
+  private mapInvoiceRowToFamilyPaymentRequestItem(row: {
+    id: string;
+    invoiceCode: string;
+    transferContent: string | null;
+    addendumId?: string | null;
+    grossAmount?: unknown;
+    vatAmount?: unknown;
+    totalPayable: unknown;
+    paymentGateway?: string | null;
+    paymentStatus: string;
+    expectedAccountNumber: string | null;
+    expectedGateway: string | null;
+    createdAt: Date;
+    expiredAt: Date;
+    paidAt: Date | null;
+    contract: {
+      id: string;
+      contractNumber: string;
+      contractStatus: string;
+      startDate?: Date | null;
+      endDate?: Date | null;
+      memberCount?: number | null;
+      facility: { facilityName: string };
+      servicePackage: { packageName: string };
+    };
+    addendum?: {
+      addendumNumber: string;
+      addendumType: string;
+    } | null;
+    paymentTransactions: Array<{
+      id: string;
+      gatewayTransactionId: string;
+      amountReceived: unknown;
+      paymentTime: Date;
+      outcome: string;
+      reason: string | null;
+      referenceCode: string;
+      gateway: string;
+    }>;
+    supportCases: Array<{
+      id: string;
+      caseCode: string;
+      status: string;
+      updatedAt: Date;
+    }>;
+  }): FamilyPaymentRequestItem {
+    const latestTx = row.paymentTransactions[0] ?? null;
+    const openCase = row.supportCases[0] ?? null;
+    const totalPayable = moneyToNumber(row.totalPayable as any);
+    const grossAmountVnd =
+      row.grossAmount != null ? moneyToNumber(row.grossAmount as any) : totalPayable;
+    const vatAmountVnd =
+      row.vatAmount != null ? moneyToNumber(row.vatAmount as any) : 0;
+
+    return {
+      id: row.id,
+      contractId: row.contract.id,
+      contractNumber: row.contract.contractNumber,
+      contractStatus: row.contract.contractStatus,
+      packageName: row.contract.servicePackage.packageName,
+      facilityName: row.contract.facility.facilityName,
+      paymentCode: row.invoiceCode,
+      transferContent: row.transferContent ?? row.invoiceCode,
+      amountVnd: totalPayable,
+      grossAmountVnd,
+      vatAmountVnd,
+      paymentGateway: row.paymentGateway ?? 'VIETQR',
+      addendumId: row.addendumId ?? null,
+      addendumNumber: row.addendum?.addendumNumber ?? null,
+      addendumType: row.addendum?.addendumType ?? null,
+      contractStartDate: row.contract.startDate?.toISOString() ?? null,
+      contractEndDate: row.contract.endDate?.toISOString() ?? null,
+      memberCount: row.contract.memberCount ?? undefined,
+      status: row.paymentStatus,
+      expectedAccountNumber: row.expectedAccountNumber,
+      expectedGateway: row.expectedGateway,
+      createdAt: row.createdAt.toISOString(),
+      expiresAt: row.expiredAt.toISOString(),
+      paidAt: row.paidAt?.toISOString() ?? null,
+      latestTransaction: latestTx
+        ? {
+            id: latestTx.id,
+            providerTransactionId: latestTx.gatewayTransactionId,
+            amountReceived: moneyToNumber(latestTx.amountReceived as any),
+            paymentTime: latestTx.paymentTime.toISOString(),
+            outcome: latestTx.outcome,
+            reason: latestTx.reason,
+            referenceCode: latestTx.referenceCode,
+            gateway: latestTx.gateway,
+          }
+        : null,
+      openSupportCase: openCase
+        ? {
+            id: openCase.id,
+            caseCode: openCase.caseCode,
+            status: openCase.status,
+            updatedAt: openCase.updatedAt.toISOString(),
+          }
+        : null,
+    };
+  }
+
   async listMyPaymentRequests(
     actor: AuthenticatedUser,
   ): Promise<FamilyPaymentRequestItem[]> {
@@ -99,90 +242,46 @@ export class PaymentsServiceImpl implements IPaymentsService {
     if (!this.prisma) {
       return [];
     }
-    const rows = await this.prisma.invoice.findMany({
-      where: {
-        contract: {
-          familyUnit: { representativeUserId: actor.id },
-        },
+    const include = this.buildFamilyInvoiceInclude();
+    const baseWhere = {
+      contract: {
+        familyUnit: { representativeUserId: actor.id },
       },
-      orderBy: { createdAt: 'desc' },
-      take: 30,
-      include: {
-        contract: {
-          select: {
-            id: true,
-            contractNumber: true,
-            contractStatus: true,
-            facility: { select: { facilityName: true } },
-            servicePackage: { select: { packageName: true } },
-          },
+    };
+    const [priorityRows, archiveRows] = await Promise.all([
+      this.prisma.invoice.findMany({
+        where: {
+          ...baseWhere,
+          paymentStatus: { in: ['PAID', 'PENDING'] },
         },
-        paymentTransactions: {
-          orderBy: { paymentTime: 'desc' },
-          take: 1,
+        orderBy: { createdAt: 'desc' },
+        include,
+      }),
+      this.prisma.invoice.findMany({
+        where: {
+          ...baseWhere,
+          paymentStatus: { in: ['EXPIRED', 'CANCELLED'] },
         },
-        supportCases: {
-          where: {
-            caseType: 'PAYMENT_ISSUE',
-            status: { in: ['OPEN', 'IN_REVIEW', 'NEED_MORE_INFO'] },
-          },
-          orderBy: { updatedAt: 'desc' },
-          take: 1,
-          select: {
-            id: true,
-            caseCode: true,
-            status: true,
-            updatedAt: true,
-          },
-        },
-      },
-    });
+        orderBy: { createdAt: 'desc' },
+        take: 30,
+        include,
+      }),
+    ]);
 
-    return rows
-      .filter((row): row is typeof row & { contract: NonNullable<typeof row.contract> } =>
-        Boolean(row.contract),
+    const mergedById = new Map<string, (typeof priorityRows)[number]>();
+    for (const row of [...priorityRows, ...archiveRows]) {
+      if (!mergedById.has(row.id)) {
+        mergedById.set(row.id, row);
+      }
+    }
+
+    return [...mergedById.values()]
+      .filter(
+        (row): row is typeof row & { contract: NonNullable<typeof row.contract> } =>
+          Boolean(row.contract),
       )
-      .map((row) => {
-        const latestTx = row.paymentTransactions[0] ?? null;
-        const openCase = row.supportCases[0] ?? null;
-        return {
-          id: row.id,
-          contractId: row.contract.id,
-          contractNumber: row.contract.contractNumber,
-          contractStatus: row.contract.contractStatus,
-          packageName: row.contract.servicePackage.packageName,
-          facilityName: row.contract.facility.facilityName,
-          paymentCode: row.invoiceCode,
-          transferContent: row.transferContent ?? row.invoiceCode,
-          amountVnd: moneyToNumber(row.totalPayable),
-          status: row.paymentStatus,
-          expectedAccountNumber: row.expectedAccountNumber,
-          expectedGateway: row.expectedGateway,
-          createdAt: row.createdAt.toISOString(),
-          expiresAt: row.expiredAt.toISOString(),
-          paidAt: row.paidAt?.toISOString() ?? null,
-          latestTransaction: latestTx
-            ? {
-                id: latestTx.id,
-                providerTransactionId: latestTx.gatewayTransactionId,
-                amountReceived: moneyToNumber(latestTx.amountReceived),
-                paymentTime: latestTx.paymentTime.toISOString(),
-                outcome: latestTx.outcome,
-                reason: latestTx.reason,
-                referenceCode: latestTx.referenceCode,
-                gateway: latestTx.gateway,
-              }
-            : null,
-          openSupportCase: openCase
-            ? {
-                id: openCase.id,
-                caseCode: openCase.caseCode,
-                status: openCase.status,
-                updatedAt: openCase.updatedAt.toISOString(),
-              }
-            : null,
-        };
-      });
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((row) => this.mapInvoiceRowToFamilyPaymentRequestItem(row as any));
   }
 
   // Lấy số tiền đã chốt trong hợp đồng/phụ lục. Khách không được tự truyền giá vào API.

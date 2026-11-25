@@ -21,8 +21,10 @@ import {
 } from '../entities/payment.entity';
 import { PaymentsClock } from '../payments.clock';
 import { PaymentsConfig } from '../payments.config';
+import { PaymentsServiceImpl as RealPaymentsServiceImpl } from '../services/impl/payments.service.impl';
 import { PaymentTestService as PaymentsServiceImpl } from './payment-test-fixture';
 import { InMemoryPaymentsRepository } from '../repositories/impl/in-memory-payments.repository';
+import type { PrismaService } from '../../../core/database/prisma.service';
 
 const variables = [
   'NODE_ENV',
@@ -890,6 +892,163 @@ describe('PaymentsServiceImpl (simulation)', () => {
       expect(pendingResult.blockingReasons).toContain(
         'VERIFIED_PAYMENT_REQUIRED',
       );
+    });
+  });
+
+  describe('listMyPaymentRequests', () => {
+    const familyActor = {
+      id: 'user-rep-1',
+      role: 'FAMILY_REP' as const,
+      familyUnitId: 'fam-1',
+    };
+
+    const makeInvoiceRow = (overrides: Record<string, unknown> = {}) => ({
+      id: 'inv-1',
+      invoiceCode: 'INV-20261101-001',
+      transferContent: 'FAMIDOC INV001',
+      contractId: 'ctr-1',
+      addendumId: null,
+      grossAmount: '2850000.00',
+      vatAmount: '0.00',
+      totalPayable: '2850000.00',
+      paymentGateway: 'VIETQR',
+      paymentStatus: 'PAID',
+      expectedAccountNumber: '0123456789',
+      expectedGateway: 'MBBank',
+      createdAt: new Date('2026-11-01T02:00:00.000Z'),
+      expiredAt: new Date('2026-11-01T02:15:00.000Z'),
+      paidAt: new Date('2026-11-01T02:05:00.000Z'),
+      contract: {
+        id: 'ctr-1',
+        contractNumber: 'HD-2026-0042',
+        contractStatus: 'ACTIVE',
+        startDate: new Date('2026-11-01T00:00:00.000Z'),
+        endDate: new Date('2027-01-31T00:00:00.000Z'),
+        memberCount: 4,
+        facility: { facilityName: 'BV Đại học Y Dược' },
+        servicePackage: { packageName: 'Gói Đồng Hành Gia Đình (3 Tháng)' },
+      },
+      addendum: null,
+      paymentTransactions: [
+        {
+          id: 'tx-1',
+          gatewayTransactionId: 'SEPAY-TX-1',
+          amountReceived: '2850000.00',
+          paymentTime: new Date('2026-11-01T02:05:00.000Z'),
+          outcome: 'MATCHED',
+          reason: null,
+          referenceCode: 'FT2630591827',
+          gateway: 'MBBank',
+        },
+      ],
+      supportCases: [],
+      ...overrides,
+    });
+
+    it('throws ForbiddenException when actor is not FAMILY_REP', async () => {
+      const realService = new RealPaymentsServiceImpl(
+        repository,
+        new PaymentsConfig(),
+        new PaymentsClock(),
+        { invoice: { findMany: jest.fn() } } as unknown as PrismaService,
+      );
+
+      await expect(
+        realService.listMyPaymentRequests({
+          id: 'admin-1',
+          role: 'ADMIN',
+          familyUnitId: null,
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('returns extended receipt breakdown fields for base contract and addendum invoices', async () => {
+      const findMany = jest
+        .fn()
+        .mockResolvedValueOnce([
+          makeInvoiceRow(),
+          makeInvoiceRow({
+            id: 'inv-add-1',
+            invoiceCode: 'INV-20261110-104',
+            addendumId: 'add-1',
+            grossAmount: '500000.00',
+            vatAmount: '50000.00',
+            totalPayable: '550000.00',
+            createdAt: new Date('2026-11-10T07:00:00.000Z'),
+            paidAt: new Date('2026-11-10T07:02:00.000Z'),
+            addendum: {
+              addendumNumber: 'PL-01',
+              addendumType: 'ADD_MEMBER',
+            },
+          }),
+        ])
+        .mockResolvedValueOnce([]);
+
+      const realService = new RealPaymentsServiceImpl(
+        repository,
+        new PaymentsConfig(),
+        new PaymentsClock(),
+        { invoice: { findMany } } as unknown as PrismaService,
+      );
+
+      const items = await realService.listMyPaymentRequests(familyActor);
+      expect(items).toHaveLength(2);
+      expect(items[0]).toMatchObject({
+        id: 'inv-add-1',
+        addendumId: 'add-1',
+        addendumNumber: 'PL-01',
+        addendumType: 'ADD_MEMBER',
+        grossAmountVnd: 500000,
+        vatAmountVnd: 50000,
+        amountVnd: 550000,
+      });
+      expect(items[1]).toMatchObject({
+        id: 'inv-1',
+        paymentCode: 'INV-20261101-001',
+        grossAmountVnd: 2850000,
+        vatAmountVnd: 0,
+        amountVnd: 2850000,
+        paymentGateway: 'VIETQR',
+        addendumId: null,
+        addendumNumber: null,
+        addendumType: null,
+        memberCount: 4,
+        contractStartDate: '2026-11-01T00:00:00.000Z',
+        contractEndDate: '2027-01-31T00:00:00.000Z',
+      });
+    });
+
+    it('queries PAID/PENDING separately from EXPIRED/CANCELLED so >30 expired QRs never hide paid receipts', async () => {
+      const paidOld = makeInvoiceRow({
+        id: 'inv-paid-old',
+        createdAt: new Date('2026-10-01T02:00:00.000Z'),
+      });
+      const expiredRecent = Array.from({ length: 30 }, (_, idx) =>
+        makeInvoiceRow({
+          id: `inv-exp-${idx}`,
+          paymentStatus: 'EXPIRED',
+          paidAt: null,
+          paymentTransactions: [],
+          createdAt: new Date(`2026-11-${String((idx % 28) + 1).padStart(2, '0')}T03:00:00.000Z`),
+        }),
+      );
+
+      const findMany = jest
+        .fn()
+        .mockResolvedValueOnce([paidOld])
+        .mockResolvedValueOnce(expiredRecent);
+
+      const realService = new RealPaymentsServiceImpl(
+        repository,
+        new PaymentsConfig(),
+        new PaymentsClock(),
+        { invoice: { findMany } } as unknown as PrismaService,
+      );
+
+      const items = await realService.listMyPaymentRequests(familyActor);
+      expect(findMany).toHaveBeenCalledTimes(2);
+      expect(items.some((item) => item.id === 'inv-paid-old')).toBe(true);
+      expect(items).toHaveLength(31);
     });
   });
 });

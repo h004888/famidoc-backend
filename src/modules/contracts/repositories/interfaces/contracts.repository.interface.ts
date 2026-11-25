@@ -311,6 +311,7 @@ export interface ContractsSession {
       representativeName: string;
     } | null;
     patientCount: number;
+    hasHistoricalContracts?: boolean;
   }>;
   findAdminUsers(): Promise<{ id: string }[]>;
   createNotification(data: {
