@@ -514,7 +514,7 @@ export class PrismaContractsSession implements ContractsSession {
   }
 
   async findFamilyGateStatus(familyId: string) {
-    const [activeContractRow, pendingContract, familyUnitRow, patientCount] = await Promise.all([
+    const [activeContractRow, pendingContract, familyUnitRow, patientCount, historicalCount] = await Promise.all([
       this.tx.medicalContract.findFirst({
         where: { familyId, contractStatus: 'ACTIVE' },
         select: {
@@ -584,6 +584,9 @@ export class PrismaContractsSession implements ContractsSession {
         },
       }),
       this.tx.patient.count({ where: { familyId, status: 'ACTIVE' } }),
+      this.tx.medicalContract.count({
+        where: { familyId, contractStatus: { in: ['EXPIRED', 'TERMINATED'] } },
+      }),
     ]);
 
     const activeContract = activeContractRow
@@ -628,7 +631,13 @@ export class PrismaContractsSession implements ContractsSession {
         }
       : null;
 
-    return { activeContract, pendingContract, familyUnit, patientCount };
+    return {
+      activeContract,
+      pendingContract,
+      familyUnit,
+      patientCount,
+      hasHistoricalContracts: historicalCount > 0,
+    };
   }
 
   findPatientsByIdsAndFamilyId(patientIds: string[], familyId: string) {

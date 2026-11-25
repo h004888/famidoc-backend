@@ -4170,6 +4170,7 @@ export class ContractsServiceImpl
       if (!familyId) {
         return {
           hasActiveContract: false,
+          hasHistoricalContracts: false,
           activeContract: null,
           pendingContract: null,
           familyUnit: null,
@@ -4181,9 +4182,11 @@ export class ContractsServiceImpl
         pendingContract: null,
         familyUnit: null,
         patientCount: 0,
+        hasHistoricalContracts: false,
       };
       return {
         hasActiveContract: Boolean(gate.activeContract),
+        hasHistoricalContracts: Boolean(gate.hasHistoricalContracts),
         activeContract: gate.activeContract,
         pendingContract: gate.pendingContract,
         familyUnit: gate.familyUnit ?? null,

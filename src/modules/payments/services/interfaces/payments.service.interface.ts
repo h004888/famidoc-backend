@@ -29,6 +29,15 @@ export interface FamilyPaymentRequestItem {
   paymentCode: string;
   transferContent: string;
   amountVnd: number;
+  grossAmountVnd?: number;
+  vatAmountVnd?: number;
+  paymentGateway?: string;
+  addendumId?: string | null;
+  addendumNumber?: string | null;
+  addendumType?: string | null;
+  contractStartDate?: string | null;
+  contractEndDate?: string | null;
+  memberCount?: number;
   status: string;
   expectedAccountNumber: string | null;
   expectedGateway: string | null;
