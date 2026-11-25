@@ -526,6 +526,44 @@ describe('DoctorsServiceImpl', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it('should throw ConflictException when doctor is already PENDING_FACILITY_REVIEW', async () => {
+      prismaService.doctor.findUnique.mockResolvedValueOnce({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.PENDING_FACILITY_REVIEW,
+      });
+
+      await expect(
+        service.submitDoctorCredentials(
+          doctorUser,
+          'doc-uuid-1',
+          credDto,
+          '127.0.0.1',
+          uploadedThreeFiles,
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(prismaService.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('should allow resubmission when doctor is PENDING_SUBMISSION with rejectionReason', async () => {
+      prismaService.doctor.findUnique.mockResolvedValueOnce({
+        ...mockDoctor,
+        onboardingStatus: DoctorOnboardingStatus.PENDING_SUBMISSION,
+        rejectionReason: 'Ảnh CCHN bị mờ góc',
+      });
+
+      const result = await service.submitDoctorCredentials(
+        doctorUser,
+        'doc-uuid-1',
+        credDto,
+        '127.0.0.1',
+        uploadedThreeFiles,
+      );
+
+      expect(result.onboardingStatus).toBe(
+        DoctorOnboardingStatus.PENDING_FACILITY_REVIEW,
+      );
+    });
+
     it('should throw BadRequestException if credential issueDate is in the future', async () => {
       prismaService.doctor.findUnique.mockResolvedValue({
         ...mockDoctor,

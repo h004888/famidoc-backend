@@ -531,6 +531,85 @@ describe('Facilities Onboarding Service (Admin-Led Provisioning & Legal Verifica
         ),
       ).rejects.toThrow(BadRequestException);
     });
+
+    it('throws ConflictException when facility legal profile is already submitted and waiting review', async () => {
+      prismaService.healthcareFacility.findUnique.mockResolvedValue({
+        ...mockFacility,
+        verificationStatus: FacilityVerificationStatus.PENDING,
+        legalRejectionReason: null,
+        licenseNumber: '01293/BYT-GPHĐ',
+        taxCode: '0102030405',
+        bankName: 'Vietcombank',
+        legalDocumentKey: 'facility-legal/fac-uuid-1/operating-license.pdf',
+        businessLicenseKey: 'facility-legal/fac-uuid-1/business-license.pdf',
+      });
+
+      await expect(
+        service.submitFacilityLegalProfile(
+          facilityUser,
+          legalDto,
+          '127.0.0.1',
+          bothFiles,
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(storageService.uploadFile).not.toHaveBeenCalled();
+      expect(prismaService.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('allows resubmission when facility is PENDING with legalRejectionReason', async () => {
+      prismaService.healthcareFacility.findUnique.mockResolvedValue({
+        ...mockFacility,
+        verificationStatus: FacilityVerificationStatus.PENDING,
+        legalRejectionReason: 'Ảnh mờ',
+        licenseNumber: '01293/BYT-GPHĐ',
+        taxCode: '0102030405',
+        bankName: 'Vietcombank',
+        legalDocumentKey: 'facility-legal/fac-uuid-1/operating-license.pdf',
+        businessLicenseKey: 'facility-legal/fac-uuid-1/business-license.pdf',
+      });
+
+      const res = await service.submitFacilityLegalProfile(
+        facilityUser,
+        legalDto,
+        '127.0.0.1',
+        bothFiles,
+      );
+
+      expect(res).toBeDefined();
+    });
+
+    it('uses "Giấy phép kinh doanh" wording in missing business license errors', async () => {
+      await expect(
+        service.submitFacilityLegalProfile(facilityUser, legalDto, '127.0.0.1', {
+          operatingLicenseFile: [validPdfFile],
+        }),
+      ).rejects.toThrow(/Giấy phép kinh doanh/);
+
+      prismaService.healthcareFacility.findUnique.mockResolvedValueOnce({
+        ...mockFacility,
+        licenseNumber: '01293/BYT-GPHĐ',
+        taxCode: '0102030405',
+        bankName: 'Vietcombank',
+        legalDocumentKey: 'facility-legal/fac-uuid-1/operating-license.pdf',
+        businessLicenseKey: null,
+      });
+      await expect(
+        service.verifyFacilityLegal(
+          adminUser,
+          'fac-uuid-1',
+          { approved: true },
+          '127.0.0.1',
+        ),
+      ).rejects.toThrow(/Giấy phép kinh doanh/);
+
+      prismaService.healthcareFacility.findUnique.mockResolvedValueOnce({
+        ...mockFacility,
+        businessLicenseKey: null,
+      });
+      await expect(
+        service.getFacilityLegalDocument('fac-uuid-1', adminUser, 'business'),
+      ).rejects.toThrow(/Giấy phép kinh doanh/);
+    });
   });
 
   describe('Step 3: verifyFacilityLegal', () => {
