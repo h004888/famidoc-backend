@@ -16,6 +16,7 @@ describe('PrismaContractsSession Documenso & legacy signature helpers', () => {
         count: jest.fn().mockResolvedValue(0),
       },
       encounter: {
+        findFirst: jest.fn().mockResolvedValue(null),
         count: jest.fn().mockResolvedValue(0),
       },
       facilitySettlement: {
@@ -139,7 +140,7 @@ describe('PrismaContractsSession Documenso & legacy signature helpers', () => {
     });
   });
 
-  it('getStaffingTerminationImpact(): dùng đúng trường encounterStatus trên model Encounter', async () => {
+  it('getStaffingTerminationImpact(): dùng đúng trường encounterStatus trên model Encounter (bao gồm PENDING_RECORD & DISPUTED)', async () => {
     const tx = makeMockTx();
     tx.encounter.count.mockResolvedValueOnce(2);
     const session = new PrismaContractsSession(tx as any);
@@ -150,8 +151,27 @@ describe('PrismaContractsSession Documenso & legacy signature helpers', () => {
     expect(tx.encounter.count).toHaveBeenCalledWith({
       where: {
         contract: { facilityId: 'fac-1' },
-        encounterStatus: { in: ['REQUESTED', 'CONFIRMED', 'IN_PROGRESS'] },
+        encounterStatus: {
+          in: ['REQUESTED', 'CONFIRMED', 'IN_PROGRESS', 'PENDING_RECORD', 'DISPUTED'],
+        },
       },
+    });
+  });
+
+  it('hasEncounterInProgress(): kiểm tra IN_PROGRESS, PENDING_RECORD và DISPUTED', async () => {
+    const tx = makeMockTx();
+    tx.encounter.findFirst.mockResolvedValueOnce({ id: 'enc-1' });
+    const session = new PrismaContractsSession(tx as any);
+
+    const hasInProgress = await session.hasEncounterInProgress('ctr-1');
+
+    expect(hasInProgress).toBe(true);
+    expect(tx.encounter.findFirst).toHaveBeenCalledWith({
+      where: {
+        contractId: 'ctr-1',
+        encounterStatus: { in: ['IN_PROGRESS', 'PENDING_RECORD', 'DISPUTED'] },
+      },
+      select: { id: true },
     });
   });
 });

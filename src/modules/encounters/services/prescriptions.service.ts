@@ -46,6 +46,8 @@ async function prescriptionTransaction<T>(
 const visitSelect = {
   id: true,
   encounterType: true,
+  encounterStatus: true,
+  familyConfirmedArrivalAt: true,
   scheduledDate: true,
   scheduledTime: true,
   participants: {
@@ -175,7 +177,11 @@ export function doctorVisitScope(
   return {
     doctor: activePrescribingDoctor(userId),
     OR: [
-      { encounterStatus: { in: ['IN_PROGRESS', 'WRAP_UP', 'COMPLETED'] } },
+      {
+        encounterStatus: {
+          in: ['IN_PROGRESS', 'PENDING_RECORD', 'WRAP_UP', 'COMPLETED', 'DISPUTED', 'NO_SHOW'],
+        },
+      },
       {
         encounterStatus: 'CONFIRMED',
         OR: [
@@ -499,13 +505,19 @@ export class PrescriptionsService {
           vietnamNow,
         );
       }
-      await tx.encounter.updateMany({
-        where: {
-          id,
-          encounterStatus: { in: ['CONFIRMED', 'IN_PROGRESS'] },
-        },
-        data: { encounterStatus: 'COMPLETED' },
-      });
+      const shouldCompleteEncounter =
+        visit.encounterStatus === 'PENDING_RECORD' ||
+        visit.encounterStatus === 'IN_PROGRESS' ||
+        (visit.encounterStatus === 'CONFIRMED' && visit.familyConfirmedArrivalAt != null);
+      if (shouldCompleteEncounter) {
+        await tx.encounter.updateMany({
+          where: {
+            id,
+            encounterStatus: { in: ['CONFIRMED', 'IN_PROGRESS', 'PENDING_RECORD'] },
+          },
+          data: { encounterStatus: 'COMPLETED' },
+        });
+      }
       await tx.notification.create({
         data: {
           userId: visit.contract.familyUnit.representativeUser.id,

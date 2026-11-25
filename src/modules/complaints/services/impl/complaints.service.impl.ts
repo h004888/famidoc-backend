@@ -159,6 +159,13 @@ export class ComplaintsServiceImpl implements IComplaintsService {
         description: dto.description,
         evidenceAttachments: keys,
       });
+      if (
+        actor.role === 'FAMILY_REP' &&
+        dto.category === 'DOCTOR_ABSENT' &&
+        dto.encounterId
+      ) {
+        await session.markEncounterDisputed(dto.encounterId);
+      }
       await session.recordComplaintEvent(
         actor.id,
         item.id,

@@ -37,6 +37,12 @@ class PrismaComplaintsSession implements ComplaintsSession {
       select: { id: true },
     }));
   }
+  async markEncounterDisputed(encounterId: string) {
+    await this.tx.encounter.update({
+      where: { id: encounterId },
+      data: { encounterStatus: 'DISPUTED' },
+    });
+  }
   createComplaint(data: Prisma.ComplaintUncheckedCreateInput) {
     return this.tx.complaint.create({ data });
   }
