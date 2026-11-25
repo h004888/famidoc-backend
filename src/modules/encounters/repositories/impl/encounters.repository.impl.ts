@@ -19,7 +19,7 @@ export class EncountersRepositoryImpl implements IEncountersRepository {
   }
 }
 
-class PrismaEncountersSession implements EncountersSession {
+export class PrismaEncountersSession implements EncountersSession {
   constructor(private readonly tx: Prisma.TransactionClient) {}
 
   findContract(id: string) {
@@ -49,6 +49,44 @@ class PrismaEncountersSession implements EncountersSession {
     return this.tx.patient.findFirst({
       where: { familyId, status: 'ACTIVE' },
       select: { id: true, fullName: true },
+    });
+  }
+
+  async ensureContractDefaultMembers(
+    contractId: string,
+    familyId: string,
+    representativeFullName: string,
+  ): Promise<EncounterDetail['contract']['members']> {
+    let patients = await this.tx.patient.findMany({
+      where: { familyId, status: 'ACTIVE' },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (patients.length === 0) {
+      const created = await this.tx.patient.create({
+        data: {
+          familyId,
+          fullName: representativeFullName || 'Chủ hộ',
+          relationshipToHead: 'SELF',
+          dateOfBirth: new Date('1990-01-01'),
+          gender: 'OTHER',
+          status: 'ACTIVE',
+        },
+      });
+      patients = [created];
+    }
+
+    const headPatient =
+      patients.find((patient) => patient.relationshipToHead === 'SELF') ?? patients[0];
+
+    await this.tx.contractMember.createMany({
+      data: [{ contractId, patientId: headPatient.id }],
+      skipDuplicates: true,
+    });
+
+    return this.tx.contractMember.findMany({
+      where: { contractId },
+      include: { patient: true },
     });
   }
 
