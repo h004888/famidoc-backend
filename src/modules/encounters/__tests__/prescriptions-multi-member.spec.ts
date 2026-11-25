@@ -140,4 +140,124 @@ describe('PrescriptionsService multi-member family visit', () => {
       mockTx.prescription.create.mock.calls.map(([{ data }]) => data.recordSnapshot.patient.id),
     ).toEqual(['pat-1', 'pat-2']);
   });
+
+  describe('confirmVisitRecord (Dual-Lane reconciliation)', () => {
+    const exam = {
+      chiefComplaint: 'Khám định kỳ',
+      clinicalFindings: 'Ổn định',
+      icd10Code: 'Z00',
+      icd10Diagnosis: 'Khám sức khỏe tổng quát',
+      treatmentPlan: 'Theo dõi định kỳ',
+    };
+    const doctorActor: any = { id: 'doc-user-1', role: 'DOCTOR' };
+
+    const buildMockPrisma = (encounterOverrides: Record<string, any>) => {
+      const mockTx: any = {
+        encounter: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'enc-1',
+            encounterType: 'HOME_VISIT',
+            encounterStatus: 'CONFIRMED',
+            familyConfirmedArrivalAt: null,
+            scheduledDate: new Date('2026-11-21T00:00:00.000Z'),
+            scheduledTime: new Date('1970-01-01T08:30:00.000Z'),
+            participants: [{ patient: { id: 'pat-1', fullName: 'Bệnh nhân 1', familyId: 'fam-1' } }],
+            doctor: {
+              doctorName: 'Bác sĩ',
+              user: { phone: '0901234567' },
+              facility: { facilityName: 'CSYT', address: 'Địa chỉ CSYT' },
+            },
+            contract: {
+              familyId: 'fam-1',
+              familyUnit: {
+                representativeUser: {
+                  id: 'rep-1',
+                  fullName: 'Chủ hộ',
+                  role: 'FAMILY_REP',
+                  status: 'ACTIVE',
+                },
+              },
+            },
+            clinicalEmrs: [],
+            ...encounterOverrides,
+          }),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+        patient: {
+          findFirst: jest.fn().mockResolvedValue({ id: 'pat-1' }),
+        },
+        clinicalEmr: {
+          create: jest.fn().mockResolvedValue({ id: 'emr-1' }),
+        },
+        notification: { create: jest.fn().mockResolvedValue(undefined) },
+        auditLog: { create: jest.fn().mockResolvedValue(undefined) },
+      };
+      const mockPrisma: any = {
+        $transaction: jest.fn().mockImplementation(async (fn: any) => fn(mockTx)),
+      };
+      return { mockTx, mockPrisma };
+    };
+
+    it('chuyển PENDING_RECORD (familyConfirmedArrivalAt != null) sang COMPLETED khi bác sĩ confirmVisitRecord', async () => {
+      const { mockTx, mockPrisma } = buildMockPrisma({
+        encounterStatus: 'PENDING_RECORD',
+        familyConfirmedArrivalAt: new Date('2026-11-21T08:35:00.000Z'),
+      });
+      const service = new PrescriptionsService(mockPrisma);
+
+      await service.confirmVisitRecord(doctorActor, 'enc-1', {
+        patientId: 'pat-1',
+        confirmed: true,
+        exam,
+      });
+
+      const whereArg = mockTx.encounter.findFirst.mock.calls[0][0].where;
+      const statusList = whereArg.OR[0].encounterStatus.in;
+      expect(statusList).toContain('PENDING_RECORD');
+      expect(mockTx.encounter.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'enc-1' }),
+          data: { encounterStatus: 'COMPLETED' },
+        }),
+      );
+    });
+
+    it('giữ nguyên CONFIRMED khi familyConfirmedArrivalAt == null (chờ gia đình hoặc job 48h)', async () => {
+      const { mockTx, mockPrisma } = buildMockPrisma({
+        encounterStatus: 'CONFIRMED',
+        familyConfirmedArrivalAt: null,
+      });
+      const service = new PrescriptionsService(mockPrisma);
+
+      await service.confirmVisitRecord(doctorActor, 'enc-1', {
+        patientId: 'pat-1',
+        confirmed: true,
+        exam,
+      });
+
+      expect(mockTx.encounter.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('giữ DISPUTED và NO_SHOW trong doctorVisitScope nhưng KHÔNG tự chuyển sang COMPLETED', async () => {
+      for (const lockedStatus of ['DISPUTED', 'NO_SHOW']) {
+        const { mockTx, mockPrisma } = buildMockPrisma({
+          encounterStatus: lockedStatus,
+          familyConfirmedArrivalAt: null,
+        });
+        const service = new PrescriptionsService(mockPrisma);
+
+        await service.confirmVisitRecord(doctorActor, 'enc-1', {
+          patientId: 'pat-1',
+          confirmed: true,
+          exam,
+        });
+
+        const whereArg = mockTx.encounter.findFirst.mock.calls[0][0].where;
+        const statusList = whereArg.OR[0].encounterStatus.in;
+        expect(statusList).toContain('DISPUTED');
+        expect(statusList).toContain('NO_SHOW');
+        expect(mockTx.encounter.updateMany).not.toHaveBeenCalled();
+      }
+    });
+  });
 });

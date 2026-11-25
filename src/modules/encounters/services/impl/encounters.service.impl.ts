@@ -753,26 +753,46 @@ export class EncountersServiceImpl implements IEncountersService {
     });
   }
 
+  private hasReachedScheduledStart(scheduledDate: Date, scheduledTime: Date, now: Date): boolean {
+    const scheduledStartUtcMs = Date.UTC(
+      scheduledDate.getUTCFullYear(),
+      scheduledDate.getUTCMonth(),
+      scheduledDate.getUTCDate(),
+      scheduledTime.getUTCHours() - 7,
+      scheduledTime.getUTCMinutes(),
+      scheduledTime.getUTCSeconds(),
+    );
+    return now.getTime() >= scheduledStartUtcMs;
+  }
+
   async confirmArrival(actor: AuthenticatedUser, encounterId: string) {
     if (!['FAMILY_REP', 'ADMIN'].includes(actor.role)) {
-      throw new ForbiddenException('Only family representative or admin can confirm doctor arrival');
+      throw new ForbiddenException('Chỉ đại diện gia đình hoặc quản trị viên mới có thể xác nhận bác sĩ đã đến khám.');
     }
     return this.repository.transaction(async (session) => {
       const encounter = await session.findEncounter(encounterId);
-      if (!encounter) throw new NotFoundException('Encounter not found');
+      if (!encounter) throw new NotFoundException('Không tìm thấy ca khám.');
       if (
         actor.role === 'FAMILY_REP' &&
         encounter.contract.familyUnit.representativeUserId !== actor.id
       ) {
-        throw new ForbiddenException('You are not authorized to confirm arrival for this encounter');
+        throw new ForbiddenException('Bạn không có quyền xác nhận ca khám này.');
+      }
+      if (encounter.encounterType !== EncounterType.HOME_VISIT) {
+        throw new BadRequestException('Chỉ áp dụng xác nhận bác sĩ đến khám cho lịch khám tại nhà.');
       }
       const statusStr = String(encounter.encounterStatus);
       if (statusStr !== 'ARRIVED' && statusStr !== 'ON_THE_WAY' && statusStr !== 'CONFIRMED') {
-        throw new BadRequestException('Encounter is not in an arrival-confirmable state');
+        throw new BadRequestException('Ca khám không ở trạng thái có thể xác nhận.');
       }
       const now = new Date();
+      if (!this.hasReachedScheduledStart(encounter.scheduledDate, encounter.scheduledTime, now)) {
+        throw new BadRequestException('Chưa đến giờ hẹn khám, chưa thể xác nhận.');
+      }
+      const hasFinalizedEmr = (encounter.clinicalEmrs ?? []).some((emr) => emr.isFinalized);
+      const nextStatus = hasFinalizedEmr ? EncounterStatus.COMPLETED : EncounterStatus.PENDING_RECORD;
       const updated = await session.updateEncounter(encounter.id, {
-        encounterStatus: EncounterStatus.IN_PROGRESS,
+        encounterStatus: nextStatus,
         familyConfirmedArrivalAt: now,
       } as Prisma.EncounterUncheckedUpdateInput);
       await session.createAuditLog(actor.id, 'FAMILY_CONFIRMED_ARRIVAL', encounter.id);
@@ -780,7 +800,9 @@ export class EncountersServiceImpl implements IEncountersService {
         await session.createNotification({
           userId: encounter.doctor.user.id,
           title: 'Gia đình đã xác nhận bác sĩ có mặt',
-          content: 'Đại diện gia đình đã xác nhận bạn có mặt tại nhà. Bạn có thể bắt đầu thăm khám và ghi bệnh án.',
+          content: hasFinalizedEmr
+            ? 'Đại diện gia đình đã xác nhận bạn có mặt tại nhà và hồ sơ khám đã hoàn tất.'
+            : 'Đại diện gia đình đã xác nhận bạn có mặt tại nhà. Vui lòng hoàn tất ghi bệnh án và đơn thuốc.',
           type: 'ENCOUNTER_ARRIVAL_CONFIRMED',
           referenceId: encounter.id,
         });

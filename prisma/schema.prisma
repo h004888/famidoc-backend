@@ -173,10 +173,12 @@ enum EncounterStatus {
   ON_THE_WAY
   ARRIVED
   IN_PROGRESS
+  PENDING_RECORD
   WRAP_UP
   COMPLETED
   CANCELLED
   NO_SHOW
+  DISPUTED
 }
 
 enum RescheduleDecision {

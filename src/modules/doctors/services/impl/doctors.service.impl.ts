@@ -2324,7 +2324,11 @@ export class DoctorsServiceImpl implements IDoctorsService {
         byChannel[row.encounterType as keyof typeof byChannel] += count;
       }
       if (row.encounterStatus === 'COMPLETED') completed += count;
-      else if (row.encounterStatus === 'IN_PROGRESS') inProgress += count;
+      else if (
+        row.encounterStatus === 'IN_PROGRESS' ||
+        row.encounterStatus === 'PENDING_RECORD'
+      )
+        inProgress += count;
       else if (row.encounterStatus === 'CONFIRMED') confirmed += count;
       else if (row.encounterStatus === 'REQUESTED') requested += count;
       else if (row.encounterStatus === 'CANCELLED') cancelled += count;

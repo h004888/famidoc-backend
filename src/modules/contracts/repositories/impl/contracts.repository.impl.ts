@@ -200,7 +200,10 @@ export class PrismaContractsSession implements ContractsSession {
   }
   async hasEncounterInProgress(contractId: string) {
     return !!(await this.tx.encounter.findFirst({
-      where: { contractId, encounterStatus: 'IN_PROGRESS' },
+      where: {
+        contractId,
+        encounterStatus: { in: ['IN_PROGRESS', 'PENDING_RECORD', 'DISPUTED'] },
+      },
       select: { id: true },
     }));
   }
@@ -812,7 +815,9 @@ export class PrismaContractsSession implements ContractsSession {
       this.tx.encounter.count({
         where: {
           contract: { facilityId },
-          encounterStatus: { in: ['REQUESTED', 'CONFIRMED', 'IN_PROGRESS'] },
+          encounterStatus: {
+            in: ['REQUESTED', 'CONFIRMED', 'IN_PROGRESS', 'PENDING_RECORD', 'DISPUTED'],
+          },
         },
       }),
       this.tx.facilitySettlement.count({

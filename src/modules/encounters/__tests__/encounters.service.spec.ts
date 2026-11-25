@@ -796,4 +796,98 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       ).rejects.toThrow(BadRequestException);
     });
   });
+
+  describe('Dual-Lane EncounterStatus enum', () => {
+    it('có đủ giá trị PENDING_RECORD và DISPUTED', () => {
+      expect((EncounterStatus as any).PENDING_RECORD).toBe('PENDING_RECORD');
+      expect((EncounterStatus as any).DISPUTED).toBe('DISPUTED');
+    });
+  });
+
+  describe('confirmArrival (Dual-Lane HOME_VISIT)', () => {
+    const pastConfirmedHomeVisit = {
+      ...sampleEncounter,
+      encounterType: EncounterType.HOME_VISIT,
+      encounterStatus: EncounterStatus.CONFIRMED,
+      scheduledDate: new Date('2020-01-01T00:00:00.000Z'),
+      scheduledTime: new Date('1970-01-01T08:00:00.000Z'),
+      clinicalEmrs: [],
+    };
+
+    it('ném BadRequestException nếu encounterType !== HOME_VISIT (bảo vệ TELEHEALTH)', async () => {
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...pastConfirmedHomeVisit,
+        encounterType: EncounterType.TELEHEALTH,
+      });
+
+      await expect(service.confirmArrival(familyActor, 'encounter-1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('ném BadRequestException nếu gia đình xác nhận trước giờ hẹn (VN +07:00)', async () => {
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...pastConfirmedHomeVisit,
+        scheduledDate: new Date('2099-12-31T00:00:00.000Z'),
+        scheduledTime: new Date('1970-01-01T09:00:00.000Z'),
+      });
+
+      await expect(service.confirmArrival(familyActor, 'encounter-1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('ném BadRequestException nếu ca khám đang NO_SHOW, DISPUTED hoặc CANCELLED', async () => {
+      for (const status of [
+        EncounterStatus.NO_SHOW,
+        (EncounterStatus as any).DISPUTED,
+        EncounterStatus.CANCELLED,
+      ]) {
+        (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+          ...pastConfirmedHomeVisit,
+          encounterStatus: status,
+        });
+
+        await expect(service.confirmArrival(familyActor, 'encounter-1')).rejects.toThrow(
+          BadRequestException,
+        );
+      }
+    });
+
+    it('chuyển sang PENDING_RECORD nếu đã đến giờ hẹn và bác sĩ chưa chốt clinicalEmrs', async () => {
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...pastConfirmedHomeVisit,
+        clinicalEmrs: [{ id: 'emr-1', patientId: 'patient-1', isFinalized: false }],
+      });
+
+      const result = await service.confirmArrival(familyActor, 'encounter-1');
+
+      expect(mockSession.updateEncounter).toHaveBeenCalledWith(
+        'encounter-1',
+        expect.objectContaining({
+          encounterStatus: (EncounterStatus as any).PENDING_RECORD,
+          familyConfirmedArrivalAt: expect.any(Date),
+        }),
+      );
+      expect(result.encounterStatus).toBe((EncounterStatus as any).PENDING_RECORD);
+    });
+
+    it('chuyển sang COMPLETED nếu đã đến giờ hẹn và bác sĩ đã chốt >= 1 clinicalEmrs', async () => {
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...pastConfirmedHomeVisit,
+        clinicalEmrs: [{ id: 'emr-1', patientId: 'patient-1', isFinalized: true }],
+      });
+
+      const result = await service.confirmArrival(familyActor, 'encounter-1');
+
+      expect(mockSession.updateEncounter).toHaveBeenCalledWith(
+        'encounter-1',
+        expect.objectContaining({
+          encounterStatus: EncounterStatus.COMPLETED,
+          familyConfirmedArrivalAt: expect.any(Date),
+        }),
+      );
+      expect(result.encounterStatus).toBe(EncounterStatus.COMPLETED);
+    });
+  });
 });

@@ -1,0 +1,3 @@
+-- AlterEnum: Dual-Lane Encounter Statuses (PENDING_RECORD, DISPUTED)
+ALTER TYPE "EncounterStatus" ADD VALUE IF NOT EXISTS 'PENDING_RECORD';
+ALTER TYPE "EncounterStatus" ADD VALUE IF NOT EXISTS 'DISPUTED';

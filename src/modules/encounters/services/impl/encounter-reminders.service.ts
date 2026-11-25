@@ -168,6 +168,86 @@ export class EncounterRemindersService
       this.logger.log(`Created ${notificationsToCreate.length} automated encounter reminders.`);
     }
 
-    return { processed: notificationsToCreate.length };
+    const reconciledCount = await this.reconcilePostVisitEncounters(now);
+
+    return { processed: notificationsToCreate.length + reconciledCount };
+  }
+
+  private async reconcilePostVisitEncounters(now: Date): Promise<number> {
+    const candidates =
+      (await this.prisma.encounter.findMany({
+        where: {
+          encounterStatus: { in: ['PENDING_RECORD', 'CONFIRMED'] },
+          scheduledDate: { lte: now },
+        },
+        include: {
+          doctor: { include: { user: true } },
+          clinicalEmrs: { select: { id: true, isFinalized: true } },
+        },
+      })) ?? [];
+
+    const overdueNotifications: Array<{
+      userId: string;
+      title: string;
+      content: string;
+      type: string;
+      referenceId: string;
+    }> = [];
+    let updatedCount = 0;
+
+    for (const enc of candidates) {
+      if (enc.encounterStatus === 'DISPUTED' || enc.encounterStatus === 'NO_SHOW') {
+        continue;
+      }
+      const encDate = new Date(enc.scheduledDate);
+      const encTime = new Date(enc.scheduledTime);
+      const endUtcMs = Date.UTC(
+        encDate.getUTCFullYear(),
+        encDate.getUTCMonth(),
+        encDate.getUTCDate(),
+        encTime.getUTCHours() - 7,
+        encTime.getUTCMinutes() + 45,
+      );
+      const hoursSinceEnd = (now.getTime() - endUtcMs) / 3600_000;
+      const hasFinalizedEmr = (enc.clinicalEmrs ?? []).some((emr) => emr.isFinalized);
+
+      if (
+        enc.encounterStatus === 'PENDING_RECORD' &&
+        !hasFinalizedEmr &&
+        hoursSinceEnd >= 24 &&
+        enc.doctor?.user?.id
+      ) {
+        overdueNotifications.push({
+          userId: enc.doctor.user.id,
+          title: 'Nhắc hoàn tất bệnh án quá hạn 24 giờ',
+          content:
+            'Gia đình đã xác nhận bạn đến khám nhưng bệnh án vẫn chưa được chốt sau 24 giờ. Vui lòng hoàn tất hồ sơ khám.',
+          type: 'ENCOUNTER_RECORD_OVERDUE',
+          referenceId: enc.id,
+        });
+      }
+
+      if (
+        enc.encounterStatus === 'CONFIRMED' &&
+        enc.familyConfirmedArrivalAt == null &&
+        hasFinalizedEmr &&
+        hoursSinceEnd >= 48
+      ) {
+        await this.prisma.encounter.update({
+          where: { id: enc.id },
+          data: { encounterStatus: 'COMPLETED' },
+        });
+        updatedCount += 1;
+      }
+    }
+
+    if (overdueNotifications.length > 0) {
+      await this.prisma.notification.createMany({
+        data: overdueNotifications,
+        skipDuplicates: true,
+      });
+    }
+
+    return overdueNotifications.length + updatedCount;
   }
 }

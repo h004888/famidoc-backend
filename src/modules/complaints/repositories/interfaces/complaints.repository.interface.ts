@@ -69,6 +69,7 @@ export interface ComplaintsSession {
     action: string,
     contract: ComplaintContract,
   ): Promise<void>;
+  markEncounterDisputed(encounterId: string): Promise<void>;
 }
 export interface IComplaintsRepository {
   transaction<T>(work: (session: ComplaintsSession) => Promise<T>): Promise<T>;

@@ -113,4 +113,94 @@ describe('EncounterRemindersService', () => {
 
     expect(res.processed).toBe(4);
   });
+
+  describe('Post-visit reconciliation (24h overdue & 48h auto-complete)', () => {
+    it('gửi notification ENCOUNTER_RECORD_OVERDUE cho bác sĩ khi ca PENDING_RECORD quá 24h chưa có clinicalEmrs finalized', async () => {
+      const now = new Date();
+      const past30h = new Date(now.getTime() - 30 * 3600_000);
+      mockPrisma.encounter.findMany
+        .mockResolvedValueOnce([]) // upcomingEncounters
+        .mockResolvedValueOnce([
+          {
+            id: 'enc-overdue-1',
+            encounterStatus: 'PENDING_RECORD',
+            scheduledDate: past30h,
+            scheduledTime: new Date('1970-01-01T08:00:00.000Z'),
+            familyConfirmedArrivalAt: past30h,
+            doctor: { user: { id: 'doc-user-1' } },
+            clinicalEmrs: [],
+          },
+        ]);
+
+      await service.runReminders();
+
+      expect(mockPrisma.notification.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.arrayContaining([
+            expect.objectContaining({
+              userId: 'doc-user-1',
+              type: 'ENCOUNTER_RECORD_OVERDUE',
+              referenceId: 'enc-overdue-1',
+            }),
+          ]),
+        }),
+      );
+    });
+
+    it('tự động chuyển CONFIRMED (familyConfirmedArrivalAt == null) quá 48h đã có clinicalEmrs finalized sang COMPLETED', async () => {
+      const now = new Date();
+      const past60h = new Date(now.getTime() - 60 * 3600_000);
+      mockPrisma.encounter.findMany
+        .mockResolvedValueOnce([]) // upcomingEncounters
+        .mockResolvedValueOnce([
+          {
+            id: 'enc-auto-complete-1',
+            encounterStatus: 'CONFIRMED',
+            scheduledDate: past60h,
+            scheduledTime: new Date('1970-01-01T08:00:00.000Z'),
+            familyConfirmedArrivalAt: null,
+            doctor: { user: { id: 'doc-user-1' } },
+            clinicalEmrs: [{ id: 'emr-1', isFinalized: true }],
+          },
+        ]);
+
+      await service.runReminders();
+
+      expect(mockPrisma.encounter.update).toHaveBeenCalledWith({
+        where: { id: 'enc-auto-complete-1' },
+        data: { encounterStatus: 'COMPLETED' },
+      });
+    });
+
+    it('KHÔNG tự chuyển DISPUTED hoặc NO_SHOW quá 48h sang COMPLETED dù đã có clinicalEmrs finalized', async () => {
+      const now = new Date();
+      const past60h = new Date(now.getTime() - 60 * 3600_000);
+      mockPrisma.encounter.findMany
+        .mockResolvedValueOnce([]) // upcomingEncounters
+        .mockResolvedValueOnce([
+          {
+            id: 'enc-disputed-1',
+            encounterStatus: 'DISPUTED',
+            scheduledDate: past60h,
+            scheduledTime: new Date('1970-01-01T08:00:00.000Z'),
+            familyConfirmedArrivalAt: null,
+            doctor: { user: { id: 'doc-user-1' } },
+            clinicalEmrs: [{ id: 'emr-1', isFinalized: true }],
+          },
+          {
+            id: 'enc-noshow-1',
+            encounterStatus: 'NO_SHOW',
+            scheduledDate: past60h,
+            scheduledTime: new Date('1970-01-01T08:00:00.000Z'),
+            familyConfirmedArrivalAt: null,
+            doctor: { user: { id: 'doc-user-2' } },
+            clinicalEmrs: [{ id: 'emr-2', isFinalized: true }],
+          },
+        ]);
+
+      await service.runReminders();
+
+      expect(mockPrisma.encounter.update).not.toHaveBeenCalled();
+    });
+  });
 });
