@@ -760,6 +760,11 @@ export class DoctorsServiceImpl implements IDoctorsService {
         'Bác sĩ đã hoàn tất onboarding và đang hoạt động (ACTIVE), không thể nộp lại hồ sơ',
       );
     }
+    if (doctor.onboardingStatus === 'PENDING_FACILITY_REVIEW') {
+      throw new ConflictException(
+        'Hồ sơ chứng chỉ của bác sĩ đã được nộp và đang chờ Cơ sở y tế thẩm định Cấp 1, không thể nộp đè.',
+      );
+    }
     if (doctor.onboardingStatus === 'FACILITY_VERIFIED') {
       throw new BadRequestException(
         'Hồ sơ bác sĩ đã được Cơ sở y tế duyệt Cấp 1 và đang chờ Quản trị viên thẩm định Cấp 2, không thể tự ý nộp đè.',
@@ -1766,6 +1771,26 @@ export class DoctorsServiceImpl implements IDoctorsService {
     };
   }
 
+  private isFacilityWaitingLegalReview(facility: {
+    verificationStatus: string;
+    legalRejectionReason?: string | null;
+    licenseNumber: string;
+    taxCode: string;
+    bankName: string;
+    legalDocumentKey?: string | null;
+    businessLicenseKey?: string | null;
+  }): boolean {
+    return (
+      facility.verificationStatus === 'PENDING' &&
+      !facility.legalRejectionReason &&
+      !facility.licenseNumber.startsWith('PENDING_') &&
+      !facility.taxCode.startsWith('PENDING_') &&
+      facility.bankName !== 'CHƯA_CẬP_NHẬT' &&
+      Boolean(facility.legalDocumentKey) &&
+      Boolean(facility.businessLicenseKey)
+    );
+  }
+
   async submitFacilityLegalProfile(
     actor: AuthenticatedUser,
     dto: SubmitFacilityLegalProfileDto,
@@ -1795,6 +1820,12 @@ export class DoctorsServiceImpl implements IDoctorsService {
       );
     }
 
+    if (this.isFacilityWaitingLegalReview(facility)) {
+      throw new ConflictException(
+        'Hồ sơ pháp lý của cơ sở y tế đã được nộp và đang chờ Quản trị viên thẩm định, không thể nộp đè.',
+      );
+    }
+
     const parsedLicenseDate = toVietnamCalendarDate(dto.licenseDate);
     if (!parsedLicenseDate) {
       throw new BadRequestException('Ngày cấp giấy phép hoạt động không hợp lệ');
@@ -1816,7 +1847,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
 
     if (!businessLicenseFile && !facility.businessLicenseKey) {
       throw new BadRequestException(
-        'Vui lòng tải lên bản scan Giấy chứng nhận Đăng ký doanh nghiệp (PDF, PNG hoặc JPEG).',
+        'Vui lòng tải lên bản scan Giấy phép kinh doanh (PDF, PNG hoặc JPEG).',
       );
     }
 
@@ -1830,7 +1861,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
     const validatedBusiness = businessLicenseFile
       ? validateUploadedDocumentFile(businessLicenseFile, {
           maxBytes: 10 * 1024 * 1024,
-          label: 'Bản scan Giấy chứng nhận Đăng ký doanh nghiệp',
+          label: 'Bản scan Giấy phép kinh doanh',
         })
       : null;
 
@@ -1901,10 +1932,10 @@ export class DoctorsServiceImpl implements IDoctorsService {
         );
       } catch (err: any) {
         this.logger.error(
-          `Upload ĐKKD CSYT (${facility.id}) thất bại: ${err?.message || err}`,
+          `Upload Giấy phép kinh doanh CSYT (${facility.id}) thất bại: ${err?.message || err}`,
         );
         throw new ServiceUnavailableException(
-          'Không thể lưu bản scan Giấy chứng nhận Đăng ký doanh nghiệp.',
+          'Không thể lưu bản scan Giấy phép kinh doanh.',
         );
       }
     }
@@ -2010,7 +2041,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
       (!facility.legalDocumentKey || !facility.businessLicenseKey)
     ) {
       throw new BadRequestException(
-        'Cơ sở y tế chưa nộp đủ 2 tài liệu scan bắt buộc (GPHĐ KBCB và Giấy chứng nhận ĐKKD) để phê duyệt ACTIVE',
+        'Cơ sở y tế chưa nộp đủ 2 tài liệu scan bắt buộc (GPHĐ KBCB và Giấy phép kinh doanh) để phê duyệt ACTIVE',
       );
     }
 
@@ -2461,7 +2492,7 @@ export class DoctorsServiceImpl implements IDoctorsService {
     if (!targetKey) {
       throw new NotFoundException(
         docType === 'business'
-          ? 'CSYT chưa có bản scan Giấy chứng nhận Đăng ký doanh nghiệp.'
+          ? 'CSYT chưa có bản scan Giấy phép kinh doanh.'
           : 'CSYT chưa có bản scan Giấy phép hoạt động KBCB.',
       );
     }

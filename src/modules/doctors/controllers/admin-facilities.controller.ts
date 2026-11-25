@@ -141,7 +141,7 @@ export class AdminFacilitiesController {
     name: 'type',
     required: false,
     enum: ['operating', 'business'],
-    description: 'operating = GPHĐ KBCB (mặc định), business = Giấy chứng nhận ĐKKD',
+    description: 'operating = GPHĐ KBCB (mặc định), business = Giấy phép kinh doanh',
   })
   @ApiOperation({ summary: 'Tải bản scan hồ sơ pháp lý của CSYT' })
   async getLegalDocument(

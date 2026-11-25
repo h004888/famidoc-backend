@@ -118,7 +118,7 @@ export class FacilitiesController {
   @ApiOperation({
     summary: 'Cơ sở y tế nộp hồ sơ pháp lý chuyên sâu & tài khoản ngân hàng',
     description:
-      'Sau khi được Admin tạo tài khoản và đăng nhập, CSYT nộp GPHĐ KBCB, Mã số thuế, Địa chỉ trụ sở, Tài khoản ngân hàng thụ hưởng và 2 tệp scan riêng (GPHĐ KBCB & Giấy chứng nhận ĐKKD, tối đa 10MB/tệp) để Admin thẩm định.',
+      'Sau khi được Admin tạo tài khoản và đăng nhập, CSYT nộp GPHĐ KBCB, Mã số thuế, Địa chỉ trụ sở, Tài khoản ngân hàng thụ hưởng và 2 tệp scan riêng (GPHĐ KBCB & Giấy phép kinh doanh, tối đa 10MB/tệp) để Admin thẩm định.',
   })
   @ApiBody({ type: SubmitFacilityLegalProfileDto })
   @ApiResponse({
@@ -154,7 +154,7 @@ export class FacilitiesController {
     name: 'type',
     required: false,
     enum: ['operating', 'business'],
-    description: 'operating = GPHĐ KBCB (mặc định), business = Giấy chứng nhận ĐKKD',
+    description: 'operating = GPHĐ KBCB (mặc định), business = Giấy phép kinh doanh',
   })
   @ApiOperation({
     summary: 'Cơ sở y tế xem lại bản scan hồ sơ pháp lý của chính mình',
@@ -180,7 +180,7 @@ export class FacilitiesController {
     name: 'type',
     required: false,
     enum: ['operating', 'business'],
-    description: 'operating = GPHĐ KBCB (mặc định), business = Giấy chứng nhận ĐKKD',
+    description: 'operating = GPHĐ KBCB (mặc định), business = Giấy phép kinh doanh',
   })
   @ApiOperation({
     summary: 'Tải/xem bản scan hồ sơ pháp lý của CSYT (Admin hoặc CSYT chính chủ)',
