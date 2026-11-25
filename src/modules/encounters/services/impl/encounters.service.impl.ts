@@ -1479,6 +1479,27 @@ export class EncountersServiceImpl implements IEncountersService {
         }
       }
 
+      if (
+        Array.isArray(encounter.contract.members) &&
+        encounter.contract.members.length === 0 &&
+        session.ensureContractDefaultMembers
+      ) {
+        try {
+          const representativeFullName =
+            encounter.contract.familyUnit?.representativeUser?.fullName ?? 'Chủ hộ';
+          encounter.contract.members = await session.ensureContractDefaultMembers(
+            encounter.contract.id,
+            encounter.contract.familyId,
+            representativeFullName,
+          );
+        } catch (error) {
+          const prismaCode = (error as { code?: string } | null)?.code;
+          if (prismaCode !== 'P2034' && prismaCode !== 'P2002') {
+            throw error;
+          }
+        }
+      }
+
       return enrichEncounterWithScheduleMeta(encounter);
     });
   }

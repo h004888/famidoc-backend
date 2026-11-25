@@ -18,6 +18,7 @@ import type {
   EncountersSession,
   IEncountersRepository,
 } from '../repositories/interfaces/encounters.repository.interface';
+import { PrismaEncountersSession } from '../repositories/impl/encounters.repository.impl';
 import type { AuthenticatedUser } from '../../../core/auth/authenticated-request';
 
 describe('EncountersService (Main Business Flow 2.3)', () => {
@@ -888,6 +889,183 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
         }),
       );
       expect(result.encounterStatus).toBe(EncounterStatus.COMPLETED);
+    });
+  });
+
+  describe('PrismaEncountersSession.ensureContractDefaultMembers', () => {
+    it('gắn Patient Chủ hộ ACTIVE sẵn có vào contract_members mà không tạo Patient mới', async () => {
+      const existingPatient = {
+        id: 'patient-head-1',
+        familyId: 'fam-unit-1',
+        fullName: 'Nguyen Van Chu Ho',
+        relationshipToHead: 'SELF',
+        status: 'ACTIVE',
+      };
+      const expectedMembers = [
+        { id: 'cm-1', contractId: 'contract-1', patientId: 'patient-head-1', patient: existingPatient },
+      ];
+      const mockTx = {
+        patient: {
+          findMany: jest.fn().mockResolvedValue([existingPatient]),
+          create: jest.fn(),
+        },
+        contractMember: {
+          createMany: jest.fn().mockResolvedValue({ count: 1 }),
+          findMany: jest.fn().mockResolvedValue(expectedMembers),
+        },
+      };
+
+      const session = new PrismaEncountersSession(mockTx as any);
+      const result = await session.ensureContractDefaultMembers('contract-1', 'fam-unit-1', 'Nguyen Van Chu Ho');
+
+      expect(mockTx.patient.findMany).toHaveBeenCalledWith({
+        where: { familyId: 'fam-unit-1', status: 'ACTIVE' },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(mockTx.patient.create).not.toHaveBeenCalled();
+      expect(mockTx.contractMember.createMany).toHaveBeenCalledWith({
+        data: [{ contractId: 'contract-1', patientId: 'patient-head-1' }],
+        skipDuplicates: true,
+      });
+      expect(mockTx.contractMember.findMany).toHaveBeenCalledWith({
+        where: { contractId: 'contract-1' },
+        include: { patient: true },
+      });
+      expect(result).toEqual(expectedMembers);
+    });
+
+    it('tự tạo Patient Chủ hộ mặc định khi hộ chưa có Patient ACTIVE nào rồi gắn vào contract_members', async () => {
+      const createdPatient = {
+        id: 'patient-created-1',
+        familyId: 'fam-unit-1',
+        fullName: 'Dai Dien Ho',
+        relationshipToHead: 'SELF',
+        status: 'ACTIVE',
+      };
+      const expectedMembers = [
+        { id: 'cm-2', contractId: 'contract-1', patientId: 'patient-created-1', patient: createdPatient },
+      ];
+      const mockTx = {
+        patient: {
+          findMany: jest.fn().mockResolvedValue([]),
+          create: jest.fn().mockResolvedValue(createdPatient),
+        },
+        contractMember: {
+          createMany: jest.fn().mockResolvedValue({ count: 1 }),
+          findMany: jest.fn().mockResolvedValue(expectedMembers),
+        },
+      };
+
+      const session = new PrismaEncountersSession(mockTx as any);
+      const result = await session.ensureContractDefaultMembers('contract-1', 'fam-unit-1', 'Dai Dien Ho');
+
+      expect(mockTx.patient.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          familyId: 'fam-unit-1',
+          fullName: 'Dai Dien Ho',
+          relationshipToHead: 'SELF',
+          status: 'ACTIVE',
+        }),
+      });
+      expect(mockTx.contractMember.createMany).toHaveBeenCalledWith({
+        data: [{ contractId: 'contract-1', patientId: 'patient-created-1' }],
+        skipDuplicates: true,
+      });
+      expect(result).toEqual(expectedMembers);
+    });
+  });
+
+  describe('EncountersServiceImpl.getEncounterDetail (Lazy Self-Heal)', () => {
+    it('tự phục hồi thành viên Chủ hộ khi contract.members rỗng và bác sĩ phụ trách gọi getEncounterDetail', async () => {
+      const recoveredMembers = [
+        {
+          id: 'cm-healed-1',
+          contractId: 'contract-1',
+          patientId: 'patient-healed-1',
+          patient: { id: 'patient-healed-1', fullName: 'Gia dinh 1', relationshipToHead: 'SELF' },
+        },
+      ];
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...sampleEncounter,
+        contract: {
+          ...sampleEncounter.contract,
+          members: [],
+        },
+      });
+      mockSession.ensureContractDefaultMembers = jest.fn().mockResolvedValueOnce(recoveredMembers);
+
+      const result = await service.getEncounterDetail(doctorActor, 'encounter-1');
+
+      expect(mockSession.ensureContractDefaultMembers).toHaveBeenCalledWith(
+        'contract-1',
+        'fam-unit-1',
+        'Gia dinh 1',
+      );
+      expect(result.contract.members).toEqual(recoveredMembers);
+    });
+
+    it('không gọi ensureContractDefaultMembers khi contract.members đã có >= 1 thành viên', async () => {
+      const existingMembers = [
+        {
+          id: 'cm-existing-1',
+          contractId: 'contract-1',
+          patientId: 'patient-1',
+          patient: { id: 'patient-1', fullName: 'Nguyen Van Patient' },
+        },
+      ];
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...sampleEncounter,
+        contract: {
+          ...sampleEncounter.contract,
+          members: existingMembers,
+        },
+      });
+      mockSession.ensureContractDefaultMembers = jest.fn();
+
+      const result = await service.getEncounterDetail(doctorActor, 'encounter-1');
+
+      expect(mockSession.ensureContractDefaultMembers).not.toHaveBeenCalled();
+      expect(result.contract.members).toEqual(existingMembers);
+    });
+
+    it('ném ForbiddenException và không gọi ensureContractDefaultMembers khi bác sĩ không phụ trách gọi getEncounterDetail', async () => {
+      (mockSession.findDoctorByUserId as jest.Mock).mockResolvedValueOnce({
+        id: 'doctor-other',
+        facilityId: 'facility-1',
+      });
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...sampleEncounter,
+        contract: {
+          ...sampleEncounter.contract,
+          members: [],
+        },
+      });
+      mockSession.ensureContractDefaultMembers = jest.fn();
+
+      await expect(service.getEncounterDetail(doctorActor, 'encounter-1')).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(mockSession.ensureContractDefaultMembers).not.toHaveBeenCalled();
+    });
+
+    it('không làm sập GET khi ensureContractDefaultMembers gặp lỗi xung đột đồng thời P2034', async () => {
+      const p2034Error = Object.assign(new Error('Transaction failed due to a write conflict or a deadlock'), {
+        code: 'P2034',
+      });
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...sampleEncounter,
+        contract: {
+          ...sampleEncounter.contract,
+          members: [],
+        },
+      });
+      mockSession.ensureContractDefaultMembers = jest.fn().mockRejectedValueOnce(p2034Error);
+
+      const result = await service.getEncounterDetail(doctorActor, 'encounter-1');
+
+      expect(mockSession.ensureContractDefaultMembers).toHaveBeenCalledTimes(1);
+      expect(result.id).toBe('encounter-1');
+      expect(result.contract.members).toEqual([]);
     });
   });
 });
