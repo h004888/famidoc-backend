@@ -35,6 +35,7 @@ import {
   FamilyPrescriptionDateQuery,
   PrescriptionPageQuery,
   SaveVisitDraftDto,
+  TimelineQuery,
   UploadBookDocumentDto,
 } from '../dtos/share-prescription.dto';
 import { MedicalBooksService } from '../services/medical-books.service';
@@ -116,6 +117,18 @@ export class MedicalBooksController {
     @Param('patientId', ParseUUIDPipe) patientId: string,
   ) {
     return this.books.patientDocuments(req.user, familyId, patientId);
+  }
+
+  @Get('families/:familyId/patients/:patientId/timeline')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({ summary: 'Dòng thời gian sức khỏe của từng thành viên' })
+  patientTimeline(
+    @Req() req: AuthenticatedRequest,
+    @Param('familyId', ParseUUIDPipe) familyId: string,
+    @Param('patientId', ParseUUIDPipe) patientId: string,
+    @Query() query: TimelineQuery,
+  ) {
+    return this.books.patientTimeline(req.user, familyId, patientId, query);
   }
 
   @Post('families/:familyId/patients/:patientId/documents')

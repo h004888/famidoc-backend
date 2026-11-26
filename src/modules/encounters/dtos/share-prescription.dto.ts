@@ -487,6 +487,19 @@ export class FamilyPrescriptionQuery extends PrescriptionPageQuery {
   patientId?: string;
 }
 
+export class TimelineQuery {
+  @IsOptional()
+  @IsString({ message: 'Con trỏ phân trang phải là chuỗi ký tự.' })
+  @MaxLength(300, { message: 'Con trỏ phân trang không được vượt quá 300 ký tự.' })
+  cursor?: string;
+
+  @Type(() => Number)
+  @IsInt({ message: 'Số bản ghi phải là số nguyên.' })
+  @Min(1, { message: 'Số bản ghi phải lớn hơn hoặc bằng 1.' })
+  @Max(50, { message: 'Số bản ghi tối đa là 50.' })
+  limit = 20;
+}
+
 export class UploadBookDocumentDto {
   @ApiProperty({ maxLength: 200 })
   @Transform(trim)

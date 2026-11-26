@@ -14,8 +14,110 @@ import {
   activePrescribingDoctor,
   doctorVisitScope,
 } from './prescriptions.service';
+import {
+  dateKeyset,
+  dateTimeKeyset,
+  decodeTimelineCursor,
+  encounterKeyset,
+  mergeTimelineEvents,
+  type TimelineEvent,
+} from './timeline.util';
 
 const PAGE_SIZE = 12;
+const VISIT_TITLE: Record<string, string> = {
+  TELEHEALTH: 'Khám trực tuyến',
+  HOME_VISIT: 'Khám tại nhà',
+  FACILITY_VISIT: 'Khám tại cơ sở',
+};
+
+function canOpenEncounter(actor: AuthenticatedUser, doctorUserId: string) {
+  return actor.role !== 'DOCTOR' || doctorUserId === actor.id;
+}
+
+function combineEncounterDateTime(scheduledDate: Date, scheduledTime: Date) {
+  return new Date(
+    `${scheduledDate.toISOString().slice(0, 10)}T${scheduledTime.toISOString().slice(11)}`,
+  );
+}
+
+function visitEvent(
+  actor: AuthenticatedUser,
+  row: {
+    id: string;
+    encounterType: string;
+    scheduledDate: Date;
+    scheduledTime: Date;
+    doctor: { doctorName: string; userId: string };
+    clinicalEmrs: { isFinalized: boolean; icd10Diagnosis: string | null }[];
+  },
+): TimelineEvent {
+  const emr = row.clinicalEmrs[0];
+  return {
+    id: row.id,
+    type: 'VISIT',
+    occurredAt: combineEncounterDateTime(row.scheduledDate, row.scheduledTime),
+    title: VISIT_TITLE[row.encounterType] ?? 'Lượt khám',
+    summary: emr?.isFinalized ? (emr.icd10Diagnosis ?? null) : null,
+    actorName: row.doctor.doctorName,
+    source: 'CLINICAL',
+    link: { encounterId: row.id },
+    canOpenDetail: canOpenEncounter(actor, row.doctor.userId),
+    attachments: [],
+  };
+}
+
+function prescriptionEvent(
+  actor: AuthenticatedUser,
+  row: {
+    id: string;
+    prescriptionCode: string;
+    createdAt: Date;
+    clinicalEmr: {
+      encounterId: string;
+      encounter: { doctor: { doctorName: string; userId: string } };
+    };
+  },
+): TimelineEvent {
+  const doctor = row.clinicalEmr.encounter.doctor;
+  return {
+    id: row.id,
+    type: 'PRESCRIPTION',
+    occurredAt: row.createdAt,
+    title: 'Đơn thuốc',
+    summary: `Mã đơn ${row.prescriptionCode}`,
+    actorName: doctor.doctorName,
+    source: 'CLINICAL',
+    link: { encounterId: row.clinicalEmr.encounterId },
+    canOpenDetail: canOpenEncounter(actor, doctor.userId),
+    attachments: [],
+  };
+}
+
+function documentEvent(
+  patientId: string,
+  record: Prisma.PatientDocumentGetPayload<{ select: typeof documentSelect }>,
+): TimelineEvent {
+  const info = documentInfo(patientId, record);
+  return {
+    id: record.id,
+    type: 'DOCUMENT',
+    occurredAt: record.recordedDate,
+    title: record.documentName,
+    summary: null,
+    actorName: null,
+    source: 'FAMILY_UPLOAD',
+    link: { documentId: record.id },
+    canOpenDetail: false,
+    attachments: [
+      {
+        id: record.id,
+        name: record.documentName,
+        downloadAvailable: info.downloadAvailable,
+        isImage: /\.(png|jpe?g)$/i.test(record.fileUrl ?? ''),
+      },
+    ],
+  };
+}
 const documentSelect = {
   id: true,
   documentName: true,
@@ -99,6 +201,36 @@ function visitScope(actor: AuthenticatedUser): Prisma.EncounterWhereInput {
           },
         },
       };
+}
+
+function patientEncounterFilter(
+  familyId: string,
+  patientId: string,
+): Prisma.EncounterWhereInput {
+  return {
+    contract: { familyId },
+    OR: [
+      { participants: { some: { patientId } } },
+      { clinicalEmrs: { some: { patientId } } },
+    ],
+  };
+}
+
+export function timelineVisitScope(
+  actor: AuthenticatedUser,
+  familyId: string,
+  patientId: string,
+): Prisma.EncounterWhereInput {
+  const roleFilter: Prisma.EncounterWhereInput =
+    actor.role === 'DOCTOR'
+      ? {
+          OR: [
+            doctorVisitScope(actor.id),
+            { clinicalEmrs: { some: { patientId, isFinalized: true } } },
+          ],
+        }
+      : visitScope(actor);
+  return { AND: [roleFilter, patientEncounterFilter(familyId, patientId)] };
 }
 
 function documentScope(
@@ -253,16 +385,7 @@ export class MedicalBooksService {
     const scope = visitScope(actor);
     const rows = await this.prisma.encounter.findMany({
       where: {
-        AND: [
-          scope,
-          {
-            contract: { familyId },
-            OR: [
-              { participants: { some: { patientId } } },
-              { clinicalEmrs: { some: { patientId } } },
-            ],
-          },
-        ],
+        AND: [scope, patientEncounterFilter(familyId, patientId)],
       },
       select: {
         ...visitSelect,
@@ -323,6 +446,109 @@ export class MedicalBooksService {
       patientId,
     );
     return patient.documents.map((record) => documentInfo(patientId, record));
+  }
+
+  async patientTimeline(
+    actor: AuthenticatedUser,
+    familyId: string,
+    patientId: string,
+    query: { cursor?: string; limit: number },
+  ) {
+    const cursor = decodeTimelineCursor(query.cursor);
+    const patient = await this.prisma.patient.findFirst({
+      where: documentScope(actor, familyId, patientId),
+      select: { id: true },
+    });
+    if (!patient) {
+      throw new NotFoundException(
+        'Không tìm thấy sổ khám của thành viên này.',
+      );
+    }
+
+    const visitScopeWhere = timelineVisitScope(actor, familyId, patientId);
+    const take = query.limit + 1;
+
+    const [encounters, prescriptions, documents] = await Promise.all([
+      this.prisma.encounter.findMany({
+        where: { AND: [visitScopeWhere, encounterKeyset(cursor)] },
+        select: {
+          id: true,
+          encounterType: true,
+          scheduledDate: true,
+          scheduledTime: true,
+          doctor: { select: { doctorName: true, userId: true } },
+          clinicalEmrs: {
+            where: { patientId },
+            select: { isFinalized: true, icd10Diagnosis: true },
+            take: 1,
+          },
+        },
+        orderBy: [
+          { scheduledDate: 'desc' },
+          { scheduledTime: 'desc' },
+          { id: 'desc' },
+        ],
+        take,
+      }),
+      this.prisma.prescription.findMany({
+        where: {
+          AND: [
+            { clinicalEmr: { patientId, encounter: visitScopeWhere } },
+            actor.role === 'DOCTOR'
+              ? { status: { in: ['ISSUED', 'EXPIRED'] } }
+              : { recipientUserId: actor.id },
+            dateTimeKeyset('createdAt', cursor),
+          ],
+        },
+        select: {
+          id: true,
+          prescriptionCode: true,
+          createdAt: true,
+          clinicalEmr: {
+            select: {
+              encounterId: true,
+              encounter: {
+                select: {
+                  doctor: { select: { doctorName: true, userId: true } },
+                },
+              },
+            },
+          },
+        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take,
+      }),
+      this.prisma.patientDocument.findMany({
+        where: { patientId, ...dateKeyset('recordedDate', cursor) },
+        select: documentSelect,
+        orderBy: [{ recordedDate: 'desc' }, { id: 'desc' }],
+        take,
+      }),
+    ]);
+
+    await writeBusinessAudit(
+      this.prisma,
+      actor.id,
+      'READ_PATIENT_TIMELINE',
+      'Patient',
+      patientId,
+    );
+
+    const merged = mergeTimelineEvents(
+      [
+        encounters.map((row) => visitEvent(actor, row)),
+        prescriptions.map((row) => prescriptionEvent(actor, row)),
+        documents.map((record) => documentEvent(patientId, record)),
+      ],
+      query.limit,
+    );
+    return {
+      items: merged.items.map((item) => ({
+        ...item,
+        occurredAt: item.occurredAt.toISOString(),
+      })),
+      nextCursor: merged.nextCursor,
+    };
   }
 
   async uploadDocument(
