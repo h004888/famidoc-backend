@@ -9,6 +9,7 @@ import {
   type QuoteOptions,
 } from './doctor-pricing';
 import type { CarePackageQuote } from '../entities/care-package-quote.entity';
+import { maxTotalVisitsFor } from '../rules/care-package-rules';
 
 // Hàm tính độc lập: không ghi dữ liệu, không gọi SePay và không kích hoạt gói.
 export function calculateCarePackageQuote(
@@ -72,15 +73,29 @@ export function calculateCarePackageQuote(
   const totalPrice = basePrice + additionalTotal + doctorTotal + extraTotal;
   const quotas = structuredClone(carePackage.quotas);
   quotas.homeVisits += extraVisits;
+  // S4 lúc mua: lượt nhà mua thêm không được đẩy tổng lượt vượt trần của kỳ hạn.
+  if (
+    extraVisits > 0 &&
+    quotas.homeVisits + (carePackage.videoQuotaPolicy === 'CONTRACT' ? 0 : quotas.videoConsultations) >
+      maxTotalVisitsFor(carePackage.durationMonths)
+  )
+    throw new BadRequestException(
+      `Mua thêm ${extraVisits} lượt nhà sẽ vượt trần ${maxTotalVisitsFor(carePackage.durationMonths)} lượt của kỳ hạn.`,
+    );
   if (carePackage.videoQuotaPolicy === 'CONTRACT') {
+    // S3: video thỏa thuận cộng lượt nhà không vượt trần 7 lượt/tháng của kỳ hạn.
+    const videoCap = Math.max(
+      0,
+      maxTotalVisitsFor(carePackage.durationMonths) - quotas.homeVisits,
+    );
     if (
       options?.videoConsultations !== undefined &&
       (!Number.isInteger(options.videoConsultations) ||
         options.videoConsultations < 1 ||
-        options.videoConsultations > 100_000)
+        options.videoConsultations > videoCap)
     )
       throw new BadRequestException(
-        'Số lượt video thỏa thuận phải từ 1 đến 100.000.',
+        `Số lượt video thỏa thuận phải từ 1 đến ${videoCap}.`,
       );
     quotas.videoConsultations = options?.videoConsultations ?? 0;
   } else if (

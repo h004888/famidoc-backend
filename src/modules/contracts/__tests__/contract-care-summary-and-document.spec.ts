@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ContractsServiceImpl } from '../services/impl/contracts.service.impl';
+import { SlotLedgerService } from '../../scheduling/slot-ledger.service';
 import { ContractsController } from '../controllers/contracts.controller';
 import { ContractDocumentRendererService } from '../services/contract-document-renderer.service';
 import {
@@ -236,7 +237,8 @@ describe('Care Needs Summary & Document API (Task 6)', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ContractsController],
       providers: [
-        {
+        { provide: SlotLedgerService, useValue: undefined },
+          {
           provide: CONTRACTS_SERVICE_TOKEN,
           useClass: ContractsServiceImpl,
         },

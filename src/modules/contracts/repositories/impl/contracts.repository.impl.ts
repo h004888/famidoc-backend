@@ -35,6 +35,9 @@ export class ContractsRepositoryImpl implements IContractsRepository {
 }
 export class PrismaContractsSession implements ContractsSession {
   constructor(private readonly tx: Prisma.TransactionClient) {}
+  getTx(): Prisma.TransactionClient {
+    return this.tx;
+  }
   async findContractForUpdate(id: string) {
     // Mọi thay đổi của cùng hợp đồng đi lần lượt, tránh hai phụ lục cùng tính theo dữ liệu cũ.
     await this.tx
@@ -55,6 +58,21 @@ export class PrismaContractsSession implements ContractsSession {
       where: { familyId, id: { not: exceptId }, contractStatus: 'ACTIVE' },
       select: { id: true },
     }));
+  }
+  async findOpenContractForFamily(familyId: string, exceptId?: string) {
+    // Khóa dòng gia đình để hai lần mua đồng thời không cùng qua được kiểm tra.
+    await this.tx
+      .$queryRaw`SELECT id FROM family_units WHERE id = ${familyId}::uuid FOR UPDATE`;
+    return this.tx.medicalContract.findFirst({
+      where: {
+        familyId,
+        ...(exceptId ? { id: { not: exceptId } } : {}),
+        contractStatus: {
+          in: ['PENDING_APPROVAL', 'PENDING_PAYMENT', 'ACTIVE'],
+        },
+      },
+      select: { id: true, contractStatus: true },
+    });
   }
   findOpenUpgrade(sourceId: string) {
     return this.tx.medicalContract.findFirst({
@@ -121,6 +139,23 @@ export class PrismaContractsSession implements ContractsSession {
           : {}),
       },
     });
+    if (status === 'EXPIRED' || status === 'TERMINATED') {
+      const vnNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
+      const todayDate = new Date(
+        Date.UTC(vnNow.getUTCFullYear(), vnNow.getUTCMonth(), vnNow.getUTCDate()),
+      );
+      await this.tx.encounter?.updateMany?.({
+        where: {
+          contractId: id,
+          scheduledDate: { gte: todayDate },
+          encounterStatus: { in: ['REQUESTED', 'CONFIRMED'] },
+        },
+        data: {
+          encounterStatus: 'CANCELLED',
+          cancelReason: reason ?? `Hợp đồng chuyển trạng thái ${status}`,
+        },
+      });
+    }
   }
   async refreshDoctorPanel(doctorId: string) {
     await this.tx
@@ -321,30 +356,15 @@ export class PrismaContractsSession implements ContractsSession {
           exceptContractId,
         }),
       });
-      return { doctor, activeAndHeldCount, usedMonthlyHomeSlots: 0 };
+      return { doctor, activeAndHeldCount };
     }
-    const activeAndHeldContracts = await this.tx.medicalContract.findMany({
+    const activeAndHeldCount = await this.tx.medicalContract.count({
       where: buildActiveAndHeldWhere(doctorId, {
         now: new Date(),
         exceptContractId,
       }),
-      select: {
-        servicePackage: {
-          select: {
-            periodicVisitsQuota: true,
-            durationMonths: true,
-          },
-        },
-      },
     });
-    const activeAndHeldCount = activeAndHeldContracts.length;
-    const usedMonthlyHomeSlots = activeAndHeldContracts.reduce((sum, c) => {
-      const visits = Math.max(0, Number(c.servicePackage?.periodicVisitsQuota ?? 0));
-      if (visits === 0) return sum;
-      const months = Math.max(1, Number(c.servicePackage?.durationMonths ?? 1));
-      return sum + Math.ceil(visits / months);
-    }, 0);
-    return { doctor, activeAndHeldCount, usedMonthlyHomeSlots };
+    return { doctor, activeAndHeldCount };
   }
 
   findMatchingSessionById(id: string) {

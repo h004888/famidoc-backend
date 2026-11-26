@@ -6,6 +6,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
   Query,
   Req,
   StreamableFile,
@@ -33,6 +34,8 @@ import {
   FamilyPrescriptionsDto,
   FamilyPrescriptionDateQuery,
   PrescriptionPageQuery,
+  SaveVisitDraftDto,
+  TimelineQuery,
   UploadBookDocumentDto,
 } from '../dtos/share-prescription.dto';
 import { MedicalBooksService } from '../services/medical-books.service';
@@ -116,6 +119,18 @@ export class MedicalBooksController {
     return this.books.patientDocuments(req.user, familyId, patientId);
   }
 
+  @Get('families/:familyId/patients/:patientId/timeline')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({ summary: 'Dòng thời gian sức khỏe của từng thành viên' })
+  patientTimeline(
+    @Req() req: AuthenticatedRequest,
+    @Param('familyId', ParseUUIDPipe) familyId: string,
+    @Param('patientId', ParseUUIDPipe) patientId: string,
+    @Query() query: TimelineQuery,
+  ) {
+    return this.books.patientTimeline(req.user, familyId, patientId, query);
+  }
+
   @Post('families/:familyId/patients/:patientId/documents')
   @Roles('FAMILY_REP')
   @Header('Cache-Control', 'private, no-store')
@@ -192,6 +207,20 @@ export class MedicalBooksController {
     @Query('patientId') patientId?: string,
   ) {
     return this.books.visitDetail(req.user, id, patientId);
+  }
+
+  @Put('visits/:id/draft')
+  @Roles('DOCTOR')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({
+    summary: 'Bác sĩ lưu nháp nội dung khám từng bước cho một thành viên',
+  })
+  saveDraft(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SaveVisitDraftDto,
+  ) {
+    return this.prescriptions.saveVisitDraft(req.user, id, dto);
   }
 
   @Post('visits/:id/confirm')

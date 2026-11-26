@@ -106,10 +106,17 @@ export type ChangeAddendum = Prisma.ContractAddendumGetPayload<{
 }>;
 export const CONTRACTS_REPOSITORY_TOKEN = Symbol('IContractsRepository');
 export interface ContractsSession {
+  /** Transaction client của phiên hiện tại (dùng cho sổ cái ca khám). */
+  getTx?(): Prisma.TransactionClient;
   findContractForUpdate(id: string): Promise<ChangeContract | null>;
   findPackage(id: string): Promise<ServicePackage | null>;
   countFamilyMembers(familyId: string): Promise<number>;
   hasOtherActiveContract(familyId: string, exceptId: string): Promise<boolean>;
+  /** Khóa dòng gia đình rồi tìm hợp đồng đang mở (ACTIVE/PENDING_*) — luật 1 gia đình chỉ 1 gói. */
+  findOpenContractForFamily?(
+    familyId: string,
+    exceptId?: string,
+  ): Promise<{ id: string; contractStatus: string } | null>;
   findOpenUpgrade(sourceId: string): Promise<ChangeContract | null>;
   findAddendum(id: string): Promise<ChangeAddendum | null>;
   findAddendumByKey(key: string): Promise<ContractAddendum | null>;
@@ -174,7 +181,6 @@ export interface ContractsSession {
   ): Promise<{
     doctor: any;
     activeAndHeldCount: number;
-    usedMonthlyHomeSlots?: number;
   } | null>;
   findMatchingSessionById?(id: string): Promise<any | null>;
   markMatchingSessionConfirmed?(id: string, contractId: string): Promise<void>;

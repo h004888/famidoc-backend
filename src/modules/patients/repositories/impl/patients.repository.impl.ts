@@ -576,6 +576,7 @@ export class PatientsRepositoryImpl implements IPatientsRepository {
       where: {
         patientId,
         recordedAt: { gte: sinceDate },
+        OR: [{ emrId: null }, { clinicalEmr: { isFinalized: true } }],
       },
       orderBy: { recordedAt: 'desc' },
     });

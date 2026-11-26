@@ -149,4 +149,24 @@ describe('PatientsRepositoryImpl - atomic memberCount lock & metadata', () => {
       skipDuplicates: true,
     });
   });
+
+  describe('findVitalSignsByPatientId', () => {
+    it('lọc bỏ sinh hiệu gắn trang khám chưa chốt khỏi danh sách của gia đình', async () => {
+      const findMany = jest.fn().mockResolvedValue([]);
+      const prisma = { vitalSign: { findMany } } as any;
+      const repo = new PatientsRepositoryImpl(prisma);
+      const since = new Date('2026-11-01T00:00:00.000Z');
+
+      await repo.findVitalSignsByPatientId('pat-1', since);
+
+      expect(findMany).toHaveBeenCalledWith({
+        where: {
+          patientId: 'pat-1',
+          recordedAt: { gte: since },
+          OR: [{ emrId: null }, { clinicalEmr: { isFinalized: true } }],
+        },
+        orderBy: { recordedAt: 'desc' },
+      });
+    });
+  });
 });

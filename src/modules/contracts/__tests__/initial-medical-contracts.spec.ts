@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ContractsServiceImpl } from '../services/impl/contracts.service.impl';
+import { SlotLedgerService } from '../../scheduling/slot-ledger.service';
 import {
   CONTRACTS_REPOSITORY_TOKEN,
   IContractsRepository,
@@ -158,6 +159,7 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: SlotLedgerService, useValue: undefined },
         ContractsServiceImpl,
         {
           provide: CONTRACTS_REPOSITORY_TOKEN,
@@ -540,7 +542,6 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
             doctorId: 'doc-1',
             memberCount: 3,
           },
-          '127.0.0.1',
         ),
       ).rejects.toThrow(BadRequestException);
     });
@@ -556,7 +557,6 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
             memberCount: 3,
             homeVisitAddress: 'Chưa cập nhật địa chỉ',
           },
-          '127.0.0.1',
         ),
       ).rejects.toThrow(BadRequestException);
     });
@@ -577,7 +577,6 @@ describe('ContractsServiceImpl - Initial 4-Party Medical Contracts (UC-16)', () 
           memberCount: 3,
           homeVisitAddress: 'Số 10 Nguyễn Trãi, Phường Thượng Đình, Thành phố Hà Nội',
         },
-        '127.0.0.1',
       );
 
       expect(sessionMock.createMedicalContract).toHaveBeenCalledWith(

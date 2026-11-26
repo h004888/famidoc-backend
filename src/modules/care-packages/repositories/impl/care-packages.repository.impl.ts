@@ -19,6 +19,7 @@ import {
   DEMO_CARE_PACKAGE_CODES,
   DEMO_CARE_PACKAGE_IDS,
   type CarePackagesListOptions,
+  type CarePackageAuditEntry,
   type CarePackagesPage,
   type CarePackagesRepository,
 } from '../interfaces/care-packages.repository.interface';
@@ -107,6 +108,19 @@ export class CarePackagesRepositoryImpl implements CarePackagesRepository {
         orderBy,
       });
       return { items: rows.map(toEntity), total, page, limit };
+    });
+  }
+
+  async recordAudit(entry: CarePackageAuditEntry): Promise<void> {
+    await this.prisma.auditLog.create({
+      data: {
+        actorUserId: entry.actorUserId ?? null,
+        action: entry.action,
+        resourceName: 'ServicePackage',
+        resourceId: entry.packageId,
+        clientIp: entry.clientIp?.slice(0, 45) ?? 'unknown',
+        details: entry.details as Prisma.InputJsonValue,
+      },
     });
   }
 

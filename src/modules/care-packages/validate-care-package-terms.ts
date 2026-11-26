@@ -1,5 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
 import type { CarePackageTerms } from './entities/care-package.entity';
+import {
+  assertNoBlockingFindings,
+  evaluateCarePackageRules,
+} from './rules/care-package-rules';
 
 export function validateCarePackageTerms(terms: CarePackageTerms): void {
   // DTO kiểm tra từng trường; hàm này kiểm tra quan hệ nghiệp vụ giữa các trường.
@@ -35,11 +39,6 @@ export function validateCarePackageTerms(terms: CarePackageTerms): void {
       'A package must include at least one consultation or visit',
     );
   }
-  // 1 gia đình tối đa 1 lượt khám tại nhà/ngày; 1 tháng tối đa ~20 ngày làm việc an toàn (có buffer).
-  const durationMonths = Math.max(1, terms.durationMonths ?? 1);
-  if (Math.ceil(terms.quotas.homeVisits / durationMonths) > 20) {
-    throw new BadRequestException(
-      'Số lượt Khám tại nhà trung bình mỗi tháng của gói không được vượt quá 20 buổi/tháng.',
-    );
-  }
+  // Năng lực xếp lịch (S1/S3) và khung giá (P1/P3): mọi lỗi mức BLOCK đều chặn lưu/publish.
+  assertNoBlockingFindings(evaluateCarePackageRules(terms));
 }

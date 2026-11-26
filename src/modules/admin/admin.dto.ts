@@ -104,6 +104,21 @@ export class AdminAccountStatusDto {
   reason!: string;
 }
 
+// Tỷ lệ chia doanh thu mặc định cho hợp đồng B2B mới: CSYT + nền tảng luôn bằng 100%.
+export class AdminUpdateRevenueConfigDto {
+  @ApiProperty({ minimum: 50, maximum: 95, example: 85, description: 'Phần trăm doanh thu thuộc cơ sở y tế' })
+  @IsInt()
+  @Min(50)
+  @Max(95)
+  facilityRevenueRate!: number;
+
+  @ApiProperty({ minimum: 5, maximum: 50, example: 15, description: 'Phần trăm hoa hồng nền tảng' })
+  @IsInt()
+  @Min(5)
+  @Max(50)
+  platformCommissionRate!: number;
+}
+
 export class AdminUpdateDoctorPanelCapacityDto {
   @ApiProperty({ minimum: 1, maximum: 100, example: 5 })
   @IsInt()

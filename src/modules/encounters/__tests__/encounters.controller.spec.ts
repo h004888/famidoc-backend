@@ -33,7 +33,9 @@ describe('EncountersController', () => {
       finalizeCadenceSchedule: jest.fn().mockResolvedValue({ finalizedCount: 4, encounters: [] }),
       confirmCadenceSchedule: jest.fn().mockResolvedValue({ confirmedCount: 4, encounters: [] }),
       adjustCadenceMilestone: jest.fn().mockResolvedValue({ id: 'enc-1' }),
-    };
+      completeEncounter: jest.fn().mockResolvedValue({ id: 'enc-1', encounterStatus: 'COMPLETED' }),
+      updateParticipantAttendance: jest.fn().mockResolvedValue({ patientId: 'pat-1', attendanceStatus: 'ABSENT' }),
+    } as any;
 
     controller = new EncountersController(service);
   });
@@ -125,5 +127,20 @@ describe('EncountersController', () => {
       triggeredBy: req.user.id,
       force: false,
     });
+
+    await (controller as any).completeEncounter(req, 'enc-1', { lateCompletionReason: 'Lý do trễ' });
+    expect((service as any).completeEncounter).toHaveBeenCalledWith(req.user, 'enc-1', {
+      lateCompletionReason: 'Lý do trễ',
+    });
+
+    await (controller as any).updateParticipantAttendance(req, 'enc-1', 'pat-1', {
+      attendanceStatus: 'ABSENT',
+    });
+    expect((service as any).updateParticipantAttendance).toHaveBeenCalledWith(
+      req.user,
+      'enc-1',
+      'pat-1',
+      { attendanceStatus: 'ABSENT' },
+    );
   });
 });

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { CreateFourPartyContractDto } from '../dtos/create-medical-contract.dto';
 import { ContractsServiceImpl } from '../services/impl/contracts.service.impl';
+import { SlotLedgerService } from '../../scheduling/slot-ledger.service';
 import { ContractsController } from '../controllers/contracts.controller';
 import {
   CONTRACTS_REPOSITORY_TOKEN,
@@ -204,6 +205,7 @@ describe('Four-Party Contract & Doctor Assignment (UC-16, UC-23, SD-16, SD-23)',
 
     const serviceModule: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: SlotLedgerService, useValue: undefined },
         ContractsServiceImpl,
         {
           provide: CONTRACTS_REPOSITORY_TOKEN,

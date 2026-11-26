@@ -1,5 +1,6 @@
 import { calculateMonthlyInvoiceShares } from '../../pricing/monthly-recognition';
 import { calculateRevenueShares } from '../../pricing/revenue-sharing';
+import { resolvePlatformRatePercent } from '../../pricing/platform-rate';
 import {
   BadRequestException,
   ConflictException,
@@ -52,6 +53,7 @@ function summarizeFacilityBusiness(
     activeContracts,
     paidInvoices,
     packageInvoices,
+    staffingRates,
   }: FacilityBusinessInputs,
   filter?: Pick<RevenueFilter, 'start' | 'end'>,
 ): FacilityBusinessSummary {
@@ -80,7 +82,8 @@ function summarizeFacilityBusiness(
       packageCode,
       packageName: servicePackage.packageName,
     };
-    const shares = calculateRevenueShares(moneyToNumber(invoice.totalPayable), 0);
+    const ratePercent = resolvePlatformRatePercent(staffingRates, invoice.paidAt);
+    const shares = calculateRevenueShares(moneyToNumber(invoice.totalPayable), 0, ratePercent);
     row.packagesSold += 1;
     row.grossVnd += shares.grossVnd;
     row.platformFeeVnd += shares.platformFeeVnd;
@@ -102,7 +105,8 @@ function summarizeFacilityBusiness(
     const contract = invoice.contract;
     if (!contract) continue;
 
-    const shares = calculateRevenueShares(moneyToNumber(invoice.totalPayable), 0);
+    const ratePercent = resolvePlatformRatePercent(staffingRates, invoice.paidAt);
+    const shares = calculateRevenueShares(moneyToNumber(invoice.totalPayable), 0, ratePercent);
     const doctorsMap = new Map<string, ParticipatingDoctorSummary>();
     if (contract.doctor) {
       doctorsMap.set(contract.doctor.id, {
@@ -143,6 +147,7 @@ function summarizeFacilityBusiness(
         ? calculateMonthlyInvoiceShares(
             {
               totalPayable: invoice.totalPayable,
+              platformRatePercent: ratePercent,
               paidAt: invoice.paidAt,
               addendumId: invoice.addendumId ?? null,
               settlementItems: invoice.settlementItems,
@@ -175,9 +180,9 @@ function summarizeFacilityBusiness(
       primaryDoctor: contract.doctor ?? null,
       participatingDoctors,
       packagePriceVnd: shares.grossVnd,
-      platformFeePercent: 15,
+      platformFeePercent: ratePercent,
       platformFeeVnd: shares.platformFeeVnd,
-      facilitySharePercent: 85,
+      facilitySharePercent: Math.round((100 - ratePercent) * 100) / 100,
       facilityShareVnd: shares.facilityShareVnd,
       ...(monthly
         ? {
@@ -580,8 +585,17 @@ export class FinanceServiceImpl implements IFinanceService {
     });
   }
   private getInvoiceShares(invoice: RevenueInvoice, filter: RevenueFilter) {
-    // 15% là phí gộp đã gồm GTGT nếu có. Không trừ VAT toàn gói trước khi tính 85% của CSYT.
-    const shares = calculateMonthlyInvoiceShares(invoice, filter);
+    // Hoa hồng nền tảng theo hợp đồng B2B (mặc định 15%) là phí gộp đã gồm GTGT nếu có. Không trừ VAT toàn gói trước khi tính phần của CSYT.
+    const shares = calculateMonthlyInvoiceShares(
+      {
+        ...invoice,
+        platformRatePercent: resolvePlatformRatePercent(
+          invoice.contract?.facility?.staffingContracts,
+          invoice.paidAt,
+        ),
+      },
+      filter,
+    );
     if (!shares)
       throw new BadRequestException(
         'Hóa đơn không có ngày phục vụ thuộc kỳ này.',

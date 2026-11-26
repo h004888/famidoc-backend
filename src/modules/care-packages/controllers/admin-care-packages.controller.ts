@@ -8,6 +8,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
   UsePipes,
 } from '@nestjs/common';
@@ -21,11 +22,20 @@ import {
 } from '@nestjs/swagger';
 import { CARE_PACKAGES_SERVICE_TOKEN, type ICarePackagesService } from '../services/interfaces/care-packages.service.interface';
 import { carePackagesValidationPipe } from '../care-packages-validation.pipe';
-import { CreateCarePackageDto } from '../dtos/create-care-package.dto';
+import {
+  CarePackageRiskAckDto,
+  CreateCarePackageWithAckDto,
+  ValidateCarePackageDto,
+} from '../dtos/create-care-package.dto';
 import { AdminListCarePackagesDto } from '../dtos/list-care-packages.dto';
-import { UpdateCarePackageDto } from '../dtos/update-care-package.dto';
+import { UpdateCarePackageWithAckDto } from '../dtos/update-care-package.dto';
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../../../core/auth/roles.guard';
+import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
+
+function actionContext(req: AuthenticatedRequest, acknowledgedWarnings?: string[]) {
+  return { actorUserId: req.user?.id, clientIp: req.ip, acknowledgedWarnings };
+}
 
 @ApiTags('Care Packages (Admin)')
 @ApiBearerAuth('JWT-auth')
@@ -45,6 +55,14 @@ export class AdminCarePackagesController {
     return this.service.listAdmin(query);
   }
 
+  @Post('validate')
+  @ApiOperation({ summary: 'Kiểm tra điều khoản gói theo quy tắc xếp lịch và giá (không lưu)' })
+  @ApiBody({ type: ValidateCarePackageDto })
+  @ApiResponse({ status: 201, description: 'Danh sách lỗi chặn, cảnh báo và tải lịch' })
+  validate(@Body() dto: ValidateCarePackageDto) {
+    return this.service.validate(dto);
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Xem chi tiết gói chăm sóc (bao gồm bản nháp/ngừng bán)' })
   @ApiParam({ name: 'id', description: 'UUID của gói chăm sóc' })
@@ -57,26 +75,28 @@ export class AdminCarePackagesController {
 
   @Post()
   @ApiOperation({ summary: 'Tạo và mở bán ngay gói chăm sóc mới' })
-  @ApiBody({ type: CreateCarePackageDto })
+  @ApiBody({ type: CreateCarePackageWithAckDto })
   @ApiResponse({ status: 201, description: 'Gói được tạo thành công và đang mở bán' })
-  @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ' })
-  create(@Body() dto: CreateCarePackageDto) {
+  @ApiResponse({ status: 400, description: 'Dữ liệu không hợp lệ hoặc vi phạm quy tắc xếp lịch/giá' })
+  @ApiResponse({ status: 409, description: 'Có cảnh báo rủi ro cần xác nhận (acknowledgedWarnings)' })
+  create(@Req() req: AuthenticatedRequest, @Body() dto: CreateCarePackageWithAckDto) {
     // Controller chỉ chuyển DTO hợp lệ sang service, không tự tạo ID hay phiên bản.
-    return this.service.create(dto);
+    return this.service.create(dto, actionContext(req));
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Cập nhật trực tiếp thông tin gói chăm sóc theo ID' })
   @ApiParam({ name: 'id', description: 'UUID của gói chăm sóc cần cập nhật' })
-  @ApiBody({ type: UpdateCarePackageDto })
+  @ApiBody({ type: UpdateCarePackageWithAckDto })
   @ApiResponse({ status: 200, description: 'Cập nhật thành công' })
-  @ApiResponse({ status: 409, description: 'Gói đang ngừng bán, cần mở bán lại trước khi chỉnh sửa' })
+  @ApiResponse({ status: 409, description: 'Gói đang ngừng bán, hoặc có cảnh báo rủi ro cần xác nhận' })
   update(
+    @Req() req: AuthenticatedRequest,
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
-    @Body() dto: UpdateCarePackageDto,
+    @Body() dto: UpdateCarePackageWithAckDto,
   ) {
     // Lưu trên đúng gói hiện tại để giữ nguyên ID và số phiên bản.
-    return this.service.update(id, dto);
+    return this.service.update(id, dto, actionContext(req));
   }
 
   @Post(':id/versions')
@@ -92,9 +112,14 @@ export class AdminCarePackagesController {
   @ApiOperation({ summary: 'Xuất bản gói chăm sóc ra công khai (chuyển sang ACTIVE)' })
   @ApiParam({ name: 'id', description: 'UUID của gói cần xuất bản' })
   @ApiResponse({ status: 200, description: 'Xuất bản gói thành công' })
-  publish(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
+  @ApiBody({ type: CarePackageRiskAckDto, required: false })
+  publish(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: CarePackageRiskAckDto,
+  ) {
     // Công bố để gói xuất hiện ở danh mục công khai; không phải thao tác thanh toán.
-    return this.service.publish(id);
+    return this.service.publish(id, actionContext(req, dto?.acknowledgedWarnings));
   }
 
   @Post(':id/reopen')
@@ -102,8 +127,13 @@ export class AdminCarePackagesController {
   @ApiParam({ name: 'id', description: 'UUID của gói cần mở bán lại' })
   @ApiResponse({ status: 201, description: 'Gói được mở bán lại thành công' })
   @ApiResponse({ status: 409, description: 'Trạng thái gói đã thay đổi hoặc đã có phiên bản mới hơn' })
-  reopen(@Param('id', new ParseUUIDPipe({ version: '4' })) id: string) {
-    return this.service.reopen(id);
+  @ApiBody({ type: CarePackageRiskAckDto, required: false })
+  reopen(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: CarePackageRiskAckDto,
+  ) {
+    return this.service.reopen(id, actionContext(req, dto?.acknowledgedWarnings));
   }
 
   @Post(':id/retire')

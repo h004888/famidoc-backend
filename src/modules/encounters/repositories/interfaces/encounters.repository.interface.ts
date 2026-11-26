@@ -72,6 +72,12 @@ export interface EncountersSession {
   createEncounter(data: Prisma.EncounterUncheckedCreateInput): Promise<Encounter>;
   findEncounter(id: string): Promise<EncounterDetail | null>;
   updateEncounter(id: string, data: Prisma.EncounterUncheckedUpdateInput): Promise<Encounter>;
+  upsertParticipantAttendance?(
+    encounterId: string,
+    patientId: string,
+    attendanceStatus: 'PLANNED' | 'EXAMINED' | 'ABSENT',
+    absenceReason?: string | null,
+  ): Promise<unknown>;
   decrementContractQuota(contractId: string, type: EncounterType): Promise<void>;
   holdTelehealthQuota(contractId: string): Promise<void>;
   releaseTelehealthQuota(contractId: string): Promise<void>;

@@ -5,6 +5,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
 import {
@@ -20,6 +21,12 @@ import type { ConfirmEncounterDto } from '../../dtos/confirm-encounter.dto';
 import type { RequestRescheduleDto } from '../../dtos/request-reschedule.dto';
 import type { DecideRescheduleRequestDto } from '../../dtos/decide-reschedule-request.dto';
 import type { ListEncountersQueryDto } from '../../dtos/list-encounters-query.dto';
+import type { CompleteEncounterDto } from '../../dtos/complete-encounter.dto';
+import type { UpdateParticipantAttendanceDto } from '../../dtos/update-participant-attendance.dto';
+import {
+  computeHomeVisitDeadlines,
+  isRecordOverdue,
+} from '../../utils/encounter-session-window.util';
 import {
   EncounterCategory,
   EncounterStatus,
@@ -45,6 +52,95 @@ import {
   type SlotEncounterSummary,
 } from '../../utils/two-slot-schedule.util';
 import { AutoScheduleFirstVisitService } from './auto-schedule-first-visit.service';
+import {
+  SlotLedgerService,
+  type OccupiedSlot,
+  type SlotWindowName,
+} from '../../../scheduling/slot-ledger.service';
+
+export type SlotReasonCode =
+  | 'AVAILABLE'
+  | 'TAKEN'
+  | 'OWN_VISIT'
+  | 'FAMILY_SAME_DAY'
+  | 'DAY_OFF'
+  | 'PAST'
+  | 'OUT_OF_CONTRACT';
+
+export function buildShiftStatus(
+  dayIso: string,
+  slotWindow: SlotWindowName,
+  occupiedMap: Map<string, OccupiedSlot>,
+  ctx: {
+    todayIso: string;
+    isDayOff: boolean;
+    dayOffReason?: string | null;
+    isOutOfContract: boolean;
+    contractId?: string;
+    familyBusyDays: Set<string>;
+  },
+): {
+  available: boolean;
+  reasonCode: SlotReasonCode;
+  label: string;
+  reason: string | null;
+} {
+  if (ctx.isOutOfContract) {
+    return {
+      available: false,
+      reasonCode: 'OUT_OF_CONTRACT',
+      label: 'Ngoài hạn hợp đồng',
+      reason: 'Ngoài hạn hợp đồng',
+    };
+  }
+  if (dayIso <= ctx.todayIso) {
+    return {
+      available: false,
+      reasonCode: 'PAST',
+      label: 'Đã qua',
+      reason: 'Đã qua',
+    };
+  }
+  if (ctx.isDayOff) {
+    return {
+      available: false,
+      reasonCode: 'DAY_OFF',
+      label: 'Ngày nghỉ',
+      reason: ctx.dayOffReason ?? 'Ngày nghỉ',
+    };
+  }
+  const occ = occupiedMap.get(`${dayIso}:${slotWindow}`);
+  if (occ) {
+    if (ctx.contractId && occ.contractId === ctx.contractId) {
+      return {
+        available: false,
+        reasonCode: 'OWN_VISIT',
+        label: 'Lịch của bạn',
+        reason: 'Lịch của bạn',
+      };
+    }
+    return {
+      available: false,
+      reasonCode: 'TAKEN',
+      label: 'Đã có lịch',
+      reason: 'Đã có lịch',
+    };
+  }
+  if (ctx.familyBusyDays.has(dayIso)) {
+    return {
+      available: false,
+      reasonCode: 'FAMILY_SAME_DAY',
+      label: 'Gia đình đã có lượt trong ngày',
+      reason: 'Gia đình đã có lượt trong ngày',
+    };
+  }
+  return {
+    available: true,
+    reasonCode: 'AVAILABLE',
+    label: 'Còn trống',
+    reason: null,
+  };
+}
 
 export const APPOINTMENT_DURATION_MINUTES = 45;
 export const RESCHEDULE_MIN_NOTICE_HOURS = 4;
@@ -189,6 +285,8 @@ export class EncountersServiceImpl implements IEncountersService {
   constructor(
     @Inject(ENCOUNTERS_REPOSITORY_TOKEN)
     private readonly repository: IEncountersRepository,
+    @Inject(SlotLedgerService)
+    private readonly slotLedger?: SlotLedgerService,
   ) {}
 
   async createPeriodicEncounter(actor: AuthenticatedUser, dto: CreatePeriodicEncounterDto) {
@@ -269,6 +367,21 @@ export class EncountersServiceImpl implements IEncountersService {
             }
           : {}),
       });
+
+      const periodicTx = (session as unknown as { tx?: Prisma.TransactionClient }).tx;
+      if (periodicTx && this.slotLedger) {
+        await this.slotLedger.book(periodicTx, {
+          doctorId,
+          contractId: contract.id,
+          date: dto.scheduledDate,
+          slotWindow:
+            Number.parseInt(dto.scheduledTime.split(':')[0] || '8', 10) >= 12
+              ? 'AFTERNOON'
+              : 'MORNING',
+          visitType: dto.encounterType === EncounterType.TELEHEALTH ? 'VIDEO' : 'HOME_VISIT',
+          encounterId: encounter.id,
+        });
+      }
 
       await session.createAuditLog(actor.id, 'CREATE_PERIODIC_ENCOUNTER', encounter.id);
 
@@ -412,6 +525,17 @@ export class EncountersServiceImpl implements IEncountersService {
           : {}),
       });
 
+      if (tx && this.slotLedger) {
+        await this.slotLedger.book(tx, {
+          doctorId: contract.doctorId,
+          contractId: contract.id,
+          date: dto.desiredDate,
+          slotWindow: resolvedSlotWindow,
+          visitType: dto.encounterType === EncounterType.TELEHEALTH ? 'VIDEO' : 'HOME_VISIT',
+          encounterId: encounter.id,
+        });
+      }
+
       await session.createAuditLog(actor.id, 'CREATE_ADHOC_ENCOUNTER', encounter.id);
 
       // Notify attending doctor
@@ -508,6 +632,10 @@ export class EncountersServiceImpl implements IEncountersService {
             encounterStatus: EncounterStatus.CANCELLED,
           });
           await session.releaseTelehealthQuota(encounter.contractId);
+          const declineTx = (session as unknown as { tx?: Prisma.TransactionClient }).tx;
+          if (declineTx && this.slotLedger) {
+            await this.slotLedger.releaseEncounter(declineTx, encounterId);
+          }
           await session.createAuditLog(actor.id, 'DECLINE_TELEHEALTH_ENCOUNTER', encounterId);
           await session.createNotification({
             userId: encounter.contract.familyUnit.representativeUserId,
@@ -681,76 +809,26 @@ export class EncountersServiceImpl implements IEncountersService {
         encounterStatus: EncounterStatus.CANCELLED,
         cancelReason: reason?.trim() || encounter.cancelReason,
       });
+      const tx = (session as unknown as { tx?: Prisma.TransactionClient }).tx;
+      if (tx && this.slotLedger) {
+        await this.slotLedger.releaseEncounter(tx, encounterId);
+      }
       await session.createAuditLog(actor.id, 'CANCEL_ENCOUNTER', encounterId);
       return { ...enrichEncounterWithScheduleMeta(updated), refunded };
     });
   }
 
-  async markOnTheWay(actor: AuthenticatedUser, encounterId: string) {
-    if (!['DOCTOR', 'ADMIN'].includes(actor.role)) {
-      throw new ForbiddenException('Only assigned doctor or admin can mark encounter on the way');
+  private reconcileHomeVisitStatus(
+    hasDoctorCompleted: boolean,
+    hasFamilyConfirmed: boolean,
+  ): EncounterStatus {
+    if (hasDoctorCompleted && hasFamilyConfirmed) {
+      return EncounterStatus.COMPLETED;
     }
-    return this.repository.transaction(async (session) => {
-      const encounter = await session.findEncounter(encounterId);
-      if (!encounter) throw new NotFoundException('Encounter not found');
-      if (actor.role === 'DOCTOR') {
-        const doc = await session.findDoctorByUserId(actor.id);
-        if (!doc || doc.id !== encounter.doctorId) {
-          throw new ForbiddenException('You are not the assigned doctor for this encounter');
-        }
-      }
-      if (encounter.encounterStatus !== EncounterStatus.CONFIRMED) {
-        throw new BadRequestException('Only CONFIRMED encounters can transition to ON_THE_WAY');
-      }
-      const now = new Date();
-      const updated = await session.updateEncounter(encounter.id, {
-        encounterStatus: 'ON_THE_WAY' as EncounterStatus,
-        onTheWayAt: now,
-      } as Prisma.EncounterUncheckedUpdateInput);
-      await session.createAuditLog(actor.id, 'DOCTOR_ON_THE_WAY', encounter.id);
-      await session.createNotification({
-        userId: encounter.contract.familyUnit.representativeUserId,
-        title: 'Bác sĩ đang trên đường đến nhà',
-        content: `Bác sĩ ${encounter.doctor.doctorName} đã bắt đầu di chuyển đến nhà bạn cho lịch khám hôm nay.`,
-        type: 'ENCOUNTER_DOCTOR_ON_THE_WAY',
-        referenceId: encounter.id,
-      });
-      return updated;
-    });
-  }
-
-  async markArrived(actor: AuthenticatedUser, encounterId: string) {
-    if (!['DOCTOR', 'ADMIN'].includes(actor.role)) {
-      throw new ForbiddenException('Only assigned doctor or admin can check in arrival');
+    if (!hasDoctorCompleted && hasFamilyConfirmed) {
+      return 'PENDING_RECORD' as EncounterStatus;
     }
-    return this.repository.transaction(async (session) => {
-      const encounter = await session.findEncounter(encounterId);
-      if (!encounter) throw new NotFoundException('Encounter not found');
-      if (actor.role === 'DOCTOR') {
-        const doc = await session.findDoctorByUserId(actor.id);
-        if (!doc || doc.id !== encounter.doctorId) {
-          throw new ForbiddenException('You are not the assigned doctor for this encounter');
-        }
-      }
-      const statusStr = String(encounter.encounterStatus);
-      if (statusStr !== 'CONFIRMED' && statusStr !== 'ON_THE_WAY') {
-        throw new BadRequestException('Encounter must be CONFIRMED or ON_THE_WAY to check in arrival');
-      }
-      const now = new Date();
-      const updated = await session.updateEncounter(encounter.id, {
-        encounterStatus: 'ARRIVED' as EncounterStatus,
-        arrivedAt: now,
-      } as Prisma.EncounterUncheckedUpdateInput);
-      await session.createAuditLog(actor.id, 'DOCTOR_ARRIVED', encounter.id);
-      await session.createNotification({
-        userId: encounter.contract.familyUnit.representativeUserId,
-        title: 'Bác sĩ đã có mặt tại nhà',
-        content: `Bác sĩ ${encounter.doctor.doctorName} đã check-in tại nhà bạn. Vui lòng mở Lịch Khám để xác nhận 1 chạm.`,
-        type: 'ENCOUNTER_DOCTOR_ARRIVED',
-        referenceId: encounter.id,
-      });
-      return updated;
-    });
+    return EncounterStatus.CONFIRMED;
   }
 
   private hasReachedScheduledStart(scheduledDate: Date, scheduledTime: Date, now: Date): boolean {
@@ -782,15 +860,15 @@ export class EncountersServiceImpl implements IEncountersService {
         throw new BadRequestException('Chỉ áp dụng xác nhận bác sĩ đến khám cho lịch khám tại nhà.');
       }
       const statusStr = String(encounter.encounterStatus);
-      if (statusStr !== 'ARRIVED' && statusStr !== 'ON_THE_WAY' && statusStr !== 'CONFIRMED') {
+      if (statusStr !== 'CONFIRMED') {
         throw new BadRequestException('Ca khám không ở trạng thái có thể xác nhận.');
       }
       const now = new Date();
       if (!this.hasReachedScheduledStart(encounter.scheduledDate, encounter.scheduledTime, now)) {
         throw new BadRequestException('Chưa đến giờ hẹn khám, chưa thể xác nhận.');
       }
-      const hasFinalizedEmr = (encounter.clinicalEmrs ?? []).some((emr) => emr.isFinalized);
-      const nextStatus = hasFinalizedEmr ? EncounterStatus.COMPLETED : EncounterStatus.PENDING_RECORD;
+      const hasDoctorCompleted = Boolean((encounter as any).doctorCompletedAt);
+      const nextStatus = this.reconcileHomeVisitStatus(hasDoctorCompleted, true);
       const updated = await session.updateEncounter(encounter.id, {
         encounterStatus: nextStatus,
         familyConfirmedArrivalAt: now,
@@ -800,7 +878,7 @@ export class EncountersServiceImpl implements IEncountersService {
         await session.createNotification({
           userId: encounter.doctor.user.id,
           title: 'Gia đình đã xác nhận bác sĩ có mặt',
-          content: hasFinalizedEmr
+          content: hasDoctorCompleted
             ? 'Đại diện gia đình đã xác nhận bạn có mặt tại nhà và hồ sơ khám đã hoàn tất.'
             : 'Đại diện gia đình đã xác nhận bạn có mặt tại nhà. Vui lòng hoàn tất ghi bệnh án và đơn thuốc.',
           type: 'ENCOUNTER_ARRIVAL_CONFIRMED',
@@ -808,6 +886,160 @@ export class EncountersServiceImpl implements IEncountersService {
         });
       }
       return updated;
+    });
+  }
+
+  async completeEncounter(
+    actor: AuthenticatedUser,
+    encounterId: string,
+    dto: CompleteEncounterDto,
+  ) {
+    if (!['DOCTOR', 'ADMIN'].includes(actor.role)) {
+      throw new ForbiddenException('Chỉ bác sĩ phụ trách hoặc quản trị viên mới có thể hoàn tất ca khám.');
+    }
+    return this.repository.transaction(async (session) => {
+      const encounter = await session.findEncounter(encounterId);
+      if (!encounter) throw new NotFoundException('Không tìm thấy ca khám.');
+      if (actor.role === 'DOCTOR') {
+        const doc = await session.findDoctorByUserId(actor.id);
+        if (!doc || doc.id !== encounter.doctorId) {
+          throw new ForbiddenException('Bạn không phải bác sĩ phụ trách ca khám này.');
+        }
+      }
+      if (encounter.encounterType !== EncounterType.HOME_VISIT) {
+        throw new BadRequestException('Chỉ áp dụng hoàn tất cấp hộ gia đình cho lịch khám tại nhà.');
+      }
+      const statusStr = String(encounter.encounterStatus);
+      if (['CANCELLED', 'NO_SHOW', 'DISPUTED'].includes(statusStr)) {
+        throw new BadRequestException('Ca khám đã bị khóa hoặc hủy, không thể hoàn tất.');
+      }
+
+      const pendingParticipants = (encounter.participants ?? []).filter(
+        (p: any) => p.attendanceStatus === 'PLANNED',
+      );
+      if (pendingParticipants.length > 0) {
+        throw new BadRequestException({
+          code: 'ATTENDANCE_PENDING',
+          message: `Còn ${pendingParticipants.length} thành viên chưa điểm danh (khám hoặc vắng).`,
+        });
+      }
+
+      const examinedParticipants = (encounter.participants ?? []).filter(
+        (p: any) => p.attendanceStatus === 'EXAMINED',
+      );
+      if (examinedParticipants.length === 0) {
+        throw new BadRequestException('Cần ít nhất 1 thành viên được khám và chốt hồ sơ trước khi hoàn tất ca khám.');
+      }
+      const finalizedPatientIds = new Set(
+        (encounter.clinicalEmrs ?? [])
+          .filter((emr: any) => emr.isFinalized)
+          .map((emr: any) => emr.patientId),
+      );
+      const missingFinalized = examinedParticipants.some(
+        (p: any) => !finalizedPatientIds.has(p.patientId),
+      );
+      if (missingFinalized) {
+        throw new BadRequestException('Vẫn còn thành viên tham gia khám chưa được chốt hồ sơ.');
+      }
+
+      const now = new Date();
+      const deadlines = computeHomeVisitDeadlines({
+        scheduledDate: encounter.scheduledDate,
+        scheduledTime: encounter.scheduledTime,
+        slotWindow: encounter.slotWindow,
+      });
+      const overdue =
+        isRecordOverdue(deadlines, now) || Boolean((encounter as any).recordOverdueAt);
+      const trimmedReason = dto?.lateCompletionReason?.trim() || '';
+      if (overdue && !trimmedReason) {
+        throw new BadRequestException('Vui lòng nhập lý do nộp hồ sơ trễ.');
+      }
+
+      const hasFamilyConfirmed = Boolean(encounter.familyConfirmedArrivalAt);
+      const nextStatus = this.reconcileHomeVisitStatus(true, hasFamilyConfirmed);
+
+      const updateData: Record<string, unknown> = {
+        doctorCompletedAt: now,
+        encounterStatus: nextStatus,
+      };
+      if (overdue) {
+        updateData.lateCompletionReason = trimmedReason;
+        updateData.recordOverdueAt = (encounter as any).recordOverdueAt ?? now;
+      }
+
+      const updated = await session.updateEncounter(
+        encounter.id,
+        updateData as Prisma.EncounterUncheckedUpdateInput,
+      );
+
+      await session.createAuditLog(
+        actor.id,
+        'COMPLETE_HOME_VISIT_ENCOUNTER',
+        encounter.id,
+      );
+
+      await session.createNotification({
+        userId: encounter.contract.familyUnit.representativeUserId,
+        title: hasFamilyConfirmed
+          ? 'Buổi khám đã hoàn tất'
+          : 'Bác sĩ đã hoàn tất buổi khám',
+        content: hasFamilyConfirmed
+          ? 'Bác sĩ đã hoàn tất toàn bộ buổi khám và bệnh án. Bạn có thể xem lại sổ khám và gửi đánh giá bác sĩ.'
+          : 'Bác sĩ đã hoàn tất buổi khám và gửi bệnh án. Vui lòng xác nhận 1 chạm trong vòng 48 giờ để hoàn tất hồ sơ.',
+        type: 'ENCOUNTER_COMPLETED',
+        referenceId: encounter.id,
+      });
+
+      return updated;
+    });
+  }
+
+  async updateParticipantAttendance(
+    actor: AuthenticatedUser,
+    encounterId: string,
+    patientId: string,
+    dto: UpdateParticipantAttendanceDto,
+  ) {
+    if (!['DOCTOR', 'ADMIN'].includes(actor.role)) {
+      throw new ForbiddenException('Chỉ bác sĩ phụ trách hoặc quản trị viên mới có thể cập nhật trạng thái tham gia.');
+    }
+    return this.repository.transaction(async (session) => {
+      const encounter = await session.findEncounter(encounterId);
+      if (!encounter) throw new NotFoundException('Không tìm thấy ca khám.');
+      if (actor.role === 'DOCTOR') {
+        const doc = await session.findDoctorByUserId(actor.id);
+        if (!doc || doc.id !== encounter.doctorId) {
+          throw new ForbiddenException('Bạn không phải bác sĩ phụ trách ca khám này.');
+        }
+      }
+      if (
+        ['DISPUTED', 'NO_SHOW', 'CANCELLED', 'COMPLETED'].includes(
+          String(encounter.encounterStatus),
+        )
+      ) {
+        throw new ConflictException(
+          'Ca khám đã kết thúc hoặc bị khóa, không thể đổi điểm danh.',
+        );
+      }
+      const existingEmr = (encounter.clinicalEmrs ?? []).find(
+        (emr: any) => emr.patientId === patientId,
+      );
+      if (existingEmr?.isFinalized) {
+        throw new ConflictException('Thành viên đã chốt hồ sơ khám, không thể thay đổi trạng thái tham gia.');
+      }
+      if (typeof session.upsertParticipantAttendance !== 'function') {
+        throw new BadRequestException('Không hỗ trợ cập nhật trạng thái tham gia.');
+      }
+      const absenceReason =
+        dto.attendanceStatus === 'ABSENT'
+          ? (dto.absenceReason?.trim() ?? null)
+          : null;
+      return session.upsertParticipantAttendance(
+        encounterId,
+        patientId,
+        dto.attendanceStatus,
+        absenceReason,
+      );
     });
   }
 
@@ -949,6 +1181,25 @@ export class EncountersServiceImpl implements IEncountersService {
         );
       }
 
+      const targetSlot = mapTimeToSlotWindow(proposedTime);
+      if (tx && this.slotLedger) {
+        const occupied = await this.slotLedger.listOccupied(
+          tx,
+          encounter.doctorId,
+          dto.proposedDate,
+          dto.proposedDate,
+          { excludeContractId: encounter.contractId },
+        );
+        if (occupied.some((s) => s.slotWindow === targetSlot)) {
+          throw new ConflictException({
+            code: 'SLOT_TAKEN',
+            message: 'Ca này vừa có người đặt, vui lòng chọn ca khác',
+            date: dto.proposedDate,
+            slotWindow: targetSlot,
+          });
+        }
+      }
+
       const isHomeVisit = encounter.encounterType === EncounterType.HOME_VISIT;
       if (isHomeVisit && tx) {
         // BR-2 (Soft-lock) & BR-5 (Cho phép đổi khung trong cùng 1 ngày bằng cách loại trừ encounter.id)
@@ -999,25 +1250,26 @@ export class EncountersServiceImpl implements IEncountersService {
           );
         }
 
-        const combinedSlots: SlotEncounterSummary[] = [
-          ...dayEncounters.map((e) => ({
-            encounterType: e.encounterType,
-            scheduledTime: e.scheduledTime,
-          })),
-          ...pendingSoftLocks.map((r) => ({
-            encounterType: r.encounter.encounterType,
-            scheduledTime: r.proposedTime,
-          })),
-        ];
+        if (!this.slotLedger) {
+          const combinedSlots: SlotEncounterSummary[] = [
+            ...dayEncounters.map((e) => ({
+              encounterType: e.encounterType,
+              scheduledTime: e.scheduledTime,
+            })),
+            ...pendingSoftLocks.map((r) => ({
+              encounterType: r.encounter.encounterType,
+              scheduledTime: r.proposedTime,
+            })),
+          ];
 
-        const targetSlot = mapTimeToSlotWindow(proposedTime);
-        const slotCheck = evaluateSlotWindowAvailability(targetSlot, combinedSlots);
-        if (!slotCheck.available) {
-          throw new ConflictException(
-            slotCheck.reason || 'Khung giờ này Bác sĩ đã kín hoặc đang được tạm giữ chờ xác nhận',
-          );
+          const slotCheck = evaluateSlotWindowAvailability(targetSlot, combinedSlots);
+          if (!slotCheck.available) {
+            throw new ConflictException(
+              slotCheck.reason || 'Khung giờ này Bác sĩ đã kín hoặc đang được tạm giữ chờ xác nhận',
+            );
+          }
         }
-      } else {
+      } else if (!this.slotLedger) {
         const conflict = await this.checkEncounterSlotConflict(
           session,
           encounter.doctorId,
@@ -1240,21 +1492,30 @@ export class EncountersServiceImpl implements IEncountersService {
         return partial;
       }
 
-      // Both Family & Doctor agreed -> Verify slot is still free on platform
-      const conflict = await this.checkEncounterSlotConflict(
-        session,
-        encounter.doctorId,
-        request.proposedDate,
-        request.proposedTime,
-        encounter.id,
-      );
-      if (conflict.hasConflict) {
-        throw new ConflictException(conflict.reason);
+      const targetSlotWindow = mapTimeToSlotWindow(request.proposedTime);
+      if (tx && this.slotLedger) {
+        await this.slotLedger.move(tx, encounter.id, {
+          date: request.proposedDate.toISOString().slice(0, 10),
+          slotWindow: targetSlotWindow,
+        });
+      } else {
+        // Both Family & Doctor agreed -> Verify slot is still free on platform
+        const conflict = await this.checkEncounterSlotConflict(
+          session,
+          encounter.doctorId,
+          request.proposedDate,
+          request.proposedTime,
+          encounter.id,
+        );
+        if (conflict.hasConflict) {
+          throw new ConflictException(conflict.reason);
+        }
       }
 
       await session.updateEncounter(encounter.id, {
         scheduledDate: request.proposedDate,
         scheduledTime: request.proposedTime,
+        slotWindow: targetSlotWindow,
         rescheduleCount: { increment: 1 },
         reminder24hSentAt: null,
         reminder2hSentAt: null,
@@ -1803,8 +2064,22 @@ export class EncountersServiceImpl implements IEncountersService {
         batchSlotsByDay.set(dayKey, existingInBatch);
       }
 
+      const tx = (session as unknown as { tx?: Prisma.TransactionClient }).tx;
       const confirmed = [];
       for (const enc of readyEncounters) {
+        if (tx && this.slotLedger) {
+          const encSlotWindow =
+            (enc.slotWindow as 'MORNING' | 'AFTERNOON' | null) ??
+            mapTimeToSlotWindow(enc.scheduledTime);
+          await this.slotLedger.book(tx, {
+            doctorId: enc.doctorId,
+            contractId,
+            date: enc.scheduledDate.toISOString().slice(0, 10),
+            slotWindow: encSlotWindow,
+            visitType: enc.encounterType === EncounterType.TELEHEALTH ? 'VIDEO' : 'HOME_VISIT',
+            encounterId: enc.id,
+          });
+        }
         await session.decrementContractQuota(contractId, enc.encounterType);
         const up = await session.updateEncounter(enc.id, {
           encounterStatus: EncounterStatus.CONFIRMED,
@@ -1973,7 +2248,7 @@ export class EncountersServiceImpl implements IEncountersService {
     doctorId: string,
     month: string,
     contractId?: string,
-    excludeEncounterId?: string,
+    _excludeEncounterId?: string,
   ) {
     if (!/^\d{4}-\d{2}$/.test(month)) {
       throw new BadRequestException('month must be in YYYY-MM format');
@@ -1982,14 +2257,12 @@ export class EncountersServiceImpl implements IEncountersService {
     const year = Number(yearStr);
     const monthIndex = Number(monthStr) - 1;
     const daysInMonth = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
-    const isDoctorOrAdmin = actor.role === 'DOCTOR' || actor.role === 'ADMIN';
 
     return this.repository.transaction(async (session) => {
       const tx = (session as unknown as { tx?: Prisma.TransactionClient }).tx;
       if (tx) {
         await this.expireStaleRescheduleRequests(tx);
       }
-      let targetFamilyId: string | null = null;
       let contractStartIso: string | null = null;
       let contractEndIso: string | null = null;
       if (contractId && tx) {
@@ -1997,95 +2270,27 @@ export class EncountersServiceImpl implements IEncountersService {
           where: { id: contractId },
           select: { familyId: true, startDate: true, endDate: true },
         });
-        targetFamilyId = c?.familyId ?? null;
         contractStartIso = c?.startDate ? c.startDate.toISOString().slice(0, 10) : null;
         contractEndIso = c?.endDate ? c.endDate.toISOString().slice(0, 10) : null;
       }
 
-      const startDate = new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0, 0));
-      const endDate = new Date(Date.UTC(year, monthIndex, daysInMonth, 23, 59, 59, 999));
+      const firstDayIso = new Date(Date.UTC(year, monthIndex, 1)).toISOString().slice(0, 10);
+      const lastDayIso = new Date(Date.UTC(year, monthIndex, daysInMonth)).toISOString().slice(0, 10);
+      const vnNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
+      const todayIso = vnNow.toISOString().slice(0, 10);
 
-      const [encounters, pendingSoftLocks] = tx
-        ? await Promise.all([
-            tx.encounter.findMany({
-              where: {
-                doctorId,
-                scheduledDate: { gte: startDate, lte: endDate },
-                encounterStatus: {
-                  in: [
-                    EncounterStatus.CONFIRMED,
-                    EncounterStatus.ON_THE_WAY,
-                    EncounterStatus.ARRIVED,
-                    EncounterStatus.IN_PROGRESS,
-                  ],
-                },
-              },
-              select: {
-                id: true,
-                scheduledDate: true,
-                scheduledTime: true,
-                encounterType: true,
-                contract: {
-                  select: {
-                    familyId: true,
-                    familyUnit: {
-                      select: { representativeUser: { select: { fullName: true } } },
-                    },
-                  },
-                },
-              },
-            }),
-            tx.encounterRescheduleRequest.findMany({
-              where: {
-                status: 'PENDING',
-                proposedDate: { gte: startDate, lte: endDate },
-                encounter: {
-                  doctorId,
-                  ...(excludeEncounterId ? { id: { not: excludeEncounterId } } : {}),
-                },
-              },
-              select: {
-                proposedDate: true,
-                proposedTime: true,
-                encounter: { select: { encounterType: true } },
-              },
-            }),
-          ])
-        : [[], []];
+      const occupied =
+        tx && this.slotLedger
+          ? await this.slotLedger.listOccupied(tx, doctorId, firstDayIso, lastDayIso)
+          : [];
 
-      const byDay = new Map<string, SlotEncounterSummary[]>();
+      const occupiedMap = new Map<string, OccupiedSlot>();
       const familyBusyDays = new Set<string>();
-
-      for (const e of encounters) {
-        const dKey = e.scheduledDate.toISOString().slice(0, 10);
-        const list = byDay.get(dKey) ?? [];
-        const repName = e.contract?.familyUnit?.representativeUser?.fullName;
-        list.push({
-          encounterType: e.encounterType,
-          scheduledTime: e.scheduledTime,
-          familyLabel: isDoctorOrAdmin ? (repName ? `Hộ ${repName}` : 'Hộ gia đình') : null,
-        });
-        byDay.set(dKey, list);
-        // BR-5: Loại trừ chính buổi đang đổi để cho phép đổi khung Sáng <-> Chiều trong cùng ngày
-        if (
-          targetFamilyId &&
-          e.contract?.familyId === targetFamilyId &&
-          e.id !== excludeEncounterId
-        ) {
-          familyBusyDays.add(dKey);
+      for (const slot of occupied) {
+        occupiedMap.set(`${slot.date}:${slot.slotWindow}`, slot);
+        if (contractId && slot.contractId === contractId) {
+          familyBusyDays.add(slot.date);
         }
-      }
-
-      // BR-2: Đưa các yêu cầu PENDING (soft-lock) vào danh sách slot đã tạm giữ
-      for (const req of pendingSoftLocks) {
-        const dKey = req.proposedDate.toISOString().slice(0, 10);
-        const list = byDay.get(dKey) ?? [];
-        list.push({
-          encounterType: req.encounter.encounterType,
-          scheduledTime: req.proposedTime,
-          familyLabel: isDoctorOrAdmin ? 'Đang tạm giữ đổi lịch' : null,
-        });
-        byDay.set(dKey, list);
       }
 
       const days = [];
@@ -2096,38 +2301,27 @@ export class EncountersServiceImpl implements IEncountersService {
         const isOutOfContract =
           (contractStartIso !== null && iso < contractStartIso) ||
           (contractEndIso !== null && iso >= contractEndIso);
-        const outOfContractReason = isOutOfContract
-          ? 'Ngoài thời hạn hiệu lực gói chăm sóc'
-          : null;
-        const dayList = byDay.get(iso) ?? [];
-        const morning = evaluateSlotWindowAvailability('MORNING', dayList);
-        const afternoon = evaluateSlotWindowAvailability('AFTERNOON', dayList);
+
+        const ctx = {
+          todayIso,
+          isDayOff: dayOff.isDayOff,
+          dayOffReason: dayOff.reason ?? null,
+          isOutOfContract,
+          contractId,
+          familyBusyDays,
+        };
+        const morning = buildShiftStatus(iso, 'MORNING', occupiedMap, ctx);
+        const afternoon = buildShiftStatus(iso, 'AFTERNOON', occupiedMap, ctx);
 
         days.push({
           date: iso,
           isDayOff: dayOff.isDayOff,
           dayOffReason: dayOff.reason ?? null,
           isOutOfContract,
-          outOfContractReason,
+          outOfContractReason: isOutOfContract ? 'Ngoài hạn hợp đồng' : null,
           familyHasVisit: familyBusyDays.has(iso),
-          morning: {
-            available: !dayOff.isDayOff && !isOutOfContract && morning.available,
-            reason: isOutOfContract
-              ? outOfContractReason
-              : dayOff.isDayOff
-                ? dayOff.reason
-                : (morning.reason ?? null),
-            label: isDoctorOrAdmin ? (morning.occupiedByLabel ?? null) : null,
-          },
-          afternoon: {
-            available: !dayOff.isDayOff && !isOutOfContract && afternoon.available,
-            reason: isOutOfContract
-              ? outOfContractReason
-              : dayOff.isDayOff
-                ? dayOff.reason
-                : (afternoon.reason ?? null),
-            label: isDoctorOrAdmin ? (afternoon.occupiedByLabel ?? null) : null,
-          },
+          morning,
+          afternoon,
         });
       }
 
@@ -2162,63 +2356,38 @@ export class EncountersServiceImpl implements IEncountersService {
       const todayIso = vnNow.toISOString().slice(0, 10);
       const maxAdvanceDate = new Date(vnNow.getTime() + 30 * 24 * 60 * 60 * 1000);
       let maxDateIso = maxAdvanceDate.toISOString().slice(0, 10);
+      let contractStartIso: string | null = null;
+      let contractEndIso: string | null = null;
 
       if (contractId && tx) {
         const contract = await tx.medicalContract.findUnique({
           where: { id: contractId },
-          select: { endDate: true },
+          select: { startDate: true, endDate: true },
         });
+        if (contract?.startDate) {
+          contractStartIso = contract.startDate.toISOString().slice(0, 10);
+        }
         if (contract?.endDate) {
-          const endIso = contract.endDate.toISOString().slice(0, 10);
-          if (endIso < maxDateIso) maxDateIso = endIso;
+          contractEndIso = contract.endDate.toISOString().slice(0, 10);
+          if (contractEndIso < maxDateIso) maxDateIso = contractEndIso;
         }
       }
 
-      const startDate = new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0, 0));
-      const endDate = new Date(Date.UTC(year, monthIndex, daysInMonth, 23, 59, 59, 999));
+      const firstDayIso = new Date(Date.UTC(year, monthIndex, 1)).toISOString().slice(0, 10);
+      const lastDayIso = new Date(Date.UTC(year, monthIndex, daysInMonth)).toISOString().slice(0, 10);
 
-      const encounters = tx
-        ? await tx.encounter.findMany({
-            where: {
-              doctorId,
-              scheduledDate: { gte: startDate, lte: endDate },
-              encounterStatus: {
-                in: [
-                  EncounterStatus.REQUESTED,
-                  EncounterStatus.CONFIRMED,
-                  EncounterStatus.ON_THE_WAY,
-                  EncounterStatus.ARRIVED,
-                  EncounterStatus.IN_PROGRESS,
-                ],
-              },
-            },
-            select: {
-              id: true,
-              scheduledDate: true,
-              scheduledTime: true,
-              encounterType: true,
-              encounterStatus: true,
-              expiresAt: true,
-            },
-          })
-        : [];
+      const occupied =
+        tx && this.slotLedger
+          ? await this.slotLedger.listOccupied(tx, doctorId, firstDayIso, lastDayIso)
+          : [];
 
-      const byDay = new Map<string, SlotEncounterSummary[]>();
-      for (const e of encounters) {
-        if (
-          e.encounterStatus === EncounterStatus.REQUESTED &&
-          e.expiresAt &&
-          e.expiresAt.getTime() <= now.getTime()
-        ) {
-          continue;
+      const occupiedMap = new Map<string, OccupiedSlot>();
+      const familyBusyDays = new Set<string>();
+      for (const slot of occupied) {
+        occupiedMap.set(`${slot.date}:${slot.slotWindow}`, slot);
+        if (contractId && slot.contractId === contractId) {
+          familyBusyDays.add(slot.date);
         }
-        const dKey = e.scheduledDate.toISOString().slice(0, 10);
-        const list = byDay.get(dKey) ?? [];
-        list.push({
-          encounterType: e.encounterType,
-          scheduledTime: e.scheduledTime,
-        });
-        byDay.set(dKey, list);
       }
 
       const days = [];
@@ -2232,48 +2401,41 @@ export class EncountersServiceImpl implements IEncountersService {
         const dateObj = new Date(Date.UTC(year, monthIndex, d, 0, 0, 0, 0));
         const iso = dateObj.toISOString().slice(0, 10);
         const dayOff = isDayOffDate(dateObj);
-        const outOfRange = iso < todayIso || iso > maxDateIso;
-        const dayList = byDay.get(iso) ?? [];
+        const isOutOfContract =
+          (contractStartIso !== null && iso < contractStartIso) ||
+          iso > maxDateIso;
 
-        if (dayOff.isDayOff || outOfRange) {
-          const reason = outOfRange
-            ? iso < todayIso
-              ? 'Ngày đã qua'
-              : 'Vượt quá phạm vi đặt lịch hoặc ngày hết hạn hợp đồng'
-            : (dayOff.reason ?? 'Ngày nghỉ');
-          days.push({
-            date: iso,
-            isDayOff: dayOff.isDayOff,
-            outOfRange,
-            morning: { available: false, candidateTimes: [], reason },
-            afternoon: { available: false, candidateTimes: [], reason },
-          });
-          continue;
-        }
-
-        const morning = evaluateVideoSlotWindowAvailability('MORNING', iso, dayList, now);
-        const afternoon = evaluateVideoSlotWindowAvailability('AFTERNOON', iso, dayList, now);
+        const ctx = {
+          todayIso,
+          isDayOff: dayOff.isDayOff,
+          dayOffReason: dayOff.reason ?? null,
+          isOutOfContract,
+          contractId,
+          familyBusyDays,
+        };
+        const mStatus = buildShiftStatus(iso, 'MORNING', occupiedMap, ctx);
+        const aStatus = buildShiftStatus(iso, 'AFTERNOON', occupiedMap, ctx);
+        const morning = {
+          ...mStatus,
+          candidateTimes: mStatus.available ? ['08:00'] : [],
+        };
+        const afternoon = {
+          ...aStatus,
+          candidateTimes: aStatus.available ? ['13:30'] : [],
+        };
 
         if (!nearestAvailableSlot) {
-          if (morning.available && morning.candidateTimes[0]) {
-            nearestAvailableSlot = {
-              date: iso,
-              slotWindow: 'MORNING',
-              suggestedTime: morning.candidateTimes[0],
-            };
-          } else if (afternoon.available && afternoon.candidateTimes[0]) {
-            nearestAvailableSlot = {
-              date: iso,
-              slotWindow: 'AFTERNOON',
-              suggestedTime: afternoon.candidateTimes[0],
-            };
+          if (morning.available) {
+            nearestAvailableSlot = { date: iso, slotWindow: 'MORNING', suggestedTime: '08:00' };
+          } else if (afternoon.available) {
+            nearestAvailableSlot = { date: iso, slotWindow: 'AFTERNOON', suggestedTime: '13:30' };
           }
         }
 
         days.push({
           date: iso,
-          isDayOff: false,
-          outOfRange: false,
+          isDayOff: dayOff.isDayOff,
+          outOfRange: iso <= todayIso || isOutOfContract,
           morning,
           afternoon,
         });
@@ -2322,53 +2484,15 @@ export class EncountersServiceImpl implements IEncountersService {
         throw new BadRequestException(dayOff.reason || 'Ngày đã chọn là ngày nghỉ');
       }
 
-      if (tx) {
-        const dayEncounters = await tx.encounter.findMany({
-          where: {
-            doctorId: encounter.doctorId,
-            scheduledDate: targetDate,
-            id: { not: encounterId },
-            encounterStatus: {
-              in: [
-                EncounterStatus.CONFIRMED,
-                EncounterStatus.ON_THE_WAY,
-                EncounterStatus.ARRIVED,
-                EncounterStatus.IN_PROGRESS,
-              ],
-            },
-          },
-          select: {
-            encounterType: true,
-            scheduledTime: true,
-            contract: { select: { familyId: true } },
-          },
+      if (tx && this.slotLedger) {
+        await this.slotLedger.book(tx, {
+          doctorId: encounter.doctorId,
+          contractId: encounter.contractId,
+          date: dto.proposedDate,
+          slotWindow: dto.slotWindow,
+          visitType: encounter.encounterType === EncounterType.TELEHEALTH ? 'VIDEO' : 'HOME_VISIT',
+          encounterId,
         });
-
-        const contract = await tx.medicalContract.findUnique({
-          where: { id: encounter.contractId },
-          select: { familyId: true },
-        });
-        if (
-          contract?.familyId &&
-          dayEncounters.some((e) => e.contract?.familyId === contract.familyId)
-        ) {
-          throw new ConflictException(
-            'Gia đình đã có 1 lượt khám trong ngày này (tối đa 1 lượt/ngày)',
-          );
-        }
-
-        const slotCheck = evaluateSlotWindowAvailability(
-          dto.slotWindow,
-          dayEncounters.map((e) => ({
-            encounterType: e.encounterType,
-            scheduledTime: e.scheduledTime,
-          })),
-        );
-        if (!slotCheck.available) {
-          throw new ConflictException(
-            slotCheck.reason || 'Khung giờ này Bác sĩ đã kín lịch',
-          );
-        }
       }
 
       const parsed = parseEncounterScheduleMeta(encounter);
@@ -2376,6 +2500,7 @@ export class EncountersServiceImpl implements IEncountersService {
       const updated = await session.updateEncounter(encounterId, {
         scheduledDate: targetDate,
         scheduledTime,
+        slotWindow: dto.slotWindow,
         encounterStatus: EncounterStatus.CONFIRMED,
         cancelReason: serializeEncounterScheduleMeta(
           {
@@ -2399,7 +2524,7 @@ export class EncountersServiceImpl implements IEncountersService {
       if (!tx) {
         throw new BadRequestException('Transaction client unavailable');
       }
-      const autoScheduler = new AutoScheduleFirstVisitService();
+      const autoScheduler = new AutoScheduleFirstVisitService(this.slotLedger);
       const created = await autoScheduler.scheduleOnContractActivated(tx, contractId);
       await session.createAuditLog(actor.id, 'RETRY_AUTO_SCHEDULE', contractId);
       return {

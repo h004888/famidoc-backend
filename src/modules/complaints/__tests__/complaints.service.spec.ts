@@ -21,10 +21,12 @@ const familyUser: AuthenticatedUser = {
 const facilityUser: AuthenticatedUser = {
   id: '33333333-3333-4333-8333-333333333333',
   role: 'HEALTHCARE_FACILITY',
+  familyUnitId: null,
 };
 const adminUser: AuthenticatedUser = {
   id: '44444444-4444-4444-8444-444444444444',
   role: 'ADMIN',
+  familyUnitId: null,
 };
 
 const baseContract = {
@@ -55,6 +57,7 @@ describe('ComplaintsServiceImpl', () => {
       listComplaints: jest.fn(),
       updateComplaint: jest.fn(),
       recordComplaintEvent: jest.fn(),
+      markEncounterDisputed: jest.fn(),
     };
     const repository: IComplaintsRepository = {
       transaction: (work) => work(session),

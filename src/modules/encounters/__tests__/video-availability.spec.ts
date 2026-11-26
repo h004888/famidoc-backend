@@ -1,52 +1,69 @@
-import {
-  evaluateVideoSlotWindowAvailability,
-} from '../utils/two-slot-schedule.util';
+import { EncountersServiceImpl } from '../services/impl/encounters.service.impl';
+import type { SlotLedgerService } from '../../scheduling/slot-ledger.service';
+import type { AuthenticatedUser } from '../../../core/auth/authenticated-request';
 
-describe('evaluateVideoSlotWindowAvailability', () => {
-  const futureDate = '2099-12-01';
+describe('getDoctorVideoAvailability (2 ca trọn khung từ SlotLedger)', () => {
+  const familyActor: AuthenticatedUser = {
+    id: 'user-fam-1',
+    role: 'FAMILY_REP',
+    familyUnitId: null,
+  } as AuthenticatedUser;
 
-  it('trả về toàn bộ mốc 30 phút khi khung Sáng trống hoàn toàn', () => {
-    const res = evaluateVideoSlotWindowAvailability('MORNING', futureDate, []);
-    expect(res.available).toBe(true);
-    expect(res.candidateTimes).toEqual([
-      '08:00',
-      '08:30',
-      '09:00',
-      '09:30',
-      '10:00',
-      '10:30',
-      '11:00',
-    ]);
-  });
+  it('trả về 2 ca trọn khung (không còn slot con 30 phút) đọc từ 1 lần listOccupied', async () => {
+    const vnNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
+    const futureDate = new Date(vnNow.getTime() + 5 * 86_400_000);
+    // Tránh Chủ nhật
+    if (futureDate.getUTCDay() === 0) {
+      futureDate.setUTCDate(futureDate.getUTCDate() + 1);
+    }
+    const targetIso = futureDate.toISOString().slice(0, 10);
+    const month = targetIso.slice(0, 7);
 
-  it('khóa khung Sáng khi đã có lịch Khám tại nhà và áp dụng vùng đệm ±30p sang đầu khung Chiều', () => {
-    const encounters = [
-      { encounterType: 'HOME_VISIT', scheduledTime: '1970-01-01T08:00:00.000Z' },
-    ];
-    const morning = evaluateVideoSlotWindowAvailability('MORNING', futureDate, encounters);
-    expect(morning.available).toBe(false);
-    expect(morning.candidateTimes).toEqual([]);
+    const ledger = {
+      listOccupied: jest.fn().mockResolvedValue([
+        {
+          date: targetIso,
+          slotWindow: 'MORNING',
+          contractId: 'other-contract',
+          status: 'BOOKED',
+        },
+      ]),
+    } as unknown as jest.Mocked<SlotLedgerService>;
 
-    const afternoon = evaluateVideoSlotWindowAvailability('AFTERNOON', futureDate, encounters);
-    expect(afternoon.available).toBe(true);
-    expect(afternoon.candidateTimes[0]).toBe('13:30');
-  });
+    const tx = {
+      medicalContract: {
+        findUnique: jest.fn().mockResolvedValue({
+          familyId: 'fam-1',
+          startDate: new Date('2020-01-01T00:00:00.000Z'),
+          endDate: new Date('2099-12-31T00:00:00.000Z'),
+        }),
+      },
+    };
+    const repo = {
+      transaction: jest.fn(async (cb: (s: any) => Promise<any>) => cb({ tx })),
+    };
 
-  it('loại bỏ mốc 30 phút đã có ca Video khác hoặc chỗ giữ REQUESTED', () => {
-    const encounters = [
-      { encounterType: 'TELEHEALTH', scheduledTime: '1970-01-01T09:00:00.000Z' },
-    ];
-    const morning = evaluateVideoSlotWindowAvailability('MORNING', futureDate, encounters);
-    expect(morning.available).toBe(true);
-    expect(morning.candidateTimes).not.toContain('09:00');
-    expect(morning.candidateTimes).toContain('09:30');
-  });
+    const service = new EncountersServiceImpl(repo as any, ledger);
+    const res = await service.getDoctorVideoAvailability(
+      familyActor,
+      'doc-1',
+      month,
+      'my-contract',
+    );
 
-  it('khóa đặt trong ngày khi quá ngưỡng cutoff (sau 09:30 đối với khung Sáng)', () => {
-    // 10:00 UTC+7 = 03:00 UTC
-    const now = new Date('2026-11-24T03:00:00.000Z');
-    const morning = evaluateVideoSlotWindowAvailability('MORNING', '2026-11-24', [], now);
-    expect(morning.available).toBe(false);
-    expect(morning.reason).toContain('quá giờ đặt trong ngày');
+    expect(ledger.listOccupied).toHaveBeenCalledTimes(1);
+    const day = res.days.find((d: any) => d.date === targetIso)!;
+    expect(day.morning).toMatchObject({
+      available: false,
+      reasonCode: 'TAKEN',
+      label: 'Đã có lịch',
+    });
+    expect(day.afternoon).toMatchObject({
+      available: true,
+      reasonCode: 'AVAILABLE',
+      label: 'Còn trống',
+    });
+    // Không còn danh sách nhiều mốc 30 phút (08:30, 09:00, ...)
+    expect((day.afternoon as any).candidateTimes ?? []).not.toContain('14:00');
   });
 });

@@ -65,12 +65,12 @@ describe('PaymentsController (recheck-activation HTTP route)', () => {
       name: 'Controller test package',
       description: 'Example care package description.',
       durationMonths: 1,
-      priceVnd: 100_000,
+      priceVnd: 950_000,
       includedMembers: 2,
       maxMembers: 4,
-      additionalMemberMonthlyPriceVnd: 50_000,
+      additionalMemberMonthlyPriceVnd: 100_000,
       quotaPeriod: QuotaPeriod.PER_TERM,
-      quotas: { videoConsultations: 5, homeVisits: 0, facilityVisits: 0 },
+      quotas: { videoConsultations: 1, homeVisits: 1, facilityVisits: 0 },
     });
     packageId = pkg.id;
 

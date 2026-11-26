@@ -2,12 +2,6 @@ import type { Prisma } from '@prisma/client';
 
 const DEFAULT_CONTRACT_HOLD_TTL_HOURS = 24;
 export const DEFAULT_MAX_PANEL_CAPACITY = 5;
-/**
- * 1 bác sĩ làm việc tối thiểu 24 ngày/tháng x 2 khung (Sáng/Chiều) = 48 khung.
- * Trừ 8 khung (~17% safety buffer) cho đổi lịch / đột xuất -> quỹ khả dụng = 40 khung/tháng.
- */
-export const DOCTOR_USABLE_MONTHLY_HOME_SLOTS = 40;
-
 export function computeMonthlyHomeVisitDemand(
   periodicVisitsQuota: number | null | undefined,
   durationMonths: number | null | undefined,
@@ -82,7 +76,6 @@ export function computeQuotaMetrics(
 
 export interface DoctorPanelLoad {
   activeAndHeldCount: number;
-  usedMonthlyHomeSlots: number;
 }
 
 /**
@@ -127,15 +120,8 @@ export async function countActiveAndHeldLoadMap(
 
   for (const row of rows) {
     if (!row.doctorId) continue;
-    const prev = loads.get(row.doctorId) ?? {
-      activeAndHeldCount: 0,
-      usedMonthlyHomeSlots: 0,
-    };
+    const prev = loads.get(row.doctorId) ?? { activeAndHeldCount: 0 };
     prev.activeAndHeldCount += 1;
-    prev.usedMonthlyHomeSlots += computeMonthlyHomeVisitDemand(
-      row.servicePackage?.periodicVisitsQuota,
-      row.servicePackage?.durationMonths,
-    );
     loads.set(row.doctorId, prev);
   }
   return loads;

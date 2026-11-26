@@ -855,10 +855,11 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       }
     });
 
-    it('chuyển sang PENDING_RECORD nếu đã đến giờ hẹn và bác sĩ chưa chốt clinicalEmrs', async () => {
+    it('chuyển sang PENDING_RECORD nếu đã đến giờ hẹn và bác sĩ chưa bấm hoàn tất (dù có clinicalEmrs finalized lẻ)', async () => {
       (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
         ...pastConfirmedHomeVisit,
-        clinicalEmrs: [{ id: 'emr-1', patientId: 'patient-1', isFinalized: false }],
+        doctorCompletedAt: null,
+        clinicalEmrs: [{ id: 'emr-1', patientId: 'patient-1', isFinalized: true }],
       });
 
       const result = await service.confirmArrival(familyActor, 'encounter-1');
@@ -873,9 +874,10 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       expect(result.encounterStatus).toBe((EncounterStatus as any).PENDING_RECORD);
     });
 
-    it('chuyển sang COMPLETED nếu đã đến giờ hẹn và bác sĩ đã chốt >= 1 clinicalEmrs', async () => {
+    it('chuyển sang COMPLETED nếu đã đến giờ hẹn và bác sĩ đã bấm hoàn tất (doctorCompletedAt != null)', async () => {
       (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
         ...pastConfirmedHomeVisit,
+        doctorCompletedAt: new Date('2020-01-01T10:00:00.000Z'),
         clinicalEmrs: [{ id: 'emr-1', patientId: 'patient-1', isFinalized: true }],
       });
 
@@ -889,6 +891,259 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
         }),
       );
       expect(result.encounterStatus).toBe(EncounterStatus.COMPLETED);
+    });
+  });
+
+  describe('completeEncounter & updateParticipantAttendance', () => {
+    const baseHomeVisit = {
+      ...sampleEncounter,
+      encounterType: EncounterType.HOME_VISIT,
+      encounterStatus: EncounterStatus.PENDING_RECORD,
+      scheduledDate: new Date('2099-12-31T00:00:00.000Z'),
+      scheduledTime: new Date('1970-01-01T08:30:00.000Z'),
+      slotWindow: 'MORNING',
+      familyConfirmedArrivalAt: new Date('2099-12-31T01:35:00.000Z'),
+      doctorCompletedAt: null,
+      recordOverdueAt: null,
+      participants: [
+        { id: 'part-1', patientId: 'patient-1', attendanceStatus: 'EXAMINED' },
+      ],
+      clinicalEmrs: [
+        { id: 'emr-1', patientId: 'patient-1', isFinalized: true },
+      ],
+    };
+
+    it('ném BadRequestException khi chưa có thành viên nào EXAMINED hoặc còn thành viên EXAMINED chưa chốt ClinicalEmr', async () => {
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...baseHomeVisit,
+        participants: [
+          { id: 'part-1', patientId: 'patient-1', attendanceStatus: 'ABSENT' },
+        ],
+        clinicalEmrs: [],
+      });
+      await expect(
+        (service as any).completeEncounter(doctorActor, 'encounter-1', {}),
+      ).rejects.toThrow(BadRequestException);
+
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...baseHomeVisit,
+        participants: [
+          { id: 'part-1', patientId: 'patient-1', attendanceStatus: 'EXAMINED' },
+          { id: 'part-2', patientId: 'patient-2', attendanceStatus: 'EXAMINED' },
+        ],
+        clinicalEmrs: [
+          { id: 'emr-1', patientId: 'patient-1', isFinalized: true },
+        ],
+      });
+      await expect(
+        (service as any).completeEncounter(doctorActor, 'encounter-1', {}),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('Task 7: chặn completeEncounter với code ATTENDANCE_PENDING khi còn thành viên PLANNED', async () => {
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...baseHomeVisit,
+        participants: [
+          { id: 'part-1', patientId: 'patient-1', attendanceStatus: 'EXAMINED' },
+          { id: 'part-2', patientId: 'patient-2', attendanceStatus: 'PLANNED' },
+        ],
+        clinicalEmrs: [
+          { id: 'emr-1', patientId: 'patient-1', isFinalized: true },
+        ],
+      });
+
+      await expect(
+        (service as any).completeEncounter(doctorActor, 'encounter-1', {}),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          code: 'ATTENDANCE_PENDING',
+          message: 'Còn 1 thành viên chưa điểm danh (khám hoặc vắng).',
+        }),
+      });
+      expect(mockSession.updateEncounter).not.toHaveBeenCalled();
+
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...baseHomeVisit,
+        participants: [
+          { id: 'part-1', patientId: 'patient-1', attendanceStatus: 'EXAMINED' },
+          { id: 'part-2', patientId: 'patient-2', attendanceStatus: 'ABSENT' },
+        ],
+        clinicalEmrs: [
+          { id: 'emr-1', patientId: 'patient-1', isFinalized: true },
+        ],
+      });
+      const res = await (service as any).completeEncounter(doctorActor, 'encounter-1', {});
+      expect(res.encounterStatus).toBe(EncounterStatus.COMPLETED);
+    });
+
+    it('trong hạn + familyConfirmedArrivalAt != null -> đặt doctorCompletedAt, chuyển COMPLETED và gửi ENCOUNTER_COMPLETED', async () => {
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce(baseHomeVisit);
+
+      const res = await (service as any).completeEncounter(doctorActor, 'encounter-1', {});
+
+      expect(mockSession.updateEncounter).toHaveBeenCalledWith(
+        'encounter-1',
+        expect.objectContaining({
+          doctorCompletedAt: expect.any(Date),
+          encounterStatus: EncounterStatus.COMPLETED,
+        }),
+      );
+      expect(mockSession.createNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'ENCOUNTER_COMPLETED',
+          referenceId: 'encounter-1',
+        }),
+      );
+      expect(res.encounterStatus).toBe(EncounterStatus.COMPLETED);
+    });
+
+    it('trong hạn + familyConfirmedArrivalAt == null -> giữ CONFIRMED và gửi thông báo nhắc gia đình xác nhận trong 48h', async () => {
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...baseHomeVisit,
+        encounterStatus: EncounterStatus.CONFIRMED,
+        familyConfirmedArrivalAt: null,
+      });
+
+      await (service as any).completeEncounter(doctorActor, 'encounter-1', {});
+
+      expect(mockSession.updateEncounter).toHaveBeenCalledWith(
+        'encounter-1',
+        expect.objectContaining({
+          doctorCompletedAt: expect.any(Date),
+          encounterStatus: EncounterStatus.CONFIRMED,
+        }),
+      );
+      expect(mockSession.createNotification).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'ENCOUNTER_COMPLETED',
+          content: expect.stringContaining('48'),
+        }),
+      );
+    });
+
+    it('quá hạn (now > 23:59 ngày khám) mà thiếu lateCompletionReason -> ném BadRequestException; có lý do -> lưu recordOverdueAt và AuditLog', async () => {
+      const overdueVisit = {
+        ...baseHomeVisit,
+        scheduledDate: new Date('2020-01-01T00:00:00.000Z'),
+        recordOverdueAt: null,
+      };
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce(overdueVisit);
+
+      await expect(
+        (service as any).completeEncounter(doctorActor, 'encounter-1', {
+          lateCompletionReason: '   ',
+        }),
+      ).rejects.toThrow('Vui lòng nhập lý do nộp hồ sơ trễ.');
+
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce(overdueVisit);
+      await (service as any).completeEncounter(doctorActor, 'encounter-1', {
+        lateCompletionReason: 'Mạng yếu khi đi khám vùng xa',
+      });
+
+      expect(mockSession.updateEncounter).toHaveBeenCalledWith(
+        'encounter-1',
+        expect.objectContaining({
+          lateCompletionReason: 'Mạng yếu khi đi khám vùng xa',
+          recordOverdueAt: expect.any(Date),
+          doctorCompletedAt: expect.any(Date),
+        }),
+      );
+      expect(mockSession.createAuditLog).toHaveBeenCalledWith(
+        doctorActor.id,
+        'COMPLETE_HOME_VISIT_ENCOUNTER',
+        'encounter-1',
+      );
+    });
+
+    it('Task 6: updateParticipantAttendance hỗ trợ PLANNED/ABSENT + absenceReason và chặn ca kết thúc/khóa hoặc đã finalized', async () => {
+      const { plainToInstance } = await import('class-transformer');
+      const { validate } = await import('class-validator');
+      const { UpdateParticipantAttendanceDto } = await import(
+        '../dtos/update-participant-attendance.dto'
+      );
+
+      const examinedDto = plainToInstance(UpdateParticipantAttendanceDto, {
+        attendanceStatus: 'EXAMINED',
+      });
+      expect((await validate(examinedDto)).length).toBeGreaterThan(0);
+
+      const missingReasonDto = plainToInstance(UpdateParticipantAttendanceDto, {
+        attendanceStatus: 'ABSENT',
+      });
+      const reasonErrs = await validate(missingReasonDto);
+      expect(reasonErrs.some((e) => e.property === 'absenceReason')).toBe(true);
+
+      (mockSession as any).upsertParticipantAttendance = jest.fn().mockResolvedValue({
+        encounterId: 'encounter-1',
+        patientId: 'patient-1',
+        attendanceStatus: 'ABSENT',
+        absenceReason: 'Đi công tác',
+      });
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...baseHomeVisit,
+        participants: [{ id: 'part-1', patientId: 'patient-1', attendanceStatus: 'PLANNED' }],
+        clinicalEmrs: [],
+      });
+
+      await (service as any).updateParticipantAttendance(
+        doctorActor,
+        'encounter-1',
+        'patient-1',
+        { attendanceStatus: 'ABSENT', absenceReason: 'Đi công tác' },
+      );
+
+      expect((mockSession as any).upsertParticipantAttendance).toHaveBeenCalledWith(
+        'encounter-1',
+        'patient-1',
+        'ABSENT',
+        'Đi công tác',
+      );
+
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...baseHomeVisit,
+        participants: [{ id: 'part-1', patientId: 'patient-1', attendanceStatus: 'ABSENT' }],
+        clinicalEmrs: [],
+      });
+      await (service as any).updateParticipantAttendance(
+        doctorActor,
+        'encounter-1',
+        'patient-1',
+        { attendanceStatus: 'PLANNED' },
+      );
+      expect((mockSession as any).upsertParticipantAttendance).toHaveBeenLastCalledWith(
+        'encounter-1',
+        'patient-1',
+        'PLANNED',
+        null,
+      );
+
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...baseHomeVisit,
+        encounterStatus: EncounterStatus.COMPLETED,
+        clinicalEmrs: [],
+      });
+      await expect(
+        (service as any).updateParticipantAttendance(
+          doctorActor,
+          'encounter-1',
+          'patient-1',
+          { attendanceStatus: 'ABSENT', absenceReason: 'Đi công tác' },
+        ),
+      ).rejects.toThrow('Ca khám đã kết thúc hoặc bị khóa, không thể đổi điểm danh.');
+
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...baseHomeVisit,
+        clinicalEmrs: [{ id: 'emr-1', patientId: 'patient-1', isFinalized: true }],
+      });
+
+      await expect(
+        (service as any).updateParticipantAttendance(
+          doctorActor,
+          'encounter-1',
+          'patient-1',
+          { attendanceStatus: 'ABSENT', absenceReason: 'Đi công tác' },
+        ),
+      ).rejects.toThrow('Thành viên đã chốt hồ sơ khám, không thể thay đổi trạng thái tham gia.');
     });
   });
 

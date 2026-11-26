@@ -79,18 +79,18 @@ describe('PaymentsServiceImpl (simulation)', () => {
       new PaymentsConfig(),
       clock,
     );
-    // Giá giả: 100.000/1 tháng/2 người, thêm người 50.000/tháng, tối đa 4 người.
+    // Giá giả: 500.000/1 tháng/2 người, thêm người 250.000/tháng, tối đa 4 người.
     const item = await packages.create({
       code: 'DEMO',
       name: 'Demo package',
       description: 'Example care package description.',
       durationMonths: 1,
-      priceVnd: 100_000,
+      priceVnd: 950_000,
       includedMembers: 2,
       maxMembers: 4,
-      additionalMemberMonthlyPriceVnd: 50_000,
+      additionalMemberMonthlyPriceVnd: 100_000,
       quotaPeriod: QuotaPeriod.PER_TERM,
-      quotas: { videoConsultations: 5, homeVisits: 0, facilityVisits: 0 },
+      quotas: { videoConsultations: 1, homeVisits: 1, facilityVisits: 0 },
     });
     packageId = item.id;
   });
@@ -179,7 +179,7 @@ describe('PaymentsServiceImpl (simulation)', () => {
       memberCount: 3,
     });
     expect(contract.simulation).toBe(true);
-    expect(contract.packageSnapshot.pricing.totalPriceVnd).toBe(150_000);
+    expect(contract.packageSnapshot.pricing.totalPriceVnd).toBe(1_050_000);
     const result = await service.tryActivate(contract.id);
     expect(result.activated).toBe(false);
     expect(result.blockingReasons).toContain('VERIFIED_PAYMENT_REQUIRED');
@@ -204,7 +204,7 @@ describe('PaymentsServiceImpl (simulation)', () => {
       service.createVietQRPayment(contract.id),
     ]);
     expect(a.id).toBe(b.id);
-    expect(a.amountVnd).toBe(150_000);
+    expect(a.amountVnd).toBe(1_050_000);
     expect(a.paymentCode).toMatch(/^FD(?=[2-9A-HJ-NP-Z]*[2-9])[2-9A-HJ-NP-Z]{8}$/);
     expect(a.transferContent).toBe(`${a.paymentCode} TT FAMIDOC NGUYEN HOAI NAM`);
     expect(Date.parse(a.expiresAt) - Date.parse(a.createdAt)).toBe(15 * 60_000);
@@ -213,10 +213,10 @@ describe('PaymentsServiceImpl (simulation)', () => {
   it('keeps agreed snapshot prices after the catalog publishes a newer version', async () => {
     const contract = await readyContract();
     const second = await packages.createVersion(packageId);
-    await packages.update(second.id, { priceVnd: 200_000 });
+    await packages.update(second.id, { priceVnd: 1_000_000 });
     await packages.publish(second.id);
     const payment = await service.createVietQRPayment(contract.id);
-    expect(payment.amountVnd).toBe(150_000);
+    expect(payment.amountVnd).toBe(1_050_000);
     expect(
       (await service.getContract(contract.id)).packageSnapshot.package.version,
     ).toBe(1);
@@ -227,7 +227,7 @@ describe('PaymentsServiceImpl (simulation)', () => {
     const payer = { id: randomUUID(), role: 'FAMILY_REP' as const, familyUnitId: old.familyId };
     const admin = { id: randomUUID(), role: 'ADMIN' as const, familyUnitId: null };
     const input = {
-      contractId: old.contractId, amountVnd: 155000, transferDescription: 'THU PHI MOI', reason: 'Điều chỉnh tiền thu.',
+      contractId: old.contractId, amountVnd: 1_055_000, transferDescription: 'THU PHI MOI', reason: 'Điều chỉnh tiền thu.',
     };
     expect(() => service.createAdminPaymentRequest(input, payer)).toThrow('Chỉ Admin');
     const adjusted = await service.createAdminPaymentRequest(input, admin);
@@ -237,7 +237,7 @@ describe('PaymentsServiceImpl (simulation)', () => {
     expect((await service.createVietQRPayment(old.contractId, undefined, payer)).id).toBe(adjusted.id);
     now = new Date(now.getTime() + 16 * 60_000);
     const next = await service.createVietQRPayment(old.contractId, undefined, payer);
-    expect(next.amountVnd).toBe(155000);
+    expect(next.amountVnd).toBe(1_055_000);
     expect(next.paymentCode).not.toBe(adjusted.paymentCode);
     expect(next.transferContent).toBe(`${next.paymentCode} THU PHI MOI`);
   });
@@ -265,7 +265,7 @@ describe('PaymentsServiceImpl (simulation)', () => {
     expect(contract.status).toBe(BillingContractStatus.ACTIVE);
     expect(contract.activeFrom).toBe(now.toISOString());
     expect(contract.activeUntil).toBe('2026-11-27T01:00:00.000Z');
-    expect(contract.packageSnapshot.benefits.quotas.videoConsultations).toBe(5);
+    expect(contract.packageSnapshot.benefits.quotas.videoConsultations).toBe(1);
     expect(
       (await service.getPaymentStatus(payment.id)).acceptedTransactionId,
     ).toBe(result.transaction.id);
@@ -300,8 +300,8 @@ describe('PaymentsServiceImpl (simulation)', () => {
   });
 
   it.each([
-    [{ transferAmount: 149_999 }, TransactionReason.AMOUNT_MISMATCH],
-    [{ transferAmount: 150_001 }, TransactionReason.AMOUNT_MISMATCH],
+    [{ transferAmount: 1_049_999 }, TransactionReason.AMOUNT_MISMATCH],
+    [{ transferAmount: 1_050_001 }, TransactionReason.AMOUNT_MISMATCH],
     [{ accountNumber: '1111111111' }, TransactionReason.WRONG_ACCOUNT],
     [{ gateway: 'OTHER_BANK' }, TransactionReason.WRONG_ACCOUNT],
     [{ code: null, content: '' }, TransactionReason.MISSING_CODE],
@@ -621,7 +621,7 @@ describe('PaymentsServiceImpl (simulation)', () => {
     expect(
       (await service.getContract(contract.id)).packageSnapshot.pricing
         .totalPriceVnd,
-    ).toBe(150_000);
+    ).toBe(1_050_000);
   });
 
   it('rejects an impossible calendar date without recording any transaction', async () => {
@@ -652,7 +652,7 @@ describe('PaymentsServiceImpl (simulation)', () => {
     expect(url.origin + url.pathname).toBe('https://vietqr.app/img');
     expect(url.searchParams.get('acc')).toBe(payment.expectedAccountNumber);
     expect(url.searchParams.get('bank')).toBe(payment.expectedGateway);
-    expect(url.searchParams.get('amount')).toBe('150000');
+    expect(url.searchParams.get('amount')).toBe('1050000');
     expect(url.searchParams.get('des')).toBe(
       `${payment.paymentCode} TT FAMIDOC NGUYEN HOAI NAM`,
     );

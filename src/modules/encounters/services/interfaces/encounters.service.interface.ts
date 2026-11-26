@@ -9,14 +9,26 @@ import type { ListEncountersQueryDto } from '../../dtos/list-encounters-query.dt
 
 export const ENCOUNTERS_SERVICE_TOKEN = Symbol('IEncountersService');
 
+import type { CompleteEncounterDto } from '../../dtos/complete-encounter.dto';
+import type { UpdateParticipantAttendanceDto } from '../../dtos/update-participant-attendance.dto';
+
 export interface IEncountersService {
   createPeriodicEncounter(actor: AuthenticatedUser, dto: CreatePeriodicEncounterDto): Promise<unknown>;
   createAdHocEncounter(actor: AuthenticatedUser, dto: CreateAdHocEncounterDto): Promise<unknown>;
   finalizeEncounter(actor: AuthenticatedUser, encounterId: string, dto: FinalizeEncounterDto): Promise<unknown>;
   confirmEncounter(actor: AuthenticatedUser, encounterId: string, dto: ConfirmEncounterDto): Promise<unknown>;
-  markOnTheWay(actor: AuthenticatedUser, encounterId: string): Promise<unknown>;
-  markArrived(actor: AuthenticatedUser, encounterId: string): Promise<unknown>;
   confirmArrival(actor: AuthenticatedUser, encounterId: string): Promise<unknown>;
+  completeEncounter(
+    actor: AuthenticatedUser,
+    encounterId: string,
+    dto: CompleteEncounterDto,
+  ): Promise<unknown>;
+  updateParticipantAttendance(
+    actor: AuthenticatedUser,
+    encounterId: string,
+    patientId: string,
+    dto: UpdateParticipantAttendanceDto,
+  ): Promise<unknown>;
   requestReschedule(actor: AuthenticatedUser, encounterId: string, dto: RequestRescheduleDto): Promise<unknown>;
   decideRescheduleRequest(
     actor: AuthenticatedUser,

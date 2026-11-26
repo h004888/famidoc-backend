@@ -25,6 +25,32 @@ import { validateCarePackageTerms } from '../../validate-care-package-terms';
 import type { QuoteCarePackageDto } from '../../dtos/quote-care-package.dto';
 import type { CarePackageQuote } from '../../entities/care-package-quote.entity';
 import { calculateCarePackageQuote } from '../../pricing/calculate-care-package-quote';
+import {
+  assertNoBlockingFindings,
+  blockingFindings,
+  evaluateCarePackageLoad,
+  evaluateCarePackageRules,
+  maxContractVideoConsultations,
+  warningFindings,
+  type CarePackageLoad,
+  type CarePackageRuleFinding,
+} from '../../rules/care-package-rules';
+import type { ValidateCarePackageDto } from '../../dtos/create-care-package.dto';
+
+// Người thao tác và các cảnh báo đã được xác nhận cho một lần lưu/publish.
+export interface CarePackageActionContext {
+  actorUserId?: string;
+  clientIp?: string;
+  acknowledgedWarnings?: string[];
+}
+
+export interface CarePackageValidationResult {
+  ok: boolean; // không có lỗi BLOCK
+  requiresAcknowledgement: string[]; // mã WARN phải tick xác nhận
+  findings: CarePackageRuleFinding[];
+  load: CarePackageLoad;
+  maxContractVideoConsultations: number | null;
+}
 
 @Injectable()
 export class CarePackagesServiceImpl {
@@ -101,18 +127,113 @@ export class CarePackagesServiceImpl {
     return item;
   }
 
-  async create(dto: CreateCarePackageDto): Promise<CarePackage> {
+  // Chạy toàn bộ quy tắc (có ngữ cảnh: gói đang bán, phiên bản trước, chạy thử xếp lịch).
+  async validate(dto: ValidateCarePackageDto): Promise<CarePackageValidationResult> {
+    const { code, packageId, ...terms } = dto;
+    const current = packageId ? await this.repository.findById(packageId) : null;
+    return this.evaluate(terms, code ?? current?.code, current ?? undefined, true);
+  }
+
+  private async evaluate(
+    terms: CarePackageTerms,
+    code: string | undefined,
+    current: CarePackage | undefined,
+    runDryRun: boolean,
+  ): Promise<CarePackageValidationResult> {
+    const active = await this.repository.list(1, 100, CarePackageStatus.ACTIVE, {
+      excludeDemo: true,
+    });
+    // So giá với bản ACTIVE cùng mã (khi sửa bản nháp) hoặc với chính bản ACTIVE đang sửa.
+    const previousVersion = code
+      ? (active.items.find((p) => p.code === code && p.id !== current?.id) ??
+        (current?.status === CarePackageStatus.ACTIVE ? current : null))
+      : null;
+    const findings = evaluateCarePackageRules(terms, {
+      activePackages: active.items,
+      previousVersion,
+      code,
+      runDryRun,
+    });
+    const contractCap =
+      terms.videoQuotaPolicy === 'CONTRACT' ? maxContractVideoConsultations(terms) : null;
+    return {
+      ok: blockingFindings(findings).length === 0,
+      requiresAcknowledgement: warningFindings(findings).map((f) => f.code),
+      findings,
+      load: evaluateCarePackageLoad(terms, contractCap ?? undefined),
+      maxContractVideoConsultations: contractCap,
+    };
+  }
+
+  // Lỗi BLOCK → 400; cảnh báo WARN chưa xác nhận → 409 kèm danh sách để form hiển thị.
+  // Trả về các cảnh báo đã được xác nhận để ghi audit sau khi lưu thành công.
+  private async enforceRules(
+    terms: CarePackageTerms,
+    code: string,
+    current: CarePackage | undefined,
+    ctx: CarePackageActionContext,
+    runDryRun: boolean,
+  ): Promise<CarePackageRuleFinding[]> {
+    const result = await this.evaluate(terms, code, current, runDryRun);
+    assertNoBlockingFindings(result.findings);
+    const acknowledged = new Set(ctx.acknowledgedWarnings ?? []);
+    const missing = result.requiresAcknowledgement.filter((c) => !acknowledged.has(c));
+    if (missing.length > 0) {
+      throw new ConflictException({
+        message: 'Thay đổi có rủi ro, cần xác nhận đã hiểu trước khi lưu.',
+        code: 'CARE_PACKAGE_RISK_ACK_REQUIRED',
+        requiresAcknowledgement: missing,
+        findings: warningFindings(result.findings),
+      });
+    }
+    return warningFindings(result.findings);
+  }
+
+  private async auditAcknowledged(
+    action: string,
+    item: CarePackage,
+    warnings: CarePackageRuleFinding[],
+    ctx: CarePackageActionContext,
+  ): Promise<void> {
+    if (warnings.length === 0) return;
+    await this.repository.recordAudit({
+      actorUserId: ctx.actorUserId,
+      clientIp: ctx.clientIp,
+      action,
+      packageId: item.id,
+      details: {
+        code: item.code,
+        version: item.version,
+        acknowledgedWarnings: warnings.map(({ code, message }) => ({ code, message })),
+      },
+    });
+  }
+
+  async create(
+    dto: CreateCarePackageDto & { acknowledgedWarnings?: string[] },
+    ctx: CarePackageActionContext = {},
+  ): Promise<CarePackage> {
     // Mã đã tồn tại phải đi qua luồng tạo phiên bản, không được tạo lại từ phiên bản 1.
     if (await this.repository.findLatestByCode(dto.code)) {
       throw new ConflictException(
         'Package code exists; create a new version instead',
       );
     }
-    const { code, ...terms } = dto;
-    return this.insertPackage(code, 1, terms, CarePackageStatus.ACTIVE);
+    const { code, acknowledgedWarnings, ...terms } = dto;
+    const actionCtx = { ...ctx, acknowledgedWarnings: acknowledgedWarnings ?? ctx.acknowledgedWarnings };
+    validateCarePackageTerms(terms);
+    // Tạo mới là mở bán ngay nên phải chạy thử xếp lịch như khi publish.
+    const warnings = await this.enforceRules(terms, code, undefined, actionCtx, true);
+    const created = await this.insertPackage(code, 1, terms, CarePackageStatus.ACTIVE);
+    await this.auditAcknowledged('CARE_PACKAGE_RISK_ACK_CREATE', created, warnings, actionCtx);
+    return created;
   }
 
-  async update(id: string, dto: UpdateCarePackageDto): Promise<CarePackage> {
+  async update(
+    id: string,
+    dto: UpdateCarePackageDto & { acknowledgedWarnings?: string[] },
+    ctx: CarePackageActionContext = {},
+  ): Promise<CarePackage> {
     const current = await this.getAdmin(id);
     // Cho phép admin chỉnh sửa trực tiếp gói dịch vụ theo yêu cầu
     if (current.status === CarePackageStatus.DEPRECATED) {
@@ -120,16 +241,29 @@ export class CarePackagesServiceImpl {
     }
     // Chỉ lấy trường thực sự được gửi; undefined không được xóa giá trị đang lưu.
     // Giữ lại số 0 và chuỗi rỗng vì đây có thể là giá trị cập nhật hợp lệ.
+    const { acknowledgedWarnings, ...fields } = dto;
+    const actionCtx = { ...ctx, acknowledgedWarnings: acknowledgedWarnings ?? ctx.acknowledgedWarnings };
     const changes = Object.fromEntries(
-      Object.entries(dto).filter(([, value]) => value !== undefined),
+      Object.entries(fields).filter(([, value]) => value !== undefined),
     ) as Partial<CarePackageTerms>;
     // Body PATCH rỗng không thể hiện thay đổi nào nên được xem là yêu cầu sai.
     if (Object.keys(changes).length === 0) {
       throw new BadRequestException('Provide at least one field to update');
     }
     // Ghép dữ liệu cũ với phần thay đổi rồi mới kiểm tra ràng buộc giữa các trường.
-    validateCarePackageTerms({ ...current, ...changes });
-    return this.repository.updateDraft(id, changes);
+    const merged = { ...current, ...changes };
+    validateCarePackageTerms(merged);
+    // Gói ACTIVE đổi là có hiệu lực ngay nên chạy thử xếp lịch luôn; bản nháp chạy khi publish.
+    const warnings = await this.enforceRules(
+      merged,
+      current.code,
+      current,
+      actionCtx,
+      current.status === CarePackageStatus.ACTIVE,
+    );
+    const updated = await this.repository.updateDraft(id, changes);
+    await this.auditAcknowledged('CARE_PACKAGE_RISK_ACK_UPDATE', updated, warnings, actionCtx);
+    return updated;
   }
 
   async createVersion(id: string): Promise<CarePackage> {
@@ -180,13 +314,23 @@ export class CarePackagesServiceImpl {
     });
   }
 
-  async publish(id: string): Promise<CarePackage> {
+  async publish(id: string, ctx: CarePackageActionContext = {}): Promise<CarePackage> {
+    // S6: publish bắt buộc chạy thử xếp lịch 5 gia đình và xác nhận các cảnh báo.
+    const current = await this.getAdmin(id);
+    const warnings = await this.enforceRules(current, current.code, current, ctx, true);
     // Repository đổi trạng thái các phiên bản cùng mã trong cùng thao tác ghi.
-    return this.repository.publish(id);
+    const published = await this.repository.publish(id);
+    await this.auditAcknowledged('CARE_PACKAGE_RISK_ACK_PUBLISH', published, warnings, ctx);
+    return published;
   }
 
-  async reopen(id: string): Promise<CarePackage> {
-    return this.repository.reopen(id);
+  async reopen(id: string, ctx: CarePackageActionContext = {}): Promise<CarePackage> {
+    // Mở bán lại gói cũ cũng phải qua quy tắc hiện hành (gói 124 không thể mở lại).
+    const current = await this.getAdmin(id);
+    const warnings = await this.enforceRules(current, current.code, current, ctx, true);
+    const reopened = await this.repository.reopen(id);
+    await this.auditAcknowledged('CARE_PACKAGE_RISK_ACK_REOPEN', reopened, warnings, ctx);
+    return reopened;
   }
 
   async retire(id: string): Promise<CarePackage> {

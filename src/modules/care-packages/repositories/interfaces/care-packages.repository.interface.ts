@@ -53,4 +53,14 @@ export interface CarePackagesRepository {
   publish(id: string): Promise<CarePackage>;
   reopen(id: string): Promise<CarePackage>;
   retire(id: string): Promise<CarePackage>; // Không xóa bản ghi khỏi kho dữ liệu.
+  // Ghi nhật ký khi admin xác nhận đã hiểu rủi ro của cảnh báo (mức WARN).
+  recordAudit(entry: CarePackageAuditEntry): Promise<void>;
+}
+
+export interface CarePackageAuditEntry {
+  actorUserId?: string;
+  clientIp?: string;
+  action: string;
+  packageId: string;
+  details: Record<string, unknown>;
 }

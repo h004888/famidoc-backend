@@ -1,5 +1,12 @@
 import { PAYMENTS_SERVICE_TOKEN } from './services/interfaces/payments.service.interface';
 import { AuthAccessModule } from '../../core/auth/auth-access.module';
+import { PaymentSettingsCrypto } from './settings/payment-settings.crypto';
+import { PaymentSettingsRepository } from './settings/payment-settings.repository';
+import { PaymentSettingsService } from './settings/payment-settings.service';
+import { PaymentSettingsBootstrapService } from './settings/payment-settings-bootstrap.service';
+import { PaymentSettingsCheckService } from './settings/payment-settings-check.service';
+import { PaymentConfigurationTestService } from './settings/payment-configuration-test.service';
+import { PaymentSettingsController } from './settings/payment-settings.controller';
 import { EncountersModule } from '../encounters/encounters.module';
 import { Module } from '@nestjs/common';
 import { SePayWebhookGuard } from './guards/sepay-webhook.guard';
@@ -16,8 +23,10 @@ import { SePayWebhookEvents, SePayWebhookExceptionFilter } from './sepay/sepay-w
 
 @Module({
   imports: [AuthAccessModule, EncountersModule],
-  controllers: [PaymentsController, SePayWebhookController],
+  controllers: [PaymentSettingsController, PaymentsController, SePayWebhookController],
   providers: [
+    PaymentSettingsCrypto, PaymentSettingsRepository, PaymentSettingsService, PaymentSettingsBootstrapService,
+    PaymentSettingsCheckService, PaymentConfigurationTestService,
     PaymentsServiceImpl,
     { provide: PAYMENTS_SERVICE_TOKEN, useExisting: PaymentsServiceImpl },
     PaymentsClock,
@@ -31,6 +40,7 @@ import { SePayWebhookEvents, SePayWebhookExceptionFilter } from './sepay/sepay-w
     { provide: PAYMENTS_REPOSITORY_TOKEN, useClass: PaymentsRepositoryImpl },
   ],
   exports: [
+    PaymentSettingsService, PaymentSettingsRepository, PaymentConfigurationTestService,
     PaymentsServiceImpl,
     PAYMENTS_SERVICE_TOKEN,
     PaymentsConfig,

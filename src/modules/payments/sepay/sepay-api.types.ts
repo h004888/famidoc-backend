@@ -33,6 +33,7 @@ export interface SePayTransactionQuery {
 }
 
 export interface ReconciledPaymentResult {
+  testOnly?: boolean;
   duplicate: boolean;
   linked: boolean;
   transaction: import('../entities/payment.entity').PaymentTransaction;

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthAccessModule } from '../../core/auth/auth-access.module';
+import { SchedulingModule } from '../scheduling/scheduling.module';
 import { ContractsController } from './controllers/contracts.controller';
 import { DocumensoWebhookController } from './controllers/documenso-webhook.controller';
 import { ContractsServiceImpl } from './services/impl/contracts.service.impl';
@@ -15,7 +16,7 @@ import { ContractHoldCleanupService } from './services/contract-hold-cleanup.ser
 import { SigningDeadlineWorker } from './services/signing-deadline-worker.service';
 
 @Module({
-  imports: [AuthAccessModule],
+  imports: [AuthAccessModule, SchedulingModule],
   controllers: [ContractsController, DocumensoWebhookController],
   providers: [
     { provide: CONTRACTS_SERVICE_TOKEN, useClass: ContractsServiceImpl },

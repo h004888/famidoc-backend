@@ -20,12 +20,12 @@ const makeInput = (
   name: 'Demo package',
   description: 'Example care package description.',
   durationMonths: 1,
-  priceVnd: 100_000,
+  priceVnd: 1_000_000,
   includedMembers: 2,
   maxMembers: 4,
   additionalMemberMonthlyPriceVnd: 50_000,
   quotaPeriod: QuotaPeriod.PER_TERM,
-  quotas: { videoConsultations: 5, homeVisits: 0, facilityVisits: 0 },
+  quotas: { videoConsultations: 2, homeVisits: 1, facilityVisits: 0 },
   ...overrides,
 });
 
@@ -153,6 +153,7 @@ describe('CarePackagesServiceImpl', () => {
     const item = await service.create(makeInput());
     const updated = await service.update(item.id, {
       additionalMemberMonthlyPriceVnd: 0,
+      acknowledgedWarnings: ['P5'],
     });
     expect(updated.additionalMemberMonthlyPriceVnd).toBe(0);
     expect(updated.priceVnd).toBe(item.priceVnd);
@@ -174,22 +175,22 @@ describe('CarePackagesServiceImpl', () => {
     const item = await service.create(input);
     input.quotas.videoConsultations = 999;
     item.quotas.videoConsultations = 888;
-    expect((await service.getAdmin(item.id)).quotas.videoConsultations).toBe(5);
+    expect((await service.getAdmin(item.id)).quotas.videoConsultations).toBe(2);
     const page = await service.listAdmin({ page: 1, limit: 20 });
     page.items[0].quotas.homeVisits = 999;
-    expect((await service.getAdmin(item.id)).quotas.homeVisits).toBe(0);
+    expect((await service.getAdmin(item.id)).quotas.homeVisits).toBe(1);
   });
 
   it('allows editing active terms directly without creating new versions', async () => {
     const item = await service.create(makeInput());
     expect(await service.getPublic(item.id)).toEqual(item);
-    const updated = await service.update(item.id, { priceVnd: 200_000 });
-    expect(updated.priceVnd).toBe(200_000);
+    const updated = await service.update(item.id, { priceVnd: 1_100_000 });
+    expect(updated.priceVnd).toBe(1_100_000);
     expect(updated.id).toBe(item.id);
     expect(updated.version).toBe(1);
     expect(updated.status).toBe('ACTIVE');
     expect((await service.listAdmin({ page: 1, limit: 20 })).total).toBe(1);
-    await expect(service.getPublic(item.id)).resolves.toMatchObject({ priceVnd: 200_000 });
+    await expect(service.getPublic(item.id)).resolves.toMatchObject({ priceVnd: 1_100_000 });
     await expect(service.publish(item.id)).rejects.toBeInstanceOf(
       ConflictException,
     );
@@ -205,12 +206,12 @@ describe('CarePackagesServiceImpl', () => {
       publishedAt: null,
     });
     await service.update(draft.id, {
-      priceVnd: 200_000,
-      quotas: { videoConsultations: 10, homeVisits: 1, facilityVisits: 0 },
+      priceVnd: 1_100_000,
+      quotas: { videoConsultations: 4, homeVisits: 1, facilityVisits: 0 },
     });
     await service.publish(draft.id);
     expect(await service.getAdmin(old.id)).toMatchObject({
-      priceVnd: 100_000,
+      priceVnd: 1_000_000,
       status: 'DEPRECATED',
       quotas: old.quotas,
     });
@@ -258,7 +259,7 @@ describe('CarePackagesServiceImpl', () => {
     const retired = await service.retire(item.id);
     expect(await service.retire(item.id)).toEqual(retired);
     expect((await service.listPublic({ page: 1, limit: 20 })).total).toBe(0);
-    expect((await service.getAdmin(item.id)).priceVnd).toBe(100_000);
+    expect((await service.getAdmin(item.id)).priceVnd).toBe(1_000_000);
   });
 
   it.each([false, true])('reopens the same retired package with a legacy draft present=%s', async (hasDraft) => {
@@ -302,11 +303,11 @@ describe('CarePackagesServiceImpl', () => {
   });
 
   it('hides legacy drafts and lists active packages before cheaper retired ones across pages', async () => {
-    const active = await service.create(makeInput({ code: 'CURRENT', priceVnd: 200_000 }));
+    const active = await service.create(makeInput({ code: 'CURRENT', priceVnd: 1_100_000 }));
     const draft = await service.createVersion(active.id);
-    const retired = await service.create(makeInput({ code: 'RETIRED', priceVnd: 150_000 }));
+    const retired = await service.create(makeInput({ code: 'RETIRED', priceVnd: 1_050_000 }));
     await service.retire(retired.id);
-    await service.update(draft.id, { priceVnd: 100_000 });
+    await service.update(draft.id, { priceVnd: 1_000_000 });
 
     const query = await carePackagesValidationPipe.transform(
       { page: '1', limit: '1', excludeDrafts: 'true' },
@@ -327,12 +328,12 @@ describe('CarePackagesServiceImpl', () => {
   });
 
   it('excludes demo packages and sorts the full admin catalog by price before pagination', async () => {
-    const prices = [700_000, 500_000, 100_000, 600_000, 400_000, 200_000, 300_000];
+    const prices = [1_000_000, 900_000, 700_000, 950_000, 850_000, 750_000, 800_000];
     for (const [index, priceVnd] of prices.entries()) {
       await service.create(makeInput({ code: `PACKAGE_${index}`, priceVnd }));
     }
     const demo = await service.create(
-      makeInput({ code: 'DEMO_LOCAL_TRAI_NGHIEM', priceVnd: 50_000 }),
+      makeInput({ code: 'DEMO_LOCAL_TRAI_NGHIEM', priceVnd: 690_000 }),
     );
     await repository.insert({
       ...demo,
@@ -344,9 +345,9 @@ describe('CarePackagesServiceImpl', () => {
     const second = await service.listAdmin({ page: 2, limit: 6 });
     expect(first.total).toBe(7);
     expect(first.items.map((item) => item.priceVnd)).toEqual([
-      100_000, 200_000, 300_000, 400_000, 500_000, 600_000,
+      700_000, 750_000, 800_000, 850_000, 900_000, 950_000,
     ]);
-    expect(second.items.map((item) => item.priceVnd)).toEqual([700_000]);
+    expect(second.items.map((item) => item.priceVnd)).toEqual([1_000_000]);
   });
 
   it('reports a missing package', async () => {
@@ -360,11 +361,11 @@ describe('CarePackagesServiceImpl', () => {
 
   it('rejects merged concurrent edits that would violate member bounds', async () => {
     const item = await service.create(
-      makeInput({ additionalMemberMonthlyPriceVnd: 0 }),
+      { ...makeInput({ additionalMemberMonthlyPriceVnd: 0 }), acknowledgedWarnings: ['P5'] },
     );
     const results = await Promise.allSettled([
-      service.update(item.id, { includedMembers: 4 }),
-      service.update(item.id, { maxMembers: 3 }),
+      service.update(item.id, { includedMembers: 4, acknowledgedWarnings: ['P5'] }),
+      service.update(item.id, { maxMembers: 3, acknowledgedWarnings: ['P5'] }),
     ]);
     expect(
       results.filter((result) => result.status === 'fulfilled'),
@@ -377,7 +378,7 @@ describe('CarePackagesServiceImpl', () => {
     const item = await service.create(makeInput());
     const before = await service.getAdmin(item.id);
     const quote = await service.quote(item.id, { memberCount: 3 });
-    expect(quote.pricing.totalPriceVnd).toBe(150_000);
+    expect(quote.pricing.totalPriceVnd).toBe(1_050_000);
     expect(quote.package.id).toBe(item.id);
     expect(await service.getAdmin(item.id)).toEqual(before);
     expect((await service.listAdmin({ page: 1, limit: 20 })).total).toBe(1);
@@ -401,35 +402,117 @@ describe('CarePackagesServiceImpl', () => {
   it('quotes a new active version rather than accepting the old retired version', async () => {
     const first = await service.create(makeInput());
     const second = await service.createVersion(first.id);
-    await service.update(second.id, { priceVnd: 200_000 });
+    await service.update(second.id, { priceVnd: 1_100_000 });
     await service.publish(second.id);
     await expect(
       service.quote(first.id, { memberCount: 2 }),
     ).rejects.toBeInstanceOf(NotFoundException);
     const quote = await service.quote(second.id, { memberCount: 2 });
     expect(quote.package.version).toBe(2);
-    expect(quote.pricing.totalPriceVnd).toBe(200_000);
-    expect((await service.getAdmin(first.id)).priceVnd).toBe(100_000);
+    expect(quote.pricing.totalPriceVnd).toBe(1_100_000);
+    expect((await service.getAdmin(first.id)).priceVnd).toBe(1_000_000);
   });
 
-  it('rejects packages whose monthly home-visit density exceeds 20 visits/month', async () => {
+  it('rejects packages whose home + video visits exceed 7 per month (S1)', async () => {
     await expect(
       service.create(
-        makeInput({
-          durationMonths: 1,
-          quotas: { videoConsultations: 0, homeVisits: 21, facilityVisits: 0 },
-        }),
+        makeInput({ quotas: { videoConsultations: 6, homeVisits: 2, facilityVisits: 0 } }),
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.create(
+        makeInput({ quotas: { videoConsultations: 50, homeVisits: 8, facilityVisits: 0 } }),
+      ),
+    ).rejects.toThrow('vượt trần 7 lượt');
   });
 
-  it('allows packages with unlimited/high videoConsultations when homeVisits <= 20/month', async () => {
-    const item = await service.create(
-      makeInput({
-        durationMonths: 1,
-        quotas: { videoConsultations: 50, homeVisits: 8, facilityVisits: 0 },
+  it('requires acknowledging risky terms (S2) and records the acknowledgement', async () => {
+    const risky = makeInput({ quotas: { videoConsultations: 6, homeVisits: 1, facilityVisits: 0 } });
+    await expect(service.create(risky)).rejects.toMatchObject({
+      response: expect.objectContaining({
+        code: 'CARE_PACKAGE_RISK_ACK_REQUIRED',
+        requiresAcknowledgement: ['S2'],
       }),
+    });
+    const item = await service.create(
+      { ...risky, acknowledgedWarnings: ['S2'] },
+      { actorUserId: 'admin-1', clientIp: '127.0.0.1' },
     );
-    expect(item.quotas.videoConsultations).toBe(50);
+    expect(item.quotas.videoConsultations).toBe(6);
+    expect(repository.auditEntries).toEqual([
+      expect.objectContaining({
+        action: 'CARE_PACKAGE_RISK_ACK_CREATE',
+        actorUserId: 'admin-1',
+        packageId: item.id,
+      }),
+    ]);
+  });
+
+  it('rejects home-visit unit prices outside 500.000đ – 2.000.000đ (P1) and packages without home visits (P3)', async () => {
+    await expect(service.create(makeInput({ priceVnd: 400_000 }))).rejects.toThrow('nằm ngoài khoảng');
+    await expect(service.create(makeInput({ priceVnd: 2_100_000 }))).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(
+      service.create(
+        makeInput({ quotas: { videoConsultations: 2, homeVisits: 0, facilityVisits: 0 } }),
+      ),
+    ).rejects.toThrow('ít nhất 1 lượt khám tại nhà');
+  });
+
+  it('warns when a version changes the price by more than 20% (P6)', async () => {
+    const first = await service.create(makeInput());
+    const draft = await service.createVersion(first.id);
+    await expect(service.update(draft.id, { priceVnd: 1_300_000 })).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    await service.update(draft.id, { priceVnd: 1_300_000, acknowledgedWarnings: ['P2', 'P6'] });
+    await expect(service.publish(draft.id)).rejects.toBeInstanceOf(ConflictException);
+    const published = await service.publish(draft.id, { acknowledgedWarnings: ['P2', 'P6'] });
+    expect(published.status).toBe('ACTIVE');
+  });
+
+  it('validates the approved catalog without blocking errors', async () => {
+    const catalog = [
+      { code: 'TRAI_NGHIEM', durationMonths: 1, priceVnd: 1_000_000, inc: 1, max: 2, home: 1, video: 1 },
+      { code: 'DONG_HANH', durationMonths: 3, priceVnd: 2_850_000, inc: 3, max: 6, home: 3, video: 4 },
+      { code: 'AN_TAM', durationMonths: 6, priceVnd: 6_475_000, inc: 4, max: 8, home: 7, video: 8 },
+    ] as const;
+    for (const p of catalog) {
+      const result = await service.validate({
+        ...makeInput(),
+        code: p.code,
+        durationMonths: p.durationMonths,
+        priceVnd: p.priceVnd,
+        homeVisitUnitPriceVnd: p.priceVnd / p.home,
+        includedMembers: p.inc,
+        maxMembers: p.max,
+        additionalMemberMonthlyPriceVnd: 75_000,
+        quotas: { videoConsultations: p.video, homeVisits: p.home, facilityVisits: 0 },
+      });
+      expect(result).toMatchObject({ ok: true, requiresAcknowledgement: [] });
+    }
+    const contract = await service.validate({
+      ...makeInput(),
+      durationMonths: 12,
+      priceVnd: 12_600_000,
+      homeVisitUnitPriceVnd: 900_000,
+      videoQuotaPolicy: 'CONTRACT',
+      includedMembers: 6,
+      maxMembers: 10,
+      additionalMemberMonthlyPriceVnd: 75_000,
+      quotas: { videoConsultations: 0, homeVisits: 14, facilityVisits: 0 },
+    });
+    expect(contract.ok).toBe(true);
+    expect(contract.maxContractVideoConsultations).toBe(70);
+    // Gói 124 cũ (1 tháng, 15 nhà + 15 video) bị chặn.
+    const old124 = await service.validate({
+      ...makeInput(),
+      priceVnd: 150_000,
+      homeVisitUnitPriceVnd: 10_000,
+      quotas: { videoConsultations: 15, homeVisits: 15, facilityVisits: 0 },
+    });
+    expect(old124.ok).toBe(false);
+    expect(old124.findings.map((f) => f.code)).toEqual(expect.arrayContaining(['S1', 'P1']));
   });
 });
