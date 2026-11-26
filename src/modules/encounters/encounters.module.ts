@@ -13,9 +13,10 @@ import { PrescriptionsController } from './controllers/prescriptions.controller'
 import { PrescriptionsService } from './services/prescriptions.service';
 import { MedicalBooksController } from './controllers/medical-books.controller';
 import { MedicalBooksService } from './services/medical-books.service';
+import { SchedulingModule } from '../scheduling/scheduling.module';
 
 @Module({
-  imports: [AuthAccessModule, PrismaModule, StorageModule],
+  imports: [AuthAccessModule, PrismaModule, StorageModule, SchedulingModule],
   controllers: [EncountersController, PrescriptionsController, MedicalBooksController],
   providers: [
     { provide: ENCOUNTERS_SERVICE_TOKEN, useClass: EncountersServiceImpl },

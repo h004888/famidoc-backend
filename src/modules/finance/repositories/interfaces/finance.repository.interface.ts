@@ -1,10 +1,21 @@
 import { Prisma, type FacilitySettlement } from '@prisma/client';
 export const FINANCE_INVOICE_INCLUDE = {
-  contract: { include: { facility: true } },
+  contract: {
+    include: {
+      facility: {
+        include: {
+          staffingContracts: {
+            where: { status: { in: ['ACTIVE', 'EXPIRED', 'TERMINATED'] } },
+            select: { platformCommissionRate: true, startDate: true, endDate: true },
+          },
+        },
+      },
+    },
+  },
   addendum: true,
   acceptedTransaction: true,
   settlementItems: true,
-} as const;
+} satisfies Prisma.InvoiceInclude;
 export type RevenueInvoice = Prisma.InvoiceGetPayload<{
   include: typeof FINANCE_INVOICE_INCLUDE;
 }>;
@@ -61,6 +72,11 @@ export interface FacilityBusinessInputs {
   activeContracts: { familyId: string; doctorId: string | null }[];
   paidInvoices: FacilityPackageInvoiceInput[];
   packageInvoices?: FacilityPackageInvoiceInput[];
+  staffingRates?: {
+    platformCommissionRate: unknown;
+    startDate: Date;
+    endDate: Date;
+  }[];
 }
 export const FINANCE_REPOSITORY_TOKEN = Symbol('IFinanceRepository');
 export interface FinanceSession {

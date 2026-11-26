@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { ContractsServiceImpl } from '../services/impl/contracts.service.impl';
+import { SlotLedgerService } from '../../scheduling/slot-ledger.service';
 import {
   CONTRACTS_REPOSITORY_TOKEN,
   IContractsRepository,
@@ -210,6 +211,7 @@ describe('ContractsServiceImpl - Staffing Contracts', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: SlotLedgerService, useValue: undefined },
         ContractsServiceImpl,
         {
           provide: CONTRACTS_REPOSITORY_TOKEN,

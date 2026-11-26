@@ -12,6 +12,7 @@ import {
   CarePackagesRepository,
   DEMO_CARE_PACKAGE_CODES,
   DEMO_CARE_PACKAGE_IDS,
+  type CarePackageAuditEntry,
   type CarePackagesListOptions,
   type CarePackagesPage,
 } from '../interfaces/care-packages.repository.interface';
@@ -22,6 +23,12 @@ import { validateCarePackageTerms } from '../../validate-care-package-terms';
 @Injectable()
 export class InMemoryCarePackagesRepository implements CarePackagesRepository {
   private readonly packages = new Map<string, CarePackage>(); // Khóa là UUID từng phiên bản.
+  readonly auditEntries: CarePackageAuditEntry[] = [];
+
+  recordAudit(entry: CarePackageAuditEntry): Promise<void> {
+    this.auditEntries.push(entry);
+    return Promise.resolve();
+  }
 
   list(
     page: number,

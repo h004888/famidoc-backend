@@ -119,6 +119,9 @@ class PrescriptionExamDto {
   @IsString({ message: 'Mã ICD-10 phải là chuỗi ký tự.' })
   @IsNotEmpty({ message: 'Vui lòng nhập mã bệnh ICD-10.' })
   @MaxLength(10, { message: 'Mã ICD-10 không được vượt quá 10 ký tự.' })
+  @Matches(/^[A-Z][0-9]{2}(\.[0-9A-Z]{1,4})?$/i, {
+    message: 'Mã ICD-10 không đúng định dạng (ví dụ J06.9, U07.1).',
+  })
   icd10Code!: string;
 
   @Transform(trim)
@@ -293,6 +296,57 @@ export class ReplacePrescriptionDto extends PrescriptionInputDto {
   replacementReason!: string;
 }
 
+export class VisitVitalsDto {
+  @ApiPropertyOptional({ minimum: 50, maximum: 260 })
+  @IsOptional()
+  @IsInt({ message: 'Huyết áp tâm thu phải là số nguyên.' })
+  @Min(50, { message: 'Huyết áp tâm thu phải từ 50 đến 260.' })
+  @Max(260, { message: 'Huyết áp tâm thu phải từ 50 đến 260.' })
+  systolicBp?: number;
+
+  @ApiPropertyOptional({ minimum: 30, maximum: 160 })
+  @IsOptional()
+  @IsInt({ message: 'Huyết áp tâm trương phải là số nguyên.' })
+  @Min(30, { message: 'Huyết áp tâm trương phải từ 30 đến 160.' })
+  @Max(160, { message: 'Huyết áp tâm trương phải từ 30 đến 160.' })
+  diastolicBp?: number;
+
+  @ApiPropertyOptional({ minimum: 30, maximum: 220 })
+  @IsOptional()
+  @IsInt({ message: 'Nhịp tim phải là số nguyên.' })
+  @Min(30, { message: 'Nhịp tim phải từ 30 đến 220.' })
+  @Max(220, { message: 'Nhịp tim phải từ 30 đến 220.' })
+  heartRate?: number;
+
+  @ApiPropertyOptional({ minimum: 34, maximum: 43 })
+  @IsOptional()
+  @IsNumber({}, { message: 'Nhiệt độ phải là số.' })
+  @Min(34, { message: 'Nhiệt độ phải từ 34 đến 43.' })
+  @Max(43, { message: 'Nhiệt độ phải từ 34 đến 43.' })
+  temperature?: number;
+
+  @ApiPropertyOptional({ minimum: 50, maximum: 100 })
+  @IsOptional()
+  @IsInt({ message: 'SpO2 phải là số nguyên.' })
+  @Min(50, { message: 'SpO2 phải từ 50 đến 100.' })
+  @Max(100, { message: 'SpO2 phải từ 50 đến 100.' })
+  spo2?: number;
+
+  @ApiPropertyOptional({ minimum: 5, maximum: 60 })
+  @IsOptional()
+  @IsInt({ message: 'Nhịp thở phải là số nguyên.' })
+  @Min(5, { message: 'Nhịp thở phải từ 5 đến 60.' })
+  @Max(60, { message: 'Nhịp thở phải từ 5 đến 60.' })
+  respiratoryRate?: number;
+
+  @ApiPropertyOptional({ minimum: 0.5, maximum: 300 })
+  @IsOptional()
+  @IsNumber({}, { message: 'Cân nặng phải là số.' })
+  @Min(0.5, { message: 'Cân nặng phải từ 0.5 đến 300.' })
+  @Max(300, { message: 'Cân nặng phải từ 0.5 đến 300.' })
+  weightKg?: number;
+}
+
 export class ConfirmVisitRecordDto {
   @ApiProperty({
     format: 'uuid',
@@ -323,6 +377,72 @@ export class ConfirmVisitRecordDto {
   })
   @Type(() => PrescriptionInputDto)
   prescription?: PrescriptionInputDto;
+
+  @ApiPropertyOptional({ type: VisitVitalsDto })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsObject({ message: 'Thông tin sinh hiệu không hợp lệ.' })
+  @ValidateNested({ message: 'Thông tin sinh hiệu phải là một đối tượng hợp lệ.' })
+  @Type(() => VisitVitalsDto)
+  vitals?: VisitVitalsDto;
+}
+
+class DraftExamDto {
+  @IsOptional()
+  @Transform(trim)
+  @IsString({ message: 'Lý do khám phải là chuỗi ký tự.' })
+  @MaxLength(4000, { message: 'Lý do khám không được vượt quá 4000 ký tự.' })
+  chiefComplaint?: string;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString({ message: 'Kết quả thăm khám phải là chuỗi ký tự.' })
+  @MaxLength(4000, {
+    message: 'Kết quả thăm khám không được vượt quá 4000 ký tự.',
+  })
+  clinicalFindings?: string;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString({ message: 'Mã ICD-10 phải là chuỗi ký tự.' })
+  @MaxLength(10, { message: 'Mã ICD-10 không được vượt quá 10 ký tự.' })
+  icd10Code?: string;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString({ message: 'Chẩn đoán phải là chuỗi ký tự.' })
+  @MaxLength(255, { message: 'Chẩn đoán không được vượt quá 255 ký tự.' })
+  icd10Diagnosis?: string;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString({ message: 'Kế hoạch điều trị phải là chuỗi ký tự.' })
+  @MaxLength(4000, {
+    message: 'Kế hoạch điều trị không được vượt quá 4000 ký tự.',
+  })
+  treatmentPlan?: string;
+}
+
+export class SaveVisitDraftDto {
+  @ApiProperty({
+    example: '9b44a2a0-2f8d-4bb4-8b2d-f7640e8d0c7e',
+    description: 'Mã thành viên được khám',
+  })
+  @IsUUID(undefined, { message: 'Mã bệnh nhân không đúng định dạng UUID.' })
+  patientId!: string;
+
+  @ApiPropertyOptional({ type: DraftExamDto })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsObject({ message: 'Thông tin khám không hợp lệ.' })
+  @ValidateNested({ message: 'Thông tin khám phải là một đối tượng hợp lệ.' })
+  @Type(() => DraftExamDto)
+  exam?: DraftExamDto;
+
+  @ApiPropertyOptional({ type: VisitVitalsDto })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsObject({ message: 'Thông tin sinh hiệu không hợp lệ.' })
+  @ValidateNested({ message: 'Thông tin sinh hiệu phải là một đối tượng hợp lệ.' })
+  @Type(() => VisitVitalsDto)
+  vitals?: VisitVitalsDto;
 }
 
 class FamilyPrescriptionEntryDto extends PrescriptionInputDto {

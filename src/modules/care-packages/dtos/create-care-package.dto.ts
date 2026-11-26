@@ -1,7 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsDefined,
+  IsOptional,
+  IsUUID,
   IsEnum,
   IsInt,
   IsIn,
@@ -148,4 +152,40 @@ export class CreateCarePackageDto extends CarePackageTermsDto {
   @IsString()
   @Length(1, 40)
   code: string;
+}
+
+// Mã cảnh báo (S2, P2, P4, P5, P6...) admin đã đọc và xác nhận chấp nhận rủi ro.
+export class CarePackageRiskAckDto {
+  @ApiPropertyOptional({ type: [String], example: ['P2'] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @Length(1, 10, { each: true })
+  acknowledgedWarnings?: string[];
+}
+
+export class CreateCarePackageWithAckDto extends CreateCarePackageDto {
+  @ApiPropertyOptional({ type: [String], example: ['P2'] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsString({ each: true })
+  @Length(1, 10, { each: true })
+  acknowledgedWarnings?: string[];
+}
+
+// Kiểm tra điều khoản trước khi lưu: dùng cho thanh "Tải lịch" và cảnh báo trên form admin.
+export class ValidateCarePackageDto extends CarePackageTermsDto {
+  @ApiPropertyOptional({ description: 'Mã dòng gói (để so với phiên bản trước)' })
+  @IsOptional()
+  @Transform(trimString)
+  @IsString()
+  @Length(1, 40)
+  code?: string;
+
+  @ApiPropertyOptional({ description: 'UUID gói đang sửa (nếu có)' })
+  @IsOptional()
+  @IsUUID('4')
+  packageId?: string;
 }

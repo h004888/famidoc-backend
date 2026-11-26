@@ -1,4 +1,4 @@
-import { ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { buildActiveAndHeldWhere } from '../contracts/pricing/doctor-quota.helper';
 import { Prisma } from '@prisma/client';
 import { getVietnamMonthWindow, todayInVietnam } from '../../core/business/business-helpers';
@@ -305,6 +305,72 @@ export class AdminService {
     return { gmvVnd: paid._sum.totalPayable ? moneyToNumber(paid._sum.totalPayable) : 0, activeContracts, doctors, facilities, openComplaints, queue, counts, series: [...buckets.values()] };
   }
 
+  async getRevenueConfig() {
+    const rows = await this.db.systemConfiguration.findMany({
+      where: { configKey: { in: [...REVENUE_CONFIG_KEYS] } },
+      select: { configKey: true, configValue: true, updatedAt: true },
+    });
+    return toRevenueConfig(rows);
+  }
+
+  async updateRevenueConfig(
+    actor: AuthenticatedUser,
+    dto: { facilityRevenueRate: number; platformCommissionRate: number },
+    ip?: string,
+  ) {
+    if (dto.facilityRevenueRate + dto.platformCommissionRate !== 100) {
+      throw new BadRequestException(
+        'Tổng tỷ lệ doanh thu cơ sở y tế và hoa hồng nền tảng phải đúng bằng 100%',
+      );
+    }
+    return this.db.$transaction(async (tx) => {
+      const before = toRevenueConfig(
+        await tx.systemConfiguration.findMany({
+          where: { configKey: { in: [...REVENUE_CONFIG_KEYS] } },
+          select: { configKey: true, configValue: true, updatedAt: true },
+        }),
+      );
+      const values = {
+        FACILITY_REVENUE_RATE: dto.facilityRevenueRate,
+        PLATFORM_COMMISSION_RATE: dto.platformCommissionRate,
+      } as const;
+      for (const key of REVENUE_CONFIG_KEYS) {
+        await tx.systemConfiguration.upsert({
+          where: { configKey: key },
+          create: {
+            configKey: key,
+            configValue: String(values[key]),
+            description: REVENUE_CONFIG_DESCRIPTIONS[key],
+            updatedBy: actor.id,
+          },
+          update: { configValue: String(values[key]), updatedBy: actor.id },
+        });
+      }
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actor.id,
+          action: 'ADMIN_UPDATE_REVENUE_CONFIG',
+          resourceName: 'system_configurations',
+          resourceId: 'REVENUE_RATES',
+          clientIp: (ip ?? 'unknown').slice(0, 45),
+          metadata: {
+            previous: {
+              facilityRevenueRate: before.facilityRevenueRate,
+              platformCommissionRate: before.platformCommissionRate,
+            },
+            next: values,
+          },
+        },
+      });
+      return toRevenueConfig(
+        await tx.systemConfiguration.findMany({
+          where: { configKey: { in: [...REVENUE_CONFIG_KEYS] } },
+          select: { configKey: true, configValue: true, updatedAt: true },
+        }),
+      );
+    });
+  }
+
   async updateDoctorPanelCapacity(
     actor: AuthenticatedUser,
     doctorId: string,
@@ -354,4 +420,30 @@ export class AdminService {
       return updated;
     });
   }
+}
+
+const REVENUE_CONFIG_KEYS = ['FACILITY_REVENUE_RATE', 'PLATFORM_COMMISSION_RATE'] as const;
+const REVENUE_CONFIG_DESCRIPTIONS = {
+  FACILITY_REVENUE_RATE: 'Tỷ lệ % doanh thu mặc định thuộc cơ sở y tế khi lập hợp đồng B2B mới',
+  PLATFORM_COMMISSION_RATE: 'Tỷ lệ % hoa hồng nền tảng mặc định khi lập hợp đồng B2B mới',
+} as const;
+
+// Giá trị thiếu hoặc hỏng trong DB quay về mặc định 85/15.
+function toRevenueConfig(rows: { configKey: string; configValue: string; updatedAt: Date }[]) {
+  const read = (key: string, fallback: number) => {
+    const value = Number(rows.find((row) => row.configKey === key)?.configValue);
+    return Number.isInteger(value) ? value : fallback;
+  };
+  const facilityRevenueRate = read('FACILITY_REVENUE_RATE', 85);
+  const platformCommissionRate = read('PLATFORM_COMMISSION_RATE', 15);
+  const valid = facilityRevenueRate + platformCommissionRate === 100;
+  const updatedAt = rows.reduce<Date | null>(
+    (latest, row) => (!latest || row.updatedAt > latest ? row.updatedAt : latest),
+    null,
+  );
+  return {
+    facilityRevenueRate: valid ? facilityRevenueRate : 85,
+    platformCommissionRate: valid ? platformCommissionRate : 15,
+    updatedAt: updatedAt?.toISOString() ?? null,
+  };
 }

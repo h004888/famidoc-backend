@@ -16,17 +16,30 @@ import type { AuthenticatedUser } from '../../../core/auth/authenticated-request
 import { writeBusinessAudit } from '../../../core/business/business-helpers';
 import { PrismaService } from '../../../core/database/prisma.service';
 import { serializable } from '../../../core/database/prisma-transaction';
+import { computeVitalAbnormalAlert } from '../../patients/utils/vital-sign.util';
 import type {
   ConfirmVisitRecordDto,
   FamilyPrescriptionsDto,
   FamilyPrescriptionQuery,
   PrescriptionInputDto,
   ReplacePrescriptionDto,
+  SaveVisitDraftDto,
   SharePrescriptionDto,
+  VisitVitalsDto,
 } from '../dtos/share-prescription.dto';
 
 const PAGE_SIZE = 12;
 const VIETNAM_TIME_OFFSET_MS = 7 * 60 * 60 * 1000;
+const LOCKED_VISIT_STATUSES = new Set(['DISPUTED', 'NO_SHOW', 'CANCELLED']);
+
+function formatVisitStart(scheduledDate: Date, scheduledTime: Date): string {
+  const hh = String(scheduledTime.getUTCHours()).padStart(2, '0');
+  const mm = String(scheduledTime.getUTCMinutes()).padStart(2, '0');
+  const dd = String(scheduledDate.getUTCDate()).padStart(2, '0');
+  const mo = String(scheduledDate.getUTCMonth() + 1).padStart(2, '0');
+  const yyyy = scheduledDate.getUTCFullYear();
+  return `${hh}:${mm} ngày ${dd}/${mo}/${yyyy}`;
+}
 
 async function prescriptionTransaction<T>(
   prisma: PrismaService,
@@ -421,6 +434,180 @@ export class PrescriptionsService {
     });
   }
 
+  private async resolveDoctorVisitMember(
+    tx: Prisma.TransactionClient,
+    actor: AuthenticatedUser,
+    id: string,
+    patientId: string,
+    vietnamNow: Date,
+  ) {
+    const visit = await tx.encounter.findFirst({
+      where: {
+        id,
+        ...doctorVisitScope(actor.id, vietnamNow),
+      },
+      select: visitSelect,
+    });
+    if (!visit) {
+      const pendingVisit = await tx.encounter.findFirst({
+        where: {
+          id,
+          doctor: activePrescribingDoctor(actor.id),
+        },
+        select: {
+          encounterStatus: true,
+          scheduledDate: true,
+          scheduledTime: true,
+        },
+      });
+      if (pendingVisit?.encounterStatus === 'CONFIRMED') {
+        throw new ConflictException({
+          code: 'VISIT_NOT_STARTED',
+          message: `Chưa đến giờ khám. Bạn có thể ghi trang khám từ ${formatVisitStart(pendingVisit.scheduledDate, pendingVisit.scheduledTime)}.`,
+        });
+      }
+      throw new NotFoundException(
+        'Không tìm thấy buổi khám của thành viên này.',
+      );
+    }
+    if (LOCKED_VISIT_STATUSES.has(visit.encounterStatus)) {
+      throw new ConflictException({
+        code: 'VISIT_LOCKED',
+        message:
+          'Ca khám đang bị khóa (khiếu nại/vắng mặt), không thể ghi trang khám.',
+      });
+    }
+    const member = await tx.patient.findFirst({
+      where: {
+        id: patientId,
+        familyId: visit.contract.familyId,
+      },
+      select: { id: true },
+    });
+    if (!member) {
+      throw new NotFoundException(
+        'Không tìm thấy buổi khám của thành viên này.',
+      );
+    }
+    const existingEmr = visit.clinicalEmrs.find(
+      (e) => e.patientId === patientId,
+    );
+    return { visit, existingEmr };
+  }
+
+  private async upsertVisitVitals(
+    tx: Prisma.TransactionClient,
+    emrId: string,
+    patientId: string,
+    vitals?: VisitVitalsDto,
+  ) {
+    if (!vitals) return;
+    const hasAnyValue = Object.values(vitals).some(
+      (value) => value !== undefined && value !== null,
+    );
+    if (!hasAnyValue) return;
+
+    const isAbnormalAlert = computeVitalAbnormalAlert(vitals);
+    const vitalData = {
+      ...(vitals.systolicBp !== undefined
+        ? { systolicBp: vitals.systolicBp }
+        : {}),
+      ...(vitals.diastolicBp !== undefined
+        ? { diastolicBp: vitals.diastolicBp }
+        : {}),
+      ...(vitals.heartRate !== undefined
+        ? { heartRate: vitals.heartRate }
+        : {}),
+      ...(vitals.temperature !== undefined
+        ? { temperature: vitals.temperature }
+        : {}),
+      ...(vitals.spo2 !== undefined ? { spo2: vitals.spo2 } : {}),
+      ...(vitals.respiratoryRate !== undefined
+        ? { respiratoryRate: vitals.respiratoryRate }
+        : {}),
+      ...(vitals.weightKg !== undefined ? { weightKg: vitals.weightKg } : {}),
+      isAbnormalAlert,
+    };
+
+    await tx.vitalSign.upsert({
+      where: { emrId },
+      create: {
+        emrId,
+        patientId,
+        ...vitalData,
+      },
+      update: vitalData,
+    });
+  }
+
+  async saveVisitDraft(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: SaveVisitDraftDto,
+  ) {
+    const now = new Date();
+    const vietnamNow = new Date(now.getTime() + VIETNAM_TIME_OFFSET_MS);
+    return prescriptionTransaction(this.prisma, async (tx) => {
+      const { existingEmr } = await this.resolveDoctorVisitMember(
+        tx,
+        actor,
+        id,
+        dto.patientId,
+        vietnamNow,
+      );
+      if (existingEmr?.isFinalized) {
+        throw new ConflictException('Trang khám đã được xác nhận.');
+      }
+
+      const examPatch = {
+        ...(dto.exam?.chiefComplaint !== undefined
+          ? { chiefComplaint: dto.exam.chiefComplaint }
+          : {}),
+        ...(dto.exam?.clinicalFindings !== undefined
+          ? { clinicalFindings: dto.exam.clinicalFindings }
+          : {}),
+        ...(dto.exam?.icd10Code !== undefined
+          ? { icd10Code: dto.exam.icd10Code }
+          : {}),
+        ...(dto.exam?.icd10Diagnosis !== undefined
+          ? { icd10Diagnosis: dto.exam.icd10Diagnosis }
+          : {}),
+        ...(dto.exam?.treatmentPlan !== undefined
+          ? { treatmentPlan: dto.exam.treatmentPlan }
+          : {}),
+      };
+
+      const record = existingEmr
+        ? await tx.clinicalEmr.update({
+            where: { id: existingEmr.id },
+            data: examPatch,
+            select: { id: true, isFinalized: true },
+          })
+        : await tx.clinicalEmr.create({
+            data: {
+              encounterId: id,
+              patientId: dto.patientId,
+              chiefComplaint: dto.exam?.chiefComplaint ?? '',
+              clinicalFindings: dto.exam?.clinicalFindings ?? '',
+              icd10Code: dto.exam?.icd10Code ?? '',
+              icd10Diagnosis: dto.exam?.icd10Diagnosis ?? '',
+              treatmentPlan: dto.exam?.treatmentPlan ?? '',
+              isFinalized: false,
+            },
+            select: { id: true, isFinalized: true },
+          });
+
+      await this.upsertVisitVitals(tx, record.id, dto.patientId, dto.vitals);
+
+      return {
+        encounterId: id,
+        emrId: record.id,
+        isFinalized: record.isFinalized,
+        savedAt: now,
+      };
+    });
+  }
+
   async confirmVisitRecord(
     actor: AuthenticatedUser,
     id: string,
@@ -434,32 +621,12 @@ export class PrescriptionsService {
     const now = new Date();
     const vietnamNow = new Date(now.getTime() + VIETNAM_TIME_OFFSET_MS);
     return prescriptionTransaction(this.prisma, async (tx) => {
-      const visit = await tx.encounter.findFirst({
-        where: {
-          id,
-          ...doctorVisitScope(actor.id, vietnamNow),
-        },
-        select: visitSelect,
-      });
-      if (!visit) {
-        throw new NotFoundException(
-          'Không tìm thấy buổi khám của thành viên này.',
-        );
-      }
-      const member = await tx.patient.findFirst({
-        where: {
-          id: dto.patientId,
-          familyId: visit.contract.familyId,
-        },
-        select: { id: true },
-      });
-      if (!member) {
-        throw new NotFoundException(
-          'Không tìm thấy buổi khám của thành viên này.',
-        );
-      }
-      const existingEmr = visit.clinicalEmrs.find(
-        (e) => e.patientId === dto.patientId,
+      const { visit, existingEmr } = await this.resolveDoctorVisitMember(
+        tx,
+        actor,
+        id,
+        dto.patientId,
+        vietnamNow,
       );
       if (existingEmr?.isFinalized) {
         throw new ConflictException('Trang khám đã được xác nhận.');
@@ -495,6 +662,13 @@ export class PrescriptionsService {
             },
             select: { id: true },
           });
+      await this.upsertVisitVitals(tx, record.id, dto.patientId, dto.vitals);
+      if (dto.vitals?.weightKg !== undefined) {
+        await tx.patient.update({
+          where: { id: dto.patientId },
+          data: { weightKg: dto.vitals.weightKg },
+        });
+      }
       if (dto.prescription) {
         await this.createSharedPrescription(
           tx,
@@ -505,29 +679,45 @@ export class PrescriptionsService {
           vietnamNow,
         );
       }
-      const shouldCompleteEncounter =
-        visit.encounterStatus === 'PENDING_RECORD' ||
-        visit.encounterStatus === 'IN_PROGRESS' ||
-        (visit.encounterStatus === 'CONFIRMED' && visit.familyConfirmedArrivalAt != null);
-      if (shouldCompleteEncounter) {
-        await tx.encounter.updateMany({
-          where: {
-            id,
-            encounterStatus: { in: ['CONFIRMED', 'IN_PROGRESS', 'PENDING_RECORD'] },
-          },
-          data: { encounterStatus: 'COMPLETED' },
-        });
-      }
-      await tx.notification.create({
-        data: {
-          userId: visit.contract.familyUnit.representativeUser.id,
-          type: 'ENCOUNTER_COMPLETED',
-          title: 'Buổi khám đã hoàn tất',
-          content:
-            'Bác sĩ đã hoàn tất ghi nhận bệnh án cho buổi khám. Bạn có thể xem lại sổ khám và gửi đánh giá bác sĩ.',
-          referenceId: id,
+      await tx.encounterParticipant.upsert({
+        where: {
+          encounterId_patientId: { encounterId: id, patientId: dto.patientId },
+        },
+        update: { attendanceStatus: 'EXAMINED' },
+        create: {
+          encounterId: id,
+          patientId: dto.patientId,
+          attendanceStatus: 'EXAMINED',
         },
       });
+      if (visit.encounterType === 'TELEHEALTH') {
+        const shouldCompleteEncounter =
+          visit.encounterStatus === 'PENDING_RECORD' ||
+          visit.encounterStatus === 'IN_PROGRESS' ||
+          (visit.encounterStatus === 'CONFIRMED' &&
+            visit.familyConfirmedArrivalAt != null);
+        if (shouldCompleteEncounter) {
+          await tx.encounter.updateMany({
+            where: {
+              id,
+              encounterStatus: {
+                in: ['CONFIRMED', 'IN_PROGRESS', 'PENDING_RECORD'],
+              },
+            },
+            data: { encounterStatus: 'COMPLETED' },
+          });
+        }
+        await tx.notification.create({
+          data: {
+            userId: visit.contract.familyUnit.representativeUser.id,
+            type: 'ENCOUNTER_COMPLETED',
+            title: 'Buổi khám đã hoàn tất',
+            content:
+              'Bác sĩ đã hoàn tất ghi nhận bệnh án cho buổi khám. Bạn có thể xem lại sổ khám và gửi đánh giá bác sĩ.',
+            referenceId: id,
+          },
+        });
+      }
       await writeBusinessAudit(
         tx,
         actor.id,

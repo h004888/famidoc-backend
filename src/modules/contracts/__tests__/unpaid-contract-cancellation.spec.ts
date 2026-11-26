@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ContractsServiceImpl } from '../services/impl/contracts.service.impl';
+import { SlotLedgerService } from '../../scheduling/slot-ledger.service';
 import { ContractsController } from '../controllers/contracts.controller';
 import {
   CONTRACTS_REPOSITORY_TOKEN,
@@ -172,6 +173,7 @@ describe('Unpaid contract cancellation & replacement', () => {
     // Luồng tạo hợp đồng chạy không kèm Documenso để không kết xuất PDF trong unit test.
     const plainModule: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: SlotLedgerService, useValue: undefined },
         ContractsServiceImpl,
         {
           provide: CONTRACTS_REPOSITORY_TOKEN,
@@ -183,6 +185,7 @@ describe('Unpaid contract cancellation & replacement', () => {
 
     const documensoModule: TestingModule = await Test.createTestingModule({
       providers: [
+        { provide: SlotLedgerService, useValue: undefined },
         ContractsServiceImpl,
         {
           provide: CONTRACTS_REPOSITORY_TOKEN,

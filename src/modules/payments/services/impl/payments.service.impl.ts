@@ -42,6 +42,8 @@ import {
 } from '../../activation/contract-activation';
 import { PaymentsClock } from '../../payments.clock';
 import { PaymentsConfig } from '../../payments.config';
+import { PaymentSettingsService } from '../../settings/payment-settings.service';
+import { PaymentConfigurationTestService } from '../../settings/payment-configuration-test.service';
 import {
   PAYMENTS_REPOSITORY_TOKEN,
   type PaymentsRepository,
@@ -86,6 +88,8 @@ export class PaymentsServiceImpl implements IPaymentsService {
     private readonly config: PaymentsConfig,
     private readonly clock: PaymentsClock,
     @Optional() private readonly prisma?: PrismaService,
+    @Optional() private readonly settings?: PaymentSettingsService,
+    @Optional() private readonly configurationTests?: PaymentConfigurationTestService,
   ) {}
 
   private buildFamilyInvoiceInclude() {
@@ -305,7 +309,8 @@ export class PaymentsServiceImpl implements IPaymentsService {
     if (actor.role !== 'ADMIN') {
       throw new ForbiddenException('Chỉ Admin được kiểm tra điều kiện tạo mã thu tiền.');
     }
-    this.config.getDestination();
+    if (this.settings) await this.settings.resolveSnapshot(this.config.getEnvironment());
+    else this.config.getDestination();
     return this.repository.transaction(async (session) => {
       const contract = await this.requireContract(session, contractId, addendumId);
       const result = await this.checkIssueEligibility(session, contract);
@@ -368,13 +373,13 @@ export class PaymentsServiceImpl implements IPaymentsService {
     return { eligible: true, requests };
   }
 
-  private issuePayment(
+  private async issuePayment(
     contractId: string,
     addendumId: string | undefined,
     actor: AuthenticatedUser | undefined,
     adjustment?: { dto: AdminPaymentRequestDto; actorId: string; ip?: string },
   ): Promise<PaymentRequest> {
-    const destination = this.config.getDestination();
+    const destination = this.settings ? await this.settings.resolveSnapshot(this.config.getEnvironment()) : this.config.getDestination();
     return this.repository.transaction(async (session) => {
       const contract = await this.requireContract(
         session,
@@ -634,12 +639,16 @@ export class PaymentsServiceImpl implements IPaymentsService {
       : new Date(item.transaction_date);
     if (!Number.isFinite(transactionAt.getTime()))
       throw new BadRequestException('Invalid SePay API transaction_date');
-    const amount =
+    const testDelivery = this.configurationTests ? await this.configurationTests.dispatch({ environment: this.config.getEnvironment(), source: 'SEPAY_API', providerTransactionId: item.id,
+      gateway: item.bank_brand_name, accountNumber: item.account_number, bankAccountId: item.bank_account_id,
+      amountVnd: item.amount_in, text: `${item.code ?? ''} ${item.transaction_content}`, transactionAt, transferType: item.transfer_type }) : { handled: false };
+    const amount = testDelivery.handled ? 0 :
       item.transfer_type === 'in' ? item.amount_in : item.amount_out;
     if (amount === 0) {
       console.warn('[SEPAY_API_ZERO_AMOUNT_SKIPPED]', { apiTransactionId: item.id });
       const nowIso = this.clock.now().toISOString();
       return {
+        testOnly: testDelivery.handled,
         duplicate: true,
         linked: false,
         transaction: {

@@ -16,6 +16,8 @@ export interface ServiceInvoice {
     serviceUntil: Date | null;
   }[];
   totalPayable: unknown;
+  // Hoa hồng nền tảng (%) theo hợp đồng B2B của cơ sở; bỏ trống thì dùng mặc định 15%.
+  platformRatePercent?: number;
   paidAt: Date | null;
   addendumId: string | null;
   addendum?: { activatedAt: Date | null } | null;
@@ -34,6 +36,7 @@ export function allocateServiceDays(
   start: Date,
   end: Date,
   stopAt = until,
+  platformRatePercent?: number,
 ) {
   const fullDays = Math.round((until.getTime() - from.getTime()) / dayMs);
   if (!Number.isSafeInteger(amount) || amount < 0 || fullDays <= 0) return null;
@@ -47,10 +50,10 @@ export function allocateServiceDays(
     after = cumulative(right);
   const grossVnd = Number(after - before);
   if (!grossVnd) return null;
-  // Tính phí gộp 15% trên phần dịch vụ, chưa gán thuế suất cho phí nền tảng.
+  // Tính phí gộp theo tỷ lệ hợp đồng trên phần dịch vụ, chưa gán thuế suất cho phí nền tảng.
   const platformFeeVnd =
-    calculateRevenueShares(Number(after), 0).platformFeeVnd -
-    calculateRevenueShares(Number(before), 0).platformFeeVnd;
+    calculateRevenueShares(Number(after), 0, platformRatePercent).platformFeeVnd -
+    calculateRevenueShares(Number(before), 0, platformRatePercent).platformFeeVnd;
   return {
     grossVnd,
     vatVnd: 0,
@@ -123,5 +126,6 @@ export function calculateMonthlyInvoiceShares(
     periodStart,
     periodEnd,
     stop,
+    invoice.platformRatePercent,
   );
 }

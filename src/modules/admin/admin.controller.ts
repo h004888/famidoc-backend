@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../core/auth/jwt-auth.guard';
 import { Roles, RolesGuard } from '../../core/auth/roles.guard';
 import type { AuthenticatedRequest } from '../../core/auth/authenticated-request';
-import { AdminAccountStatusDto, AdminAuditQuery, AdminComplaintsQuery, AdminFinanceReportQuery, AdminOverviewQuery, AdminUpdateDoctorPanelCapacityDto, AdminUsersQuery, ComplaintsQuery } from './admin.dto';
+import { AdminAccountStatusDto, AdminAuditQuery, AdminComplaintsQuery, AdminFinanceReportQuery, AdminOverviewQuery, AdminUpdateDoctorPanelCapacityDto, AdminUpdateRevenueConfigDto, AdminUsersQuery, ComplaintsQuery } from './admin.dto';
 import { AdminService } from './admin.service';
 
 @ApiTags('Admin')
@@ -62,6 +62,18 @@ export class AdminController {
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ) {
     return this.service.resendFacilityInvite(req.user, id, req.ip);
+  }
+
+  @Get('revenue-config')
+  @ApiOperation({ summary: 'Tỷ lệ chia doanh thu mặc định cho hợp đồng B2B mới' })
+  getRevenueConfig() {
+    return this.service.getRevenueConfig();
+  }
+
+  @Patch('revenue-config')
+  @ApiOperation({ summary: 'Cập nhật tỷ lệ chia doanh thu mặc định (CSYT + nền tảng = 100%)' })
+  updateRevenueConfig(@Req() req: AuthenticatedRequest, @Body() dto: AdminUpdateRevenueConfigDto) {
+    return this.service.updateRevenueConfig(req.user, dto, req.ip);
   }
 
   @Patch('doctors/:id/panel-capacity')

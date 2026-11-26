@@ -77,6 +77,9 @@ describe('PrescriptionsService multi-member family visit', () => {
           return record;
         }),
       },
+      encounterParticipant: {
+        upsert: jest.fn().mockResolvedValue({}),
+      },
       prescription: {
         create: jest.fn().mockImplementation(async ({ data }: any) => {
           const rec = {
@@ -188,6 +191,10 @@ describe('PrescriptionsService multi-member family visit', () => {
         },
         clinicalEmr: {
           create: jest.fn().mockResolvedValue({ id: 'emr-1' }),
+          update: jest.fn().mockResolvedValue({ id: 'emr-1' }),
+        },
+        encounterParticipant: {
+          upsert: jest.fn().mockResolvedValue({}),
         },
         notification: { create: jest.fn().mockResolvedValue(undefined) },
         auditLog: { create: jest.fn().mockResolvedValue(undefined) },
@@ -198,8 +205,9 @@ describe('PrescriptionsService multi-member family visit', () => {
       return { mockTx, mockPrisma };
     };
 
-    it('chuyển PENDING_RECORD (familyConfirmedArrivalAt != null) sang COMPLETED khi bác sĩ confirmVisitRecord', async () => {
+    it('HOME_VISIT ở trạng thái PENDING_RECORD: khóa ClinicalEmr, cập nhật attendanceStatus = EXAMINED, KHÔNG đóng ca và KHÔNG gửi ENCOUNTER_COMPLETED', async () => {
       const { mockTx, mockPrisma } = buildMockPrisma({
+        encounterType: 'HOME_VISIT',
         encounterStatus: 'PENDING_RECORD',
         familyConfirmedArrivalAt: new Date('2026-11-21T08:35:00.000Z'),
       });
@@ -214,10 +222,46 @@ describe('PrescriptionsService multi-member family visit', () => {
       const whereArg = mockTx.encounter.findFirst.mock.calls[0][0].where;
       const statusList = whereArg.OR[0].encounterStatus.in;
       expect(statusList).toContain('PENDING_RECORD');
+      expect(mockTx.encounterParticipant.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            encounterId_patientId: { encounterId: 'enc-1', patientId: 'pat-1' },
+          },
+          update: { attendanceStatus: 'EXAMINED' },
+          create: expect.objectContaining({
+            encounterId: 'enc-1',
+            patientId: 'pat-1',
+            attendanceStatus: 'EXAMINED',
+          }),
+        }),
+      );
+      expect(mockTx.encounter.updateMany).not.toHaveBeenCalled();
+      expect(mockTx.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('TELEHEALTH ở trạng thái PENDING_RECORD: vẫn chuyển sang COMPLETED khi bác sĩ confirmVisitRecord', async () => {
+      const { mockTx, mockPrisma } = buildMockPrisma({
+        encounterType: 'TELEHEALTH',
+        encounterStatus: 'PENDING_RECORD',
+        familyConfirmedArrivalAt: new Date('2026-11-21T08:35:00.000Z'),
+      });
+      const service = new PrescriptionsService(mockPrisma);
+
+      await service.confirmVisitRecord(doctorActor, 'enc-1', {
+        patientId: 'pat-1',
+        confirmed: true,
+        exam,
+      });
+
       expect(mockTx.encounter.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ id: 'enc-1' }),
           data: { encounterStatus: 'COMPLETED' },
+        }),
+      );
+      expect(mockTx.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ type: 'ENCOUNTER_COMPLETED' }),
         }),
       );
     });
@@ -238,7 +282,7 @@ describe('PrescriptionsService multi-member family visit', () => {
       expect(mockTx.encounter.updateMany).not.toHaveBeenCalled();
     });
 
-    it('giữ DISPUTED và NO_SHOW trong doctorVisitScope nhưng KHÔNG tự chuyển sang COMPLETED', async () => {
+    it('giữ DISPUTED và NO_SHOW trong doctorVisitScope nhưng chặn ghi trang khám với VISIT_LOCKED', async () => {
       for (const lockedStatus of ['DISPUTED', 'NO_SHOW']) {
         const { mockTx, mockPrisma } = buildMockPrisma({
           encounterStatus: lockedStatus,
@@ -246,10 +290,14 @@ describe('PrescriptionsService multi-member family visit', () => {
         });
         const service = new PrescriptionsService(mockPrisma);
 
-        await service.confirmVisitRecord(doctorActor, 'enc-1', {
-          patientId: 'pat-1',
-          confirmed: true,
-          exam,
+        await expect(
+          service.confirmVisitRecord(doctorActor, 'enc-1', {
+            patientId: 'pat-1',
+            confirmed: true,
+            exam,
+          }),
+        ).rejects.toMatchObject({
+          response: expect.objectContaining({ code: 'VISIT_LOCKED' }),
         });
 
         const whereArg = mockTx.encounter.findFirst.mock.calls[0][0].where;
@@ -258,6 +306,96 @@ describe('PrescriptionsService multi-member family visit', () => {
         expect(statusList).toContain('NO_SHOW');
         expect(mockTx.encounter.updateMany).not.toHaveBeenCalled();
       }
+    });
+  });
+
+  describe('saveVisitDraft', () => {
+    const doctorActor: any = { id: 'doc-user-1', role: 'DOCTOR' };
+
+    const buildDraftPrisma = (existingEmrs: any[]) => {
+      const mockTx: any = {
+        encounter: {
+          findFirst: jest.fn().mockResolvedValue({
+            id: 'enc-1',
+            encounterType: 'HOME_VISIT',
+            encounterStatus: 'CONFIRMED',
+            contract: { familyId: 'fam-1' },
+            clinicalEmrs: existingEmrs,
+          }),
+        },
+        patient: {
+          findFirst: jest.fn().mockResolvedValue({ id: 'pat-1' }),
+        },
+        clinicalEmr: {
+          create: jest.fn().mockResolvedValue({ id: 'emr-draft-1', isFinalized: false }),
+          update: jest.fn().mockResolvedValue({ id: 'emr-draft-1', isFinalized: false }),
+        },
+        encounterParticipant: {
+          upsert: jest.fn().mockResolvedValue({}),
+        },
+      };
+      const mockPrisma: any = {
+        $transaction: jest.fn().mockImplementation(async (fn: any) => fn(mockTx)),
+      };
+      return { mockTx, mockPrisma };
+    };
+
+    it('tạo mới ClinicalEmr với isFinalized = false khi chưa có bản nháp', async () => {
+      const { mockTx, mockPrisma } = buildDraftPrisma([]);
+      const service = new PrescriptionsService(mockPrisma) as any;
+
+      const result = await service.saveVisitDraft(doctorActor, 'enc-1', {
+        patientId: 'pat-1',
+        exam: { chiefComplaint: 'Đau đầu nhẹ' },
+      });
+
+      expect(mockTx.clinicalEmr.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            encounterId: 'enc-1',
+            patientId: 'pat-1',
+            chiefComplaint: 'Đau đầu nhẹ',
+            isFinalized: false,
+          }),
+        }),
+      );
+      expect(result.isFinalized).toBe(false);
+    });
+
+    it('cập nhật lại ClinicalEmr nếu đã có bản nháp chưa chốt', async () => {
+      const { mockTx, mockPrisma } = buildDraftPrisma([
+        { id: 'emr-draft-1', patientId: 'pat-1', isFinalized: false },
+      ]);
+      const service = new PrescriptionsService(mockPrisma) as any;
+
+      await service.saveVisitDraft(doctorActor, 'enc-1', {
+        patientId: 'pat-1',
+        exam: { icd10Code: 'J00', icd10Diagnosis: 'Viêm mũi họng cấp' },
+      });
+
+      expect(mockTx.clinicalEmr.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'emr-draft-1' },
+          data: expect.objectContaining({
+            icd10Code: 'J00',
+            icd10Diagnosis: 'Viêm mũi họng cấp',
+          }),
+        }),
+      );
+    });
+
+    it('ném ConflictException nếu thành viên đã chốt hồ sơ (isFinalized === true)', async () => {
+      const { mockPrisma } = buildDraftPrisma([
+        { id: 'emr-final-1', patientId: 'pat-1', isFinalized: true },
+      ]);
+      const service = new PrescriptionsService(mockPrisma) as any;
+
+      await expect(
+        service.saveVisitDraft(doctorActor, 'enc-1', {
+          patientId: 'pat-1',
+          exam: { chiefComplaint: 'Sửa lại' },
+        }),
+      ).rejects.toThrow('Trang khám đã được xác nhận.');
     });
   });
 });

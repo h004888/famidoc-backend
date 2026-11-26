@@ -128,6 +128,26 @@ export class PrismaEncountersSession implements EncountersSession {
     });
   }
 
+  upsertParticipantAttendance(
+    encounterId: string,
+    patientId: string,
+    attendanceStatus: 'PLANNED' | 'EXAMINED' | 'ABSENT',
+    absenceReason: string | null = null,
+  ) {
+    return this.tx.encounterParticipant.upsert({
+      where: {
+        encounterId_patientId: { encounterId, patientId },
+      },
+      update: { attendanceStatus, absenceReason },
+      create: {
+        encounterId,
+        patientId,
+        attendanceStatus,
+        absenceReason,
+      },
+    });
+  }
+
   async decrementContractQuota(contractId: string, type: EncounterType) {
     if (type === 'HOME_VISIT') {
       await this.tx.medicalContract.update({

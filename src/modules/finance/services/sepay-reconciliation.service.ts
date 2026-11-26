@@ -4,6 +4,8 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Optional,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Prisma, type SePayReconciliationRun } from '@prisma/client';
 import { PrismaService } from '../../../core/database/prisma.service';
@@ -20,6 +22,10 @@ import type {
   RunSePayReconciliationDto,
   SePayReconciliationQueryDto,
 } from '../dtos/finance.dto';
+import { randomUUID } from 'node:crypto';
+import { PaymentSettingsService } from '../../payments/settings/payment-settings.service';
+import type { PaymentSettingsSnapshot } from '../../payments/settings/payment-settings.dto';
+import { summarizeReconciliation, reconciliationCountKeys } from './payment-reconciliation-batch';
 
 type ReconciliationTrigger = 'MANUAL' | 'SCHEDULED';
 
@@ -32,6 +38,7 @@ export class SePayReconciliationService {
     private readonly paymentsConfig: PaymentsConfig,
     @Inject(PAYMENTS_SERVICE_TOKEN)
     private readonly payments: IPaymentsService,
+    @Optional() private readonly settings?: PaymentSettingsService,
   ) {}
 
   async runManual(
@@ -62,8 +69,11 @@ export class SePayReconciliationService {
 
   async getStatus(environment: PaymentEnvironment) {
     this.assertActiveEnvironment(environment);
+    const snapshot = this.settings ? await this.settings.repository.current(environment) : null;
     const [state, latestRun, unreconciledTransactions] = await Promise.all([
-      this.prisma.sePayReconciliationState.findUnique({
+      snapshot?.monitoredAccountId ? this.prisma.paymentAccountReconciliationState.findUnique({
+        where: { environment_monitoredAccountId: { environment, monitoredAccountId: snapshot.monitoredAccountId } },
+      }) : this.settings ? Promise.resolve(null) : this.prisma.sePayReconciliationState.findUnique({
         where: { environment },
       }),
       this.prisma.sePayReconciliationRun.findFirst({
@@ -109,6 +119,8 @@ export class SePayReconciliationService {
       if (rangeTo.getTime() > Date.now() + 300_000)
         throw new BadRequestException('Thời điểm kết thúc không được ở tương lai.');
     }
+
+    if (this.settings) return this.runBatch(trigger, environment, requestedByUserId, rangeFrom, rangeTo);
 
     await this.prisma.sePayReconciliationState.upsert({
       where: { environment },
@@ -269,6 +281,90 @@ export class SePayReconciliationService {
         data: { lastRunId: run.id, lockedUntil: null },
       });
       throw error;
+    }
+  }
+
+  private async runBatch(trigger: ReconciliationTrigger, environment: PaymentEnvironment, requestedByUserId?: string, rangeFrom?: Date, rangeTo?: Date) {
+    try {
+      return await this.executeBatch(trigger, environment, requestedByUserId, rangeFrom, rangeTo);
+    } catch (error) {
+      if (error instanceof ConflictException) throw error;
+      throw new ServiceUnavailableException('PAYMENT_RECONCILIATION_STORAGE_UNAVAILABLE');
+    }
+  }
+
+  private async executeBatch(trigger: ReconciliationTrigger, environment: PaymentEnvironment, requestedByUserId?: string, rangeFrom?: Date, rangeTo?: Date) {
+    const accounts = await this.settings!.repository.forAccounts(environment);
+    if (!accounts.length) throw new ConflictException('NO_MONITORED_ACCOUNT');
+    const batch = await this.prisma.paymentReconciliationBatch.create({ data: { environment, trigger, requestedByUserId, rangeFrom, rangeTo, status: 'RUNNING' } });
+    const runs: SePayReconciliationRun[] = [];
+    for (const account of accounts) runs.push(await this.runForAccount(account, batch.id, trigger, requestedByUserId, rangeFrom, rangeTo));
+    const { status, counts } = summarizeReconciliation(runs);
+    const errors = runs.flatMap(run => (Array.isArray(run.errors) ? run.errors : []).map(error => ({ monitoredAccountId: run.monitoredAccountId, runId: run.id, code: 'ACCOUNT_RECONCILIATION_FAILED', message: typeof error === 'object' && error && 'message' in error ? String(error.message) : 'Account reconciliation failed' })));
+    const completed = await this.prisma.paymentReconciliationBatch.update({ where: { id: batch.id }, data: { status, counts, errors, completedAt: new Date() } });
+    return { ...completed, ...counts, resultKind: 'BATCH' as const, runs };
+  }
+
+  private async runForAccount(snapshot: PaymentSettingsSnapshot, batchId: string, trigger: ReconciliationTrigger, requestedByUserId?: string, rangeFrom?: Date, rangeTo?: Date): Promise<SePayReconciliationRun> {
+    const environment = snapshot.environment, monitoredAccountId = snapshot.monitoredAccountId!;
+    const key = { environment, monitoredAccountId }, leaseOwner = randomUUID();
+    const counts = Object.fromEntries(reconciliationCountKeys.map(key => [key, 0])) as Record<typeof reconciliationCountKeys[number], number>;
+    const run = await this.prisma.sePayReconciliationRun.create({ data: { environment, monitoredAccountId, batchId, trigger, requestedByUserId, rangeFrom, rangeTo, status: 'RUNNING' } });
+    const errors: { message: string; transactionId?: string }[] = [];
+    let ownsLease = false;
+    const heartbeat = async () => {
+      const now = new Date();
+      const renewed = await this.prisma.paymentAccountReconciliationState.updateMany({ where: { ...key, leaseOwner, lockedUntil: { gt: now } }, data: { lockedUntil: new Date(+now + 1800000) } });
+      if (!renewed.count) throw new ConflictException('ACCOUNT_LEASE_LOST');
+    };
+    try {
+      await this.prisma.paymentAccountReconciliationState.upsert({ where: { environment_monitoredAccountId: key }, create: key, update: {} });
+      const now = new Date();
+      const lock = await this.prisma.paymentAccountReconciliationState.updateMany({ where: { ...key, OR: [{ lockedUntil: null }, { lockedUntil: { lt: now } }] }, data: { leaseOwner, lockedUntil: new Date(+now + 1800000) } });
+      if (!lock.count) throw new ConflictException('ACCOUNT_LOCKED');
+      ownsLease = true;
+      const state = await this.prisma.paymentAccountReconciliationState.findUniqueOrThrow({ where: { environment_monitoredAccountId: key } });
+      const explicitRange = Boolean(rangeFrom), cursorBefore = explicitRange ? null : state.cursor;
+      let cursorAfter = cursorBefore;
+      const from = rangeFrom ?? (cursorBefore ? undefined : new Date(Date.now() - this.config.getLookbackMilliseconds()));
+      const to = rangeTo ?? new Date();
+      await this.prisma.sePayReconciliationRun.update({ where: { id: run.id }, data: { cursorBefore, rangeFrom: from, rangeTo: to } });
+      for (let pageNumber = 1; ; pageNumber++) {
+        if (pageNumber > 1000) throw new ConflictException('ACCOUNT_RANGE_TOO_LARGE');
+        await heartbeat();
+        const page = await this.api.listTransactions(environment, { bankAccountId: snapshot.bankAccountId, page: pageNumber, perPage: 100, sinceId: cursorBefore ?? undefined, from, to }, { apiToken: snapshot.apiToken });
+        await heartbeat();
+        for (const transaction of page.transactions) {
+          try {
+            if (transaction.account_number !== snapshot.accountNumber || transaction.bank_account_id !== snapshot.bankAccountId || transaction.bank_brand_name.trim().toLowerCase() !== snapshot.gateway.trim().toLowerCase()) throw new Error('PROVIDER_ACCOUNT_MISMATCH');
+            const result = await this.payments.handleSePayApiTransaction(transaction, run.id);
+            cursorAfter = transaction.id;
+            if (result.testOnly) continue;
+            counts.fetchedCount++;
+            if (!result.duplicate) counts.backfilledCount++;
+            if (result.linked) counts.linkedCount++;
+            if (result.transaction.outcome === TransactionOutcome.MATCHED) counts.matchedCount++;
+            else if (result.transaction.outcome === TransactionOutcome.REVIEW_REQUIRED) counts.reviewRequiredCount++;
+            else counts.ignoredCount++;
+          } catch { errors.push({ transactionId: transaction.id, message: 'TRANSACTION_RECONCILIATION_FAILED' }); }
+        }
+        await heartbeat();
+        if (!page.hasMore) break;
+        await new Promise<void>(resolve => setTimeout(resolve, 350));
+      }
+      if (from) counts.localOnlyCount = await this.prisma.paymentTransaction.count({ where: { environment, accountNumber: snapshot.accountNumber, gateway: { equals: snapshot.gateway, mode: 'insensitive' }, paymentTime: { gte: from, lte: to }, sepayApiTransactionId: null } });
+      const status = errors.length || counts.localOnlyCount ? 'PARTIAL' : 'SUCCEEDED';
+      const completedAt = new Date();
+      return await this.prisma.$transaction(async tx => {
+        const updated = await tx.paymentAccountReconciliationState.updateMany({ where: { ...key, leaseOwner, lockedUntil: { gt: completedAt } }, data: { cursor: explicitRange || errors.length ? state.cursor : cursorAfter, lastRunId: run.id, lastSuccessfulAt: status === 'SUCCEEDED' ? completedAt : undefined, leaseOwner: null, lockedUntil: null } });
+        if (!updated.count) throw new ConflictException('ACCOUNT_LEASE_LOST');
+        return tx.sePayReconciliationRun.update({ where: { id: run.id }, data: { ...counts, status, cursorAfter: explicitRange || errors.length ? cursorBefore : cursorAfter, errors: errors.slice(0, 100), completedAt } });
+      });
+    } catch (error) {
+      const message = error instanceof ConflictException ? (error.message.startsWith('ACCOUNT_') ? error.message : 'ACCOUNT_CONFLICT') : 'ACCOUNT_PROVIDER_UNAVAILABLE';
+      return this.prisma.sePayReconciliationRun.update({ where: { id: run.id }, data: { ...counts, status: 'FAILED', errors: [...errors.slice(0, 99), { message }], completedAt: new Date() } });
+    } finally {
+      if (ownsLease) await this.prisma.paymentAccountReconciliationState.updateMany({ where: { ...key, leaseOwner }, data: { leaseOwner: null, lockedUntil: null } });
     }
   }
 

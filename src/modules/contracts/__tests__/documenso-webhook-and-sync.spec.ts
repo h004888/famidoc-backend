@@ -116,8 +116,8 @@ describe('DocumensoWebhookAndSync', () => {
     await service.applySignedRecipients('contract-1', [recipient], 'test');
     expect(queueNotices).toHaveBeenCalledTimes(1);
     const jobs = queueNotices.mock.calls[0][0].data;
-    expect(jobs.filter(job => job.kind === 'OPEN')).toHaveLength(3);
-    expect(jobs.filter(job => job.kind === 'REMINDER')).toHaveLength(3);
+    expect(jobs.filter((job: { kind: string }) => job.kind === 'OPEN')).toHaveLength(3);
+    expect(jobs.filter((job: { kind: string }) => job.kind === 'REMINDER')).toHaveLength(3);
   });
 
   it('handleWebhook(): từ chối HTTP 401 khi sai hoặc thiếu X-Documenso-Secret', async () => {

@@ -2,6 +2,7 @@ import {
   type CanActivate,
   type ExecutionContext,
   Injectable,
+  Optional,
   type RawBodyRequest,
   UnauthorizedException,
   UnsupportedMediaTypeException,
@@ -10,15 +11,51 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request } from 'express';
 import { PaymentsClock } from '../payments.clock';
 import { PaymentsConfig } from '../payments.config';
+import { PaymentSettingsService } from '../settings/payment-settings.service';
+
+export interface VerifiedPaymentContext { environment: 'TEST' | 'LIVE'; monitoredAccountIds: string[] }
 
 @Injectable()
 export class SePayWebhookGuard implements CanActivate {
   constructor(
     private readonly config: PaymentsConfig,
     private readonly clock: PaymentsClock,
+    @Optional() private readonly settings?: PaymentSettingsService,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  canActivate(context: ExecutionContext): boolean | Promise<boolean> {
+    return this.settings ? this.verifySnapshot(context) : this.verifyLegacy(context);
+  }
+  private async verifySnapshot(context: ExecutionContext) {
+    this.config.assertPaymentsEnabled();
+    const request = context.switchToHttp().getRequest<RawBodyRequest<Request> & { verifiedPaymentContext?: VerifiedPaymentContext }>();
+    if (request.headers['content-type']?.split(';')[0].trim().toLowerCase() !== 'application/json')
+      throw new UnsupportedMediaTypeException('Use application/json for this webhook');
+    if (request.path === '/webhooks/sepay/test' && process.env.PAYMENTS_MODE !== 'simulation') throw new UnauthorizedException();
+    if (!Buffer.isBuffer(request.rawBody) || request.rawBody.length > 100_000) throw new UnauthorizedException('Invalid webhook body');
+    const environment = this.config.getEnvironment();
+    const body = request.body as { accountNumber?: unknown; gateway?: unknown };
+    if (typeof body.accountNumber !== 'string' || typeof body.gateway !== 'string' || body.gateway.length > 100 || body.accountNumber.length > 34)
+      throw new UnauthorizedException('Invalid webhook account');
+    const candidates = await this.settings!.repository.credentials(environment, body.gateway, body.accountNumber, this.clock.now());
+    if (!candidates.length && !await this.settings!.repository.current(environment)) return this.verifyLegacy(context);
+    const verified = candidates.filter(candidate => {
+      if (candidate.authMethod === 'apikey') {
+        const actual = Buffer.from(request.headers.authorization?.match(/^Apikey ([^\s]+)$/i)?.[1] ?? '');
+        const expected = Buffer.from(candidate.webhookApiKey ?? '');
+        return actual.length > 0 && actual.length === expected.length && timingSafeEqual(actual, expected);
+      }
+      const timestamp = request.headers['x-sepay-timestamp'], signature = request.headers['x-sepay-signature'];
+      if (typeof timestamp !== 'string' || !/^\d{1,12}$/.test(timestamp) || typeof signature !== 'string' || !/^sha256=[a-f0-9]{64}$/i.test(signature) ||
+          Math.abs(Math.floor(this.clock.now().getTime() / 1000) - Number(timestamp)) > 300) return false;
+      const expected = createHmac('sha256', candidate.webhookSecret ?? '').update(timestamp).update('.').update(request.rawBody!).digest();
+      return timingSafeEqual(Buffer.from(signature.slice(7), 'hex'), expected);
+    });
+    if (!verified.length) throw new UnauthorizedException('Invalid webhook credentials');
+    request.verifiedPaymentContext = { environment, monitoredAccountIds: [...new Set(verified.map(row => row.monitoredAccountId!))] };
+    return true;
+  }
+  private verifyLegacy(context: ExecutionContext): boolean {
     this.config.assertPaymentsEnabled();
     const request = context
       .switchToHttp()

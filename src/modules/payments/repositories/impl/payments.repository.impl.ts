@@ -424,12 +424,26 @@ class PrismaPaymentsSession implements PaymentsSession {
     });
 
     if (justActivated) {
+      // Savepoint: lỗi giữa chừng phải hoàn tác toàn bộ ca/encounter đã tạo dở,
+      // không để lại dòng BOOKED mồ côi khi transaction thanh toán vẫn commit.
+      const canSavepoint =
+        typeof (this.tx as { $executeRawUnsafe?: unknown })
+          .$executeRawUnsafe === 'function';
       try {
+        if (canSavepoint)
+          await this.tx.$executeRawUnsafe('SAVEPOINT auto_schedule');
         await this.autoScheduleFirstVisit?.scheduleOnContractActivated(
           this.tx,
           contract.id,
         );
+        if (canSavepoint)
+          await this.tx.$executeRawUnsafe('RELEASE SAVEPOINT auto_schedule');
       } catch (err) {
+        if (canSavepoint) {
+          await this.tx
+            .$executeRawUnsafe('ROLLBACK TO SAVEPOINT auto_schedule')
+            .catch(() => undefined);
+        }
         new Logger(PaymentsRepositoryImpl.name).warn(
           `Automatic cadence draft generation failed for contract ${contract.id}: ${
             err instanceof Error ? err.message : String(err)

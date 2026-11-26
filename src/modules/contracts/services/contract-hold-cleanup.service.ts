@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../core/database/prisma.service';
 import { DocumensoClientService } from './documenso-client.service';
+import { SlotLedgerService } from '../../scheduling/slot-ledger.service';
 
 @Injectable()
 export class ContractHoldCleanupService
@@ -19,6 +20,8 @@ export class ContractHoldCleanupService
     private readonly prisma: PrismaService,
     @Optional()
     private readonly documensoClient?: DocumensoClientService,
+    @Optional()
+    private readonly slotLedger?: SlotLedgerService,
   ) {}
 
   onApplicationBootstrap() {
@@ -90,6 +93,7 @@ export class ContractHoldCleanupService
           where: { contractId: draft.id, paymentStatus: 'PENDING' },
           data: { paymentStatus: 'CANCELLED' },
         });
+        await this.slotLedger?.releaseContractHolds(tx, draft.id);
         return true;
       });
 

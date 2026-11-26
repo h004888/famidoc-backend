@@ -2,9 +2,9 @@ import type { ContractSummary } from '../../entities/contract-change.entity';
 import { calculateContractTermsHash } from '../../pricing/contract-terms-hash';
 import {
   DEFAULT_MAX_PANEL_CAPACITY,
-  DOCTOR_USABLE_MONTHLY_HOME_SLOTS,
-  computeMonthlyHomeVisitDemand,
 } from '../../pricing/doctor-quota.helper';
+import { SlotLedgerService } from '../../../scheduling/slot-ledger.service';
+import { planContractVisits } from '../../../scheduling/planner/visit-planner';
 import {
   BadRequestException,
   ConflictException,
@@ -33,6 +33,7 @@ import {
 } from '../../../../core/business/business-helpers';
 import { moneyToNumber } from '../../../../core/database/prisma-transaction';
 import { calculateCarePackageQuote } from '../../../care-packages/pricing/calculate-care-package-quote';
+import { assertRemainingVisitsFit } from '../../../care-packages/rules/care-package-rules';
 import {
   CarePackageStatus,
   QuotaPeriod,
@@ -147,23 +148,87 @@ export class ContractsServiceImpl
     @Optional()
     @Inject(ContractPdfRendererService)
     private readonly pdfRenderer?: ContractPdfRendererService,
+    @Inject(SlotLedgerService)
+    private readonly slotLedger?: SlotLedgerService,
   ) {
     this.documentRenderer =
       documentRenderer || new ContractDocumentRendererService();
+  }
+
+  /**
+   * Lập kế hoạch rải đều các lượt khám theo lịch thật của bác sĩ trước khi
+   * tạo hợp đồng. Không đủ ngày/ca trống → DOCTOR_SCHEDULE_FULL (400-class
+   * conflict) và không tạo hợp đồng. Bỏ qua khi không có sổ cái (unit test cũ).
+   */
+  private async planSlotsForPurchase(
+    session: ContractsSession,
+    prepared: {
+      effectiveDoctorId: string | null;
+      targetFamilyId?: string | null;
+      today: Date;
+      pkg: { periodicVisitsQuota: number; telehealthQuota: number; durationMonths: number };
+    },
+  ) {
+    const tx = session.getTx?.();
+    const doctorId = prepared.effectiveDoctorId;
+    if (!this.slotLedger || !tx || !doctorId) return null;
+    const home = prepared.pkg.periodicVisitsQuota ?? 0;
+    const video = prepared.pkg.telehealthQuota ?? 0;
+    if (home + video === 0) return null;
+
+    const startIso = prepared.today.toISOString().slice(0, 10);
+    const endIso = addContractMonths(prepared.today, prepared.pkg.durationMonths)
+      .toISOString()
+      .slice(0, 10);
+    const tomorrow = new Date(prepared.today.getTime() + 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+
+    const occupied = await this.slotLedger.listOccupied(
+      tx,
+      doctorId,
+      startIso,
+      endIso,
+    );
+    const familyBusyDates = prepared.targetFamilyId
+      ? await this.slotLedger.listFamilyBusyDates(
+          tx,
+          prepared.targetFamilyId,
+          startIso,
+          endIso,
+        )
+      : [];
+    const plan = planContractVisits({
+      startDate: startIso,
+      endDate: endIso,
+      homeVisits: home,
+      videoVisits: video,
+      occupied: occupied.map((o) => ({ date: o.date, slotWindow: o.slotWindow })),
+      familyBusyDates,
+      earliestDate: tomorrow,
+    });
+    if (!plan.ok) {
+      throw new ConflictException({
+        code: 'DOCTOR_SCHEDULE_FULL',
+        message:
+          'Lịch của bác sĩ không còn đủ ca trống cho gói này. Vui lòng chọn bác sĩ hoặc gói khác.',
+        needed: plan.needed,
+        available: plan.available,
+      });
+    }
+    return { tx, doctorId, visits: plan.visits };
   }
 
   private async lockAndVerifyDoctorQuota(
     session: ContractsSession,
     doctorId: string,
     exceptContractId?: string,
-    requestedMonthlyHomeSlots = 0,
   ): Promise<{ doctor: any; activeAndHeldCount: number; maxCap: number }> {
     const locked = session.lockDoctorAndCountActiveAndHeld
       ? await session.lockDoctorAndCountActiveAndHeld(doctorId, exceptContractId)
       : null;
     let doctor = locked?.doctor ?? null;
     let activeAndHeldCount = locked?.activeAndHeldCount ?? 0;
-    const usedMonthlyHomeSlots = locked?.usedMonthlyHomeSlots ?? 0;
 
     if (!locked && !session.lockDoctorAndCountActiveAndHeld) {
       doctor = await session.findDoctorById(doctorId);
@@ -187,20 +252,6 @@ export class ContractsServiceImpl
     if (activeAndHeldCount >= maxCap) {
       throw new ConflictException(
         `Bác sĩ đã đạt giới hạn tối đa số hộ gia đình phụ trách (${maxCap}/${maxCap}). Vui lòng chọn bác sĩ khác`,
-      );
-    }
-
-    if (
-      requestedMonthlyHomeSlots > 0 &&
-      usedMonthlyHomeSlots + requestedMonthlyHomeSlots >
-        DOCTOR_USABLE_MONTHLY_HOME_SLOTS
-    ) {
-      const remainingMonthlySlots = Math.max(
-        0,
-        DOCTOR_USABLE_MONTHLY_HOME_SLOTS - usedMonthlyHomeSlots,
-      );
-      throw new ConflictException(
-        `Bác sĩ chỉ còn ${remainingMonthlySlots}/${DOCTOR_USABLE_MONTHLY_HOME_SLOTS} khung Khám tại nhà khả dụng trong tháng (gói yêu cầu ${requestedMonthlyHomeSlots} khung/tháng). Vui lòng chọn bác sĩ khác hoặc gói có số lượt khám thấp hơn.`,
       );
     }
 
@@ -624,16 +675,11 @@ export class ContractsServiceImpl
 
       let doctor: any = null;
       let resolvedFacilityId = dto.facilityId;
-      const requestedMonthlyHomeSlots = computeMonthlyHomeVisitDemand(
-        pkg.periodicVisitsQuota,
-        pkg.durationMonths,
-      );
       if (effectiveDoctorId) {
         const checked = await this.lockAndVerifyDoctorQuota(
           session,
           effectiveDoctorId,
           dto.replaceContractId,
-          requestedMonthlyHomeSlots,
         );
         doctor = checked.doctor;
         if (dto.facilityId && dto.facilityId !== doctor.facilityId) {
@@ -705,6 +751,11 @@ export class ContractsServiceImpl
           targetFamilyId,
         );
       }
+      await this.assertNoOtherOpenContract(
+        session,
+        targetFamilyId,
+        dto.replaceContractId,
+      );
 
       let memberCount: number;
       if (patientIds.length > 0) {
@@ -839,6 +890,12 @@ export class ContractsServiceImpl
           'REPLACE_UNPAID_CONTRACT_DRAFT',
         );
       }
+      // Kiểm tra lại dưới khóa dòng gia đình (chống mua đồng thời 2 gói).
+      await this.assertNoOtherOpenContract(
+        session,
+        prepared.targetFamilyId,
+        dto.replaceContractId,
+      );
 
       // Khóa lại dòng bác sĩ và kiểm tra slot một lần nữa trước khi ghi DB để chống race condition
       // (đặc biệt khi Documenso I/O chạy giữa 2 transaction).
@@ -846,11 +903,6 @@ export class ContractsServiceImpl
         await this.lockAndVerifyDoctorQuota(
           session,
           prepared.effectiveDoctorId,
-          undefined,
-          computeMonthlyHomeVisitDemand(
-            prepared.pkg.periodicVisitsQuota,
-            prepared.pkg.durationMonths,
-          ),
         );
       }
 
@@ -858,6 +910,7 @@ export class ContractsServiceImpl
       const signingDeadlineAt = options?.usesExistingCredit
         ? null
         : new Date(createdAt.getTime() + 24 * 3_600_000);
+      const slotPlan = await this.planSlotsForPurchase(session, prepared);
       const createFn = session.createMedicalContract || session.createUpgrade;
       const item = await createFn.call(session, {
         contractNumber: prepared.contractNumber,
@@ -882,6 +935,19 @@ export class ContractsServiceImpl
         documensoEnvelopeId: documensoEnvelope?.envelopeId ?? null,
         documensoItemId: documensoEnvelope?.envelopeItemId ?? null,
       });
+
+      if (slotPlan) {
+        await this.slotLedger!.hold(slotPlan.tx, {
+          doctorId: slotPlan.doctorId,
+          contractId: item.id,
+          slots: slotPlan.visits.map((v) => ({
+            date: v.date,
+            slotWindow: v.slotWindow,
+            visitType: v.visitType,
+          })),
+          expiresAt: signingDeadlineAt ?? computeContractHoldExpiresAt(createdAt),
+        });
+      }
 
       if (!isValidHomeVisitAddress(prepared.family.homeAddress)) {
         await session.updateFamilyHomeAddress?.(
@@ -2804,6 +2870,18 @@ export class ContractsServiceImpl
       if (dto.type === 'QUOTA_EXPANSION') {
         if (dto.additionalMembers !== undefined)
           throw new BadRequestException('Quota expansion cannot add members');
+        // S4: lượt mua thêm cộng lượt còn lại phải xếp được trong phần kỳ hạn còn lại.
+        assertRemainingVisitsFit(
+          {
+            remainingVisits:
+              contract.remainingHomeVisits +
+              contract.remainingTelehealth +
+              dto.extraHomeVisits!,
+            today: todayInVietnam(),
+            endDate: contract.endDate,
+          },
+          'Mua thêm lượt khám',
+        );
         amount = calculateHomeVisitAddendum(terms, dto.extraHomeVisits!);
       } else {
         if (dto.extraHomeVisits !== undefined)
@@ -3532,6 +3610,22 @@ export class ContractsServiceImpl
     return contract;
   }
   // Chỉ bản nháp chưa thanh toán mới được hủy/thay thế; hóa đơn PAID khóa vĩnh viễn.
+  /** Luật: mỗi gia đình chỉ có 1 gói; muốn đổi gói phải hủy gói hiện tại trước. */
+  private async assertNoOtherOpenContract(
+    session: ContractsSession,
+    familyId: string,
+    exceptId?: string,
+  ) {
+    const open = await session.findOpenContractForFamily?.(familyId, exceptId);
+    if (open) {
+      throw new ConflictException({
+        code: 'FAMILY_ALREADY_HAS_OPEN_CONTRACT',
+        message:
+          'Gia đình đã có một gói đang hiệu lực hoặc đang chờ xử lý. Vui lòng hủy gói hiện tại trước khi mua gói khác.',
+        contractId: open.id,
+      });
+    }
+  }
   private async requireReplaceableDraft(
     session: ContractsSession,
     contractId: string,

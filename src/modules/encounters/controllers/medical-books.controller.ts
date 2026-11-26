@@ -6,6 +6,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Put,
   Query,
   Req,
   StreamableFile,
@@ -33,6 +34,7 @@ import {
   FamilyPrescriptionsDto,
   FamilyPrescriptionDateQuery,
   PrescriptionPageQuery,
+  SaveVisitDraftDto,
   UploadBookDocumentDto,
 } from '../dtos/share-prescription.dto';
 import { MedicalBooksService } from '../services/medical-books.service';
@@ -192,6 +194,20 @@ export class MedicalBooksController {
     @Query('patientId') patientId?: string,
   ) {
     return this.books.visitDetail(req.user, id, patientId);
+  }
+
+  @Put('visits/:id/draft')
+  @Roles('DOCTOR')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({
+    summary: 'Bác sĩ lưu nháp nội dung khám từng bước cho một thành viên',
+  })
+  saveDraft(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SaveVisitDraftDto,
+  ) {
+    return this.prescriptions.saveVisitDraft(req.user, id, dto);
   }
 
   @Post('visits/:id/confirm')

@@ -58,6 +58,7 @@ export class SePayApiClient {
   async listTransactions(
     environment: PaymentEnvironment,
     query: SePayTransactionQuery,
+    credentials?: { apiToken: string; deadline?: number },
   ): Promise<SePayTransactionPage> {
     const url = new URL(`${this.config.getBaseUrl(environment)}/transactions`);
     url.searchParams.set('bank_account_id', query.bankAccountId);
@@ -79,23 +80,23 @@ export class SePayApiClient {
     if (query.to)
       url.searchParams.set('transaction_date_to', formatVietnamDate(query.to));
 
-    let lastStatus: number | undefined;
+      let lastStatus: number | undefined;
     for (let attempt = 0; attempt < 3; attempt++) {
       let response: Response;
       try {
         response = await fetch(url, {
           headers: {
             Accept: 'application/json',
-            Authorization: `Bearer ${this.config.getToken(environment)}`,
+              Authorization: `Bearer ${credentials?.apiToken ?? this.config.getToken(environment)}`,
           },
-          signal: AbortSignal.timeout(10_000),
+            signal: AbortSignal.timeout(Math.max(1, Math.min(10_000, (credentials?.deadline ?? (Date.now() + 10_000)) - Date.now()))),
         });
-      } catch {
+        } catch (error) {
         if (attempt < 2) {
           await wait(250 * 2 ** attempt);
           continue;
         }
-        throw new ServiceUnavailableException('Cannot reach SePay API');
+          throw new ServiceUnavailableException({ message: 'Cannot reach SePay API', code: error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name) ? 'PROVIDER_TIMEOUT' : 'PROVIDER_UNAVAILABLE' });
       }
       lastStatus = response.status;
       if (response.status === 429 || response.status >= 500) {
@@ -107,7 +108,7 @@ export class SePayApiClient {
           );
           await wait(
             Number.isFinite(seconds)
-              ? Math.min(Math.max(seconds, 1), 5) * 1000
+                ? Math.min(Math.max(seconds, 0.25), 1) * 1000
               : 1000,
           );
           continue;

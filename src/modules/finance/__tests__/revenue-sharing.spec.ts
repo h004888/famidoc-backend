@@ -25,4 +25,18 @@ describe('Revenue share arithmetic', () => {
   ])('rejects invalid recorded amounts %s/%s', (gross, vat) => {
     expect(() => calculateRevenueShares(gross, vat)).toThrow();
   });
+
+  it('uses the contract commission rate instead of the 15% default', () => {
+    const value = calculateRevenueShares(1000000, 0, 20);
+    expect(value.platformFeeVnd).toBe(200000);
+    expect(value.facilityShareVnd).toBe(800000);
+  });
+  it('supports two-decimal rates without losing VND', () => {
+    const value = calculateRevenueShares(1001, 0, 12.5);
+    expect(value.platformFeeVnd).toBe(125);
+    expect(value.platformFeeVnd + value.facilityShareVnd).toBe(1001);
+  });
+  it.each([-1, 101, Number.NaN])('rejects invalid rate %s', (rate) => {
+    expect(() => calculateRevenueShares(1000, 0, rate)).toThrow();
+  });
 });

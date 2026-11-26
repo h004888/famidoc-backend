@@ -88,6 +88,10 @@ function visitScope(actor: AuthenticatedUser): Prisma.EncounterWhereInput {
     ? doctorVisitScope(actor.id)
     : {
         contract: { familyUnit: { representativeUserId: actor.id } },
+        OR: [
+          { encounterType: 'TELEHEALTH' },
+          { encounterType: 'HOME_VISIT', doctorCompletedAt: { not: null } },
+        ],
         clinicalEmrs: {
           some: {
             isFinalized: true,
@@ -447,6 +451,20 @@ export class MedicalBooksService {
             treatmentPlan: true,
             isFinalized: true,
             finalizedAt: true,
+            vitalSigns: {
+              orderBy: [{ recordedAt: 'desc' }],
+              take: 1,
+              select: {
+                systolicBp: true,
+                diastolicBp: true,
+                heartRate: true,
+                temperature: true,
+                spo2: true,
+                respiratoryRate: true,
+                weightKg: true,
+                recordedAt: true,
+              },
+            },
             prescriptions: {
               where: isDoctor ? undefined : { recipientUserId: actor.id },
               orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -487,6 +505,58 @@ export class MedicalBooksService {
     const { clinicalEmrs: _emrs, participants, contract, doctor, ...entry } = visit;
     const recipient = contract.familyUnit.representativeUser;
     const prescription = clinicalEmr?.prescriptions[0];
+    const mapVitals = (
+      row: {
+        systolicBp: number | null;
+        diastolicBp: number | null;
+        heartRate: number | null;
+        temperature: unknown;
+        spo2: number | null;
+        respiratoryRate: number | null;
+        weightKg: unknown;
+        recordedAt: Date;
+      },
+      source: 'DRAFT' | 'PREVIOUS',
+    ) => ({
+      systolicBp: row.systolicBp,
+      diastolicBp: row.diastolicBp,
+      heartRate: row.heartRate,
+      temperature:
+        row.temperature !== null && row.temperature !== undefined
+          ? Number(row.temperature)
+          : null,
+      spo2: row.spo2,
+      respiratoryRate: row.respiratoryRate,
+      weightKg:
+        row.weightKg !== null && row.weightKg !== undefined
+          ? Number(row.weightKg)
+          : null,
+      recordedAt: row.recordedAt,
+      source,
+    });
+    const emrVital = clinicalEmr?.vitalSigns?.[0];
+    let vitals: ReturnType<typeof mapVitals> | null = null;
+    if (emrVital && (isDoctor || clinicalEmr?.isFinalized)) {
+      vitals = mapVitals(emrVital, 'DRAFT');
+    } else if (isDoctor) {
+      const previousVital = await this.prisma.vitalSign.findFirst({
+        where: { patientId: resolvedPatient.id },
+        orderBy: { recordedAt: 'desc' },
+        select: {
+          systolicBp: true,
+          diastolicBp: true,
+          heartRate: true,
+          temperature: true,
+          spo2: true,
+          respiratoryRate: true,
+          weightKg: true,
+          recordedAt: true,
+        },
+      });
+      if (previousVital) {
+        vitals = mapVitals(previousVital, 'PREVIOUS');
+      }
+    }
     if (clinicalEmr) {
       await writeBusinessAudit(
         this.prisma,
@@ -540,6 +610,7 @@ export class MedicalBooksService {
       prescription: prescription ? prescriptionView(prescription) : null,
       prescriptionHistory:
         clinicalEmr?.prescriptions.slice(1).map(prescriptionView) ?? [],
+      vitals,
     };
   }
 }

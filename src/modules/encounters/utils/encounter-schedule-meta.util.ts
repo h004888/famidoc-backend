@@ -1,4 +1,8 @@
 import { EncounterCategory, EncounterStatus } from '@prisma/client';
+import {
+  computeHomeVisitDeadlines,
+  type HomeVisitDeadlines,
+} from './encounter-session-window.util';
 
 export type PendingScheduleStage =
   | 'CADENCE_DRAFT'
@@ -147,10 +151,24 @@ export function enrichEncounterWithScheduleMeta<
     encounterStatus: EncounterStatus | string;
     category: EncounterCategory | string;
     cancelReason?: string | null;
+    encounterType?: string | null;
+    scheduledDate?: Date | string | null;
+    scheduledTime?: Date | string | null;
+    slotWindow?: string | null;
   },
->(encounter: T): T & ParsedEncounterScheduleMeta {
+>(encounter: T): T & ParsedEncounterScheduleMeta & { sessionDeadlines?: HomeVisitDeadlines } {
+  const sessionDeadlines =
+    encounter.encounterType === 'HOME_VISIT' && encounter.scheduledDate
+      ? computeHomeVisitDeadlines({
+          scheduledDate: encounter.scheduledDate,
+          scheduledTime: encounter.scheduledTime,
+          slotWindow: encounter.slotWindow,
+        })
+      : undefined;
+
   return {
     ...encounter,
     ...parseEncounterScheduleMeta(encounter),
+    ...(sessionDeadlines ? { sessionDeadlines } : {}),
   };
 }

@@ -173,7 +173,14 @@ class PrismaFinanceSession implements FinanceSession {
         invoice.paidAt < filter.end &&
         invoice.paidAt <= now,
     );
-    return { doctors, activeContracts, paidInvoices, packageInvoices };
+    const staffingRates = await this.tx.b2bStaffingContract.findMany({
+      where: {
+        facilityId: filter.facilityId,
+        status: { in: ['ACTIVE', 'EXPIRED', 'TERMINATED'] },
+      },
+      select: { platformCommissionRate: true, startDate: true, endDate: true },
+    });
+    return { doctors, activeContracts, paidInvoices, packageInvoices, staffingRates };
   }
   async findEligibleInvoices(filter: RevenueFilter) {
     const rows = await this.tx.invoice.findMany({

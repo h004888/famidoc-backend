@@ -181,6 +181,12 @@ enum EncounterStatus {
   DISPUTED
 }
 
+enum EncounterParticipantAttendance {
+  PLANNED
+  EXAMINED
+  ABSENT
+}
+
 enum RescheduleDecision {
   PENDING
   APPROVED
@@ -446,6 +452,7 @@ model Doctor {
   credentials        DoctorCredential[]
   medicalContracts   MedicalContract[]
   encounters         Encounter[]
+  slotBookings       DoctorSlotBooking[]
   reviews            DoctorReview[]
   treatedCases       DoctorTreatedCase[]
   quotaProposals     DoctorQuotaProposal[]
@@ -756,6 +763,7 @@ model MedicalContract {
   addenda        ContractAddendum[]
   members        ContractMember[]
   encounters     Encounter[]
+  slotBookings   DoctorSlotBooking[]
   invoices             Invoice[]
   complaints           Complaint[]
   supportCases         SupportCase[]
@@ -900,6 +908,11 @@ model Encounter {
   onTheWayAt               DateTime?           @map("on_the_way_at") @db.Timestamptz()
   arrivedAt                DateTime?           @map("arrived_at") @db.Timestamptz()
   familyConfirmedArrivalAt DateTime?           @map("family_confirmed_arrival_at") @db.Timestamptz()
+  doctorCompletedAt        DateTime?           @map("doctor_completed_at") @db.Timestamptz()
+  recordOverdueAt          DateTime?           @map("record_overdue_at") @db.Timestamptz()
+  lateCompletionReason     String?             @map("late_completion_reason") @db.Text
+  reminder21hSentAt        DateTime?           @map("reminder_21h_sent_at") @db.Timestamptz()
+  overdueEscalatedAt       DateTime?           @map("overdue_escalated_at") @db.Timestamptz()
   cancelReason             String?             @map("cancel_reason") @db.Text
   reminder24hSentAt  DateTime?           @map("reminder_24h_sent_at") @db.Timestamptz()
   reminder2hSentAt   DateTime?           @map("reminder_2h_sent_at") @db.Timestamptz()
@@ -924,6 +937,8 @@ model Encounter {
 
   @@index([contractId, scheduledDate(sort: Desc), scheduledTime(sort: Desc)], map: "idx_encounters_contract_timeline")
   @@index([doctorId, scheduledDate, scheduledTime], map: "idx_encounters_doctor_schedule")
+  slotBooking DoctorSlotBooking?
+
   @@map("encounters")
 }
 
@@ -959,10 +974,12 @@ model EncounterRescheduleRequest {
 }
 
 model EncounterParticipant {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  encounterId String   @map("encounter_id") @db.Uuid
-  patientId   String   @map("patient_id") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz()
+  id               String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  encounterId      String                         @map("encounter_id") @db.Uuid
+  patientId        String                         @map("patient_id") @db.Uuid
+  attendanceStatus EncounterParticipantAttendance @default(PLANNED) @map("attendance_status")
+  absenceReason    String?                        @map("absence_reason") @db.VarChar(255)
+  createdAt        DateTime                       @default(now()) @map("created_at") @db.Timestamptz()
 
   encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
   patient   Patient   @relation(fields: [patientId], references: [id], onDelete: Restrict)
@@ -1051,8 +1068,9 @@ model VitalSign {
   diastolicBp     Int?     @map("diastolic_bp")
   heartRate       Int?     @map("heart_rate")
   temperature     Decimal? @db.Decimal(4, 1)
-  spo2            Int?
+  spo2             Int?
   respiratoryRate  Int?     @map("respiratory_rate")
+  weightKg         Decimal? @map("weight_kg") @db.Decimal(5, 1)
   bloodGlucose     Decimal? @map("blood_glucose") @db.Decimal(5, 2)
   glucoseContext   String?  @map("glucose_context") @db.VarChar(30)
   measurementState String?  @map("measurement_state") @db.VarChar(30)
@@ -1064,6 +1082,7 @@ model VitalSign {
   clinicalEmr ClinicalEmr? @relation(fields: [emrId], references: [id], onDelete: SetNull)
   patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
+  @@unique([emrId], map: "uq_vital_signs_emr_id")
   @@index([patientId, recordedAt(sort: Desc)], map: "idx_abnormal_vital_signs")
   @@map("vital_signs")
 }
@@ -1160,7 +1179,7 @@ model Invoice {
   environment           String    @default("TEST") @db.VarChar(10)
   attempt               Int       @default(1)
   expectedAccountNumber String?   @map("expected_account_number") @db.VarChar(50)
-  expectedGateway       String?   @map("expected_gateway") @db.VarChar(50)
+  expectedGateway       String?   @map("expected_gateway") @db.VarChar(100)
   paidAt                DateTime? @map("paid_at") @db.Timestamptz()
   acceptedTransactionId String?   @unique @map("accepted_transaction_id") @db.Uuid
 
@@ -1238,6 +1257,10 @@ model PaymentTransaction {
 }
 
 model SePayReconciliationRun {
+  monitoredAccountId  String? @db.Uuid
+  batchId             String? @db.Uuid
+  monitoredAccount    PaymentMonitoredAccount? @relation(fields: [monitoredAccountId], references: [id])
+  batch               PaymentReconciliationBatch? @relation(fields: [batchId], references: [id])
   id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   environment         String    @db.VarChar(10)
   trigger             String    @db.VarChar(20)
@@ -1262,6 +1285,8 @@ model SePayReconciliationRun {
 
   @@index([environment, startedAt(sort: Desc)])
   @@map("sepay_reconciliation_runs")
+  @@index([environment, monitoredAccountId, startedAt])
+  @@index([batchId])
 }
 
 model SePayReconciliationState {
@@ -1575,4 +1600,152 @@ model MatchingQueueRequest {
   @@index([familyId, status], map: "idx_matching_queue_family_status")
   @@index([userId, status], map: "idx_matching_queue_user_status")
   @@map("matching_queue_requests")
+}
+model PaymentSettingsHead {
+  environment String @id @db.VarChar(10)
+  revisionId String @unique @db.Uuid
+  version Int
+  revision PaymentSettingsRevision @relation(fields: [revisionId], references: [id])
+}
+
+model PaymentSettingsRevision {
+  id String @id @default(uuid()) @db.Uuid
+  environment String @db.VarChar(10)
+  version Int
+  source String @db.VarChar(20)
+  monitoredAccountId String @db.Uuid
+  accountNumber String @db.VarChar(19)
+  gateway String @db.VarChar(100)
+  bankAccountId String @db.Uuid
+  authMethod String @db.VarChar(10)
+  encryptedSecrets Json @db.JsonB
+  createdBy String? @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz()
+  account PaymentMonitoredAccount @relation(fields: [monitoredAccountId], references: [id])
+  head PaymentSettingsHead?
+  credentials PaymentWebhookCredentialWindow[]
+  sessions PaymentConfigurationTestSession[]
+  @@unique([environment, version])
+}
+
+model PaymentMonitoredAccount {
+  id String @id @default(uuid()) @db.Uuid
+  environment String @db.VarChar(10)
+  normalizedGateway String @db.VarChar(100)
+  accountNumber String @db.VarChar(19)
+  bankAccountId String @db.Uuid
+  latestRevisionId String? @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz()
+  revisions PaymentSettingsRevision[]
+  credentials PaymentWebhookCredentialWindow[]
+  states PaymentAccountReconciliationState[]
+  runs SePayReconciliationRun[]
+  @@unique([environment, normalizedGateway, accountNumber, bankAccountId])
+}
+
+model PaymentAccountReconciliationState {
+  environment String @db.VarChar(10)
+  monitoredAccountId String @db.Uuid
+  cursor String? @db.Uuid
+  lastSuccessfulAt DateTime? @db.Timestamptz()
+  lastRunId String? @db.Uuid
+  lockedUntil DateTime? @db.Timestamptz()
+  leaseOwner String? @db.Uuid
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz()
+  account PaymentMonitoredAccount @relation(fields: [monitoredAccountId], references: [id])
+  @@id([environment, monitoredAccountId])
+}
+
+model PaymentWebhookCredentialWindow {
+  id String @id @default(uuid()) @db.Uuid
+  monitoredAccountId String @db.Uuid
+  revisionId String @db.Uuid
+  method String @db.VarChar(10)
+  retiredAt DateTime? @db.Timestamptz()
+  acceptUntil DateTime? @db.Timestamptz()
+  account PaymentMonitoredAccount @relation(fields: [monitoredAccountId], references: [id])
+  revision PaymentSettingsRevision @relation(fields: [revisionId], references: [id])
+  @@unique([monitoredAccountId, revisionId, method])
+}
+
+model PaymentReconciliationBatch {
+  id String @id @default(uuid()) @db.Uuid
+  environment String @db.VarChar(10)
+  trigger String @db.VarChar(20)
+  requestedByUserId String? @db.Uuid
+  status String @db.VarChar(20)
+  rangeFrom DateTime? @db.Timestamptz()
+  rangeTo DateTime? @db.Timestamptz()
+  startedAt DateTime @default(now()) @db.Timestamptz()
+  completedAt DateTime? @db.Timestamptz()
+  counts Json @default("{}") @db.JsonB
+  errors Json @default("[]") @db.JsonB
+  runs SePayReconciliationRun[]
+}
+
+model PaymentConfigurationTestSession {
+  id String @id @default(uuid()) @db.Uuid
+  actorId String @db.Uuid
+  requestId String @db.Uuid
+  requestIds String[] @default([]) @db.Uuid
+  revisionId String @db.Uuid
+  environment String @db.VarChar(10)
+  code String @unique @db.VarChar(27)
+  amountVnd Int
+  account Json @db.JsonB
+  createdAt DateTime @default(now()) @db.Timestamptz()
+  expiresAt DateTime @db.Timestamptz()
+  finalizeAt DateTime @db.Timestamptz()
+  status String @db.VarChar(25)
+  webhookMatchedAt DateTime? @db.Timestamptz()
+  apiSeenAt DateTime? @db.Timestamptz()
+  revision PaymentSettingsRevision @relation(fields: [revisionId], references: [id])
+  deliveries PaymentConfigurationTestDelivery[]
+  @@unique([actorId, requestId])
+  @@index([actorId, environment, finalizeAt])
+}
+
+model PaymentConfigurationTestDelivery {
+  id String @id @default(uuid()) @db.Uuid
+  sessionId String? @db.Uuid
+  environment String @db.VarChar(10)
+  source String @db.VarChar(10)
+  providerTransactionId String @db.VarChar(100)
+  fingerprint String @db.VarChar(64)
+  accountMatch Boolean
+  amountMatch Boolean
+  evidence Json @db.JsonB
+  receivedAt DateTime @default(now()) @db.Timestamptz()
+  session PaymentConfigurationTestSession? @relation(fields: [sessionId], references: [id])
+  @@unique([environment, source, providerTransactionId])
+}
+
+model PaymentConfigurationCheckWindow {
+  actorId String @db.Uuid
+  windowStart DateTime @db.Timestamptz()
+  count Int @default(0)
+  @@id([actorId, windowStart])
+}
+
+
+model DoctorSlotBooking {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  doctorId      String    @map("doctor_id") @db.Uuid
+  slotDate      DateTime  @map("slot_date") @db.Date
+  slotWindow    String    @map("slot_window") @db.VarChar(20)
+  contractId    String    @map("contract_id") @db.Uuid
+  encounterId   String?   @unique @map("encounter_id") @db.Uuid
+  visitType     String    @map("visit_type") @db.VarChar(20)
+  status        String    @db.VarChar(10)
+  holdExpiresAt DateTime? @map("hold_expires_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  doctor    Doctor          @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  contract  MedicalContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  encounter Encounter?      @relation(fields: [encounterId], references: [id], onDelete: SetNull)
+
+  @@unique([doctorId, slotDate, slotWindow])
+  @@unique([contractId, slotDate])
+  @@index([contractId])
+  @@map("doctor_slot_bookings")
 }

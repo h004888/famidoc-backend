@@ -37,6 +37,8 @@ import { DecideRescheduleRequestDto } from '../dtos/decide-reschedule-request.dt
 import { ListEncountersQueryDto } from '../dtos/list-encounters-query.dto';
 import { DoctorManualScheduleDto } from '../dtos/doctor-manual-schedule.dto';
 import { AdjustCadenceMilestoneDto } from '../dtos/adjust-cadence-milestone.dto';
+import { CompleteEncounterDto } from '../dtos/complete-encounter.dto';
+import { UpdateParticipantAttendanceDto } from '../dtos/update-participant-attendance.dto';
 
 @ApiTags('Encounters & Examination Scheduling')
 @ApiBearerAuth('JWT-auth')
@@ -133,24 +135,6 @@ export class EncountersController {
     return (this.service as any).cancelEncounter(req.user, id, reason);
   }
 
-  @Patch(':id/on-the-way')
-  @Roles('DOCTOR', 'ADMIN')
-  @ApiOperation({ summary: 'Bác sĩ báo đang di chuyển tới nhà gia đình' })
-  @ApiParam({ name: 'id', description: 'ID của buổi khám' })
-  @ResponseMessage('Đã cập nhật trạng thái đang di chuyển')
-  markOnTheWay(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
-    return this.service.markOnTheWay(req.user, id);
-  }
-
-  @Patch(':id/arrive')
-  @Roles('DOCTOR', 'ADMIN')
-  @ApiOperation({ summary: 'Bác sĩ check-in đã có mặt tại nhà gia đình' })
-  @ApiParam({ name: 'id', description: 'ID của buổi khám' })
-  @ResponseMessage('Đã check-in có mặt tại nhà gia đình')
-  markArrived(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
-    return this.service.markArrived(req.user, id);
-  }
-
   @Patch(':id/confirm-arrival')
   @Roles('FAMILY_REP', 'ADMIN')
   @ApiOperation({ summary: 'Gia đình xác nhận 1 chạm bác sĩ đã có mặt tại nhà' })
@@ -158,6 +142,36 @@ export class EncountersController {
   @ResponseMessage('Đã xác nhận bác sĩ có mặt tại nhà')
   confirmArrival(@Req() req: AuthenticatedRequest, @Param('id') id: string) {
     return this.service.confirmArrival(req.user, id);
+  }
+
+  @Patch(':id/complete')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({ summary: 'Bác sĩ xác nhận hoàn tất toàn bộ ca khám tại nhà' })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám' })
+  @ApiBody({ type: CompleteEncounterDto })
+  @ResponseMessage('Đã hoàn tất ca khám tại nhà')
+  completeEncounter(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Body() dto: CompleteEncounterDto,
+  ) {
+    return this.service.completeEncounter(req.user, id, dto);
+  }
+
+  @Patch(':id/participants/:patientId/attendance')
+  @Roles('DOCTOR', 'ADMIN')
+  @ApiOperation({ summary: 'Bác sĩ cập nhật trạng thái tham gia của thành viên trong ca khám' })
+  @ApiParam({ name: 'id', description: 'ID của buổi khám' })
+  @ApiParam({ name: 'patientId', description: 'ID của thành viên' })
+  @ApiBody({ type: UpdateParticipantAttendanceDto })
+  @ResponseMessage('Đã cập nhật trạng thái tham gia')
+  updateParticipantAttendance(
+    @Req() req: AuthenticatedRequest,
+    @Param('id') id: string,
+    @Param('patientId') patientId: string,
+    @Body() dto: UpdateParticipantAttendanceDto,
+  ) {
+    return this.service.updateParticipantAttendance(req.user, id, patientId, dto);
   }
 
   @Post(':id/reschedule')
