@@ -1,9 +1,10 @@
-import {
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma, type ServicePackage } from '@prisma/client';
+import {
+  BusinessConflictException,
+  ResourceNotFoundException,
+} from '../../../../core/exceptions/api.exception';
+import { CarePackageErrorCode } from '../../../../core/constants/error-codes.constant';
 import { PrismaService } from '../../../../core/database/prisma.service';
 import {
   moneyToNumber,
@@ -48,7 +49,6 @@ function toEntity(row: ServicePackage): CarePackage {
     quotas: {
       videoConsultations: row.telehealthQuota,
       homeVisits: row.periodicVisitsQuota,
-      facilityVisits: 0,
     },
     status: row.status as CarePackageStatus,
     createdAt: row.createdAt.toISOString(),
@@ -63,13 +63,13 @@ function termsData(terms: CarePackageTerms) {
     packageName: terms.name,
     description: terms.description,
     durationMonths: terms.durationMonths,
-    videoQuotaPolicy: terms.videoQuotaPolicy ?? 'FIXED',
+    videoQuotaPolicy: 'FIXED',
     homeVisitUnitPrice: terms.homeVisitUnitPriceVnd ?? null,
     basePrice: terms.priceVnd,
     includedMembers: terms.includedMembers,
     maxMembers: terms.maxMembers,
     additionalMemberMonthlyPrice: terms.additionalMemberMonthlyPriceVnd,
-    quotaPeriod: terms.quotaPeriod,
+    quotaPeriod: QuotaPeriod.PER_TERM,
     telehealthQuota: terms.quotas.videoConsultations,
     periodicVisitsQuota: terms.quotas.homeVisits,
   };
@@ -87,6 +87,7 @@ export class CarePackagesRepositoryImpl implements CarePackagesRepository {
   ): Promise<CarePackagesPage> {
     return serializable(this.prisma, async (tx) => {
       const where: Prisma.ServicePackageWhereInput = {
+        deletedAt: null,
         status: status ?? (options?.excludeDrafts ? { not: 'DRAFT' } : undefined),
       };
       if (options?.excludeDemo) {
@@ -125,13 +126,15 @@ export class CarePackagesRepositoryImpl implements CarePackagesRepository {
   }
 
   async findById(id: string): Promise<CarePackage | null> {
-    const row = await this.prisma.servicePackage.findUnique({ where: { id } });
+    const row = await this.prisma.servicePackage.findFirst({
+      where: { id, deletedAt: null },
+    });
     return row ? toEntity(row) : null;
   }
 
   async findLatestByCode(code: string): Promise<CarePackage | null> {
     const row = await this.prisma.servicePackage.findFirst({
-      where: { lineageCode: code },
+      where: { lineageCode: code, deletedAt: null },
       orderBy: { version: 'desc' },
     });
     return row ? toEntity(row) : null;
@@ -148,8 +151,9 @@ export class CarePackagesRepositoryImpl implements CarePackagesRepository {
         item.version !== (latest?.version ?? 0) + 1 ||
         latest?.status === 'DRAFT'
       ) {
-        throw new ConflictException(
-          'Package version changed or a draft already exists',
+        throw new BusinessConflictException(
+          CarePackageErrorCode.CARE_PACKAGE_CODE_EXISTS,
+          'Phiên bản gói đã thay đổi hoặc đã tồn tại bản nháp. Vui lòng tải lại danh mục.',
         );
       }
       return toEntity(
@@ -178,7 +182,10 @@ export class CarePackagesRepositoryImpl implements CarePackagesRepository {
     return serializable(this.prisma, async (tx) => {
       const row = await this.requireRow(tx, id);
       if (row.status === 'DEPRECATED')
-        throw new ConflictException('Cannot edit a deprecated package');
+        throw new BusinessConflictException(
+          CarePackageErrorCode.CARE_PACKAGE_DEPRECATED_READONLY,
+          'Không thể chỉnh sửa gói dịch vụ đã ngừng bán.',
+        );
       const merged = { ...toEntity(row), ...changes };
       validateCarePackageTerms(merged);
       return toEntity(
@@ -202,9 +209,12 @@ export class CarePackagesRepositoryImpl implements CarePackagesRepository {
     return serializable(this.prisma, async (tx) => {
       const row = await this.requireRow(tx, id);
       if (row.status !== expectedStatus)
-        throw new ConflictException(expectedStatus === 'DRAFT'
-          ? 'Only a draft can be published'
-          : 'Chỉ có thể mở bán lại gói đã ngừng bán. Hãy tải lại danh mục.');
+        throw new BusinessConflictException(
+          CarePackageErrorCode.CARE_PACKAGE_INACTIVE,
+          expectedStatus === 'DRAFT'
+            ? 'Chỉ có thể xuất bản gói đang ở trạng thái bản nháp.'
+            : 'Chỉ có thể mở bán lại gói đã ngừng bán. Hãy tải lại danh mục.',
+        );
       const latest = await tx.servicePackage.findFirst({
         where: {
           lineageCode: row.lineageCode,
@@ -214,9 +224,12 @@ export class CarePackagesRepositoryImpl implements CarePackagesRepository {
         orderBy: { version: 'desc' },
       });
       if (latest?.id !== id)
-        throw new ConflictException(expectedStatus === 'DRAFT'
-          ? 'Only the latest version can be published'
-          : 'Gói đã có phiên bản mới hơn. Vui lòng mở bán phiên bản mới nhất.');
+        throw new BusinessConflictException(
+          CarePackageErrorCode.CARE_PACKAGE_INACTIVE,
+          expectedStatus === 'DRAFT'
+            ? 'Chỉ có thể xuất bản phiên bản mới nhất của gói.'
+            : 'Gói đã có phiên bản mới hơn. Vui lòng mở bán phiên bản mới nhất.',
+        );
       validateCarePackageTerms(toEntity(row));
       const now = new Date();
       // Ngừng bản cũ trước khi bật bản mới; unique index trong DB bảo đảm chỉ có một ACTIVE/mã.
@@ -238,7 +251,10 @@ export class CarePackagesRepositoryImpl implements CarePackagesRepository {
       const row = await this.requireRow(tx, id);
       if (row.status === 'DEPRECATED') return toEntity(row);
       if (row.status !== 'ACTIVE')
-        throw new ConflictException('Only an active package can be retired');
+        throw new BusinessConflictException(
+          CarePackageErrorCode.CARE_PACKAGE_INACTIVE,
+          'Chỉ có thể ngừng bán gói đang ở trạng thái mở bán.',
+        );
       return toEntity(
         await tx.servicePackage.update({
           where: { id },
@@ -248,9 +264,72 @@ export class CarePackagesRepositoryImpl implements CarePackagesRepository {
     });
   }
 
+  async softDelete(id: string): Promise<{ id: string; deletedAt: string }> {
+    return serializable(this.prisma, async (tx) => {
+      const row = await this.requireRow(tx, id);
+      if (row.status === 'ACTIVE') {
+        throw new BusinessConflictException(
+          CarePackageErrorCode.CARE_PACKAGE_ACTIVE_DELETE_BLOCKED,
+          'Không thể xóa gói đang mở bán. Vui lòng ngừng bán gói trước khi xóa.',
+          'Không thể xóa gói đang mở bán. Vui lòng ngừng bán gói trước khi xóa.',
+          {
+            conditions: [
+              {
+                code: 'PKG_STATUS',
+                condition: 'status phải là DEPRECATED hoặc DRAFT',
+                message: 'Gói hiện đang ở trạng thái Đang bán (ACTIVE).',
+              },
+            ],
+          },
+        );
+      }
+
+      const contracts = await tx.medicalContract.count({ where: { packageId: id } });
+      const matchingSessions = await tx.matchingSession.count({
+        where: { servicePackage: { id } },
+      });
+      const matchingQueueRequests = await tx.matchingQueueRequest.count({
+        where: { servicePackage: { id } },
+      });
+      const inUseCount = contracts + matchingSessions + matchingQueueRequests;
+      if (inUseCount > 0) {
+        const msg = `Không thể xóa gói vì đang có ${inUseCount} hợp đồng hoặc yêu cầu ghép nối sử dụng gói này.`;
+        throw new BusinessConflictException(
+          CarePackageErrorCode.CARE_PACKAGE_IN_USE,
+          msg,
+          msg,
+          {
+            conditions: [
+              {
+                code: 'PKG_IN_USE',
+                condition: 'Không còn hợp đồng hoặc phiên ghép nối liên kết với gói',
+                message: `Đang có ${inUseCount} hợp đồng/phiên ghép nối liên kết với gói.`,
+              },
+            ],
+          },
+        );
+      }
+
+      const now = new Date();
+      await tx.servicePackage.update({
+        where: { id },
+        data: {
+          status: 'DEPRECATED',
+          deletedAt: now,
+          retiredAt: row.retiredAt ?? now,
+        },
+      });
+      return { id, deletedAt: now.toISOString() };
+    });
+  }
+
   private async requireRow(tx: Prisma.TransactionClient, id: string) {
-    const row = await tx.servicePackage.findUnique({ where: { id } });
-    if (!row) throw new NotFoundException('Care package not found');
+    const row = await tx.servicePackage.findFirst({ where: { id, deletedAt: null } });
+    if (!row)
+      throw new ResourceNotFoundException(
+        CarePackageErrorCode.CARE_PACKAGE_NOT_FOUND,
+        'Không tìm thấy gói dịch vụ.',
+      );
     return row;
   }
 }

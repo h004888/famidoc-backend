@@ -131,9 +131,10 @@ describe('Standard API Response Pipeline (E2E Integration)', () => {
 
     expect(res.body.success).toBe(false);
     expect(res.body.code).toBe(422);
+    expect(res.body).not.toHaveProperty('message');
     expect(res.body.error).toBeDefined();
     expect(res.body.error.errorCode).toBe('VALIDATION_FAILED');
-    expect(res.body.error.type).toBe('https://api.famidoc.vn/errors/validation-failed');
+    expect(res.body.error).not.toHaveProperty('type');
     expect(res.body.error.instance).toBe('/test-api/users');
     expect(Array.isArray(res.body.error.invalidParams)).toBe(true);
     expect(res.body.error.invalidParams.length).toBeGreaterThanOrEqual(3);
@@ -146,8 +147,9 @@ describe('Standard API Response Pipeline (E2E Integration)', () => {
 
     expect(res.body.success).toBe(false);
     expect(res.body.code).toBe(404);
+    expect(res.body).not.toHaveProperty('message');
     expect(res.body.error.errorCode).toBe('USER_NOT_FOUND');
-    expect(res.body.error.type).toBe('https://api.famidoc.vn/errors/user-not-found');
+    expect(res.body.error).not.toHaveProperty('type');
     expect(res.body.error.title).toBe('Resource Not Found');
     expect(res.body.error.detail).toBe('Người dùng không tồn tại');
   });

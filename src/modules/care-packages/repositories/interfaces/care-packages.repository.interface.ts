@@ -53,6 +53,7 @@ export interface CarePackagesRepository {
   publish(id: string): Promise<CarePackage>;
   reopen(id: string): Promise<CarePackage>;
   retire(id: string): Promise<CarePackage>; // Không xóa bản ghi khỏi kho dữ liệu.
+  softDelete(id: string): Promise<{ id: string; deletedAt: string }>;
   // Ghi nhật ký khi admin xác nhận đã hiểu rủi ro của cảnh báo (mức WARN).
   recordAudit(entry: CarePackageAuditEntry): Promise<void>;
 }

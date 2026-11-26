@@ -1,16 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
-  ArrayMaxSize,
-  IsArray,
   IsDefined,
-  IsOptional,
-  IsUUID,
-  IsEnum,
   IsInt,
-  IsIn,
+  IsNotEmpty,
   IsObject,
+  IsOptional,
   IsString,
+  IsUUID,
   Length,
   Matches,
   Max,
@@ -18,174 +15,124 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { QuotaPeriod } from '../entities/care-package.entity';
 
 // Chỉ bỏ khoảng trắng ở chuỗi, không ép kiểu dữ liệu sai để vượt qua validation.
 const trimString = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim() : value;
 
-// Ba hạn mức dùng chung cho nhóm người được gói phục vụ, không tính riêng từng người.
+// Hai hạn mức dùng chung cho nhóm người được gói phục vụ, không tính riêng từng người.
 export class CarePackageQuotasDto {
-  // Số lượt video: cho phép 0; trần 100.000 là giới hạn kỹ thuật, chưa phải bảng quyền lợi.
   @ApiProperty({
-    description: 'Số lượt khám tư vấn video trực tuyến',
-    example: 10,
-    default: 0,
+    description: 'Số lượt khám tư vấn video trực tuyến trong cả kỳ (bắt buộc > 0)',
+    example: 6,
+    minimum: 1,
   })
-  @IsInt()
-  @Min(0)
-  @Max(100_000)
+  @IsInt({ message: 'Số lượt tư vấn video phải là số nguyên.' })
+  @Min(1, { message: 'Số lượt tư vấn video phải lớn hơn 0.' })
+  @Max(100_000, { message: 'Số lượt tư vấn video không được vượt quá 100.000 lượt.' })
   videoConsultations: number;
 
-  // Số lượt khám tại nhà trong chu kỳ cấu hình của gói.
   @ApiProperty({
-    description: 'Số lượt bác sĩ đến khám tận nơi tại nhà',
+    description: 'Số lượt bác sĩ đến khám tận nơi tại nhà trong cả kỳ (bắt buộc > 0)',
     example: 4,
-    default: 0,
+    minimum: 1,
   })
-  @IsInt()
-  @Min(0)
-  @Max(100_000)
+  @IsInt({ message: 'Số lượt khám tại nhà phải là số nguyên.' })
+  @Min(1, { message: 'Số lượt khám tại nhà phải lớn hơn 0.' })
+  @Max(100_000, { message: 'Số lượt khám tại nhà không được vượt quá 100.000 lượt.' })
   homeVisits: number;
-
-  // Khám tại cơ sở ngoài phạm vi gói hiện tại; giữ field cũ tương thích response.
-  @ApiProperty({
-    description: 'Số lượt khám tại cơ sở y tế (mặc định 0)',
-    example: 0,
-    default: 0,
-  })
-  @IsInt()
-  @Min(0)
-  @Max(0)
-  facilityVisits: number;
 }
 
 export class CarePackageTermsDto {
-  @ApiPropertyOptional({
-    enum: ['FIXED', 'CONTRACT'],
-    description:
-      'FIXED cho gói 1/3/6 tháng; CONTRACT cho quota năm được chốt khi ký.',
-  })
-  @ValidateIf((_o, v) => v !== undefined)
-  @IsIn(['FIXED', 'CONTRACT'])
-  videoQuotaPolicy?: 'FIXED' | 'CONTRACT';
   @ApiPropertyOptional({
     minimum: 1,
     description:
       'Đơn giá một lần khám tại nhà của cả gia đình, chưa có phụ thu bác sĩ.',
   })
   @ValidateIf((_o, v) => v !== undefined)
-  @IsInt()
-  @Min(1)
-  @Max(9_999_999_999)
+  @IsInt({ message: 'Đơn giá lượt khám tại nhà phải là số nguyên.' })
+  @Min(1, { message: 'Đơn giá lượt khám tại nhà phải lớn hơn 0đ.' })
+  @Max(9_999_999_999, {
+    message: 'Đơn giá lượt khám tại nhà không được vượt quá 9.999.999.999đ.',
+  })
   homeVisitUnitPriceVnd?: number;
+
   @ApiProperty({ minLength: 10, maxLength: 120 })
   @Transform(trimString)
-  @IsString()
-  @Length(10, 120)
-  @Matches(/\p{L}/u)
+  @IsNotEmpty({ message: 'Tên gói không được để trống.' })
+  @IsString({ message: 'Tên gói phải là chuỗi ký tự.' })
+  @Length(10, 120, { message: 'Tên gói phải có từ 10 đến 120 ký tự.' })
+  @Matches(/\p{L}/u, { message: 'Tên gói phải chứa ít nhất một chữ cái.' })
   name: string;
 
   @ApiProperty({ minLength: 20, maxLength: 2000 })
   @Transform(trimString)
-  @IsString()
-  @Length(20, 2000)
-  @Matches(/\p{L}/u)
+  @IsNotEmpty({ message: 'Mô tả gói không được để trống.' })
+  @IsString({ message: 'Mô tả gói phải là chuỗi ký tự.' })
+  @Length(20, 2000, { message: 'Mô tả gói phải có từ 20 đến 2.000 ký tự.' })
+  @Matches(/\p{L}/u, { message: 'Mô tả gói phải chứa ít nhất một chữ cái.' })
   description: string;
 
-  // Bốn kỳ hạn của catalog 05/11/2026.
-  @IsInt()
-  @Min(1)
-  @IsIn([1, 3, 6, 12])
+  // Thời hạn gói tùy chỉnh tự do miễn là số nguyên dương > 0.
+  @ApiProperty({ minimum: 1, example: 4 })
+  @IsInt({ message: 'Thời hạn gói phải là số nguyên.' })
+  @Min(1, { message: 'Thời hạn gói phải lớn hơn 0 tháng.' })
   durationMonths: number;
 
   // Giá trọn kỳ cho số người cơ bản, là số nguyên VND dương, không phải giá mỗi tháng.
-  @IsInt()
-  @Min(1)
-  @Max(9_999_999_999)
+  @ApiProperty({ minimum: 1, maximum: 9_999_999_999 })
+  @IsInt({ message: 'Giá gói trọn kỳ phải là số nguyên.' })
+  @Min(1, { message: 'Giá gói trọn kỳ phải lớn hơn 0đ.' })
+  @Max(9_999_999_999, {
+    message: 'Giá gói trọn kỳ không được vượt quá 9.999.999.999đ.',
+  })
   priceVnd: number;
 
   // Số người được phục vụ trong giá cơ bản; không phải giới hạn cây gia đình.
-  @IsInt()
-  @Min(1)
-  @Max(10)
+  @ApiProperty({ minimum: 1, maximum: 10 })
+  @IsInt({ message: 'Số thành viên trong giá gói phải là số nguyên.' })
+  @Min(1, { message: 'Số thành viên trong giá gói phải từ 1 đến 10 người.' })
+  @Max(10, { message: 'Số thành viên trong giá gói phải từ 1 đến 10 người.' })
   includedMembers: number;
 
   // Tổng số người tối đa sau khi bổ sung; service kiểm tra không thấp hơn includedMembers.
-  @IsInt()
-  @Min(1)
-  @Max(10)
+  @ApiProperty({ minimum: 1, maximum: 10 })
+  @IsInt({ message: 'Số thành viên tối đa phải là số nguyên.' })
+  @Min(1, { message: 'Số thành viên tối đa phải từ 1 đến 10 người.' })
+  @Max(10, { message: 'Số thành viên tối đa phải từ 1 đến 10 người.' })
   maxMembers: number;
 
   // Đơn giá thêm một người/tháng; 0 cho phép miễn phí khi vẫn được thêm người.
-  @IsInt()
-  @Min(0)
-  @Max(9_999_999_999)
+  @ApiProperty({ minimum: 0, maximum: 9_999_999_999 })
+  @IsInt({ message: 'Phụ phí thêm thành viên phải là số nguyên.' })
+  @Min(0, { message: 'Phụ phí thêm thành viên không được nhỏ hơn 0đ.' })
+  @Max(9_999_999_999, {
+    message: 'Phụ phí thêm thành viên không được vượt quá 9.999.999.999đ.',
+  })
   additionalMemberMonthlyPriceVnd: number;
 
-  // Chọn hạn mức cho toàn kỳ hoặc cho từng tháng hợp đồng.
-  @ApiProperty({
-    enum: QuotaPeriod,
-    enumName: 'QuotaPeriod',
-    description: 'Kỳ hạn áp dụng hạn mức gói (PER_TERM hoặc PER_MONTH)',
-  })
-  @IsEnum(QuotaPeriod)
-  quotaPeriod: QuotaPeriod;
-
-  // Bắt buộc có object quotas và kiểm tra đủ ba trường bên trong.
-  // @Type giúp dữ liệu JSON lồng nhau trở thành DTO để @ValidateNested hoạt động.
+  // Bắt buộc có object quotas và kiểm tra đủ hai trường bên trong.
   @ApiProperty({
     type: () => CarePackageQuotasDto,
     description: 'Chi tiết các hạn mức quyền lợi gói',
   })
-  @IsDefined()
-  @IsObject()
+  @IsDefined({
+    message: 'Vui lòng cung cấp đầy đủ hạn mức khám tại nhà và tư vấn video.',
+  })
+  @IsObject({
+    message: 'Vui lòng cung cấp đầy đủ hạn mức khám tại nhà và tư vấn video.',
+  })
   @ValidateNested()
   @Type(() => CarePackageQuotasDto)
   quotas: CarePackageQuotasDto;
 }
 
-export class CreateCarePackageDto extends CarePackageTermsDto {
-  // Giới hạn độ dài để còn chỗ cho hậu tố phiên bản trong packageCode.
-  @ApiProperty({ minLength: 1, maxLength: 40 })
-  @Transform(trimString)
-  @IsString()
-  @Length(1, 40)
-  code: string;
-}
+// Khi tạo mới, Backend tự sinh mã gói (code) duy nhất, không bắt buộc người dùng nhập.
+export class CreateCarePackageDto extends CarePackageTermsDto {}
 
-// Mã cảnh báo (S2, P2, P4, P5, P6...) admin đã đọc và xác nhận chấp nhận rủi ro.
-export class CarePackageRiskAckDto {
-  @ApiPropertyOptional({ type: [String], example: ['P2'] })
-  @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(20)
-  @IsString({ each: true })
-  @Length(1, 10, { each: true })
-  acknowledgedWarnings?: string[];
-}
-
-export class CreateCarePackageWithAckDto extends CreateCarePackageDto {
-  @ApiPropertyOptional({ type: [String], example: ['P2'] })
-  @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(20)
-  @IsString({ each: true })
-  @Length(1, 10, { each: true })
-  acknowledgedWarnings?: string[];
-}
-
-// Kiểm tra điều khoản trước khi lưu: dùng cho thanh "Tải lịch" và cảnh báo trên form admin.
 export class ValidateCarePackageDto extends CarePackageTermsDto {
-  @ApiPropertyOptional({ description: 'Mã dòng gói (để so với phiên bản trước)' })
-  @IsOptional()
-  @Transform(trimString)
-  @IsString()
-  @Length(1, 40)
-  code?: string;
-
   @ApiPropertyOptional({ description: 'UUID gói đang sửa (nếu có)' })
   @IsOptional()
-  @IsUUID('4')
+  @IsUUID('4', { message: 'Mã định danh gói phải là UUID hợp lệ.' })
   packageId?: string;
 }

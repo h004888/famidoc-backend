@@ -1,8 +1,12 @@
 import {
   ConflictException,
   Injectable,
-  NotFoundException,
 } from '@nestjs/common';
+import {
+  BusinessConflictException,
+  ResourceNotFoundException,
+} from '../../../../core/exceptions/api.exception';
+import { CarePackageErrorCode } from '../../../../core/constants/error-codes.constant';
 import {
   CarePackageStatus,
   type CarePackage,
@@ -23,6 +27,8 @@ import { validateCarePackageTerms } from '../../validate-care-package-terms';
 @Injectable()
 export class InMemoryCarePackagesRepository implements CarePackagesRepository {
   private readonly packages = new Map<string, CarePackage>(); // Khóa là UUID từng phiên bản.
+  private readonly deletedIds = new Set<string>();
+  readonly inUseIds = new Set<string>();
   readonly auditEntries: CarePackageAuditEntry[] = [];
 
   recordAudit(entry: CarePackageAuditEntry): Promise<void> {
@@ -39,6 +45,7 @@ export class InMemoryCarePackagesRepository implements CarePackagesRepository {
     // Lọc trước khi phân trang để total phản ánh đúng số bản ghi thỏa điều kiện.
     const putRetiredLast = !status && options?.excludeDrafts;
     const items = [...this.packages.values()]
+      .filter((item) => !this.deletedIds.has(item.id))
       .filter((item) => status !== undefined
         ? item.status === status
         : !options?.excludeDrafts || item.status !== CarePackageStatus.DRAFT,
@@ -66,6 +73,7 @@ export class InMemoryCarePackagesRepository implements CarePackagesRepository {
   }
 
   findById(id: string): Promise<CarePackage | null> {
+    if (this.deletedIds.has(id)) return Promise.resolve(null);
     const item = this.packages.get(id);
     // Trả null nếu thiếu; việc chuyển thành lỗi HTTP được service quyết định.
     return Promise.resolve(item ? structuredClone(item) : null);
@@ -74,7 +82,7 @@ export class InMemoryCarePackagesRepository implements CarePackagesRepository {
   findLatestByCode(code: string): Promise<CarePackage | null> {
     // Lấy phiên bản có số lớn nhất, kể cả khi bản đó còn nháp hoặc đã ngừng bán.
     const latest = [...this.packages.values()]
-      .filter((item) => item.code === code)
+      .filter((item) => !this.deletedIds.has(item.id) && item.code === code)
       .sort((a, b) => b.version - a.version)[0];
     return Promise.resolve(latest ? structuredClone(latest) : null);
   }
@@ -107,7 +115,7 @@ export class InMemoryCarePackagesRepository implements CarePackagesRepository {
     }
     const updated = {
       ...current,
-      // Ghép thay đổi vào bản hiện tại; object quotas nếu có sẽ thay trọn bộ ba hạn mức.
+      // Ghép thay đổi vào bản hiện tại; object quotas nếu có sẽ thay trọn bộ hai hạn mức.
       ...structuredClone(terms),
       updatedAt: new Date().toISOString(),
     };
@@ -197,11 +205,60 @@ export class InMemoryCarePackagesRepository implements CarePackagesRepository {
     return Promise.resolve(structuredClone(retired));
   }
 
+  softDelete(id: string): Promise<{ id: string; deletedAt: string }> {
+    const current = this.requirePackage(id);
+    if (current.status === CarePackageStatus.ACTIVE) {
+      throw new BusinessConflictException(
+        CarePackageErrorCode.CARE_PACKAGE_ACTIVE_DELETE_BLOCKED,
+        'Không thể xóa gói đang mở bán. Vui lòng ngừng bán gói trước khi xóa.',
+        'Không thể xóa gói đang mở bán. Vui lòng ngừng bán gói trước khi xóa.',
+        {
+          conditions: [
+            {
+              code: 'PKG_STATUS',
+              condition: 'status phải là DEPRECATED hoặc DRAFT',
+              message: 'Gói hiện đang ở trạng thái Đang bán (ACTIVE).',
+            },
+          ],
+        },
+      );
+    }
+    if (this.inUseIds.has(id)) {
+      const msg = 'Không thể xóa gói vì đang có 1 hợp đồng hoặc yêu cầu ghép nối sử dụng gói này.';
+      throw new BusinessConflictException(
+        CarePackageErrorCode.CARE_PACKAGE_IN_USE,
+        msg,
+        msg,
+        {
+          conditions: [
+            {
+              code: 'PKG_IN_USE',
+              condition: 'Không còn hợp đồng hoặc phiên ghép nối liên kết với gói',
+              message: 'Đang có 1 hợp đồng/phiên ghép nối liên kết với gói.',
+            },
+          ],
+        },
+      );
+    }
+    const deletedAt = new Date().toISOString();
+    this.deletedIds.add(id);
+    this.packages.set(id, {
+      ...current,
+      status: CarePackageStatus.DEPRECATED,
+      retiredAt: current.retiredAt ?? deletedAt,
+      updatedAt: deletedAt,
+    });
+    return Promise.resolve({ id, deletedAt });
+  }
+
   private requirePackage(id: string): CarePackage {
     // Hàm nội bộ lấy bản hiện tại để thao tác ghi; không trả object này trực tiếp ra API.
-    const item = this.packages.get(id);
+    const item = this.deletedIds.has(id) ? undefined : this.packages.get(id);
     if (!item) {
-      throw new NotFoundException('Care package not found');
+      throw new ResourceNotFoundException(
+        CarePackageErrorCode.CARE_PACKAGE_NOT_FOUND,
+        'Không tìm thấy gói dịch vụ.',
+      );
     }
     return item;
   }

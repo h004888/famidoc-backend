@@ -56,7 +56,6 @@ function pkg(months = 3): CarePackage {
     quotas: {
       homeVisits: terms.home,
       videoConsultations: terms.video,
-      facilityVisits: 0,
     },
     currency: 'VND',
     status: CarePackageStatus.ACTIVE,
@@ -97,7 +96,6 @@ describe('Bảng dịch vụ 05/11/2026', () => {
     expect(q.benefits.quotas).toEqual({
       homeVisits: 3,
       videoConsultations: 4,
-      facilityVisits: 0,
     });
   });
   it('mua thêm hai lần khám cộng cả đơn giá gói và phụ thu bác sĩ', () => {

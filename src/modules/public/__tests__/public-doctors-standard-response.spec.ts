@@ -133,11 +133,10 @@ describe('Public Doctors API — Standard Response & Error Formatting', () => {
       expect(res.body.meta).toBeNull();
       expect(res.body.error).toBeDefined();
       expect(res.body.error.errorCode).toBe('VALIDATION_FAILED');
-      expect(res.body.error.type).toBe('https://api.famidoc.vn/errors/validation-failed');
+      expect(res.body.error).not.toHaveProperty('type');
+      expect(res.body).not.toHaveProperty('message');
       expect(res.body.error.title).toBe('Unprocessable Content');
-      expect(res.body.error.detail).toBe(
-        'One or more fields in the request failed validation constraints.',
-      );
+      expect(res.body.error.detail).toContain('facilityId');
 
       const invalidParam = res.body.error.invalidParams?.find(
         (p: any) => p.field === 'facilityId',

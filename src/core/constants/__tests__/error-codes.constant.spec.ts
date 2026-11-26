@@ -7,8 +7,6 @@ import {
   DoctorErrorCode,
   CarePackageErrorCode,
   PaymentErrorCode,
-  ERROR_TYPE_BASE_URI,
-  resolveErrorTypeUri,
 } from '../error-codes.constant';
 
 describe('Error Codes and Problem Details URI Constants', () => {
@@ -55,16 +53,7 @@ describe('Error Codes and Problem Details URI Constants', () => {
     expect(ValidationIssue.INVALID_TYPE).toBe('INVALID_TYPE');
   });
 
-  it('resolveErrorTypeUri phải sinh ra URI chuẩn RFC 9457 dạng kebab-case', () => {
-    expect(ERROR_TYPE_BASE_URI).toBe('https://api.famidoc.vn/errors');
-    expect(resolveErrorTypeUri('USER_NOT_FOUND')).toBe(
-      'https://api.famidoc.vn/errors/user-not-found',
-    );
-    expect(resolveErrorTypeUri(AuthErrorCode.AUTH_INVALID_CREDENTIALS)).toBe(
-      'https://api.famidoc.vn/errors/auth-invalid-credentials',
-    );
-    expect(resolveErrorTypeUri('UNKNOWN_ERROR')).toBe(
-      'https://api.famidoc.vn/errors/unknown-error',
-    );
+  it('CarePackageErrorCode không còn chứa CARE_PACKAGE_RISK_ACK_REQUIRED', () => {
+    expect(Object.values(CarePackageErrorCode)).not.toContain('CARE_PACKAGE_RISK_ACK_REQUIRED');
   });
 });

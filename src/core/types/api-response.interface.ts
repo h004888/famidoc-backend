@@ -9,13 +9,19 @@ export interface InvalidParamItem {
   rejectedValue?: any;
 }
 
+export interface ErrorConditionItem {
+  code: string;
+  condition: string;
+  message: string;
+}
+
 export interface ProblemDetails {
-  type: string;
   title: string;
   detail: string;
   errorCode: string;
   instance?: string;
   invalidParams?: InvalidParamItem[];
+  conditions?: ErrorConditionItem[];
   [key: string]: any;
 }
 
@@ -57,7 +63,7 @@ export interface ApiSuccessResponse<T = any> extends BaseApiResponse {
   error?: null;
 }
 
-export interface ApiErrorResponse extends BaseApiResponse {
+export interface ApiErrorResponse extends Omit<BaseApiResponse, 'message'> {
   success: false;
   data?: null;
   meta?: ResponseMeta | null;

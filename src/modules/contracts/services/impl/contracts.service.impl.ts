@@ -820,7 +820,6 @@ export class ContractsServiceImpl
           quotas: {
             homeVisits: pkg.periodicVisitsQuota,
             videoConsultations: pkg.telehealthQuota,
-            facilityVisits: 0,
           },
           currency: 'VND',
           status: CarePackageStatus.ACTIVE,
@@ -3163,7 +3162,6 @@ export class ContractsServiceImpl
               quotas: {
                 homeVisits: pkg.periodicVisitsQuota,
                 videoConsultations: pkg.telehealthQuota,
-                facilityVisits: 0,
               },
               currency: 'VND',
               status: CarePackageStatus.ACTIVE,
@@ -3368,7 +3366,6 @@ export class ContractsServiceImpl
                 quotas: {
                   homeVisits: ctx.pkg.periodicVisitsQuota,
                   videoConsultations: ctx.pkg.telehealthQuota,
-                  facilityVisits: 0,
                 },
                 currency: 'VND',
                 status: CarePackageStatus.ACTIVE,
@@ -3555,7 +3552,6 @@ export class ContractsServiceImpl
               quotas: {
                 homeVisits: ctx.pkg.periodicVisitsQuota,
                 videoConsultations: ctx.pkg.telehealthQuota,
-                facilityVisits: 0,
               },
               currency: 'VND',
               status: CarePackageStatus.ACTIVE,

@@ -19,7 +19,7 @@ const makePackage = (overrides: Partial<CarePackage> = {}): CarePackage => ({
   maxMembers: 6,
   additionalMemberMonthlyPriceVnd: 50_000,
   quotaPeriod: QuotaPeriod.PER_TERM,
-  quotas: { videoConsultations: 20, homeVisits: 2, facilityVisits: 1 },
+  quotas: { videoConsultations: 20, homeVisits: 2 },
   currency: 'VND',
   status: CarePackageStatus.ACTIVE,
   createdAt: '2026-10-26T00:00:00.000Z',
@@ -112,7 +112,7 @@ describe('calculateCarePackageQuote', () => {
     (memberCount) => {
       expect(() =>
         calculateCarePackageQuote(makePackage(), memberCount),
-      ).toThrow(BadRequestException);
+      ).toThrow('Số thành viên phải là số nguyên từ 1 đến 100.');
     },
   );
 

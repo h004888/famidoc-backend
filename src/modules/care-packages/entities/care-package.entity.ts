@@ -13,12 +13,11 @@ export enum QuotaPeriod {
 export interface CarePackageQuotas {
   videoConsultations: number;
   homeVisits: number;
-  facilityVisits: number;
 }
 
 // Điều khoản có thể chỉnh ở DRAFT hoặc sao chép sang phiên bản mới.
 export interface CarePackageTerms {
-  videoQuotaPolicy?: 'FIXED' | 'CONTRACT'; // Gói năm chốt số lượt cụ thể trước khi ký.
+  videoQuotaPolicy?: 'FIXED' | 'CONTRACT'; // Mặc định FIXED; giữ optional để tương thích đọc hợp đồng cũ.
   homeVisitUnitPriceVnd?: number;
   name: string;
   description: string;
