@@ -1,7 +1,10 @@
 import { calculateContractTermsHash } from '../../../contracts/pricing/contract-terms-hash';
 import { activateAddendumRights } from '../../../contracts/activation/activate-addendum';
 import { PaymentsConfig } from '../../payments.config';
-import { todayInVietnam } from '../../../../core/business/business-helpers';
+import {
+  notifyContractParties,
+  todayInVietnam,
+} from '../../../../core/business/business-helpers';
 import {
   ConflictException,
   Injectable,
@@ -161,7 +164,7 @@ export class PaymentsRepositoryImpl implements PaymentsRepository {
     );
   }
 }
-class PrismaPaymentsSession implements PaymentsSession {
+export class PrismaPaymentsSession implements PaymentsSession {
   constructor(
     private readonly tx: Prisma.TransactionClient,
     private readonly environment: 'TEST' | 'LIVE',
@@ -180,6 +183,12 @@ class PrismaPaymentsSession implements PaymentsSession {
       );
     if (row.isDemo !== (this.environment === 'TEST'))
       throw new ConflictException('Contract/payment environment mismatch');
+    const isR8Renewal =
+      Boolean(row.upgradedFromId) &&
+      Boolean(
+        (row.billingSnapshot as Record<string, unknown> | null)
+          ?.renewalConfirmation,
+      );
     const signature = (role: string, userId?: string) =>
       row.signatures.some(
         (s) =>
@@ -189,13 +198,17 @@ class PrismaPaymentsSession implements PaymentsSession {
           (role !== 'ADMIN' || s.signerUser.role === 'ADMIN') &&
           s.signatureHash.length > 0 &&
           (!row.upgradedFromId ||
+            isR8Renewal ||
             s.termsHash === calculateContractTermsHash(row)),
       );
+    const isRenewal = Boolean(row.upgradedFromId);
     const activeCount = await this.tx.medicalContract.count({
       where: {
         doctorId: row.doctorId,
         contractStatus: 'ACTIVE',
-        id: { not: row.id },
+        ...(row.upgradedFromId
+          ? { id: { notIn: [row.id, row.upgradedFromId] } }
+          : { id: { not: row.id } }),
       },
     });
     const now = todayInVietnam();
@@ -226,9 +239,15 @@ class PrismaPaymentsSession implements PaymentsSession {
       status:
         row.contractStatus === 'ACTIVE'
           ? BillingContractStatus.ACTIVE
-          : ['EXPIRED', 'TERMINATED'].includes(row.contractStatus)
-            ? BillingContractStatus.CANCELLED
-            : BillingContractStatus.PENDING,
+          : row.contractStatus === 'PENDING_ACTIVATION'
+            ? BillingContractStatus.PENDING_ACTIVATION
+            : ['EXPIRED', 'TERMINATED', 'CANCELLED'].includes(
+                  row.contractStatus,
+                )
+              ? BillingContractStatus.CANCELLED
+              : BillingContractStatus.PENDING,
+      upgradedFromId: row.upgradedFromId ?? null,
+      holdExpiresAt: row.holdExpiresAt?.toISOString() ?? null,
       packageSnapshot: snapshot,
       // Đọc chữ ký, phân công và sức chứa từ DB; không nhận cờ tự khai từ client.
       requirements: {
@@ -236,11 +255,15 @@ class PrismaPaymentsSession implements PaymentsSession {
           'FAMILY_REP',
           row.familyUnit.representativeUserId,
         ),
-        adminSigned: signature('ADMIN'),
-        facilitySigned: signature('HEALTHCARE_FACILITY', row.facility.userId),
-        doctorSigned: row.doctor
-          ? signature('ASSIGNED_DOCTOR', row.doctor.userId)
-          : false,
+        adminSigned: isRenewal ? true : signature('ADMIN'),
+        facilitySigned: isRenewal
+          ? true
+          : signature('HEALTHCARE_FACILITY', row.facility.userId),
+        doctorSigned: isRenewal
+          ? true
+          : row.doctor
+            ? signature('ASSIGNED_DOCTOR', row.doctor.userId)
+            : false,
         facilityId: row.facilityId,
         doctorId: row.doctorId,
         doctorVerified: Boolean(
@@ -260,8 +283,9 @@ class PrismaPaymentsSession implements PaymentsSession {
           (await this.tx.patient.count({
             where: { familyId: row.familyId, status: 'ACTIVE' },
           })) <= row.memberCount,
-        contractTermValid:
-          row.startDate <= todayInVietnam() && row.endDate > todayInVietnam(),
+        contractTermValid: isRenewal
+          ? row.endDate > now && row.endDate > row.startDate
+          : row.startDate <= now && row.endDate > now,
       },
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
@@ -409,19 +433,45 @@ class PrismaPaymentsSession implements PaymentsSession {
         },
       });
     }
+    const justPendingActivation =
+      contract.status === BillingContractStatus.PENDING_ACTIVATION &&
+      old.contractStatus !== 'PENDING_ACTIVATION';
     await this.tx.medicalContract.update({
       where: { id: contract.id },
       data: {
         contractStatus:
           contract.status === BillingContractStatus.ACTIVE
             ? 'ACTIVE'
-            : contract.status === BillingContractStatus.CANCELLED
-              ? 'TERMINATED'
-              : 'PENDING_PAYMENT',
+            : contract.status === BillingContractStatus.PENDING_ACTIVATION
+              ? 'PENDING_ACTIVATION'
+              : contract.status === BillingContractStatus.CANCELLED
+                ? 'TERMINATED'
+                : 'PENDING_PAYMENT',
+        ...(justPendingActivation || justActivated
+          ? { holdExpiresAt: null }
+          : {}),
+        ...(justActivated && old.upgradedFromId && contract.activeFrom && contract.activeUntil
+          ? {
+              startDate: new Date(contract.activeFrom),
+              endDate: new Date(contract.activeUntil),
+            }
+          : {}),
         updatedAt: new Date(contract.updatedAt),
         // Không sửa giá, chữ ký hay kỳ hạn đã thỏa thuận khi nhận tiền.
       },
     });
+
+    if (justPendingActivation || (justActivated && old.upgradedFromId)) {
+      await notifyContractParties(
+        this.tx,
+        old,
+        'Hợp đồng đã được gia hạn',
+        justPendingActivation
+          ? `Hợp đồng gia hạn đã thanh toán thành công và sẽ tự động có hiệu lực từ ngày ${old.startDate.toISOString().slice(0, 10)}.`
+          : 'Hợp đồng gia hạn đã thanh toán thành công và đã có hiệu lực.',
+        'CONTRACT_RENEWED',
+      );
+    }
 
     if (justActivated) {
       // Savepoint: lỗi giữa chừng phải hoàn tác toàn bộ ca/encounter đã tạo dở,

@@ -1,4 +1,6 @@
-import { BadRequestException } from '@nestjs/common';
+import { HttpStatus } from '@nestjs/common';
+import { BaseApiException } from '../../core/exceptions/api.exception';
+import { CarePackageErrorCode } from '../../core/constants/error-codes.constant';
 import type { CarePackageTerms } from './entities/care-package.entity';
 import {
   assertNoBlockingFindings,
@@ -7,38 +9,57 @@ import {
 
 export function validateCarePackageTerms(terms: CarePackageTerms): void {
   // DTO kiểm tra từng trường; hàm này kiểm tra quan hệ nghiệp vụ giữa các trường.
-  // Số người tối đa không thể thấp hơn số người đã nằm trong giá gói cơ bản.
+  // R1: Số người tối đa không thể thấp hơn số người đã nằm trong giá gói cơ bản.
   if (terms.maxMembers < terms.includedMembers) {
-    throw new BadRequestException('maxMembers cannot be below includedMembers');
+    throw new BaseApiException({
+      errorCode: CarePackageErrorCode.CARE_PACKAGE_TERMS_INVALID,
+      status: HttpStatus.BAD_REQUEST,
+      message: 'Số thành viên tối đa phải lớn hơn hoặc bằng số thành viên trong giá gói.',
+      invalidParams: [
+        {
+          field: 'maxMembers',
+          issue: 'MIN_VALUE',
+          message: 'Số thành viên tối đa phải lớn hơn hoặc bằng số thành viên trong giá gói.',
+        },
+      ],
+    });
   }
-  // Không cho thêm thành viên thì cũng không được cấu hình phí thêm thành viên.
+  // R2: Không cho thêm thành viên thì cũng không được cấu hình phí thêm thành viên.
   if (
     terms.maxMembers === terms.includedMembers &&
     terms.additionalMemberMonthlyPriceVnd !== 0
   ) {
-    throw new BadRequestException(
-      'Additional-member fee must be zero when extra members are disabled',
-    );
+    throw new BaseApiException({
+      errorCode: CarePackageErrorCode.CARE_PACKAGE_TERMS_INVALID,
+      status: HttpStatus.BAD_REQUEST,
+      message: 'Phụ phí thêm thành viên phải bằng 0đ khi gói không cho phép thêm thành viên.',
+      invalidParams: [
+        {
+          field: 'additionalMemberMonthlyPriceVnd',
+          issue: 'MAX_VALUE',
+          message: 'Phụ phí thêm thành viên phải bằng 0đ khi gói không cho phép thêm thành viên.',
+        },
+      ],
+    });
   }
+  // R3: Nếu có đơn giá khám tại nhà thì giá gói phải khớp đơn giá * số lượt khám tại nhà.
   if (
     terms.homeVisitUnitPriceVnd !== undefined &&
     terms.homeVisitUnitPriceVnd * terms.quotas.homeVisits !== terms.priceVnd
   ) {
-    throw new BadRequestException(
-      'Giá gói cơ bản phải bằng số lần khám tại nhà nhân đơn giá; phụ thu bác sĩ tính riêng.',
-    );
+    throw new BaseApiException({
+      errorCode: CarePackageErrorCode.CARE_PACKAGE_TERMS_INVALID,
+      status: HttpStatus.BAD_REQUEST,
+      message: 'Giá gói trọn kỳ phải bằng đơn giá khám tại nhà nhân với số lượt khám tại nhà.',
+      invalidParams: [
+        {
+          field: 'priceVnd',
+          issue: 'INVALID_VALUE',
+          message: 'Giá gói trọn kỳ phải bằng đơn giá khám tại nhà nhân với số lượt khám tại nhà.',
+        },
+      ],
+    });
   }
-  if (terms.videoQuotaPolicy === 'CONTRACT' && terms.durationMonths !== 12) {
-    throw new BadRequestException(
-      'Chỉ gói năm dùng hạn mức video chốt theo hợp đồng.',
-    );
-  }
-  // Một gói phải có ít nhất một quyền lợi khám/tư vấn, không công bố gói rỗng quyền lợi.
-  if (Object.values(terms.quotas).every((quota) => quota === 0)) {
-    throw new BadRequestException(
-      'A package must include at least one consultation or visit',
-    );
-  }
-  // Năng lực xếp lịch (S1/S3) và khung giá (P1/P3): mọi lỗi mức BLOCK đều chặn lưu/publish.
+  // Năng lực xếp lịch (S1/S6) và điều kiện lượt khám (P3, videoConsultations >= 1).
   assertNoBlockingFindings(evaluateCarePackageRules(terms));
 }

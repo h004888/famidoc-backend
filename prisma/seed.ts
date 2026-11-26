@@ -234,7 +234,6 @@ export async function seedDemo(prisma: PrismaClient, password: string) {
             quotas: {
               videoConsultations: p.telehealthQuota,
               homeVisits: p.periodicVisitsQuota,
-              facilityVisits: 0,
             },
             status: CarePackageStatus.ACTIVE,
             createdAt: p.createdAt.toISOString(),

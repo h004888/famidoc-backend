@@ -2,6 +2,7 @@ import type { CarePackageQuote } from '../../care-packages/entities/care-package
 
 export enum BillingContractStatus {
   PENDING = 'PENDING',
+  PENDING_ACTIVATION = 'PENDING_ACTIVATION',
   ACTIVE = 'ACTIVE',
   CANCELLED = 'CANCELLED',
 }
@@ -36,6 +37,8 @@ export interface BillingContract {
   updatedAt: string;
   activeFrom: string | null;
   activeUntil: string | null;
+  upgradedFromId?: string | null;
+  holdExpiresAt?: string | null;
   addendumId?: string;
   plannedFrom?: string;
   plannedUntil?: string;

@@ -14,6 +14,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../../../core/database/prisma.service';
+import { todayInVietnam } from '../../../../core/business/business-helpers';
 import { moneyToNumber } from '../../../../core/database/prisma-transaction';
 import { randomUUID } from 'node:crypto';
 
@@ -343,6 +344,16 @@ export class PaymentsServiceImpl implements IPaymentsService {
         blockingReasons: [],
       };
     }
+    if (
+      contract.holdExpiresAt &&
+      Date.parse(contract.holdExpiresAt) <= this.clock.now().getTime()
+    ) {
+      return {
+        eligible: false,
+        message: 'Đã quá thời hạn thanh toán gia hạn hợp đồng.',
+        blockingReasons: ['RENEWAL_PAYMENT_EXPIRED'],
+      };
+    }
     const missing = missingActivationRequirements(contract.requirements);
     if (missing.length) {
       return {
@@ -443,7 +454,12 @@ export class PaymentsServiceImpl implements IPaymentsService {
           status: PaymentRequestStatus.PENDING,
           createdAt: now.toISOString(),
           expiresAt: new Date(
-            now.getTime() + destination.ttlMinutes * 60_000,
+            contract.holdExpiresAt
+              ? Math.min(
+                  now.getTime() + destination.ttlMinutes * 60_000,
+                  Date.parse(contract.holdExpiresAt),
+                )
+              : now.getTime() + destination.ttlMinutes * 60_000,
           ).toISOString(),
           paidAt: null,
           acceptedTransactionId: null,
@@ -499,6 +515,13 @@ export class PaymentsServiceImpl implements IPaymentsService {
         if (contract) {
           if (contract.status === BillingContractStatus.ACTIVE) {
             view.activation = { activated: true, blockingReasons: [] };
+          } else if (
+            contract.status === BillingContractStatus.PENDING_ACTIVATION
+          ) {
+            view.activation = {
+              activated: false,
+              blockingReasons: ['AWAITING_START_DATE'],
+            };
           } else {
             view.activation = {
               activated: false,
@@ -899,6 +922,7 @@ export class PaymentsServiceImpl implements IPaymentsService {
       let activation;
       if (
         !payment.addendumId &&
+        !contract.upgradedFromId &&
         this.prisma &&
         (contract as { status?: string }).status === 'PENDING_PAYMENT'
       ) {
@@ -1109,14 +1133,42 @@ export class PaymentsServiceImpl implements IPaymentsService {
       };
     // Chỉ tạo khoảng hiệu lực sau khi đã vượt toàn bộ cổng điều kiện.
     const now = this.clock.now();
+    if (
+      contract.upgradedFromId &&
+      contract.plannedFrom &&
+      todayInVietnam(new Date(contract.plannedFrom)) > todayInVietnam(now)
+    ) {
+      contract.status = BillingContractStatus.PENDING_ACTIVATION;
+      contract.updatedAt = now.toISOString();
+      await session.saveContract(contract);
+      return {
+        contractId: contract.id,
+        status: contract.status,
+        activated: false,
+        blockingReasons: ['AWAITING_START_DATE'],
+      };
+    }
+
+    const startDate = contract.upgradedFromId
+      ? todayInVietnam(now)
+      : contract.plannedFrom
+        ? new Date(contract.plannedFrom)
+        : now;
+    const endDate = contract.upgradedFromId
+      ? addContractMonths(
+          startDate,
+          contract.packageSnapshot.package.durationMonths,
+        )
+      : contract.plannedUntil
+        ? new Date(contract.plannedUntil)
+        : addContractMonths(
+            now,
+            contract.packageSnapshot.package.durationMonths,
+          );
+
     contract.status = BillingContractStatus.ACTIVE;
-    contract.activeFrom = contract.plannedFrom ?? now.toISOString();
-    contract.activeUntil =
-      contract.plannedUntil ??
-      addContractMonths(
-        now,
-        contract.packageSnapshot.package.durationMonths,
-      ).toISOString();
+    contract.activeFrom = startDate.toISOString();
+    contract.activeUntil = endDate.toISOString();
     contract.updatedAt = now.toISOString();
     await session.saveContract(contract);
     return {
@@ -1162,6 +1214,7 @@ export class PaymentsServiceImpl implements IPaymentsService {
     return (await session.listContracts()).some(
       (item) =>
         item.id !== contract.id &&
+        item.id !== contract.upgradedFromId &&
         item.familyId === contract.familyId &&
         item.status === BillingContractStatus.ACTIVE,
     );

@@ -58,6 +58,7 @@ export class ContractHoldCleanupService
       },
       select: {
         id: true,
+        upgradedFromId: true,
         documensoEnvelopeId: true,
       },
       take: 100,
@@ -69,6 +70,7 @@ export class ContractHoldCleanupService
 
     const releasedIds: Array<{ id: string; envelopeId: string | null }> = [];
     for (const draft of expiredDrafts) {
+      const isRenewal = Boolean(draft.upgradedFromId);
       const updated = await this.prisma.$transaction(async (tx) => {
         const res = await tx.medicalContract.updateMany({
           where: {
@@ -78,8 +80,10 @@ export class ContractHoldCleanupService
             OR: [{ signingDeadlineAt: null }, { contractStatus: 'PENDING_PAYMENT' }],
           },
           data: {
-            contractStatus: 'TERMINATED',
-            terminationReason: 'Hết thời hạn giữ chỗ hợp đồng nháp (TTL)',
+            contractStatus: isRenewal ? 'CANCELLED' : 'TERMINATED',
+            terminationReason: isRenewal
+              ? 'Quá thời hạn thanh toán gia hạn hợp đồng'
+              : 'Hết thời hạn giữ chỗ hợp đồng nháp (TTL)',
             terminatedAt: now,
             documensoEnvelopeId: null,
             documensoItemId: null,

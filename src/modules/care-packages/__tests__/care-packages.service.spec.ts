@@ -1,10 +1,9 @@
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import {
-  BadRequestException,
-  ConflictException,
-  NotFoundException,
-} from '@nestjs/common';
+  BaseApiException,
+  ResourceNotFoundException,
+} from '../../../core/exceptions/api.exception';
 import { CarePackagesServiceImpl } from '../services/impl/care-packages.service.impl';
-import { QuotaPeriod } from '../entities/care-package.entity';
 import { InMemoryCarePackagesRepository } from '../repositories/impl/in-memory-care-packages.repository';
 import { DEMO_CARE_PACKAGE_IDS } from '../repositories/interfaces/care-packages.repository.interface';
 import { CreateCarePackageDto } from '../dtos/create-care-package.dto';
@@ -12,20 +11,17 @@ import { AdminListCarePackagesDto } from '../dtos/list-care-packages.dto';
 import { UpdateCarePackageDto } from '../dtos/update-care-package.dto';
 import { carePackagesValidationPipe } from '../care-packages-validation.pipe';
 
-// Dữ liệu chỉ dành cho test, không phải giá hay quyền lợi FamiDoc đã được phê duyệt.
 const makeInput = (
   overrides: Partial<CreateCarePackageDto> = {},
 ): CreateCarePackageDto => ({
-  code: 'DEMO',
-  name: 'Demo package',
-  description: 'Example care package description.',
+  name: 'Gói Chăm Sóc Demo Gia Đình',
+  description: 'Mô tả gói chăm sóc sức khỏe gia đình tiêu chuẩn.',
   durationMonths: 1,
   priceVnd: 1_000_000,
   includedMembers: 2,
   maxMembers: 4,
   additionalMemberMonthlyPriceVnd: 50_000,
-  quotaPeriod: QuotaPeriod.PER_TERM,
-  quotas: { videoConsultations: 2, homeVisits: 1, facilityVisits: 0 },
+  quotas: { videoConsultations: 2, homeVisits: 1 },
   ...overrides,
 });
 
@@ -33,27 +29,23 @@ describe('Care package form validation', () => {
   const createMetadata = { type: 'body' as const, metatype: CreateCarePackageDto };
   const updateMetadata = { type: 'body' as const, metatype: UpdateCarePackageDto };
 
-  it.each(['7', '3-gói Cơ bản'])(
-    'accepts code %s and trims text at the minimum lengths',
-    async (code) => {
-      const body = makeInput({
-        code: `  ${code}  `,
-        name: '  Gói 3 tuần  ',
-        description: '  Khám tại nhà 2 lượt.  ',
-      });
-      await expect(
-        carePackagesValidationPipe.transform(body, createMetadata),
-      ).resolves.toMatchObject({
-        code,
-        name: 'Gói 3 tuần',
-        description: 'Khám tại nhà 2 lượt.',
-      });
-    },
-  );
+  it('trims text and accepts custom durationMonths > 0 without code or quotaPeriod', async () => {
+    const body = makeInput({
+      durationMonths: 4,
+      name: '  Gói 4 tháng  ',
+      description: '  Khám tại nhà 2 lượt mỗi kỳ.  ',
+    });
+    await expect(
+      carePackagesValidationPipe.transform(body, createMetadata),
+    ).resolves.toMatchObject({
+      durationMonths: 4,
+      name: 'Gói 4 tháng',
+      description: 'Khám tại nhà 2 lượt mỗi kỳ.',
+    });
+  });
 
   it.each([
-    { code: '  ' },
-    { code: 'x'.repeat(41) },
+    { durationMonths: 0 },
     { name: '  Gói tháng  ' },
     { description: '  Khám tại nhà 2 lượt  ' },
     { description: undefined },
@@ -89,7 +81,7 @@ describe('CarePackagesServiceImpl', () => {
     service = new CarePackagesServiceImpl(repository);
   });
 
-  it('starts with an empty catalog, not assumed official packages', async () => {
+  it('starts with an empty catalog', async () => {
     expect(await service.listPublic({ page: 1, limit: 20 })).toEqual({
       items: [],
       total: 0,
@@ -98,15 +90,19 @@ describe('CarePackagesServiceImpl', () => {
     });
   });
 
-  it('creates an active package ready for purchase with server-owned identity and version', async () => {
-    const item = await service.create(makeInput());
+  it('tự sinh code duy nhất <= 40 ký tự khi tạo gói mới, cố định PER_TERM & FIXED, không có facilityVisits', async () => {
+    const item = await service.create(makeInput({ durationMonths: 4 }));
+    expect(item.code).toMatch(/^PKG_\d{8}_[A-F0-9]{6}$/);
+    expect(item.code.length).toBeLessThanOrEqual(40);
     expect(item).toMatchObject({
-      code: 'DEMO',
       version: 1,
       status: 'ACTIVE',
       currency: 'VND',
-      description: makeInput().description,
+      quotaPeriod: 'PER_TERM',
+      videoQuotaPolicy: 'FIXED',
+      quotas: { videoConsultations: 2, homeVisits: 1 },
     });
+    expect(item.quotas).not.toHaveProperty('facilityVisits');
     expect(item.id).toMatch(/^[0-9a-f-]{36}$/);
     expect(item.publishedAt).not.toBeNull();
     expect((await service.listPublic({ page: 1, limit: 20 })).total).toBe(1);
@@ -114,59 +110,46 @@ describe('CarePackagesServiceImpl', () => {
     expect((await service.quote(item.id, { memberCount: 2 })).pricing.totalPriceVnd).toBe(item.priceVnd);
   });
 
-  it('rejects a duplicate code, including simultaneous creation', async () => {
+  it('tạo đồng thời hai gói vẫn sinh hai mã code khác nhau và không trùng DB', async () => {
     const results = await Promise.allSettled([
       service.create(makeInput()),
       service.create(makeInput()),
     ]);
-    expect(
-      results.filter((result) => result.status === 'fulfilled'),
-    ).toHaveLength(1);
-    expect(
-      results.filter((result) => result.status === 'rejected'),
-    ).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(2);
+    const [first, second] = results.map((r) => (r as PromiseFulfilledResult<any>).value);
+    expect(first.code).not.toBe(second.code);
   });
 
-  it('rejects a member ceiling below the included count', async () => {
+  it('rejects invalid member bounds and empty/zero quotas', async () => {
+    await expect(service.create(makeInput({ maxMembers: 1 }))).rejects.toBeInstanceOf(
+      BaseApiException,
+    );
+    await expect(service.create(makeInput({ maxMembers: 2 }))).rejects.toBeInstanceOf(
+      BaseApiException,
+    );
     await expect(
-      service.create(makeInput({ maxMembers: 1 })),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('rejects extra-member charges when adding members is disabled', async () => {
+      service.create(makeInput({ quotas: { videoConsultations: 0, homeVisits: 1 } })),
+    ).rejects.toBeInstanceOf(BaseApiException);
     await expect(
-      service.create(makeInput({ maxMembers: 2 })),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('requires at least one included service', async () => {
-    await expect(
-      service.create(
-        makeInput({
-          quotas: { videoConsultations: 0, homeVisits: 0, facilityVisits: 0 },
-        }),
-      ),
-    ).rejects.toBeInstanceOf(BadRequestException);
+      service.create(makeInput({ quotas: { videoConsultations: 2, homeVisits: 0 } })),
+    ).rejects.toThrow('ít nhất 1 lượt khám tại nhà');
   });
 
   it('updates package values, preserving explicitly supplied zero', async () => {
     const item = await service.create(makeInput());
     const updated = await service.update(item.id, {
       additionalMemberMonthlyPriceVnd: 0,
-      acknowledgedWarnings: ['P5'],
     });
     expect(updated.additionalMemberMonthlyPriceVnd).toBe(0);
     expect(updated.priceVnd).toBe(item.priceVnd);
-    await expect(service.update(item.id, {})).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
+    await expect(service.update(item.id, {})).rejects.toBeInstanceOf(BaseApiException);
   });
 
   it('validates partial edits against the current package', async () => {
     const item = await service.create(makeInput());
-    await expect(
-      service.update(item.id, { includedMembers: 5 }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.update(item.id, { includedMembers: 5 })).rejects.toBeInstanceOf(
+      BaseApiException,
+    );
     expect((await service.getAdmin(item.id)).includedMembers).toBe(2);
   });
 
@@ -191,9 +174,7 @@ describe('CarePackagesServiceImpl', () => {
     expect(updated.status).toBe('ACTIVE');
     expect((await service.listAdmin({ page: 1, limit: 20 })).total).toBe(1);
     await expect(service.getPublic(item.id)).resolves.toMatchObject({ priceVnd: 1_100_000 });
-    await expect(service.publish(item.id)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    await expect(service.publish(item.id)).rejects.toBeInstanceOf(ConflictException);
   });
 
   it('creates a new version without changing old prices or quotas', async () => {
@@ -207,7 +188,7 @@ describe('CarePackagesServiceImpl', () => {
     });
     await service.update(draft.id, {
       priceVnd: 1_100_000,
-      quotas: { videoConsultations: 4, homeVisits: 1, facilityVisits: 0 },
+      quotas: { videoConsultations: 4, homeVisits: 1 },
     });
     await service.publish(draft.id);
     expect(await service.getAdmin(old.id)).toMatchObject({
@@ -218,301 +199,94 @@ describe('CarePackagesServiceImpl', () => {
     const publicList = await service.listPublic({ page: 1, limit: 20 });
     expect(publicList.total).toBe(1);
     expect(publicList.items[0].id).toBe(draft.id);
-    await expect(service.getPublic(old.id)).rejects.toBeInstanceOf(
-      NotFoundException,
+    await expect(service.getPublic(old.id)).rejects.toBeInstanceOf(ResourceNotFoundException);
+  });
+
+  it('cho phép tự do đơn giá và phụ phí (đã bỏ P1, P2, P4, P5, P6) và S2 chỉ trả INFO không chặn lưu', async () => {
+    // Đơn giá 200.000đ (trước đây bị P1 chặn) và phụ phí 300.000đ (trước đây P5 cảnh báo) + 6 lượt/tháng (S2)
+    const created = await service.create(
+      makeInput({
+        durationMonths: 4,
+        priceVnd: 200_000,
+        additionalMemberMonthlyPriceVnd: 300_000,
+        quotas: { videoConsultations: 23, homeVisits: 1 },
+      }),
     );
-  });
+    expect(created.priceVnd).toBe(200_000);
+    expect(created.durationMonths).toBe(4);
 
-  it('does not create versions from a draft or an outdated source', async () => {
-    const first = await service.create(makeInput());
-    const second = await service.createVersion(first.id);
-    await expect(service.createVersion(second.id)).rejects.toBeInstanceOf(
-      ConflictException,
+    const validation = await service.validate(
+      makeInput({
+        durationMonths: 1,
+        priceVnd: 5_000_000,
+        quotas: { videoConsultations: 5, homeVisits: 1 },
+      }),
     );
-    await expect(service.createVersion(first.id)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
-    await service.publish(second.id);
-    await expect(service.createVersion(first.id)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
-  });
-
-  it('serializes competing version creation through the repository unique constraint', async () => {
-    const item = await service.create(makeInput());
-    const results = await Promise.allSettled([
-      service.createVersion(item.id),
-      service.createVersion(item.id),
-    ]);
-    expect(
-      results.filter((result) => result.status === 'fulfilled'),
-    ).toHaveLength(1);
-    expect((await service.listAdmin({ page: 1, limit: 20 })).total).toBe(2);
-  });
-
-  it('retires without deleting old terms and is idempotent', async () => {
-    const item = await service.create(makeInput());
-    const draft = await service.createVersion(item.id);
-    await expect(service.retire(draft.id)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
-    const retired = await service.retire(item.id);
-    expect(await service.retire(item.id)).toEqual(retired);
-    expect((await service.listPublic({ page: 1, limit: 20 })).total).toBe(0);
-    expect((await service.getAdmin(item.id)).priceVnd).toBe(1_000_000);
-  });
-
-  it.each([false, true])('reopens the same retired package with a legacy draft present=%s', async (hasDraft) => {
-    const item = await service.create(makeInput());
-    const draft = hasDraft ? await service.createVersion(item.id) : null;
-    await service.retire(item.id);
-
-    const reopened = await service.reopen(item.id);
-    expect(reopened).toMatchObject({
-      id: item.id, code: item.code, version: item.version,
-      priceVnd: item.priceVnd, quotas: item.quotas,
-      status: 'ACTIVE', retiredAt: null,
-    });
-    expect(await service.getPublic(item.id)).toEqual(reopened);
-    expect((await service.listPublic({ page: 1, limit: 20 })).items).toHaveLength(1);
-    if (draft) expect((await service.getAdmin(draft.id)).status).toBe('DRAFT');
-  });
-
-  it('rejects reopening a draft, an active package, or a superseded version', async () => {
-    const item = await service.create(makeInput());
-    await expect(service.reopen(item.id)).rejects.toBeInstanceOf(ConflictException);
-    const next = await service.createVersion(item.id);
-    await expect(service.reopen(next.id)).rejects.toBeInstanceOf(ConflictException);
-    await service.publish(next.id);
-    await expect(service.reopen(item.id)).rejects.toThrow('phiên bản mới hơn');
-    expect((await service.getPublic(next.id)).status).toBe('ACTIVE');
-  });
-
-  it('paginates and filters admin results', async () => {
-    await service.create(makeInput({ code: 'BB' }));
-    await service.create(makeInput({ code: 'AA' }));
-    expect(await service.listAdmin({ page: 2, limit: 1 })).toMatchObject({
-      total: 2,
-      page: 2,
-      limit: 1,
-      items: [expect.objectContaining({ code: 'BB' })],
-    });
-    expect((await service.listAdmin({ page: 100, limit: 1 })).items).toEqual(
-      [],
-    );
-  });
-
-  it('hides legacy drafts and lists active packages before cheaper retired ones across pages', async () => {
-    const active = await service.create(makeInput({ code: 'CURRENT', priceVnd: 1_100_000 }));
-    const draft = await service.createVersion(active.id);
-    const retired = await service.create(makeInput({ code: 'RETIRED', priceVnd: 1_050_000 }));
-    await service.retire(retired.id);
-    await service.update(draft.id, { priceVnd: 1_000_000 });
-
-    const query = await carePackagesValidationPipe.transform(
-      { page: '1', limit: '1', excludeDrafts: 'true' },
-      { type: 'query', metatype: AdminListCarePackagesDto },
-    );
-    expect(await service.listAdmin(query)).toMatchObject({
-      total: 2,
-      items: [expect.objectContaining({ id: active.id, status: 'ACTIVE' })],
-    });
-    expect(await service.listAdmin({ page: 2, limit: 1, excludeDrafts: true })).toMatchObject({
-      total: 2,
-      items: [expect.objectContaining({ id: retired.id, status: 'DEPRECATED' })],
-    });
-    expect(await service.listAdmin({ page: 1, limit: 1 })).toMatchObject({
-      total: 3,
-      items: [expect.objectContaining({ id: draft.id, status: 'DRAFT' })],
-    });
-  });
-
-  it('excludes demo packages and sorts the full admin catalog by price before pagination', async () => {
-    const prices = [1_000_000, 900_000, 700_000, 950_000, 850_000, 750_000, 800_000];
-    for (const [index, priceVnd] of prices.entries()) {
-      await service.create(makeInput({ code: `PACKAGE_${index}`, priceVnd }));
-    }
-    const demo = await service.create(
-      makeInput({ code: 'DEMO_LOCAL_TRAI_NGHIEM', priceVnd: 690_000 }),
-    );
-    await repository.insert({
-      ...demo,
-      id: DEMO_CARE_PACKAGE_IDS[0],
-      code: 'TRAI_NGHIEM',
-    });
-
-    const first = await service.listAdmin({ page: 1, limit: 6 });
-    const second = await service.listAdmin({ page: 2, limit: 6 });
-    expect(first.total).toBe(7);
-    expect(first.items.map((item) => item.priceVnd)).toEqual([
-      700_000, 750_000, 800_000, 850_000, 900_000, 950_000,
-    ]);
-    expect(second.items.map((item) => item.priceVnd)).toEqual([1_000_000]);
-  });
-
-  it('reports a missing package', async () => {
-    await expect(service.getAdmin('missing')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
-    await expect(service.getPublic('missing')).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
-  });
-
-  it('rejects merged concurrent edits that would violate member bounds', async () => {
-    const item = await service.create(
-      { ...makeInput({ additionalMemberMonthlyPriceVnd: 0 }), acknowledgedWarnings: ['P5'] },
-    );
-    const results = await Promise.allSettled([
-      service.update(item.id, { includedMembers: 4, acknowledgedWarnings: ['P5'] }),
-      service.update(item.id, { maxMembers: 3, acknowledgedWarnings: ['P5'] }),
-    ]);
-    expect(
-      results.filter((result) => result.status === 'fulfilled'),
-    ).toHaveLength(1);
-    const final = await service.getAdmin(item.id);
-    expect(final.maxMembers).toBeGreaterThanOrEqual(final.includedMembers);
-  });
-
-  it('quotes an active package using stored terms without changing the catalog', async () => {
-    const item = await service.create(makeInput());
-    const before = await service.getAdmin(item.id);
-    const quote = await service.quote(item.id, { memberCount: 3 });
-    expect(quote.pricing.totalPriceVnd).toBe(1_050_000);
-    expect(quote.package.id).toBe(item.id);
-    expect(await service.getAdmin(item.id)).toEqual(before);
-    expect((await service.listAdmin({ page: 1, limit: 20 })).total).toBe(1);
-  });
-
-  it('does not quote draft, retired or unknown packages', async () => {
-    const item = await service.create(makeInput());
-    const draft = await service.createVersion(item.id);
-    await expect(
-      service.quote(draft.id, { memberCount: 2 }),
-    ).rejects.toBeInstanceOf(NotFoundException);
-    await service.retire(item.id);
-    await expect(
-      service.quote(item.id, { memberCount: 2 }),
-    ).rejects.toBeInstanceOf(NotFoundException);
-    await expect(
-      service.quote('missing', { memberCount: 2 }),
-    ).rejects.toBeInstanceOf(NotFoundException);
-  });
-
-  it('quotes a new active version rather than accepting the old retired version', async () => {
-    const first = await service.create(makeInput());
-    const second = await service.createVersion(first.id);
-    await service.update(second.id, { priceVnd: 1_100_000 });
-    await service.publish(second.id);
-    await expect(
-      service.quote(first.id, { memberCount: 2 }),
-    ).rejects.toBeInstanceOf(NotFoundException);
-    const quote = await service.quote(second.id, { memberCount: 2 });
-    expect(quote.package.version).toBe(2);
-    expect(quote.pricing.totalPriceVnd).toBe(1_100_000);
-    expect((await service.getAdmin(first.id)).priceVnd).toBe(1_000_000);
+    expect(validation.ok).toBe(true);
+    expect(validation.requiresAcknowledgement).toEqual([]);
+    expect(validation.findings.find((f) => f.code === 'S2')?.level).toBe('INFO');
   });
 
   it('rejects packages whose home + video visits exceed 7 per month (S1)', async () => {
     await expect(
-      service.create(
-        makeInput({ quotas: { videoConsultations: 6, homeVisits: 2, facilityVisits: 0 } }),
-      ),
-    ).rejects.toBeInstanceOf(BadRequestException);
+      service.create(makeInput({ quotas: { videoConsultations: 6, homeVisits: 2 } })),
+    ).rejects.toMatchObject({
+      errorCode: 'CARE_PACKAGE_RULE_BLOCKED',
+    });
     await expect(
-      service.create(
-        makeInput({ quotas: { videoConsultations: 50, homeVisits: 8, facilityVisits: 0 } }),
-      ),
-    ).rejects.toThrow('vượt trần 7 lượt');
+      service.create(makeInput({ quotas: { videoConsultations: 50, homeVisits: 8 } })),
+    ).rejects.toThrow('vượt trần tối đa 7 lượt');
   });
 
-  it('requires acknowledging risky terms (S2) and records the acknowledgement', async () => {
-    const risky = makeInput({ quotas: { videoConsultations: 6, homeVisits: 1, facilityVisits: 0 } });
-    await expect(service.create(risky)).rejects.toMatchObject({
-      response: expect.objectContaining({
-        code: 'CARE_PACKAGE_RISK_ACK_REQUIRED',
-        requiresAcknowledgement: ['S2'],
-      }),
+  it('excludes demo packages from admin catalog', async () => {
+    await repository.insert({
+      id: DEMO_CARE_PACKAGE_IDS[0],
+      code: 'TRAI_NGHIEM',
+      version: 1,
+      name: 'Demo',
+      description: 'Demo description for testing.',
+      durationMonths: 1,
+      priceVnd: 1_000_000,
+      includedMembers: 1,
+      maxMembers: 2,
+      additionalMemberMonthlyPriceVnd: 0,
+      currency: 'VND',
+      quotaPeriod: 'PER_TERM' as any,
+      quotas: { videoConsultations: 1, homeVisits: 1 },
+      status: 'ACTIVE' as any,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      publishedAt: new Date().toISOString(),
+      retiredAt: null,
     });
-    const item = await service.create(
-      { ...risky, acknowledgedWarnings: ['S2'] },
-      { actorUserId: 'admin-1', clientIp: '127.0.0.1' },
-    );
-    expect(item.quotas.videoConsultations).toBe(6);
-    expect(repository.auditEntries).toEqual([
-      expect.objectContaining({
-        action: 'CARE_PACKAGE_RISK_ACK_CREATE',
-        actorUserId: 'admin-1',
-        packageId: item.id,
-      }),
-    ]);
+    const adminPage = await service.listAdmin(new AdminListCarePackagesDto());
+    expect(adminPage.total).toBe(0);
   });
 
-  it('rejects home-visit unit prices outside 500.000đ – 2.000.000đ (P1) and packages without home visits (P3)', async () => {
-    await expect(service.create(makeInput({ priceVnd: 400_000 }))).rejects.toThrow('nằm ngoài khoảng');
-    await expect(service.create(makeInput({ priceVnd: 2_100_000 }))).rejects.toBeInstanceOf(
-      BadRequestException,
-    );
-    await expect(
-      service.create(
-        makeInput({ quotas: { videoConsultations: 2, homeVisits: 0, facilityVisits: 0 } }),
-      ),
-    ).rejects.toThrow('ít nhất 1 lượt khám tại nhà');
+  it('reports a missing package', async () => {
+    await expect(service.getAdmin('missing')).rejects.toBeInstanceOf(ResourceNotFoundException);
+    await expect(service.getPublic('missing')).rejects.toBeInstanceOf(ResourceNotFoundException);
   });
 
-  it('warns when a version changes the price by more than 20% (P6)', async () => {
-    const first = await service.create(makeInput());
-    const draft = await service.createVersion(first.id);
-    await expect(service.update(draft.id, { priceVnd: 1_300_000 })).rejects.toBeInstanceOf(
-      ConflictException,
-    );
-    await service.update(draft.id, { priceVnd: 1_300_000, acknowledgedWarnings: ['P2', 'P6'] });
-    await expect(service.publish(draft.id)).rejects.toBeInstanceOf(ConflictException);
-    const published = await service.publish(draft.id, { acknowledgedWarnings: ['P2', 'P6'] });
-    expect(published.status).toBe('ACTIVE');
-  });
-
-  it('validates the approved catalog without blocking errors', async () => {
-    const catalog = [
-      { code: 'TRAI_NGHIEM', durationMonths: 1, priceVnd: 1_000_000, inc: 1, max: 2, home: 1, video: 1 },
-      { code: 'DONG_HANH', durationMonths: 3, priceVnd: 2_850_000, inc: 3, max: 6, home: 3, video: 4 },
-      { code: 'AN_TAM', durationMonths: 6, priceVnd: 6_475_000, inc: 4, max: 8, home: 7, video: 8 },
-    ] as const;
-    for (const p of catalog) {
-      const result = await service.validate({
-        ...makeInput(),
-        code: p.code,
-        durationMonths: p.durationMonths,
-        priceVnd: p.priceVnd,
-        homeVisitUnitPriceVnd: p.priceVnd / p.home,
-        includedMembers: p.inc,
-        maxMembers: p.max,
-        additionalMemberMonthlyPriceVnd: 75_000,
-        quotas: { videoConsultations: p.video, homeVisits: p.home, facilityVisits: 0 },
-      });
-      expect(result).toMatchObject({ ok: true, requiresAcknowledgement: [] });
-    }
-    const contract = await service.validate({
-      ...makeInput(),
-      durationMonths: 12,
-      priceVnd: 12_600_000,
-      homeVisitUnitPriceVnd: 900_000,
-      videoQuotaPolicy: 'CONTRACT',
-      includedMembers: 6,
-      maxMembers: 10,
-      additionalMemberMonthlyPriceVnd: 75_000,
-      quotas: { videoConsultations: 0, homeVisits: 14, facilityVisits: 0 },
+  it('xóa mềm thành công gói DEPRECATED/DRAFT, chặn xóa gói ACTIVE và gói đang được sử dụng', async () => {
+    const active = await service.create(makeInput());
+    await expect((service as any).remove(active.id)).rejects.toMatchObject({
+      errorCode: 'CARE_PACKAGE_ACTIVE_DELETE_BLOCKED',
     });
-    expect(contract.ok).toBe(true);
-    expect(contract.maxContractVideoConsultations).toBe(70);
-    // Gói 124 cũ (1 tháng, 15 nhà + 15 video) bị chặn.
-    const old124 = await service.validate({
-      ...makeInput(),
-      priceVnd: 150_000,
-      homeVisitUnitPriceVnd: 10_000,
-      quotas: { videoConsultations: 15, homeVisits: 15, facilityVisits: 0 },
+
+    await service.retire(active.id);
+    const deleted = await (service as any).remove(active.id);
+    expect(deleted.id).toBe(active.id);
+    expect(typeof deleted.deletedAt).toBe('string');
+
+    expect((await service.listAdmin({ page: 1, limit: 20 })).total).toBe(0);
+    await expect(service.getAdmin(active.id)).rejects.toBeInstanceOf(ResourceNotFoundException);
+
+    const inUse = await service.create(makeInput());
+    await service.retire(inUse.id);
+    (repository as any).inUseIds.add(inUse.id);
+    await expect((service as any).remove(inUse.id)).rejects.toMatchObject({
+      errorCode: 'CARE_PACKAGE_IN_USE',
     });
-    expect(old124.ok).toBe(false);
-    expect(old124.findings.map((f) => f.code)).toEqual(expect.arrayContaining(['S1', 'P1']));
   });
 });

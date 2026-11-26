@@ -2,14 +2,14 @@ import {
   HttpException,
   HttpStatus,
   ConflictException,
-  NotFoundException,
-  BadRequestException,
-  UnauthorizedException,
-  ForbiddenException,
 } from '@nestjs/common';
 
-import { resolveErrorTypeUri, ValidationErrorCode } from '../constants/error-codes.constant';
-import { InvalidParamItem, ProblemDetails } from '../types/api-response.interface';
+import { ValidationErrorCode } from '../constants/error-codes.constant';
+import {
+  ErrorConditionItem,
+  InvalidParamItem,
+  ProblemDetails,
+} from '../types/api-response.interface';
 
 export interface BaseApiExceptionOptions {
   errorCode: string;
@@ -17,16 +17,16 @@ export interface BaseApiExceptionOptions {
   status?: HttpStatus;
   detail?: string;
   title?: string;
-  typeUri?: string;
   invalidParams?: InvalidParamItem[];
+  conditions?: ErrorConditionItem[];
 }
 
 export class BaseApiException extends HttpException {
   public readonly errorCode: string;
   public readonly detail: string;
   public readonly title: string;
-  public readonly typeUri: string;
   public readonly invalidParams?: InvalidParamItem[];
+  public readonly conditions?: ErrorConditionItem[];
 
   constructor(options: BaseApiExceptionOptions) {
     const status = options.status ?? HttpStatus.BAD_REQUEST;
@@ -35,11 +35,14 @@ export class BaseApiException extends HttpException {
     this.errorCode = options.errorCode;
     this.detail = options.detail ?? options.message;
     this.title = options.title ?? BaseApiException.getDefaultTitle(status);
-    this.typeUri = options.typeUri ?? resolveErrorTypeUri(options.errorCode);
     this.invalidParams = options.invalidParams;
+    this.conditions = options.conditions;
   }
 
-  public static fromHttpException(exception: HttpException, defaultErrorCode = 'BAD_REQUEST'): BaseApiException {
+  public static fromHttpException(
+    exception: HttpException,
+    defaultErrorCode = 'BAD_REQUEST',
+  ): BaseApiException {
     const status = exception.getStatus();
     const res = exception.getResponse();
     let message = exception.message;
@@ -48,8 +51,8 @@ export class BaseApiException extends HttpException {
 
     if (typeof res === 'object' && res !== null) {
       const resObj = res as Record<string, any>;
-      message = resObj.message || message;
-      detail = resObj.error || message;
+      message = typeof resObj.message === 'string' ? resObj.message : message;
+      detail = typeof resObj.detail === 'string' ? resObj.detail : message;
     }
 
     return new BaseApiException({
@@ -63,13 +66,15 @@ export class BaseApiException extends HttpException {
 
   public toProblemDetails(instanceUri?: string): ProblemDetails {
     return {
-      type: this.typeUri,
       title: this.title,
       detail: this.detail,
       errorCode: this.errorCode,
       ...(instanceUri ? { instance: instanceUri } : {}),
       ...(this.invalidParams && this.invalidParams.length > 0
         ? { invalidParams: this.invalidParams }
+        : {}),
+      ...(this.conditions && this.conditions.length > 0
+        ? { conditions: this.conditions }
         : {}),
     };
   }
@@ -99,13 +104,20 @@ export class BaseApiException extends HttpException {
 }
 
 export class ValidationException extends BaseApiException {
-  constructor(invalidParams: InvalidParamItem[], message = 'Dữ liệu đầu vào không hợp lệ') {
+  constructor(
+    invalidParams: InvalidParamItem[],
+    message = 'Dữ liệu đầu vào không hợp lệ.',
+  ) {
+    const detail =
+      invalidParams.length > 0
+        ? invalidParams.map((item) => item.message).join(' ')
+        : message;
     super({
       errorCode: ValidationErrorCode.VALIDATION_FAILED,
       message,
       status: HttpStatus.UNPROCESSABLE_ENTITY,
       title: 'Unprocessable Content',
-      detail: 'One or more fields in the request body failed validation constraints.',
+      detail,
       invalidParams,
     });
   }
@@ -127,20 +139,28 @@ export class BusinessConflictException extends ConflictException {
   public readonly errorCode: string;
   public readonly detail: string;
   public readonly title: string;
-  public readonly typeUri: string;
   public readonly invalidParams?: InvalidParamItem[];
+  public readonly conditions?: ErrorConditionItem[];
 
-  constructor(errorCode: string, message: string, detail?: string) {
+  constructor(
+    errorCode: string,
+    message: string,
+    detail?: string,
+    options?: {
+      invalidParams?: InvalidParamItem[];
+      conditions?: ErrorConditionItem[];
+    },
+  ) {
     super(message);
     this.errorCode = errorCode;
     this.detail = detail ?? message;
     this.title = 'Conflict';
-    this.typeUri = resolveErrorTypeUri(errorCode);
+    this.invalidParams = options?.invalidParams;
+    this.conditions = options?.conditions;
   }
 
   public toProblemDetails(instanceUri?: string): ProblemDetails {
     return {
-      type: this.typeUri,
       title: this.title,
       detail: this.detail,
       errorCode: this.errorCode,
@@ -148,10 +168,12 @@ export class BusinessConflictException extends ConflictException {
       ...(this.invalidParams && this.invalidParams.length > 0
         ? { invalidParams: this.invalidParams }
         : {}),
+      ...(this.conditions && this.conditions.length > 0
+        ? { conditions: this.conditions }
+        : {}),
     };
   }
 }
-
 
 export class UnauthorizedApiException extends BaseApiException {
   constructor(errorCode: string, message: string, detail?: string) {

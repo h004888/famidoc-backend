@@ -296,7 +296,7 @@ import { demoIds, seedDemo } from '../prisma/seed';
         where: { isDemo: false, contractStatus: 'PENDING_APPROVAL' },
       });
       const today = new Date();
-      today.setUTCDate(today.getUTCDate() + 10);
+      today.setUTCDate(today.getUTCDate() + 5);
       await db.medicalContract.update({
         where: { id: soon.id },
         data: { contractStatus: 'ACTIVE', endDate: today },
@@ -308,7 +308,7 @@ import { demoIds, seedDemo } from '../prisma/seed';
       await api('post', '/api/v1/notifications/reminders/run').expect(201);
       expect(
         await db.notification.count({
-          where: { referenceId: soon.id, type: 'CONTRACT_EXPIRY_15D' },
+          where: { referenceId: soon.id, type: 'CONTRACT_EXPIRY_7D' },
         }),
       ).toBe(1);
     });

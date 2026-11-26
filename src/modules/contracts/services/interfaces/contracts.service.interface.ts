@@ -1,11 +1,13 @@
 import type {
   ContractSummary,
   ContractChangeTerms,
+  ContractRenewalPreview,
   TerminationResult,
 } from '../../entities/contract-change.entity';
 import type { ContractAddendum, ContractSignature } from '@prisma/client';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
 import type {
+  ConfirmContractRenewalDto,
   CreateContractAddendumDto,
   CreatePackageUpgradeDto,
   SignContractChangeDto,
@@ -111,7 +113,7 @@ export interface IContractsService {
     actor: AuthenticatedUser,
     id: string,
     reason?: string,
-  ): Promise<{ id: string; contractStatus: 'TERMINATED' }>;
+  ): Promise<{ id: string; contractStatus: 'TERMINATED' | 'CANCELLED' }>;
   createStaffingContract(
     actor: AuthenticatedUser,
     dto: CreateStaffingContractDto,
@@ -207,6 +209,16 @@ export interface IContractsService {
     id: string,
     dto: CreateContractAddendumDto,
   ): Promise<ContractAddendum>;
+  getRenewalPreview(
+    actor: AuthenticatedUser,
+    id: string,
+  ): Promise<ContractRenewalPreview>;
+  confirmContractRenewal(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: ConfirmContractRenewalDto,
+    ip: string,
+  ): Promise<ContractSummary>;
   createPackageUpgradeContract(
     actor: AuthenticatedUser,
     id: string,

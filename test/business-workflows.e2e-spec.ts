@@ -926,15 +926,32 @@ import {
           .activePanelCount,
       ).toBe(0);
     });
-    it('creates an independent upgrade contract, signs it and activates only after payment', async () => {
-      const dto = {
-        packageId: '70000000-0000-4000-8000-000000000002',
-      };
-      const created = await call(
+    it('creates a renewal contract in PENDING_PAYMENT without 4-party signing and keeps old ACTIVE until startDate (R1–R9)', async () => {
+      const preview = await call(
+        'get',
+        `/api/v1/contracts/${active}/renewal-preview`,
+        'family2',
+      );
+      expect(preview.body.eligible).toBe(true);
+      expect(preview.body.caseType).toBe('CASE_A');
+
+      // R6: Không cho phép đổi gói khi gia hạn
+      await call(
         'post',
         `/api/v1/contracts/${active}/upgrade`,
         'family2',
-        dto,
+        { packageId: '70000000-0000-4000-8000-000000000002', kind: 'UPGRADE' },
+        400,
+      );
+
+      const created = await call(
+        'post',
+        `/api/v1/contracts/${active}/renew`,
+        'family2',
+        {
+          acceptedTerms: true,
+          termsHash: preview.body.termsHash,
+        },
         201,
       );
       upgrade = created.body;
@@ -942,33 +959,21 @@ import {
       expect(upgrade.doctor).toBeUndefined();
       expect(upgrade.facility).toBeUndefined();
       expect(upgrade.id).not.toBe(active);
-      expect(upgrade.contractStatus).toBe('PENDING_APPROVAL');
+      expect(upgrade.contractStatus).toBe('PENDING_PAYMENT');
       expect(upgrade.upgradedFromId).toBe(active);
-      expect(Number(upgrade.totalAmount)).toBe(2850000);
-      expect(upgrade.remainingHomeVisits).toBe(3);
-      expect(upgrade.remainingTelehealth).toBe(20);
-      const retry = await call(
-        'post',
-        `/api/v1/contracts/${active}/upgrade`,
-        'family2',
-        dto,
-        201,
-      );
-      expect(retry.body.id).toBe(upgrade.id);
+
+      // R8: Không cho phép ký 4 bên qua sign-upgrade đối với kỳ gia hạn
       await call(
-        'post',
-        '/api/v1/payments/vietqr',
-        'family2',
-        { contractId: upgrade.id },
+        'put',
+        `/api/v1/contracts/${upgrade.id}/sign-upgrade`,
+        'admin',
+        {
+          termsHash: preview.body.termsHash,
+          acceptedTerms: true,
+        },
         409,
       );
-      const terms = await call('get', `/api/v1/contracts/${upgrade.id}/terms`);
-      expect(terms.body.signedRoles).toEqual([]);
-      for (const who of ['family2', 'admin', 'facility', 'doctor'])
-        await call('put', `/api/v1/contracts/${upgrade.id}/sign-upgrade`, who, {
-          termsHash: terms.body.termsHash,
-          acceptedTerms: true,
-        });
+
       const issued = await call(
         'post',
         '/api/v1/payments/vietqr',
@@ -983,7 +988,7 @@ import {
             where: { id: upgrade.id },
           })
         ).contractStatus,
-      ).toBe('ACTIVE');
+      ).toBe('PENDING_ACTIVATION');
       expect(
         await db.medicalContract.count({
           where: { familyId: demoIds.otherFamily, contractStatus: 'ACTIVE' },

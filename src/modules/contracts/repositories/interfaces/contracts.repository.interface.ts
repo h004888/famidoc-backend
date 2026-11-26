@@ -93,6 +93,27 @@ export const MEDICAL_CONTRACT_DETAIL_INCLUDE = {
     orderBy: { createdAt: 'desc' },
   },
   invoices: true,
+  upgradedFrom: {
+    select: {
+      id: true,
+      contractNumber: true,
+      contractStatus: true,
+      startDate: true,
+      endDate: true,
+    },
+  },
+  upgrades: {
+    select: {
+      id: true,
+      contractNumber: true,
+      contractStatus: true,
+      startDate: true,
+      endDate: true,
+      holdExpiresAt: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  },
 } as const;
 export type DetailedMedicalContract = Prisma.MedicalContractGetPayload<{
   include: typeof MEDICAL_CONTRACT_DETAIL_INCLUDE;
@@ -133,10 +154,28 @@ export interface ContractsSession {
   ): Promise<ChangeContract>;
   updateContractStatus(
     id: string,
-    status: 'EXPIRED' | 'TERMINATED' | 'PENDING_PAYMENT',
+    status:
+      | 'EXPIRED'
+      | 'TERMINATED'
+      | 'CANCELLED'
+      | 'PENDING_PAYMENT'
+      | 'PENDING_ACTIVATION'
+      | 'ACTIVE',
     reason?: string,
     renewHold?: boolean,
   ): Promise<void>;
+  getRenewalGraceDays?(): Promise<number>;
+  findActivePackageByLineage?(lineageCode: string): Promise<ServicePackage | null>;
+  findActivePatientsByFamilyId?(familyId: string): Promise<
+    Array<{
+      id: string;
+      fullName: string;
+      dateOfBirth: Date;
+      gender: string;
+      relationshipToRep: string;
+    }>
+  >;
+  findChildRenewalsBySourceId?(sourceId: string): Promise<ChangeContract[]>;
   refreshDoctorPanel(doctorId: string): Promise<void>;
   findPendingTermination(
     contractId: string,

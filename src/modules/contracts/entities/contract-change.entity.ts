@@ -20,6 +20,74 @@ export interface ContractSummary {
   signingToken?: string | null;
   signingUrl?: string | null;
   additionalTerms?: string | null;
+  holdExpiresAt?: Date | null;
+}
+
+export type RenewalCaseType = 'CASE_A' | 'CASE_B';
+
+export interface RenewalBlockingItem {
+  code:
+    | 'CONTRACT_TERMINATED'
+    | 'CONTRACT_NOT_ACTIVE_YET'
+    | 'GRACE_PERIOD_EXPIRED'
+    | 'RENEWAL_ALREADY_EXISTS'
+    | 'PACKAGE_UNAVAILABLE'
+    | 'DOCTOR_INACTIVE'
+    | 'DOCTOR_PANEL_FULL'
+    | 'PENDING_TERMINATION_REQUEST'
+    | 'PENDING_MEMBER_ADDENDUM'
+    | 'NO_ACTIVE_MEMBERS';
+  message: string;
+}
+
+export interface ContractRenewalPreview {
+  sourceContractId: string;
+  sourceContractNumber: string;
+  sourceStatus: MedicalContractStatus;
+  eligible: boolean;
+  suggestBuyNew: boolean;
+  caseType: RenewalCaseType | null;
+  graceDays: number;
+  graceEndsAt: string | null;
+  expectedStartDate: string | null;
+  expectedEndDate: string | null;
+  paymentDeadlineAt: string | null;
+  blockingReasons: RenewalBlockingItem[];
+  existingRenewal: {
+    id: string;
+    contractNumber: string;
+    contractStatus: MedicalContractStatus;
+  } | null;
+  package: {
+    id: string;
+    code: string;
+    name: string;
+    durationMonths: number;
+    quotas: {
+      homeVisits: number;
+      videoConsultations: number;
+    };
+  } | null;
+  doctor: {
+    id: string;
+    fullName: string;
+  } | null;
+  facility: {
+    id: string;
+    name: string;
+  } | null;
+  members: Array<{
+    id: string;
+    fullName: string;
+    relationshipToRep: string;
+  }>;
+  pricing: {
+    basePriceVnd: number;
+    additionalMembersTotalVnd: number;
+    totalPriceVnd: number;
+    currency: string;
+  } | null;
+  termsHash: string | null;
 }
 export interface ContractChangeTerms {
   id: string;

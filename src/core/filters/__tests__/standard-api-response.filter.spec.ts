@@ -73,9 +73,9 @@ describe('StandardApiResponseFilter (RFC 9457 Compliance)', () => {
     const json = getJson();
     expect(json.success).toBe(false);
     expect(json.code).toBe(HttpStatus.NOT_FOUND);
+    expect(json).not.toHaveProperty('message');
     expect(json.requestId).toBe('req_123');
     expect(json.error).toEqual({
-      type: 'https://api.famidoc.vn/errors/user-not-found',
       title: 'Resource Not Found',
       detail: 'Người dùng không tồn tại',
       errorCode: 'USER_NOT_FOUND',
@@ -106,7 +106,15 @@ describe('StandardApiResponseFilter (RFC 9457 Compliance)', () => {
     expect(json.error.invalidParams[0]).toMatchObject({
       field: 'email',
       issue: 'INVALID_FORMAT',
+      message: 'Email không đúng định dạng email.',
     });
+    expect(json.error.invalidParams[1]).toMatchObject({
+      field: 'password',
+      issue: 'MIN_LENGTH',
+      message: 'Mật khẩu phải có ít nhất 8 ký tự.',
+    });
+    expect(json.error).not.toHaveProperty('type');
+    expect(json).not.toHaveProperty('message');
   });
 
   it('nên bắt lỗi không mong muốn (500) và không làm lộ stack trace', () => {
@@ -139,7 +147,7 @@ describe('StandardApiResponseFilter (RFC 9457 Compliance)', () => {
     expect(json.success).toBe(false);
     expect(json.code).toBe(HttpStatus.CONFLICT);
     expect(json.error.errorCode).toBe('CONFLICT_ERROR');
-    expect(json.error.detail).toBe('Contract is not ready for payment');
+    expect(json.error.detail).toBe('Dữ liệu đang xung đột với trạng thái hiện tại.');
     expect(json.error.blockingReasons).toEqual(['DOCTOR_VERIFICATION_REQUIRED']);
   });
 
@@ -184,14 +192,81 @@ describe('StandardApiResponseFilter (RFC 9457 Compliance)', () => {
     filter.catch(new NotFoundException('Bác sĩ không tồn tại'), hostDoctor.host);
     expect(hostDoctor.getJson().error.errorCode).toBe('DOCTOR_NOT_FOUND');
 
-    // 3. NotFoundException tại /api/v1/care-packages/789 -> PACKAGE_NOT_FOUND
+    // 3. NotFoundException tại /api/v1/care-packages/789 -> CARE_PACKAGE_NOT_FOUND
     const hostPackage = createMockArgumentsHost({ url: '/api/v1/care-packages/789' });
     filter.catch(new NotFoundException('Gói không tồn tại'), hostPackage.host);
-    expect(hostPackage.getJson().error.errorCode).toBe('PACKAGE_NOT_FOUND');
+    expect(hostPackage.getJson().error.errorCode).toBe('CARE_PACKAGE_NOT_FOUND');
 
     // 4. NotFoundException tại /api/v1/unknown -> RESOURCE_NOT_FOUND
     const hostUnknown = createMockArgumentsHost({ url: '/api/v1/unknown' });
     filter.catch(new NotFoundException('Không tìm thấy tài nguyên'), hostUnknown.host);
     expect(hostUnknown.getJson().error.errorCode).toBe('RESOURCE_NOT_FOUND');
+  });
+
+  it('nên bắt lỗi Prisma P2002 sang 409 DB_UNIQUE_VIOLATION kèm invalidParams tiếng Việt', () => {
+    const { host, getJson, getStatus } = createMockArgumentsHost({
+      url: '/api/v1/admin/care-packages',
+    });
+
+    filter.catch(
+      { code: 'P2002', meta: { target: ['package_code'] }, message: 'Unique constraint failed' },
+      host,
+    );
+
+    expect(getStatus()).toBe(HttpStatus.CONFLICT);
+    const json = getJson();
+    expect(json.error.errorCode).toBe('DB_UNIQUE_VIOLATION');
+    expect(json.error.invalidParams).toEqual([
+      {
+        field: 'package_code',
+        issue: 'DUPLICATE',
+        message: 'Mã gói đã tồn tại trong hệ thống.',
+      },
+    ]);
+  });
+
+  it('nên map lỗi constraint service_packages_schedule_cap_chk sang thông báo tiếng Việt mới', () => {
+    const { host, getJson, getStatus } = createMockArgumentsHost({
+      url: '/api/v1/admin/care-packages',
+    });
+
+    filter.catch(
+      { message: 'new row for relation "service_packages" violates check constraint "service_packages_schedule_cap_chk"' },
+      host,
+    );
+
+    expect(getStatus()).toBe(HttpStatus.BAD_REQUEST);
+    const json = getJson();
+    expect(json.error.errorCode).toBe('DB_CONSTRAINT_VIOLATION');
+    expect(json.error.detail).toContain('ít nhất 1 lượt khám nhà, 1 lượt tư vấn video');
+    expect(json.error.detail).not.toContain('500.000');
+  });
+
+  it('nên bóc đúng field và message tiếng Việt khi NestJS ValidationPipe thêm prefix quotas.', () => {
+    const { host, getJson, getStatus } = createMockArgumentsHost({
+      url: '/api/v1/admin/care-packages',
+    });
+
+    filter.catch(
+      new BadRequestException([
+        'quotas.Số lượt khám tại nhà phải lớn hơn 0.',
+        'quotas.Số lượt tư vấn video phải lớn hơn 0.',
+      ]),
+      host,
+    );
+
+    expect(getStatus()).toBe(HttpStatus.UNPROCESSABLE_ENTITY);
+    expect(getJson().error.invalidParams).toEqual([
+      {
+        field: 'quotas.homeVisits',
+        issue: 'MIN_VALUE',
+        message: 'Số lượt khám tại nhà phải lớn hơn 0.',
+      },
+      {
+        field: 'quotas.videoConsultations',
+        issue: 'MIN_VALUE',
+        message: 'Số lượt tư vấn video phải lớn hơn 0.',
+      },
+    ]);
   });
 });

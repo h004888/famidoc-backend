@@ -25,7 +25,7 @@ describe('BaseApiException & Domain Exceptions', () => {
     expect(ex.title).toBe('Custom Title');
 
     const problem = ex.toProblemDetails('/api/v1/test');
-    expect(problem.type).toBe('https://api.famidoc.vn/errors/custom-error');
+    expect(problem).not.toHaveProperty('type');
     expect(problem.title).toBe('Custom Title');
     expect(problem.detail).toBe('Detailed explanation');
     expect(problem.errorCode).toBe('CUSTOM_ERROR');

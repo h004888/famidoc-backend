@@ -28,6 +28,7 @@ import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
 import { RolesGuard, Roles } from '../../../core/auth/roles.guard';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
 import {
+  ConfirmContractRenewalDto,
   CreateContractAddendumDto,
   CreatePackageUpgradeDto,
   SignContractChangeDto,
@@ -774,6 +775,39 @@ export class ContractsController {
     @Body() dto: CreateContractAddendumDto,
   ) {
     return this.service.createContractAddendum(req.user, id, dto);
+  }
+
+  @Get(':id/renewal-preview')
+  @ApiOperation({
+    summary: 'Kiểm tra điều kiện và xem trước thông tin gia hạn hợp đồng (R1–R9)',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng gốc' })
+  @ApiResponse({ status: 200, description: 'Trả về thông tin xem trước gia hạn' })
+  getRenewalPreview(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    return this.service.getRenewalPreview(req.user, id);
+  }
+
+  @Post(':id/renew')
+  @ApiOperation({
+    summary: 'Xác nhận gia hạn hợp đồng và tạo kỳ mới ở trạng thái chờ thanh toán (R8, R9)',
+  })
+  @ApiParam({ name: 'id', description: 'UUID của hợp đồng gốc' })
+  @ApiBody({ type: ConfirmContractRenewalDto })
+  @ApiResponse({ status: 201, description: 'Tạo kỳ gia hạn thành công' })
+  confirmContractRenewal(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: ConfirmContractRenewalDto,
+  ) {
+    return this.service.confirmContractRenewal(
+      req.user,
+      id,
+      dto,
+      req.ip || 'unknown',
+    );
   }
 
   @Post(':id/upgrade')

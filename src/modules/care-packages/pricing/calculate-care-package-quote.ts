@@ -24,11 +24,11 @@ export function calculateCarePackageQuote(
     memberCount > 100
   ) {
     throw new BadRequestException(
-      'memberCount must be an integer between 1 and 100',
+      'Số thành viên phải là số nguyên từ 1 đến 100.',
     );
   }
   if (carePackage.status !== CarePackageStatus.ACTIVE) {
-    throw new NotFoundException('Care package not found');
+    throw new NotFoundException('Không tìm thấy gói dịch vụ.');
   }
   if (memberCount > carePackage.maxMembers) {
     throw new BadRequestException({
@@ -120,7 +120,7 @@ export function calculateCarePackageQuote(
     ].some((amount) => amount > maximum)
   ) {
     throw new BadRequestException(
-      'Calculated price exceeds the supported VND range',
+      'Giá tính toán vượt quá giới hạn VND hệ thống hỗ trợ.',
     );
   }
 

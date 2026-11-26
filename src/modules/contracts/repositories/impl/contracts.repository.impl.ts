@@ -14,7 +14,11 @@ import {
   notifyContractParties,
   writeBusinessAudit,
 } from '../../../../core/business/business-helpers';
-import { buildActiveAndHeldWhere, computeContractHoldExpiresAt } from '../../pricing/doctor-quota.helper';
+import {
+  buildActiveAndHeldWhere,
+  clampRenewalGraceDays,
+  computeContractHoldExpiresAt,
+} from '../../pricing/doctor-quota.helper';
 import { queueSigningNotices } from '../../services/signing-deadline';
 import {
   CONTRACT_CHANGE_INCLUDE,
@@ -68,7 +72,7 @@ export class PrismaContractsSession implements ContractsSession {
         familyId,
         ...(exceptId ? { id: { not: exceptId } } : {}),
         contractStatus: {
-          in: ['PENDING_APPROVAL', 'PENDING_PAYMENT', 'ACTIVE'],
+          in: ['PENDING_APPROVAL', 'PENDING_PAYMENT', 'PENDING_ACTIVATION', 'ACTIVE'],
         },
       },
       select: { id: true, contractStatus: true },
@@ -79,7 +83,7 @@ export class PrismaContractsSession implements ContractsSession {
       where: {
         upgradedFromId: sourceId,
         contractStatus: {
-          in: ['PENDING_APPROVAL', 'PENDING_PAYMENT', 'ACTIVE'],
+          in: ['PENDING_APPROVAL', 'PENDING_PAYMENT', 'PENDING_ACTIVATION', 'ACTIVE'],
         },
       },
       include: CONTRACT_CHANGE_INCLUDE,
@@ -121,16 +125,26 @@ export class PrismaContractsSession implements ContractsSession {
   }
   async updateContractStatus(
     id: string,
-    status: 'EXPIRED' | 'TERMINATED' | 'PENDING_PAYMENT',
+    status:
+      | 'EXPIRED'
+      | 'TERMINATED'
+      | 'CANCELLED'
+      | 'PENDING_PAYMENT'
+      | 'PENDING_ACTIVATION'
+      | 'ACTIVE',
     reason?: string,
     renewHold = false,
   ) {
+    const isEnded = status === 'TERMINATED' || status === 'CANCELLED';
+    const clearHold =
+      isEnded || status === 'PENDING_ACTIVATION' || status === 'ACTIVE';
     await this.tx.medicalContract.update({
       where: { id },
       data: {
         contractStatus: status,
         ...(renewHold ? { holdExpiresAt: computeContractHoldExpiresAt() } : {}),
-        ...(status === 'TERMINATED'
+        ...(clearHold && !renewHold ? { holdExpiresAt: null } : {}),
+        ...(isEnded
           ? {
               terminationReason: reason,
               terminatedAt: new Date(),
@@ -139,7 +153,7 @@ export class PrismaContractsSession implements ContractsSession {
           : {}),
       },
     });
-    if (status === 'EXPIRED' || status === 'TERMINATED') {
+    if (status === 'EXPIRED' || status === 'TERMINATED' || status === 'CANCELLED') {
       const vnNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
       const todayDate = new Date(
         Date.UTC(vnNow.getUTCFullYear(), vnNow.getUTCMonth(), vnNow.getUTCDate()),
@@ -156,6 +170,60 @@ export class PrismaContractsSession implements ContractsSession {
         },
       });
     }
+  }
+
+  async getRenewalGraceDays(): Promise<number> {
+    const row = await this.tx.systemConfiguration.findUnique({
+      where: { configKey: 'CONTRACT_RENEWAL_GRACE_DAYS' },
+      select: { configValue: true },
+    });
+    return clampRenewalGraceDays(
+      row?.configValue ?? process.env.CONTRACT_RENEWAL_GRACE_DAYS,
+    );
+  }
+
+  findActivePackageByLineage(lineageCode: string) {
+    return this.tx.servicePackage.findFirst({
+      where: {
+        lineageCode,
+        status: 'ACTIVE',
+        deletedAt: null,
+      },
+      orderBy: { version: 'desc' },
+    });
+  }
+
+  async findActivePatientsByFamilyId(familyId: string) {
+    const rows = await this.tx.patient.findMany({
+      where: { familyId, status: 'ACTIVE' },
+      select: {
+        id: true,
+        fullName: true,
+        dateOfBirth: true,
+        gender: true,
+        relationshipToHead: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      fullName: row.fullName,
+      dateOfBirth: row.dateOfBirth,
+      gender: row.gender,
+      relationshipToRep: row.relationshipToHead,
+    }));
+  }
+
+  findChildRenewalsBySourceId(sourceId: string) {
+    return this.tx.medicalContract.findMany({
+      where: {
+        upgradedFromId: sourceId,
+        contractStatus: {
+          in: ['PENDING_APPROVAL', 'PENDING_PAYMENT', 'PENDING_ACTIVATION'],
+        },
+      },
+      include: CONTRACT_CHANGE_INCLUDE,
+    });
   }
   async refreshDoctorPanel(doctorId: string) {
     await this.tx
@@ -829,7 +897,14 @@ export class PrismaContractsSession implements ContractsSession {
       this.tx.medicalContract.count({
         where: {
           facilityId,
-          contractStatus: { in: ['PENDING_APPROVAL', 'PENDING_PAYMENT'] },
+          contractStatus: {
+            in: [
+              'PENDING_APPROVAL',
+              'PENDING_PAYMENT',
+              'PAID_PENDING_APPROVAL',
+              'PENDING_ACTIVATION',
+            ],
+          },
         },
       }),
       this.tx.encounter.count({

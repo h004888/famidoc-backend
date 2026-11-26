@@ -1,13 +1,14 @@
 /**
- * Famidoc Global Error Codes & RFC 9457 Problem Details Specifications.
+ * Famidoc Global Error Codes & Unified API Error Specifications.
  */
-
-export const ERROR_TYPE_BASE_URI = 'https://api.famidoc.vn/errors';
 
 export enum SystemErrorCode {
   INTERNAL_SERVER_ERROR = 'INTERNAL_SERVER_ERROR',
   DATABASE_CONNECTION_ERROR = 'DATABASE_CONNECTION_ERROR',
   DATABASE_TRANSACTION_FAILED = 'DATABASE_TRANSACTION_FAILED',
+  DB_UNIQUE_VIOLATION = 'DB_UNIQUE_VIOLATION',
+  DB_FOREIGN_KEY_VIOLATION = 'DB_FOREIGN_KEY_VIOLATION',
+  DB_CONSTRAINT_VIOLATION = 'DB_CONSTRAINT_VIOLATION',
   EXTERNAL_SERVICE_UNAVAILABLE = 'EXTERNAL_SERVICE_UNAVAILABLE',
   EXTERNAL_SERVICE_TIMEOUT = 'EXTERNAL_SERVICE_TIMEOUT',
   SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
@@ -78,6 +79,11 @@ export enum CarePackageErrorCode {
   CARE_PACKAGE_NOT_FOUND = 'CARE_PACKAGE_NOT_FOUND',
   CARE_PACKAGE_INACTIVE = 'CARE_PACKAGE_INACTIVE',
   CARE_PACKAGE_TERMS_INVALID = 'CARE_PACKAGE_TERMS_INVALID',
+  CARE_PACKAGE_RULE_BLOCKED = 'CARE_PACKAGE_RULE_BLOCKED',
+  CARE_PACKAGE_CODE_EXISTS = 'CARE_PACKAGE_CODE_EXISTS',
+  CARE_PACKAGE_DEPRECATED_READONLY = 'CARE_PACKAGE_DEPRECATED_READONLY',
+  CARE_PACKAGE_ACTIVE_DELETE_BLOCKED = 'CARE_PACKAGE_ACTIVE_DELETE_BLOCKED',
+  CARE_PACKAGE_IN_USE = 'CARE_PACKAGE_IN_USE',
 }
 
 export enum PaymentErrorCode {
@@ -86,27 +92,5 @@ export enum PaymentErrorCode {
   PAYMENT_AMOUNT_MISMATCH = 'PAYMENT_AMOUNT_MISMATCH',
   PAYMENT_GATEWAY_ERROR = 'PAYMENT_GATEWAY_ERROR',
   PAYMENT_SIGNATURE_INVALID = 'PAYMENT_SIGNATURE_INVALID',
-}
-
-const URI_CACHE = new Map<string, string>();
-
-/**
- * Converts UPPER_SNAKE_CASE error codes to RFC 9457 URI path.
- * e.g. "USER_NOT_FOUND" -> "https://api.famidoc.vn/errors/user-not-found"
- */
-export function resolveErrorTypeUri(errorCode: string): string {
-  if (!errorCode) {
-    return `${ERROR_TYPE_BASE_URI}/unknown-error`;
-  }
-  const cached = URI_CACHE.get(errorCode);
-  if (cached) return cached;
-
-  const slug = errorCode
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
-  const uri = `${ERROR_TYPE_BASE_URI}/${slug}`;
-  URI_CACHE.set(errorCode, uri);
-  return uri;
 }
 

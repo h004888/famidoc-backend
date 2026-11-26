@@ -25,9 +25,8 @@ describe('ApiResponse Type Guards and Contracts', () => {
       success: false,
       code: 404,
       error: {
-        type: 'https://api.famidoc.vn/errors/resource-not-found',
         title: 'Resource Not Found',
-        detail: 'User not found',
+        detail: 'Không tìm thấy người dùng',
         errorCode: 'USER_NOT_FOUND',
         instance: '/api/v1/users/123',
       },

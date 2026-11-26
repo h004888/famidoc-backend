@@ -576,7 +576,9 @@ describe('Doctors & Facilities Controllers', () => {
         expect.objectContaining({
           success: false,
           code: 400,
-          message: 'Dung lượng file Excel vượt quá giới hạn tối đa 2MB',
+          error: expect.objectContaining({
+            detail: 'Dung lượng file Excel vượt quá giới hạn tối đa 2MB',
+          }),
         }),
       );
     });
