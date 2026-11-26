@@ -1193,11 +1193,12 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
       },
     );
 
-    it('createPackageUpgradeContract(): tạo Envelope Documenso và lưu 4 signer khi Documenso được cấu hình', async () => {
+    it('createPackageUpgradeContract(): từ chối kind UPGRADE (R6) và tạo gia hạn RENEWAL không ký lại Documenso 4 bên', async () => {
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const oldContract = makeContractRecord({
         id: 'old-expired-1',
         contractStatus: 'EXPIRED',
-        endDate: new Date('2026-01-01'),
+        endDate: yesterday,
         billingSnapshot: {
           package: { code: 'PKG-GOLD', durationMonths: 3 },
           members: { requestedCount: 2 },
@@ -1257,22 +1258,31 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
         pdfRendererMock as any,
       );
 
+      await expect(
+        service.createPackageUpgradeContract(familyUser, oldContract.id, {
+          packageId: mockPkg.id,
+          kind: 'UPGRADE',
+        }),
+      ).rejects.toThrow(BadRequestException);
+
       const summary = await service.createPackageUpgradeContract(familyUser, oldContract.id, {
         packageId: mockPkg.id,
-        kind: 'UPGRADE',
+        kind: 'RENEWAL',
       });
 
-      expect(documensoMock.createFourPartyEnvelope).toHaveBeenCalledTimes(1);
-      expect(savedSigners).toHaveLength(4);
-      expect(summary.documensoEnvelopeId).toBe('env-upgrade-1');
-      expect(summary.signingToken).toBe('tok-up-a');
+      expect(documensoMock.createFourPartyEnvelope).not.toHaveBeenCalled();
+      expect(savedSigners).toHaveLength(0);
+      expect(summary.documensoEnvelopeId).toBeNull();
+      expect(summary.documensoItemId).toBeNull();
+      expect(summary.contractStatus).toBe('PENDING_PAYMENT');
     });
 
-    it('createPackageUpgradeContract(): gọi deleteEnvelope dọn dẹp khi lưu DB thất bại', async () => {
+    it('createPackageUpgradeContract(): truyền lỗi DB khi createUpgrade thất bại và không tạo hay xóa Envelope Documenso', async () => {
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const oldContract = makeContractRecord({
         id: 'old-expired-2',
         contractStatus: 'EXPIRED',
-        endDate: new Date('2026-01-01'),
+        endDate: yesterday,
         billingSnapshot: {
           package: { code: 'PKG-GOLD', durationMonths: 3 },
           members: { requestedCount: 2 },
@@ -1325,12 +1335,12 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
       await expect(
         service.createPackageUpgradeContract(familyUser, oldContract.id, {
           packageId: mockPkg.id,
-          kind: 'UPGRADE',
+          kind: 'RENEWAL',
         }),
       ).rejects.toThrow('DB upgrade insert failed');
 
-      expect(documensoMock.deleteEnvelope).toHaveBeenCalledTimes(1);
-      expect(documensoMock.deleteEnvelope).toHaveBeenCalledWith('env-upgrade-rollback');
+      expect(documensoMock.createFourPartyEnvelope).not.toHaveBeenCalled();
+      expect(documensoMock.deleteEnvelope).not.toHaveBeenCalled();
     });
 
     it('backfill (2B): bỏ qua token rỗng, bỏ qua email trùng nhiều vai trò và không tạo Invalid Date khi timestamp lỗi', async () => {
@@ -1542,12 +1552,13 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
       });
     });
 
-    it('createPackageUpgradeContract(): hỗ trợ ACTIVE (endDate <= today), RENEWAL, bỏ qua Documenso khi isDemo hoặc chưa cấu hình, trả envelope khi existing và rollback nếu TX 2 gói bị ngừng', async () => {
+    it('createPackageUpgradeContract(): hỗ trợ ACTIVE/RENEWAL không ký lại Documenso, trả envelope khi existing và ném ConflictException khi gói bị ngừng', async () => {
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const makeUpgradeSession = (oldOverrides: Record<string, any> = {}, pkgOverrides: Record<string, any> = {}) => {
         const oldContract = makeContractRecord({
           id: 'old-ctr-1',
           contractStatus: 'EXPIRED',
-          endDate: new Date('2020-01-01'),
+          endDate: yesterday,
           billingSnapshot: {
             package: { code: 'PKG-GOLD', durationMonths: 12 },
             members: { requestedCount: 2 },
@@ -1595,8 +1606,8 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
         renderPdf: jest.fn().mockResolvedValue(Buffer.from('%PDF-1.4')),
       };
 
-      // 1. ACTIVE (endDate <= today) + RENEWAL với Documenso được cấu hình -> hết hạn HĐ cũ trong TX 2 & tạo envelope
-      const activeCase = makeUpgradeSession({ contractStatus: 'ACTIVE', endDate: new Date('2020-01-01') });
+      // 1. ACTIVE + RENEWAL -> giữ nguyên trạng thái HĐ cũ, tạo HĐ gia hạn PENDING_PAYMENT không cần Documenso
+      const activeCase = makeUpgradeSession({ contractStatus: 'ACTIVE', endDate: yesterday });
       const docActive = makeDocumenso(true);
       const svcActive = new ContractsServiceImpl(
         { transaction: (cb: any) => cb(activeCase.sessionMock) } as any,
@@ -1610,10 +1621,10 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
         packageId: mockPkg.id,
         kind: 'RENEWAL',
       });
-      expect(activeCase.sessionMock.updateContractStatus).toHaveBeenCalledWith(activeCase.oldContract.id, 'EXPIRED');
-      expect(activeCase.sessionMock.refreshDoctorPanel).toHaveBeenCalledWith(mockDoctor.id);
-      expect(docActive.createFourPartyEnvelope).toHaveBeenCalledTimes(1);
-      expect(renewalSummary.documensoEnvelopeId).toBe('env-up-case');
+      expect(activeCase.sessionMock.updateContractStatus).not.toHaveBeenCalled();
+      expect(docActive.createFourPartyEnvelope).not.toHaveBeenCalled();
+      expect(renewalSummary.documensoEnvelopeId).toBeNull();
+      expect(renewalSummary.contractStatus).toBe('PENDING_PAYMENT');
 
       // 2. isDemo=true -> không tạo envelope Documenso
       const demoCase = makeUpgradeSession({ isDemo: true });
@@ -1649,7 +1660,7 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
       });
       expect(docUnconf.createFourPartyEnvelope).not.toHaveBeenCalled();
 
-      // 4. existing open upgrade -> trả kèm documensoEnvelopeId & documensoItemId
+      // 4. existing open upgrade -> trả về hợp đồng đang mở (idempotent)
       const existingCase = makeUpgradeSession();
       existingCase.sessionMock.findOpenUpgrade.mockResolvedValue(
         makeContractRecord({
@@ -1677,17 +1688,14 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
         existingCase.oldContract.id,
         { packageId: mockPkg.id, kind: 'RENEWAL' },
       );
-      expect(existingSummary.documensoEnvelopeId).toBe('env-existing-up');
-      expect(existingSummary.documensoItemId).toBe('item-existing-up');
+      expect(existingSummary.id).toBe('existing-up-1');
+      expect(existingCase.sessionMock.createUpgrade).not.toHaveBeenCalled();
 
-      // 5. TX 2 phát hiện gói bị ngừng (RETIRED) -> ném NotFoundException & deleteEnvelope dọn dẹp
-      const retiredTx2Case = makeUpgradeSession();
-      retiredTx2Case.sessionMock.findPackage
-        .mockResolvedValueOnce(mockPkg)
-        .mockResolvedValueOnce({ ...mockPkg, status: 'RETIRED' });
+      // 5. Gói bị ngừng (RETIRED) -> ném ConflictException & không gọi Documenso
+      const retiredCase = makeUpgradeSession({}, { status: 'RETIRED' });
       const docRetired = makeDocumenso(true);
       const svcRetired = new ContractsServiceImpl(
-        { transaction: (cb: any) => cb(retiredTx2Case.sessionMock) } as any,
+        { transaction: (cb: any) => cb(retiredCase.sessionMock) } as any,
         undefined,
         undefined,
         docRetired as any,
@@ -1695,12 +1703,13 @@ describe('Documenso Contract Initiation, Parallel Signing, Signed PDF & Family G
         pdfRendererMock as any,
       );
       await expect(
-        svcRetired.createPackageUpgradeContract(familyUser, retiredTx2Case.oldContract.id, {
+        svcRetired.createPackageUpgradeContract(familyUser, retiredCase.oldContract.id, {
           packageId: mockPkg.id,
           kind: 'RENEWAL',
         }),
-      ).rejects.toThrow(NotFoundException);
-      expect(docRetired.deleteEnvelope).toHaveBeenCalledWith('env-up-case');
+      ).rejects.toThrow(ConflictException);
+      expect(docRetired.createFourPartyEnvelope).not.toHaveBeenCalled();
+      expect(docRetired.deleteEnvelope).not.toHaveBeenCalled();
     });
   });
 });

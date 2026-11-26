@@ -13,6 +13,7 @@ import { ContractPdfRendererService } from './services/contract-pdf-renderer.ser
 import { DocumensoClientService } from './services/documenso-client.service';
 import { DocumensoSyncService } from './services/documenso-sync.service';
 import { ContractHoldCleanupService } from './services/contract-hold-cleanup.service';
+import { ContractLifecycleWorkerService } from './services/contract-lifecycle-worker.service';
 import { SigningDeadlineWorker } from './services/signing-deadline-worker.service';
 
 @Module({
@@ -27,12 +28,14 @@ import { SigningDeadlineWorker } from './services/signing-deadline-worker.servic
     DocumensoClientService,
     DocumensoSyncService,
     ContractHoldCleanupService,
+    ContractLifecycleWorkerService,
     SigningDeadlineWorker,
   ],
   exports: [
     ContractDocumentRendererService,
     ContractPdfRendererService,
     ContractHoldCleanupService,
+    ContractLifecycleWorkerService,
   ],
 })
 export class ContractsModule {}

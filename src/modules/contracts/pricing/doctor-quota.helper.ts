@@ -2,6 +2,18 @@ import type { Prisma } from '@prisma/client';
 
 const DEFAULT_CONTRACT_HOLD_TTL_HOURS = 24;
 export const DEFAULT_MAX_PANEL_CAPACITY = 5;
+export const DEFAULT_RENEWAL_GRACE_DAYS = 7;
+
+/**
+ * Chuẩn hóa số ngày ân hạn gia hạn hợp đồng: luôn ép tối thiểu 7 ngày (R3).
+ */
+export function clampRenewalGraceDays(raw: unknown): number {
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_RENEWAL_GRACE_DAYS;
+  }
+  return Math.max(DEFAULT_RENEWAL_GRACE_DAYS, Math.floor(parsed));
+}
 export function computeMonthlyHomeVisitDemand(
   periodicVisitsQuota: number | null | undefined,
   durationMonths: number | null | undefined,
@@ -35,6 +47,12 @@ export function buildActiveAndHeldWhere(
   options?: { now?: Date; exceptContractId?: string },
 ): Prisma.MedicalContractWhereInput {
   const now = options?.now ?? new Date();
+  const notSequentialRenewalOfActiveSource = {
+    OR: [
+      { upgradedFromId: null },
+      { upgradedFrom: { contractStatus: { not: 'ACTIVE' as const } } },
+    ],
+  };
   return {
     ...(doctorId ? { doctorId } : {}),
     ...(options?.exceptContractId
@@ -42,10 +60,17 @@ export function buildActiveAndHeldWhere(
       : {}),
     OR: [
       { contractStatus: 'ACTIVE' },
+      {
+        contractStatus: 'PENDING_ACTIVATION',
+        ...notSequentialRenewalOfActiveSource,
+      },
       { contractStatus: 'PENDING_APPROVAL', signingDeadlineAt: { not: null } },
       {
         contractStatus: { in: ['PENDING_APPROVAL', 'PENDING_PAYMENT'] },
-        OR: [{ holdExpiresAt: null }, { holdExpiresAt: { gt: now } }],
+        AND: [
+          { OR: [{ holdExpiresAt: null }, { holdExpiresAt: { gt: now } }] },
+          notSequentialRenewalOfActiveSource,
+        ],
       },
     ],
   };

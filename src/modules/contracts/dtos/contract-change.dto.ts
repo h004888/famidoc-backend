@@ -3,6 +3,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsOptional,
   IsString,
   IsUUID,
   Length,
@@ -70,21 +71,53 @@ export class CreatePackageUpgradeDto {
   @Max(100_000)
   videoConsultations?: number;
 
-  @ApiProperty({
-    description: 'ID gói dịch vụ chăm sóc sức khỏe muốn nâng cấp tới',
+  @ApiPropertyOptional({
+    description: 'ID gói dịch vụ chăm sóc sức khỏe (mặc định giữ nguyên gói cũ theo R6)',
     example: '3fa85f64-5717-4562-b3fc-2c963f66afa6',
   })
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== undefined)
   @IsUUID('4')
-  packageId!: string;
+  packageId?: string;
 
   @ApiPropertyOptional({
     enum: ['UPGRADE', 'RENEWAL'],
     description: 'Hình thức thay đổi gói (UPGRADE: nâng cấp, RENEWAL: gia hạn)',
-    default: 'UPGRADE',
-    example: 'UPGRADE',
+    default: 'RENEWAL',
+    example: 'RENEWAL',
   })
   @IsIn(['UPGRADE', 'RENEWAL'])
-  kind: 'UPGRADE' | 'RENEWAL' = 'UPGRADE';
+  kind: 'UPGRADE' | 'RENEWAL' = 'RENEWAL';
+}
+
+export class ConfirmContractRenewalDto {
+  @ApiProperty({
+    description: 'Xác nhận gia đình đã đọc và đồng ý điều khoản gia hạn hợp đồng',
+    example: true,
+  })
+  @IsBoolean()
+  acceptedTerms!: boolean;
+
+  @ApiProperty({
+    description: 'Mã băm SHA-256 của bản xem trước điều khoản & giá gia hạn',
+    example: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+  })
+  @IsString()
+  @Matches(sha256Hex)
+  termsHash!: string;
+
+  @ApiPropertyOptional({
+    description: 'Số lượt video thỏa thuận nếu gói có hạn mức theo hợp đồng',
+    example: 20,
+    minimum: 1,
+    maximum: 100000,
+  })
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== undefined)
+  @IsInt()
+  @Min(1)
+  @Max(100_000)
+  videoConsultations?: number;
 }
 
 export class SignContractChangeDto {

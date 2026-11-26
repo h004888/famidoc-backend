@@ -1,6 +1,19 @@
-import type { ContractSummary } from '../../entities/contract-change.entity';
+import type {
+  ContractRenewalPreview,
+  ContractSummary,
+  RenewalBlockingItem,
+  RenewalCaseType,
+} from '../../entities/contract-change.entity';
+import {
+  computeGraceEndDate,
+  computeRenewalPaymentDeadline,
+  computeRenewalTermsHash,
+  formatIsoDate,
+  toVnCalendarMidnight,
+} from '../../pricing/contract-renewal.helper';
 import { calculateContractTermsHash } from '../../pricing/contract-terms-hash';
 import {
+  clampRenewalGraceDays,
   DEFAULT_MAX_PANEL_CAPACITY,
 } from '../../pricing/doctor-quota.helper';
 import { SlotLedgerService } from '../../../scheduling/slot-ledger.service';
@@ -51,6 +64,7 @@ import type {
   IContractsService,
 } from '../interfaces/contracts.service.interface';
 import type {
+  ConfirmContractRenewalDto,
   CreateContractAddendumDto,
   CreatePackageUpgradeDto,
   SignContractChangeDto,
@@ -459,12 +473,16 @@ export class ContractsServiceImpl
       if (!source) {
         throw new NotFoundException('Không tìm thấy hợp đồng');
       }
+      const canRefundCancelledRenewal =
+        source.contractStatus === 'CANCELLED' &&
+        source.upgradedFromId !== null;
       if (
         source.contractStatus !== 'APPROVAL_REJECTED' &&
-        source.contractStatus !== 'APPROVAL_EXPIRED'
+        source.contractStatus !== 'APPROVAL_EXPIRED' &&
+        !canRefundCancelledRenewal
       ) {
         throw new ConflictException(
-          'Chỉ có thể yêu cầu hoàn tiền cho hợp đồng bị từ chối hoặc quá hạn 24h',
+          'Chỉ có thể yêu cầu hoàn tiền cho hợp đồng bị từ chối, quá hạn 24h hoặc kỳ gia hạn bị hủy theo hợp đồng gốc',
         );
       }
       if (source.creditTransferTarget || source.refundRequest) {
@@ -1145,7 +1163,7 @@ export class ContractsServiceImpl
     actor: AuthenticatedUser,
     id: string,
     reason?: string,
-  ): Promise<{ id: string; contractStatus: 'TERMINATED' }> {
+  ): Promise<{ id: string; contractStatus: 'TERMINATED' | 'CANCELLED' }> {
     if (!['FAMILY_REP', 'ADMIN'].includes(actor.role)) {
       throw new ForbiddenException(
         'Chỉ Đại diện gia đình hoặc Quản trị viên mới có quyền hủy bản nháp hợp đồng',
@@ -1185,7 +1203,10 @@ export class ContractsServiceImpl
     });
     // Documenso nằm ngoài transaction: lỗi phía đối tác chỉ ghi cảnh báo, bản nháp nội bộ đã đóng.
     await this.deleteEnvelopeSafely(contract.documensoEnvelopeId);
-    return { id: contract.id, contractStatus: 'TERMINATED' };
+    return {
+      id: contract.id,
+      contractStatus: contract.upgradedFromId ? 'CANCELLED' : 'TERMINATED',
+    };
   }
 
   private async deleteEnvelopeSafely(envelopeId?: string | null) {
@@ -2947,322 +2968,677 @@ export class ContractsServiceImpl
       return addendum;
     });
   }
-  // Chỉ mở kỳ mới khi hợp đồng cũ đã hết hạn hoặc được duyệt chấm dứt.
-  async createPackageUpgradeContract(
+  private async evaluateRenewalContext(
+    session: ContractsSession,
+    old: ChangeContract,
+    now = new Date(),
+  ) {
+    const today = todayInVietnam(now);
+    const graceDays = session.getRenewalGraceDays
+      ? await session.getRenewalGraceDays()
+      : clampRenewalGraceDays(process.env.CONTRACT_RENEWAL_GRACE_DAYS);
+    const blockingReasons: RenewalBlockingItem[] = [];
+    let suggestBuyNew = false;
+    let caseType: RenewalCaseType | null = null;
+
+    const graceEndDate = computeGraceEndDate(old.endDate, graceDays);
+    const graceEndsAt = formatIsoDate(graceEndDate);
+
+    if (old.contractStatus === 'TERMINATED') {
+      blockingReasons.push({
+        code: 'CONTRACT_TERMINATED',
+        message:
+          'Hợp đồng đã bị chấm dứt nên không thể gia hạn. Vui lòng mua gói mới.',
+      });
+      suggestBuyNew = true;
+    } else if (old.contractStatus === 'ACTIVE') {
+      caseType = 'CASE_A';
+    } else if (old.contractStatus === 'EXPIRED') {
+      if (today.getTime() > graceEndDate.getTime()) {
+        blockingReasons.push({
+          code: 'GRACE_PERIOD_EXPIRED',
+          message: `Hợp đồng đã quá thời gian ân hạn ${graceDays} ngày. Vui lòng mua gói mới.`,
+        });
+        suggestBuyNew = true;
+      } else {
+        caseType = 'CASE_B';
+      }
+    } else {
+      blockingReasons.push({
+        code: 'CONTRACT_NOT_ACTIVE_YET',
+        message: 'Hợp đồng chưa có hiệu lực nên chưa thể gia hạn.',
+      });
+    }
+
+    const existing = await session.findOpenUpgrade(old.id);
+    if (existing) {
+      blockingReasons.push({
+        code: 'RENEWAL_ALREADY_EXISTS',
+        message:
+          'Hợp đồng này đã có yêu cầu hoặc kỳ gia hạn kế tiếp đang mở.',
+      });
+    }
+
+    const oldTerms = readFrozenContractTerms(old.billingSnapshot);
+    const lineageCode =
+      old.servicePackage?.lineageCode ?? oldTerms.package.code;
+    const pkg =
+      session.findActivePackageByLineage && lineageCode
+        ? await session.findActivePackageByLineage(lineageCode)
+        : old.packageId
+          ? await session.findPackage(old.packageId)
+          : null;
+
+    if (!pkg || pkg.status !== 'ACTIVE' || pkg.deletedAt) {
+      blockingReasons.push({
+        code: 'PACKAGE_UNAVAILABLE',
+        message:
+          'Gói dịch vụ hiện tại đã ngừng cung cấp. Vui lòng chọn mua gói mới.',
+      });
+      suggestBuyNew = true;
+    }
+
+    if (!old.doctorId) {
+      blockingReasons.push({
+        code: 'DOCTOR_INACTIVE',
+        message: 'Hợp đồng chưa có bác sĩ phụ trách hợp lệ.',
+      });
+      suggestBuyNew = true;
+    } else if (session.lockDoctorAndCountActiveAndHeld) {
+      const doctorPanel = await session.lockDoctorAndCountActiveAndHeld(
+        old.doctorId,
+      );
+      const docStatus =
+        doctorPanel?.doctor?.onboardingStatus ?? old.doctor?.onboardingStatus;
+      if (!doctorPanel || docStatus !== 'ACTIVE') {
+        blockingReasons.push({
+          code: 'DOCTOR_INACTIVE',
+          message:
+            'Bác sĩ phụ trách hiện không còn hoạt động. Vui lòng mua gói mới để chọn bác sĩ khác.',
+        });
+        suggestBuyNew = true;
+      } else if (caseType === 'CASE_B') {
+        const maxCap =
+          typeof doctorPanel.doctor?.maxPanelCapacity === 'number' &&
+          doctorPanel.doctor.maxPanelCapacity > 0
+            ? doctorPanel.doctor.maxPanelCapacity
+            : DEFAULT_MAX_PANEL_CAPACITY;
+        if (doctorPanel.activeAndHeldCount >= maxCap) {
+          blockingReasons.push({
+            code: 'DOCTOR_PANEL_FULL',
+            message:
+              'Bác sĩ phụ trách đã đủ số gia đình tối đa. Vui lòng mua gói mới để chọn bác sĩ khác.',
+          });
+          suggestBuyNew = true;
+        }
+      }
+    } else if (
+      old.doctor &&
+      (old.doctor as { onboardingStatus?: string }).onboardingStatus &&
+      (old.doctor as { onboardingStatus?: string }).onboardingStatus !== 'ACTIVE'
+    ) {
+      blockingReasons.push({
+        code: 'DOCTOR_INACTIVE',
+        message:
+          'Bác sĩ phụ trách hiện không còn hoạt động. Vui lòng mua gói mới.',
+      });
+      suggestBuyNew = true;
+    }
+
+    const pendingTermination = session.findPendingTermination
+      ? await session.findPendingTermination(old.id)
+      : null;
+    if (pendingTermination) {
+      blockingReasons.push({
+        code: 'PENDING_TERMINATION_REQUEST',
+        message:
+          'Hợp đồng đang có yêu cầu chấm dứt chờ xử lý nên tạm thời không thể gia hạn.',
+      });
+    }
+
+    const pendingMemberAddendum = session.hasPendingMemberAddendum
+      ? await session.hasPendingMemberAddendum(old.id)
+      : false;
+    if (pendingMemberAddendum) {
+      blockingReasons.push({
+        code: 'PENDING_MEMBER_ADDENDUM',
+        message:
+          'Hợp đồng đang có phụ lục thêm thành viên chờ thanh toán. Vui lòng hoàn tất hoặc hủy phụ lục trước khi gia hạn.',
+      });
+    }
+
+    const activePatients = session.findActivePatientsByFamilyId
+      ? await session.findActivePatientsByFamilyId(old.familyId)
+      : [];
+    const memberCount =
+      activePatients.length > 0
+        ? activePatients.length
+        : await session.countFamilyMembers(old.familyId);
+    if (memberCount < 1) {
+      blockingReasons.push({
+        code: 'NO_ACTIVE_MEMBERS',
+        message: 'Gia đình chưa có hồ sơ thành viên đang hoạt động.',
+      });
+    }
+
+    let expectedStartDateObj: Date | null = null;
+    let expectedEndDateObj: Date | null = null;
+    let paymentDeadlineAt: Date | null = null;
+    if (caseType && pkg) {
+      expectedStartDateObj =
+        caseType === 'CASE_A'
+          ? new Date(toVnCalendarMidnight(old.endDate).getTime() + 86_400_000)
+          : today;
+      expectedEndDateObj = addContractMonths(
+        expectedStartDateObj,
+        pkg.durationMonths,
+      );
+      paymentDeadlineAt = computeRenewalPaymentDeadline(
+        now,
+        caseType,
+        old.endDate,
+        graceDays,
+      );
+    }
+
+    const quote =
+      pkg && memberCount >= 1
+        ? calculateCarePackageQuote(
+            {
+              id: pkg.id,
+              code: pkg.lineageCode,
+              version: pkg.version,
+              name: pkg.packageName,
+              description: pkg.description,
+              durationMonths: pkg.durationMonths,
+              priceVnd: moneyToNumber(pkg.basePrice),
+              includedMembers: pkg.includedMembers,
+              maxMembers: pkg.maxMembers,
+              additionalMemberMonthlyPriceVnd: moneyToNumber(
+                pkg.additionalMemberMonthlyPrice,
+              ),
+              quotaPeriod: pkg.quotaPeriod as QuotaPeriod,
+              videoQuotaPolicy:
+                pkg.videoQuotaPolicy === 'CONTRACT' ? 'CONTRACT' : undefined,
+              quotas: {
+                homeVisits: pkg.periodicVisitsQuota,
+                videoConsultations: pkg.telehealthQuota,
+                facilityVisits: 0,
+              },
+              currency: 'VND',
+              status: CarePackageStatus.ACTIVE,
+              createdAt: pkg.createdAt.toISOString(),
+              updatedAt: pkg.updatedAt.toISOString(),
+              publishedAt: pkg.publishedAt?.toISOString() ?? null,
+              retiredAt: null,
+            },
+            memberCount,
+            pkg.videoQuotaPolicy === 'CONTRACT'
+              ? {
+                  videoConsultations: Math.max(
+                    1,
+                    oldTerms.benefits.quotas.videoConsultations || 1,
+                  ),
+                }
+              : undefined,
+          )
+        : null;
+
+    const expectedStartDate = expectedStartDateObj
+      ? formatIsoDate(expectedStartDateObj)
+      : null;
+    const expectedEndDate = expectedEndDateObj
+      ? formatIsoDate(expectedEndDateObj)
+      : null;
+
+    const termsHash =
+      pkg && quote && expectedStartDate && expectedEndDate
+        ? computeRenewalTermsHash({
+            sourceContractId: old.id,
+            packageId: pkg.id,
+            totalPriceVnd: quote.pricing.totalPriceVnd,
+            expectedStartDate,
+            expectedEndDate,
+            memberIds: activePatients.map((p) => p.id),
+          })
+        : null;
+
+    const eligible = blockingReasons.length === 0;
+    const preview: ContractRenewalPreview = {
+      sourceContractId: old.id,
+      sourceContractNumber: old.contractNumber,
+      sourceStatus: old.contractStatus,
+      eligible,
+      suggestBuyNew,
+      caseType,
+      graceDays,
+      graceEndsAt,
+      expectedStartDate,
+      expectedEndDate,
+      paymentDeadlineAt: paymentDeadlineAt?.toISOString() ?? null,
+      blockingReasons,
+      existingRenewal: existing
+        ? {
+            id: existing.id,
+            contractNumber: existing.contractNumber,
+            contractStatus: existing.contractStatus,
+          }
+        : null,
+      package: pkg
+        ? {
+            id: pkg.id,
+            code: pkg.lineageCode,
+            name: pkg.packageName,
+            durationMonths: pkg.durationMonths,
+            quotas: {
+              homeVisits: pkg.periodicVisitsQuota,
+              videoConsultations:
+                quote?.benefits.quotas.videoConsultations ?? pkg.telehealthQuota,
+            },
+          }
+        : null,
+      doctor: old.doctor
+        ? {
+            id: old.doctor.id,
+            fullName:
+              (old.doctor as { user?: { fullName?: string } }).user?.fullName ??
+              (old.doctor as { fullName?: string }).fullName ??
+              'Bác sĩ phụ trách',
+          }
+        : null,
+      facility: old.facility
+        ? {
+            id: old.facility.id,
+            name: old.facility.facilityName,
+          }
+        : null,
+      members: activePatients.map((p) => ({
+        id: p.id,
+        fullName: p.fullName,
+        relationshipToRep: p.relationshipToRep,
+      })),
+      pricing: quote
+        ? {
+            basePriceVnd: quote.pricing.basePriceVnd,
+            additionalMembersTotalVnd: quote.pricing.additionalMembersTotalVnd,
+            totalPriceVnd: quote.pricing.totalPriceVnd,
+            currency: 'VND',
+          }
+        : null,
+      termsHash,
+    };
+
+    return {
+      preview,
+      old,
+      pkg,
+      quote,
+      activePatients,
+      memberCount,
+      expectedStartDateObj,
+      expectedEndDateObj,
+      paymentDeadlineAt,
+      existing,
+    };
+  }
+
+  getRenewalPreview(
     actor: AuthenticatedUser,
     id: string,
-    dto: CreatePackageUpgradeDto,
-  ): Promise<ContractSummary> {
-    const today = todayInVietnam();
-    const shouldProvisionDocumenso = this.isDocumensoConfigured();
-
-    const firstPass = await this.repository.transaction(async (session) => {
+  ): Promise<ContractRenewalPreview> {
+    return this.repository.transaction(async (session) => {
       const old = await this.requirePartyContract(session, id, actor);
-      if (!['FAMILY_REP', 'ADMIN'].includes(actor.role))
+      if (!['FAMILY_REP', 'ADMIN'].includes(actor.role)) {
         throw new ForbiddenException(
-          'Only the family or Admin can request a replacement contract',
+          'Chỉ đại diện gia đình hoặc quản trị viên mới được xem thông tin gia hạn',
         );
-      if (
-        !['EXPIRED', 'TERMINATED'].includes(old.contractStatus) &&
-        old.endDate > today
-      )
-        throw new ConflictException(
-          'The old contract must expire or complete approved early termination first',
-        );
-      if (!['ACTIVE', 'EXPIRED', 'TERMINATED'].includes(old.contractStatus))
-        throw new ConflictException(
-          'An unsigned/unpaid contract cannot be used for renewal or upgrade',
-        );
+      }
+      const ctx = await this.evaluateRenewalContext(session, old, new Date());
+      return ctx.preview;
+    });
+  }
 
-      const existing = await session.findOpenUpgrade(id);
-      if (existing) {
-        const familyCount = await session.countFamilyMembers(old.familyId);
-        if (
-          existing.packageId !== dto.packageId ||
-          existing.memberCount !== familyCount
-        )
-          throw new ConflictException(
-            'A different replacement contract is already pending',
-          );
-        const { benefits } = readFrozenContractTerms(existing.billingSnapshot);
-        const agreedVideoVisits =
-          benefits.videoQuotaPolicy === 'CONTRACT'
-            ? benefits.quotas.videoConsultations
-            : undefined;
-        // Gọi lại cùng dữ liệu thì trả hợp đồng cũ. Đổi hạn mức phải lập điều khoản mới.
-        if (agreedVideoVisits !== dto.videoConsultations)
-          throw new ConflictException(
-            'A replacement contract with different video terms is already pending',
-          );
-        return {
-          kind: 'DONE' as const,
-          summary: {
-            ...this.toContractSummary(existing),
-            documensoEnvelopeId:
-              (existing as { documensoEnvelopeId?: string | null })
-                .documensoEnvelopeId ?? null,
-            documensoItemId:
-              (existing as { documensoItemId?: string | null })
-                .documensoItemId ?? null,
-          },
-        };
+  confirmContractRenewal(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: ConfirmContractRenewalDto,
+    ip: string,
+  ): Promise<ContractSummary> {
+    return this.repository.transaction(async (session) => {
+      if (!dto.acceptedTerms) {
+        throw new BadRequestException(
+          'Vui lòng xác nhận đồng ý điều khoản gia hạn hợp đồng.',
+        );
+      }
+      const old = await this.requirePartyContract(session, id, actor);
+      if (!['FAMILY_REP', 'ADMIN'].includes(actor.role)) {
+        throw new ForbiddenException(
+          'Chỉ đại diện gia đình hoặc quản trị viên mới được xác nhận gia hạn',
+        );
+      }
+      const now = new Date();
+      const ctx = await this.evaluateRenewalContext(session, old, now);
+      if (ctx.existing) {
+        if (ctx.existing.contractStatus === 'PENDING_PAYMENT') {
+          return this.toContractSummary(ctx.existing);
+        }
+        throw new ConflictException(
+          'Hợp đồng này đã có kỳ gia hạn đang xử lý hoặc chờ hiệu lực.',
+        );
+      }
+      if (
+        !ctx.preview.eligible ||
+        !ctx.pkg ||
+        !ctx.quote ||
+        !ctx.expectedStartDateObj ||
+        !ctx.expectedEndDateObj ||
+        !ctx.paymentDeadlineAt
+      ) {
+        throw new ConflictException(
+          ctx.preview.blockingReasons[0]?.message ??
+            'Hợp đồng không đủ điều kiện gia hạn.',
+        );
+      }
+      if (dto.termsHash !== ctx.preview.termsHash) {
+        throw new ConflictException(
+          'Thông tin giá hoặc thành viên đã thay đổi. Vui lòng tải lại bản xem trước gia hạn.',
+        );
       }
 
-      if (await session.hasOtherActiveContract(old.familyId, old.id))
-        throw new ConflictException(
-          'The family already has another active contract',
-        );
-      const pkg = await session.findPackage(dto.packageId);
-      if (!pkg || pkg.status !== 'ACTIVE' || pkg.deletedAt)
-        throw new NotFoundException('Active package not found');
-      const oldTerms = readFrozenContractTerms(old.billingSnapshot);
-      if (
-        dto.kind === 'UPGRADE' &&
-        pkg.durationMonths <= oldTerms.package.durationMonths
-      )
-        throw new BadRequestException(
-          'Choose a higher package term, or use RENEWAL for the same term',
-        );
-      if (dto.kind === 'RENEWAL' && pkg.lineageCode !== oldTerms.package.code)
-        throw new BadRequestException('Renewal must use the same package line');
-      const videoAgreedInContract = pkg.videoQuotaPolicy === 'CONTRACT';
-      if (videoAgreedInContract && dto.videoConsultations === undefined)
-        throw new BadRequestException(
-          'Cần nhập số lượt video đã thỏa thuận cho gói này.',
-        );
-      if (!videoAgreedInContract && dto.videoConsultations !== undefined)
-        throw new BadRequestException('Gói này có số lượt video cố định.');
-      // Gói áp dụng cho toàn bộ gia đình. Số người lấy từ DB, không lấy danh sách do client chọn.
-      const memberCount = await session.countFamilyMembers(old.familyId);
-      if (memberCount < 1)
-        throw new BadRequestException(
-          'The family has no active member profiles',
-        );
-      const quote = calculateCarePackageQuote(
-        {
-          id: pkg.id,
-          code: pkg.lineageCode,
-          version: pkg.version,
-          name: pkg.packageName,
-          description: pkg.description,
-          durationMonths: pkg.durationMonths,
-          priceVnd: moneyToNumber(pkg.basePrice),
-          includedMembers: pkg.includedMembers,
-          maxMembers: pkg.maxMembers,
-          additionalMemberMonthlyPriceVnd: moneyToNumber(
-            pkg.additionalMemberMonthlyPrice,
-          ),
-          quotaPeriod: pkg.quotaPeriod as QuotaPeriod,
-          videoQuotaPolicy: videoAgreedInContract ? 'CONTRACT' : undefined,
-          quotas: {
-            homeVisits: pkg.periodicVisitsQuota,
-            videoConsultations: pkg.telehealthQuota,
-            facilityVisits: 0,
-          },
-          currency: 'VND',
-          status: CarePackageStatus.ACTIVE,
-          createdAt: pkg.createdAt.toISOString(),
-          updatedAt: pkg.updatedAt.toISOString(),
-          publishedAt: pkg.publishedAt?.toISOString() ?? null,
-          retiredAt: null,
-        },
-        memberCount,
-        videoAgreedInContract
-          ? { videoConsultations: dto.videoConsultations }
-          : undefined,
-      );
+      const renewalQuote =
+        ctx.pkg.videoQuotaPolicy === 'CONTRACT' &&
+        dto.videoConsultations !== undefined
+          ? calculateCarePackageQuote(
+              {
+                ...ctx.quote.package,
+                id: ctx.pkg.id,
+                code: ctx.pkg.lineageCode,
+                version: ctx.pkg.version,
+                name: ctx.pkg.packageName,
+                description: ctx.pkg.description,
+                durationMonths: ctx.pkg.durationMonths,
+                priceVnd: moneyToNumber(ctx.pkg.basePrice),
+                includedMembers: ctx.pkg.includedMembers,
+                maxMembers: ctx.pkg.maxMembers,
+                additionalMemberMonthlyPriceVnd: moneyToNumber(
+                  ctx.pkg.additionalMemberMonthlyPrice,
+                ),
+                quotaPeriod: ctx.pkg.quotaPeriod as QuotaPeriod,
+                videoQuotaPolicy: 'CONTRACT',
+                quotas: {
+                  homeVisits: ctx.pkg.periodicVisitsQuota,
+                  videoConsultations: ctx.pkg.telehealthQuota,
+                  facilityVisits: 0,
+                },
+                currency: 'VND',
+                status: CarePackageStatus.ACTIVE,
+                createdAt: ctx.pkg.createdAt.toISOString(),
+                updatedAt: ctx.pkg.updatedAt.toISOString(),
+                publishedAt: ctx.pkg.publishedAt?.toISOString() ?? null,
+                retiredAt: null,
+              },
+              ctx.memberCount,
+              { videoConsultations: dto.videoConsultations },
+            )
+          : ctx.quote;
+
       const snapshot = {
-        package: quote.package,
-        members: quote.members,
-        pricing: quote.pricing,
-        benefits: quote.benefits,
+        package: renewalQuote.package,
+        members: renewalQuote.members,
+        pricing: renewalQuote.pricing,
+        benefits: renewalQuote.benefits,
+        renewalConfirmation: {
+          confirmedByUserId: actor.id,
+          confirmedAt: now.toISOString(),
+          ipAddress: ip.slice(0, 45),
+          termsHash: dto.termsHash,
+          caseType: ctx.preview.caseType,
+        },
       };
+
       const contractNumber =
         'MC' + randomUUID().replaceAll('-', '').toUpperCase();
-
-      if (!old.isDemo && shouldProvisionDocumenso) {
-        const parties = await this.loadContractParties(session, old);
-        const contractInput: BuildDocumensoContractHtmlInput = {
-          contractNumber,
-          durationMonths: pkg.durationMonths,
-          pkg,
-          pricing: {
-            basePriceVnd: quote.pricing.basePriceVnd,
-            additionalMemberTotalVnd: quote.pricing.additionalMembersTotalVnd,
-            additionalMemberUnitPriceVnd: moneyToNumber(
-              pkg.additionalMemberMonthlyPrice,
-            ),
-            totalPriceVnd: quote.pricing.totalPriceVnd,
-          },
-          memberCount,
-          family: parties.family,
-          facility: parties.facility,
-          doctor: parties.doctor,
-          admin: parties.admin,
-        };
-        this.assertRealPartyDataIfStrict(contractInput);
-        const recipients = this.buildDocumensoRecipients({
-          ...parties,
-          familyId: old.familyId,
-          facilityId: old.facilityId,
-        });
-        return {
-          kind: 'PROVISION' as const,
-          old,
-          pkg,
-          quote,
-          snapshot,
-          memberCount,
-          contractNumber,
-          contractInput,
-          recipients,
-        };
-      }
-
-      if (old.contractStatus === 'ACTIVE') {
-        await session.updateContractStatus(old.id, 'EXPIRED');
-        if (old.doctorId) await session.refreshDoctorPanel(old.doctorId);
-      }
-      // Hợp đồng mới bắt đầu kỳ mới. Không cộng tiền, ngày hay lượt chưa dùng của hợp đồng cũ.
       const item = await session.createUpgrade({
         contractNumber,
         familyId: old.familyId,
         facilityId: old.facilityId,
         doctorId: old.doctorId,
-        packageId: pkg.id,
-        totalAmount: quote.pricing.totalPriceVnd,
-        remainingHomeVisits: pkg.periodicVisitsQuota,
-        remainingTelehealth: quote.benefits.quotas.videoConsultations,
-        startDate: today,
-        endDate: addContractMonths(today, pkg.durationMonths),
-        contractStatus: 'PENDING_APPROVAL',
+        packageId: ctx.pkg.id,
+        totalAmount: renewalQuote.pricing.totalPriceVnd,
+        remainingHomeVisits: ctx.pkg.periodicVisitsQuota,
+        remainingTelehealth: renewalQuote.benefits.quotas.videoConsultations,
+        startDate: ctx.expectedStartDateObj,
+        endDate: ctx.expectedEndDateObj,
+        contractStatus: 'PENDING_PAYMENT',
+        holdExpiresAt: ctx.paymentDeadlineAt,
         billingSnapshot: snapshot as unknown as Prisma.InputJsonValue,
-        memberCount,
+        memberCount: ctx.memberCount,
         isDemo: old.isDemo,
         upgradedFromId: old.id,
+        documensoEnvelopeId: null,
+        documensoItemId: null,
       });
+
+      if (ctx.activePatients.length > 0 && session.createContractMembers) {
+        await session.createContractMembers(
+          item.id,
+          ctx.activePatients.map((p) => p.id),
+        );
+      }
+
+      await session.saveUpgradeSignature({
+        contractId: item.id,
+        termsHash: dto.termsHash,
+        signerRole: 'FAMILY_REP',
+        signerUserId: actor.id,
+        signatureHash: createTermsHash({
+          termsHash: dto.termsHash,
+          userId: actor.id,
+          ip: ip.slice(0, 45),
+          at: now.toISOString(),
+        }),
+        ipAddress: ip.slice(0, 45),
+      });
+
+      await session.recordChange(
+        actor.id,
+        item,
+        'CONFIRM_CONTRACT_RENEWAL',
+        item.id,
+      );
+
+      return {
+        ...this.toContractSummary(item),
+        documensoEnvelopeId: null,
+        documensoItemId: null,
+        holdExpiresAt: ctx.paymentDeadlineAt,
+      };
+    });
+  }
+
+  // Gia hạn hợp đồng (R1–R9): giữ nguyên gói, cơ sở y tế và bác sĩ; không ký lại 4 bên.
+  async createPackageUpgradeContract(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: CreatePackageUpgradeDto,
+  ): Promise<ContractSummary> {
+    return this.repository.transaction(async (session) => {
+      const old = await this.requirePartyContract(session, id, actor);
+      if (!['FAMILY_REP', 'ADMIN'].includes(actor.role)) {
+        throw new ForbiddenException(
+          'Only the family or Admin can request a replacement contract',
+        );
+      }
+      if (dto.kind === 'UPGRADE') {
+        throw new BadRequestException(
+          'Gia hạn hợp đồng phải giữ nguyên gói dịch vụ cũ theo quy tắc R6. Để đổi gói hoặc bác sĩ, vui lòng chấm dứt hợp đồng và mua mới.',
+        );
+      }
+      const oldTerms = readFrozenContractTerms(old.billingSnapshot);
+      if (dto.packageId) {
+        const requestedPkg = await session.findPackage(dto.packageId);
+        const matchesOldId = Boolean(old.packageId && dto.packageId === old.packageId);
+        const matchesLineage = Boolean(
+          requestedPkg &&
+            oldTerms.package.code &&
+            requestedPkg.lineageCode === oldTerms.package.code,
+        );
+        if (!requestedPkg || (!matchesOldId && !matchesLineage)) {
+          throw new BadRequestException(
+            'Gia hạn hợp đồng phải giữ nguyên gói dịch vụ cũ theo quy tắc R6. Để đổi gói hoặc bác sĩ, vui lòng chấm dứt hợp đồng và mua mới.',
+          );
+        }
+      }
+
+      const now = new Date();
+      const ctx = await this.evaluateRenewalContext(session, old, now);
+      if (ctx.existing) {
+        const agreedVideoVisits =
+          readFrozenContractTerms(ctx.existing.billingSnapshot).benefits
+            .videoQuotaPolicy === 'CONTRACT'
+            ? readFrozenContractTerms(ctx.existing.billingSnapshot).benefits
+                .quotas.videoConsultations
+            : undefined;
+        if (
+          dto.videoConsultations !== undefined &&
+          agreedVideoVisits !== dto.videoConsultations
+        ) {
+          throw new ConflictException(
+            'A replacement contract with different video terms is already pending',
+          );
+        }
+        return this.toContractSummary(ctx.existing);
+      }
+
+      if (
+        !ctx.preview.eligible ||
+        !ctx.pkg ||
+        !ctx.quote ||
+        !ctx.expectedStartDateObj ||
+        !ctx.expectedEndDateObj ||
+        !ctx.paymentDeadlineAt
+      ) {
+        throw new ConflictException(
+          ctx.preview.blockingReasons[0]?.message ??
+            'Hợp đồng không đủ điều kiện gia hạn.',
+        );
+      }
+
+      const videoAgreedInContract = ctx.pkg.videoQuotaPolicy === 'CONTRACT';
+      if (videoAgreedInContract && dto.videoConsultations === undefined) {
+        throw new BadRequestException(
+          'Cần nhập số lượt video đã thỏa thuận cho gói này.',
+        );
+      }
+      if (!videoAgreedInContract && dto.videoConsultations !== undefined) {
+        throw new BadRequestException('Gói này có số lượt video cố định.');
+      }
+
+      const quote = videoAgreedInContract
+        ? calculateCarePackageQuote(
+            {
+              ...ctx.quote.package,
+              id: ctx.pkg.id,
+              code: ctx.pkg.lineageCode,
+              version: ctx.pkg.version,
+              name: ctx.pkg.packageName,
+              description: ctx.pkg.description,
+              durationMonths: ctx.pkg.durationMonths,
+              priceVnd: moneyToNumber(ctx.pkg.basePrice),
+              includedMembers: ctx.pkg.includedMembers,
+              maxMembers: ctx.pkg.maxMembers,
+              additionalMemberMonthlyPriceVnd: moneyToNumber(
+                ctx.pkg.additionalMemberMonthlyPrice,
+              ),
+              quotaPeriod: ctx.pkg.quotaPeriod as QuotaPeriod,
+              videoQuotaPolicy: 'CONTRACT',
+              quotas: {
+                homeVisits: ctx.pkg.periodicVisitsQuota,
+                videoConsultations: ctx.pkg.telehealthQuota,
+                facilityVisits: 0,
+              },
+              currency: 'VND',
+              status: CarePackageStatus.ACTIVE,
+              createdAt: ctx.pkg.createdAt.toISOString(),
+              updatedAt: ctx.pkg.updatedAt.toISOString(),
+              publishedAt: ctx.pkg.publishedAt?.toISOString() ?? null,
+              retiredAt: null,
+            },
+            ctx.memberCount,
+            { videoConsultations: dto.videoConsultations },
+          )
+        : ctx.quote;
+
+      const termsHash = ctx.preview.termsHash!;
+      const snapshot = {
+        package: quote.package,
+        members: quote.members,
+        pricing: quote.pricing,
+        benefits: quote.benefits,
+        renewalConfirmation: {
+          confirmedByUserId: actor.id,
+          confirmedAt: now.toISOString(),
+          ipAddress: 'api-upgrade',
+          termsHash,
+          caseType: ctx.preview.caseType,
+        },
+      };
+      const contractNumber =
+        'MC' + randomUUID().replaceAll('-', '').toUpperCase();
+      const item = await session.createUpgrade({
+        contractNumber,
+        familyId: old.familyId,
+        facilityId: old.facilityId,
+        doctorId: old.doctorId,
+        packageId: ctx.pkg.id,
+        totalAmount: quote.pricing.totalPriceVnd,
+        remainingHomeVisits: ctx.pkg.periodicVisitsQuota,
+        remainingTelehealth: quote.benefits.quotas.videoConsultations,
+        startDate: ctx.expectedStartDateObj,
+        endDate: ctx.expectedEndDateObj,
+        contractStatus: 'PENDING_PAYMENT',
+        holdExpiresAt: ctx.paymentDeadlineAt,
+        billingSnapshot: snapshot as unknown as Prisma.InputJsonValue,
+        memberCount: ctx.memberCount,
+        isDemo: old.isDemo,
+        upgradedFromId: old.id,
+        documensoEnvelopeId: null,
+        documensoItemId: null,
+      });
+
+      if (ctx.activePatients.length > 0 && session.createContractMembers) {
+        await session.createContractMembers(
+          item.id,
+          ctx.activePatients.map((p) => p.id),
+        );
+      }
+      if (session.saveUpgradeSignature) {
+        await session.saveUpgradeSignature({
+          contractId: item.id,
+          termsHash,
+          signerRole: 'FAMILY_REP',
+          signerUserId: actor.id,
+          signatureHash: createTermsHash({
+            termsHash,
+            userId: actor.id,
+            at: now.toISOString(),
+          }),
+          ipAddress: 'api-upgrade',
+        });
+      }
       await session.recordChange(
         actor.id,
         item,
         'CREATE_PACKAGE_UPGRADE_CONTRACT',
         item.id,
       );
-      return { kind: 'DONE' as const, summary: this.toContractSummary(item) };
+      return {
+        ...this.toContractSummary(item),
+        documensoEnvelopeId: null,
+        documensoItemId: null,
+        holdExpiresAt: ctx.paymentDeadlineAt,
+      };
     });
-
-    if (firstPass.kind === 'DONE') {
-      return firstPass.summary;
-    }
-
-    const documensoEnvelope = await this.provisionDocumensoEnvelope(
-      firstPass.contractNumber,
-      firstPass.contractInput,
-      firstPass.recipients,
-    );
-
-    try {
-      return await this.repository.transaction(async (session) => {
-        const old = await this.requirePartyContract(session, id, actor);
-        if (
-          !['EXPIRED', 'TERMINATED'].includes(old.contractStatus) &&
-          old.endDate > today
-        ) {
-          throw new ConflictException(
-            'The old contract must expire or complete approved early termination first',
-          );
-        }
-        if (!['ACTIVE', 'EXPIRED', 'TERMINATED'].includes(old.contractStatus)) {
-          throw new ConflictException(
-            'An unsigned/unpaid contract cannot be used for renewal or upgrade',
-          );
-        }
-        if (old.isDemo) {
-          throw new ConflictException(
-            'Cannot attach Documenso envelope to demo contract',
-          );
-        }
-        const existing = await session.findOpenUpgrade(id);
-        if (existing) {
-          throw new ConflictException(
-            'A different replacement contract is already pending',
-          );
-        }
-        if (await session.hasOtherActiveContract(old.familyId, old.id)) {
-          throw new ConflictException(
-            'The family already has another active contract',
-          );
-        }
-        const pkg = await session.findPackage(dto.packageId);
-        if (!pkg || pkg.status !== 'ACTIVE' || pkg.deletedAt) {
-          throw new NotFoundException('Active package not found');
-        }
-        const memberCount = await session.countFamilyMembers(old.familyId);
-        if (memberCount < 1) {
-          throw new BadRequestException(
-            'The family has no active member profiles',
-          );
-        }
-        if (memberCount !== firstPass.memberCount) {
-          throw new ConflictException(
-            'Family member count changed while creating replacement contract',
-          );
-        }
-        if (old.contractStatus === 'ACTIVE') {
-          await session.updateContractStatus(old.id, 'EXPIRED');
-          if (old.doctorId) await session.refreshDoctorPanel(old.doctorId);
-        }
-
-        const item = await session.createUpgrade({
-          contractNumber: firstPass.contractNumber,
-          familyId: old.familyId,
-          facilityId: old.facilityId,
-          doctorId: old.doctorId,
-          packageId: firstPass.pkg.id,
-          totalAmount: firstPass.quote.pricing.totalPriceVnd,
-          remainingHomeVisits: firstPass.pkg.periodicVisitsQuota,
-          remainingTelehealth:
-            firstPass.quote.benefits.quotas.videoConsultations,
-          startDate: today,
-          endDate: addContractMonths(today, firstPass.pkg.durationMonths),
-          contractStatus: 'PENDING_APPROVAL',
-          billingSnapshot:
-            firstPass.snapshot as unknown as Prisma.InputJsonValue,
-          memberCount: firstPass.memberCount,
-          isDemo: old.isDemo,
-          upgradedFromId: old.id,
-          documensoEnvelopeId: documensoEnvelope.envelopeId,
-          documensoItemId: documensoEnvelope.envelopeItemId,
-        });
-
-        await this.saveDocumensoSignersForContract(
-          session,
-          item.id,
-          documensoEnvelope.signers,
-        );
-
-        await session.recordChange(
-          actor.id,
-          item,
-          'CREATE_PACKAGE_UPGRADE_CONTRACT',
-          item.id,
-        );
-
-        const familySigner = documensoEnvelope.signers.find(
-          (s) => s.role === 'FAMILY_REP',
-        );
-
-        return {
-          ...this.toContractSummary(item),
-          documensoEnvelopeId: documensoEnvelope.envelopeId,
-          documensoItemId: documensoEnvelope.envelopeItemId,
-          signingToken: familySigner?.token ?? null,
-          signingUrl: familySigner?.signingUrl ?? null,
-        };
-      });
-    } catch (error) {
-      await this.deleteEnvelopeSafely(documensoEnvelope.envelopeId);
-      throw error;
-    }
   }
   getContractChangeTerms(
     actor: AuthenticatedUser,
@@ -3368,6 +3744,20 @@ export class ContractsServiceImpl
         throw new ConflictException(
           'Use the core four-party signing flow for an initial contract',
         );
+      const snapshotObj =
+        contract.billingSnapshot &&
+        typeof contract.billingSnapshot === 'object' &&
+        !Array.isArray(contract.billingSnapshot)
+          ? (contract.billingSnapshot as Record<string, unknown>)
+          : null;
+      if (
+        snapshotObj?.renewalConfirmation != null ||
+        !(contract as { documensoEnvelopeId?: string | null }).documensoEnvelopeId
+      ) {
+        throw new ConflictException(
+          'Kỳ gia hạn hợp đồng không sử dụng quy trình ký 4 bên (R8).',
+        );
+      }
       if (
         !['PENDING_APPROVAL', 'PENDING_PAYMENT'].includes(
           contract.contractStatus,
@@ -3547,6 +3937,27 @@ export class ContractsServiceImpl
       // Chấm dứt quyền dịch vụ, giải phóng panel; giữ nguyên tiền đã nhận và toàn bộ bệnh án.
       await session.updateContractStatus(id, 'TERMINATED', item.reason);
       await session.cancelUnpaidRights(id);
+      const childRenewals =
+        (await session.findChildRenewalsBySourceId?.(id)) ?? [];
+      for (const child of childRenewals) {
+        if (
+          child.contractStatus === 'PENDING_PAYMENT' ||
+          child.contractStatus === 'PENDING_ACTIVATION'
+        ) {
+          await session.updateContractStatus(
+            child.id,
+            'CANCELLED',
+            'Hủy kỳ gia hạn chờ hiệu lực do hợp đồng kỳ hiện tại bị chấm dứt',
+          );
+          await session.cancelUnpaidRights(child.id);
+          await session.recordChange(
+            actor.id,
+            child,
+            'CANCEL_RENEWAL_ON_SOURCE_TERMINATION',
+            child.id,
+          );
+        }
+      }
       await session.refreshDoctorPanel(contract.doctorId);
       const updated = await session.updateTermination(id, item.id, {
         status: 'APPROVED',
@@ -3660,7 +4071,11 @@ export class ContractsServiceImpl
     actorId: string,
     action: string,
   ) {
-    await session.updateContractStatus(contract.id, 'TERMINATED', reason);
+    await session.updateContractStatus(
+      contract.id,
+      contract.upgradedFromId ? 'CANCELLED' : 'TERMINATED',
+      reason,
+    );
     await session.cancelPendingInvoices(contract.id);
     await session.clearDocumensoState?.(contract.id);
     await session.recordChange(actorId, contract, action, contract.id);

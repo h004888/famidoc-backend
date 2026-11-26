@@ -11,13 +11,18 @@ describe('PrismaContractsSession Documenso & legacy signature helpers', () => {
         deleteMany: jest.fn().mockResolvedValue({ count: 2 }),
       },
       medicalContract: {
+        findFirst: jest.fn().mockResolvedValue(null),
         update: jest.fn().mockResolvedValue({ id: 'ctr-1' }),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
         count: jest.fn().mockResolvedValue(0),
       },
+      systemConfiguration: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
       encounter: {
         findFirst: jest.fn().mockResolvedValue(null),
         count: jest.fn().mockResolvedValue(0),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       facilitySettlement: {
         count: jest.fn().mockResolvedValue(0),
@@ -172,6 +177,88 @@ describe('PrismaContractsSession Documenso & legacy signature helpers', () => {
         encounterStatus: { in: ['IN_PROGRESS', 'PENDING_RECORD', 'DISPUTED'] },
       },
       select: { id: true },
+    });
+  });
+
+  it('findOpenUpgrade(): bao gồm cả PENDING_ACTIVATION ngoài PENDING_APPROVAL, PENDING_PAYMENT, ACTIVE', async () => {
+    const tx = makeMockTx();
+    const session = new PrismaContractsSession(tx as any);
+
+    await session.findOpenUpgrade('src-1');
+
+    expect(tx.medicalContract.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          upgradedFromId: 'src-1',
+          contractStatus: {
+            in: ['PENDING_APPROVAL', 'PENDING_PAYMENT', 'PENDING_ACTIVATION', 'ACTIVE'],
+          },
+        },
+      }),
+    );
+  });
+
+  it('getRenewalGraceDays(): mặc định 7 ngày, nhận giá trị >= 7 và ép tối thiểu 7 ngày', async () => {
+    const tx = makeMockTx();
+    const session = new PrismaContractsSession(tx as any);
+
+    tx.systemConfiguration.findUnique.mockResolvedValueOnce(null);
+    await expect((session as any).getRenewalGraceDays()).resolves.toBe(7);
+
+    tx.systemConfiguration.findUnique.mockResolvedValueOnce({ configValue: '14' });
+    await expect((session as any).getRenewalGraceDays()).resolves.toBe(14);
+
+    tx.systemConfiguration.findUnique.mockResolvedValueOnce({ configValue: '3' });
+    await expect((session as any).getRenewalGraceDays()).resolves.toBe(7);
+  });
+
+  it('updateContractStatus(): hỗ trợ CANCELLED, clear holdExpiresAt và hủy lịch hẹn tương lai', async () => {
+    const tx = makeMockTx();
+    const session = new PrismaContractsSession(tx as any);
+
+    await session.updateContractStatus('ctr-cancel' as any, 'CANCELLED' as any, 'Hủy yêu cầu gia hạn');
+
+    expect(tx.medicalContract.update).toHaveBeenCalledWith({
+      where: { id: 'ctr-cancel' },
+      data: expect.objectContaining({
+        contractStatus: 'CANCELLED',
+        terminationReason: 'Hủy yêu cầu gia hạn',
+        terminatedAt: expect.any(Date),
+        holdExpiresAt: null,
+      }),
+    });
+    expect(tx.encounter.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          contractId: 'ctr-cancel',
+          encounterStatus: { in: ['REQUESTED', 'CONFIRMED'] },
+        }),
+        data: {
+          encounterStatus: 'CANCELLED',
+          cancelReason: 'Hủy yêu cầu gia hạn',
+        },
+      }),
+    );
+  });
+
+  it('getStaffingTerminationImpact(): đếm cả PENDING_ACTIVATION và PAID_PENDING_APPROVAL vào pendingMedicalContracts', async () => {
+    const tx = makeMockTx();
+    const session = new PrismaContractsSession(tx as any);
+
+    await session.getStaffingTerminationImpact('fac-1');
+
+    expect(tx.medicalContract.count).toHaveBeenCalledWith({
+      where: {
+        facilityId: 'fac-1',
+        contractStatus: {
+          in: [
+            'PENDING_APPROVAL',
+            'PENDING_PAYMENT',
+            'PAID_PENDING_APPROVAL',
+            'PENDING_ACTIVATION',
+          ],
+        },
+      },
     });
   });
 });

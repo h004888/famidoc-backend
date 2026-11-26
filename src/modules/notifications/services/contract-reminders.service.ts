@@ -33,12 +33,17 @@ export class ContractRemindersService
   }
   async runExpiryReminders() {
     const today = todayInVietnam(),
-      deadline = new Date(today.getTime() + 15 * 86_400_000);
+      deadline = new Date(today.getTime() + 7 * 86_400_000);
     const contracts = await this.prisma.medicalContract.findMany({
       where: {
         contractStatus: 'ACTIVE',
         isDemo: false,
         endDate: { gt: today, lte: deadline },
+        upgrades: {
+          none: {
+            contractStatus: { in: ['PENDING_ACTIVATION', 'ACTIVE'] },
+          },
+        },
       },
       select: {
         id: true,
@@ -50,9 +55,9 @@ export class ContractRemindersService
     const result = await this.prisma.notification.createMany({
       data: contracts.map((c) => ({
         userId: c.familyUnit.representativeUserId,
-        title: 'Hợp đồng sắp hết hạn',
-        content: `Hợp đồng hết hạn ngày ${c.endDate.toISOString().slice(0, 10)}. Vui lòng xem phương án gia hạn.`,
-        type: 'CONTRACT_EXPIRY_15D',
+        title: 'Hợp đồng sắp hết hạn – Gia hạn ngay',
+        content: `Hợp đồng hết hạn ngày ${c.endDate.toISOString().slice(0, 10)}. Vui lòng gia hạn để duy trì dịch vụ không gián đoạn.`,
+        type: 'CONTRACT_EXPIRY_7D',
         referenceId: c.id,
       })),
       skipDuplicates: true,

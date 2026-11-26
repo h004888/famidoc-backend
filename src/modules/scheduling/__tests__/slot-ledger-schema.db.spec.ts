@@ -125,6 +125,7 @@ describeDb('doctor_slot_bookings schema', () => {
       'EXPIRED',
       'APPROVAL_REJECTED',
       'APPROVAL_EXPIRED',
+      'CANCELLED',
     ]) {
       await inRollbackTx(async (tx, f) => {
         await insert(tx, {

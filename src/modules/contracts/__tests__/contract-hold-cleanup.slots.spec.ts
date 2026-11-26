@@ -62,4 +62,53 @@ describe('ContractHoldCleanupService (SlotLedger release)', () => {
     expect(resEmpty).toEqual({ released: 0 });
     expect(slotLedger.releaseContractHolds).not.toHaveBeenCalled();
   });
+
+  it('chuyển kỳ gia hạn quá hạn sang CANCELLED (upgradedFromId != null) và giữ TERMINATED cho hợp đồng mua mới (R9)', async () => {
+    const now = new Date('2026-12-02T10:00:00.000Z');
+    const expiredDrafts = [
+      { id: 'ren-expired', upgradedFromId: 'old-1', documensoEnvelopeId: null },
+      { id: 'new-expired', upgradedFromId: null, documensoEnvelopeId: null },
+    ];
+    const tx = {
+      medicalContract: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      contractDocumensoSigner: {
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      invoice: {
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const prisma = {
+      medicalContract: {
+        findMany: jest.fn().mockResolvedValue(expiredDrafts),
+      },
+      $transaction: jest.fn(async (cb: (client: typeof tx) => Promise<boolean>) => cb(tx)),
+    };
+    const service = new ContractHoldCleanupService(prisma as any);
+    const res = await service.releaseExpiredHolds(now);
+
+    expect(res).toEqual({ released: 2 });
+    expect(tx.medicalContract.updateMany).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'ren-expired' }),
+        data: expect.objectContaining({
+          contractStatus: 'CANCELLED',
+          terminationReason: 'Quá thời hạn thanh toán gia hạn hợp đồng',
+        }),
+      }),
+    );
+    expect(tx.medicalContract.updateMany).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'new-expired' }),
+        data: expect.objectContaining({
+          contractStatus: 'TERMINATED',
+          terminationReason: 'Hết thời hạn giữ chỗ hợp đồng nháp (TTL)',
+        }),
+      }),
+    );
+  });
 });
