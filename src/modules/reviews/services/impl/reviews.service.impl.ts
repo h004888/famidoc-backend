@@ -27,9 +27,16 @@ export class ReviewsServiceImpl implements IReviewsService {
       const encounter = await session.findEncounter(dto.encounterId);
       if (!encounter || encounter.contract.familyId !== actor.familyUnitId)
         throw new NotFoundException('Encounter not found');
-      // Gia đình chỉ đánh giá sau buổi khám đã hoàn thành, mỗi buổi đúng một lần.
-      if (encounter.encounterStatus !== 'COMPLETED')
-        throw new ConflictException('The encounter has not been completed');
+      // Cho phép gia đình đánh giá ngay cả khi ca khám chưa chuyển sang COMPLETED,
+      // chỉ chặn các ca chưa xác nhận / đã hủy / vắng mặt / đang tranh chấp, mỗi buổi đúng một lần.
+      if (
+        ['REQUESTED', 'CANCELLED', 'NO_SHOW', 'DISPUTED'].includes(
+          encounter.encounterStatus,
+        )
+      )
+        throw new ConflictException(
+          'This encounter status cannot be reviewed',
+        );
       if (await session.findReview(encounter.id))
         throw new ConflictException('This encounter already has a review');
       const review = await session.createReview({
