@@ -489,16 +489,40 @@ export class PrismaPaymentsSession implements PaymentsSession {
         if (canSavepoint)
           await this.tx.$executeRawUnsafe('RELEASE SAVEPOINT auto_schedule');
       } catch (err) {
-        if (canSavepoint) {
-          await this.tx
-            .$executeRawUnsafe('ROLLBACK TO SAVEPOINT auto_schedule')
-            .catch(() => undefined);
-        }
-        new Logger(PaymentsRepositoryImpl.name).warn(
-          `Automatic cadence draft generation failed for contract ${contract.id}: ${
+        const logger = new Logger(PaymentsRepositoryImpl.name);
+        logger.warn(
+          `Xếp lịch tự động thất bại cho hợp đồng ${contract.id}: ${
             err instanceof Error ? err.message : String(err)
           }`,
         );
+        if (canSavepoint) {
+          const rolledBack = await this.tx
+            .$executeRawUnsafe('ROLLBACK TO SAVEPOINT auto_schedule')
+            .then(() => true)
+            .catch(() => false);
+          // R20: hợp đồng vẫn ACTIVE; sau khi hoàn tác phần xếp dở, báo CSYT + gia đình để bấm "Xếp lịch lại".
+          if (rolledBack && this.autoScheduleFirstVisit) {
+            try {
+              await this.tx.$executeRawUnsafe('SAVEPOINT auto_schedule_notify');
+              await this.autoScheduleFirstVisit.notifyAutoScheduleFailed(
+                this.tx,
+                contract.id,
+              );
+              await this.tx.$executeRawUnsafe(
+                'RELEASE SAVEPOINT auto_schedule_notify',
+              );
+            } catch (notifyErr) {
+              await this.tx
+                .$executeRawUnsafe('ROLLBACK TO SAVEPOINT auto_schedule_notify')
+                .catch(() => undefined);
+              logger.warn(
+                `Không gửi được thông báo xếp lịch thất bại cho hợp đồng ${contract.id}: ${
+                  notifyErr instanceof Error ? notifyErr.message : String(notifyErr)
+                }`,
+              );
+            }
+          }
+        }
       }
     }
   }

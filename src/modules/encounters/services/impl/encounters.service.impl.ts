@@ -2,12 +2,22 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpStatus,
   Inject,
   Injectable,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
+import { isValidHomeVisitAddress } from '../../../../core/business/business-helpers';
+import {
+  AutoScheduleErrorCode,
+  ContractErrorCode,
+} from '../../../../core/constants/error-codes.constant';
+import {
+  BaseApiException,
+  ResourceNotFoundException,
+} from '../../../../core/exceptions/api.exception';
 import {
   ENCOUNTERS_REPOSITORY_TOKEN,
   type EncountersSession,
@@ -2522,7 +2532,64 @@ export class EncountersServiceImpl implements IEncountersService {
     return this.repository.transaction(async (session) => {
       const tx = (session as unknown as { tx?: Prisma.TransactionClient }).tx;
       if (!tx) {
-        throw new BadRequestException('Transaction client unavailable');
+        throw new BaseApiException({
+          errorCode: AutoScheduleErrorCode.AUTO_SCHEDULE_TRANSACTION_UNAVAILABLE,
+          status: HttpStatus.INTERNAL_SERVER_ERROR,
+          message:
+            'Không mở được phiên xử lý dữ liệu để xếp lịch. Vui lòng thử lại sau.',
+        });
+      }
+      const contract = await tx.medicalContract.findUnique({
+        where: { id: contractId },
+        select: {
+          contractStatus: true,
+          doctorId: true,
+          homeVisitAddress: true,
+          familyUnit: { select: { homeAddress: true } },
+        },
+      });
+      if (!contract) {
+        throw new ResourceNotFoundException(
+          ContractErrorCode.CONTRACT_NOT_FOUND,
+          'Không tìm thấy hợp đồng cần xếp lịch.',
+        );
+      }
+      if (contract.contractStatus !== 'ACTIVE') {
+        throw new BaseApiException({
+          errorCode: ContractErrorCode.CONTRACT_NOT_ACTIVE,
+          status: HttpStatus.BAD_REQUEST,
+          message: 'Hợp đồng chưa được kích hoạt nên chưa thể xếp lịch.',
+          conditions: [
+            {
+              code: 'CONTRACT_ACTIVE',
+              condition: 'Hợp đồng phải ở trạng thái ACTIVE',
+              message: `Hợp đồng đang ở trạng thái ${contract.contractStatus}.`,
+            },
+          ],
+        });
+      }
+      const missingReasons: string[] = [];
+      if (!contract.doctorId) missingReasons.push('Bác sĩ phụ trách');
+      if (
+        !isValidHomeVisitAddress(contract.homeVisitAddress) &&
+        !isValidHomeVisitAddress(contract.familyUnit?.homeAddress)
+      ) {
+        missingReasons.push('Địa chỉ khám tại nhà');
+      }
+      if (missingReasons.length > 0) {
+        throw new BaseApiException({
+          errorCode: AutoScheduleErrorCode.AUTO_SCHEDULE_MISSING_DATA,
+          status: HttpStatus.BAD_REQUEST,
+          message: `Hợp đồng còn thiếu: ${missingReasons.join(', ')}.`,
+          conditions: missingReasons.map((reason) => ({
+            code:
+              reason === 'Bác sĩ phụ trách'
+                ? 'CONTRACT_DOCTOR_REQUIRED'
+                : 'HOME_VISIT_ADDRESS_REQUIRED',
+            condition: `Hợp đồng phải có ${reason.toLowerCase()}`,
+            message: `Hợp đồng chưa có ${reason.toLowerCase()}.`,
+          })),
+        });
       }
       const autoScheduler = new AutoScheduleFirstVisitService(this.slotLedger);
       const created = await autoScheduler.scheduleOnContractActivated(tx, contractId);

@@ -858,7 +858,7 @@ describe('PaymentsServiceImpl (simulation)', () => {
       );
     });
 
-    it('rejects FAMILY_REP from another family or on an unpaid request with ForbiddenException', async () => {
+    it('rejects FAMILY_REP from another family (403) or on an unpaid request (400) with Vietnamese error codes', async () => {
       const payment = await pendingPayment();
       const owner = {
         id: randomUUID(),
@@ -867,7 +867,10 @@ describe('PaymentsServiceImpl (simulation)', () => {
       };
       await expect(
         service.recheckActivation(payment.id, owner),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).rejects.toMatchObject({
+        errorCode: 'PAYMENT_NOT_RECORDED',
+        status: 400,
+      });
 
       await service.handleVietQRWebhook(payload(payment));
       const otherFamily = {
@@ -877,7 +880,10 @@ describe('PaymentsServiceImpl (simulation)', () => {
       };
       await expect(
         service.recheckActivation(payment.id, otherFamily),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).rejects.toMatchObject({
+        errorCode: 'PAYMENT_RECHECK_FORBIDDEN',
+        status: 403,
+      });
     });
 
     it('keeps ADMIN able to recheck activation for any family or status', async () => {

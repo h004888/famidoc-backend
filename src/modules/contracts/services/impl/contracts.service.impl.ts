@@ -45,6 +45,8 @@ import {
   todayInVietnam,
 } from '../../../../core/business/business-helpers';
 import { moneyToNumber } from '../../../../core/database/prisma-transaction';
+import { BusinessConflictException } from '../../../../core/exceptions/api.exception';
+import { DoctorErrorCode } from '../../../../core/constants/error-codes.constant';
 import { calculateCarePackageQuote } from '../../../care-packages/pricing/calculate-care-package-quote';
 import { assertRemainingVisitsFit } from '../../../care-packages/rules/care-package-rules';
 import {
@@ -186,9 +188,9 @@ export class ContractsServiceImpl
     const tx = session.getTx?.();
     const doctorId = prepared.effectiveDoctorId;
     if (!this.slotLedger || !tx || !doctorId) return null;
+    // Chỉ giữ ca cho buổi khám tại nhà; buổi video do gia đình tự đặt với bác sĩ.
     const home = prepared.pkg.periodicVisitsQuota ?? 0;
-    const video = prepared.pkg.telehealthQuota ?? 0;
-    if (home + video === 0) return null;
+    if (home === 0) return null;
 
     const startIso = prepared.today.toISOString().slice(0, 10);
     const endIso = addContractMonths(prepared.today, prepared.pkg.durationMonths)
@@ -216,19 +218,27 @@ export class ContractsServiceImpl
       startDate: startIso,
       endDate: endIso,
       homeVisits: home,
-      videoVisits: video,
+      videoVisits: 0,
       occupied: occupied.map((o) => ({ date: o.date, slotWindow: o.slotWindow })),
       familyBusyDates,
       earliestDate: tomorrow,
     });
     if (!plan.ok) {
-      throw new ConflictException({
-        code: 'DOCTOR_SCHEDULE_FULL',
-        message:
-          'Lịch của bác sĩ không còn đủ ca trống cho gói này. Vui lòng chọn bác sĩ hoặc gói khác.',
-        needed: plan.needed,
-        available: plan.available,
-      });
+      throw new BusinessConflictException(
+        DoctorErrorCode.DOCTOR_SCHEDULE_FULL,
+        'Lịch của bác sĩ không còn đủ ca trống cho các buổi khám tại nhà của gói này. Vui lòng chọn bác sĩ hoặc gói khác.',
+        undefined,
+        {
+          conditions: [
+            {
+              code: 'HOME_SLOT_CAPACITY',
+              condition:
+                'Số ca trống của bác sĩ phải ≥ số buổi khám tại nhà của gói',
+              message: `Gói cần ${plan.needed} buổi khám tại nhà nhưng bác sĩ chỉ còn ${plan.available} ca trống trong thời hạn hợp đồng.`,
+            },
+          ],
+        },
+      );
     }
     return { tx, doctorId, visits: plan.visits };
   }

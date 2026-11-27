@@ -46,7 +46,7 @@ describe('Care package form validation', () => {
 
   it.each([
     { durationMonths: 0 },
-    { name: '  Gói tháng  ' },
+    { name: '  Gói  ' },
     { description: '  Khám tại nhà 2 lượt  ' },
     { description: undefined },
   ])('rejects invalid create data %j', async (changes) => {
@@ -61,7 +61,7 @@ describe('Care package form validation', () => {
       carePackagesValidationPipe.transform({ priceVnd: 200_000 }, updateMetadata),
     ).resolves.toMatchObject({ priceVnd: 200_000 });
     await expect(
-      carePackagesValidationPipe.transform({ name: 'Gói tháng' }, updateMetadata),
+      carePackagesValidationPipe.transform({ name: 'Gói' }, updateMetadata),
     ).rejects.toBeInstanceOf(BadRequestException);
     await expect(
       carePackagesValidationPipe.transform({ description: null }, updateMetadata),

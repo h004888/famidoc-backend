@@ -294,7 +294,7 @@ export class EncountersController {
   @Post('contracts/:contractId/retry-auto-schedule')
   @Roles('HEALTHCARE_FACILITY', 'FAMILY_REP', 'ADMIN')
   @ApiOperation({ summary: 'Chạy lại xếp lịch tự động sau khi bổ sung thông tin (EF1)' })
-  @ResponseMessage('Đã kích hoạt xếp lịch tự động lại thành công')
+  @ResponseMessage('Đã xếp lại lịch khám tại nhà thành công')
   retryContractAutoSchedule(
     @Req() req: AuthenticatedRequest,
     @Param('contractId') contractId: string,

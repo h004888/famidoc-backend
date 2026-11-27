@@ -11,7 +11,9 @@ import {
   Length,
   Matches,
   Max,
+  MaxLength,
   Min,
+  MinLength,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
@@ -57,11 +59,12 @@ export class CarePackageTermsDto {
   })
   homeVisitUnitPriceVnd?: number;
 
-  @ApiProperty({ minLength: 10, maxLength: 120 })
+  @ApiProperty({ minLength: 5, maxLength: 50 })
   @Transform(trimString)
   @IsNotEmpty({ message: 'Tên gói không được để trống.' })
   @IsString({ message: 'Tên gói phải là chuỗi ký tự.' })
-  @Length(10, 120, { message: 'Tên gói phải có từ 10 đến 120 ký tự.' })
+  @MinLength(5, { message: 'Tên gói phải có ít nhất 5 ký tự.' })
+  @MaxLength(50, { message: 'Tên gói không được vượt quá 50 ký tự.' })
   @Matches(/\p{L}/u, { message: 'Tên gói phải chứa ít nhất một chữ cái.' })
   name: string;
 

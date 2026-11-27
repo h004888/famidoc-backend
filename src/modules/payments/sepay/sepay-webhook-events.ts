@@ -11,6 +11,7 @@ import type { Response } from 'express';
 import { PrismaService } from '../../../core/database/prisma.service';
 import { StandardApiResponseFilter } from '../../../core/filters/standard-api-response.filter';
 import type { PaymentTransactionResult } from '../entities/payment.entity';
+import { WEBHOOK_SIGNATURE_INVALID_MESSAGE } from '../guards/sepay-webhook.guard';
 
 const toNumber = ({ value }: { value: unknown }) =>
   typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
@@ -117,6 +118,7 @@ function describeFailure(error: unknown): Pick<WebhookEvent, 'httpStatus' | 'res
   const codes: Record<string, string> = {
     'Invalid webhook API key': 'INVALID_API_KEY',
     'Invalid webhook signature': 'INVALID_SIGNATURE',
+    [WEBHOOK_SIGNATURE_INVALID_MESSAGE]: 'INVALID_SIGNATURE',
     'Webhook timestamp is outside the allowed window': 'SIGNATURE_EXPIRED',
     'Local test route is disabled': 'TEST_ROUTE_DISABLED',
     'Use application/json for this webhook': 'UNSUPPORTED_CONTENT_TYPE',

@@ -8,10 +8,15 @@ import {
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { PaymentErrorCode } from '../../../core/constants/error-codes.constant';
+import { UnauthorizedApiException } from '../../../core/exceptions/api.exception';
 import type { Request } from 'express';
 import { PaymentsClock } from '../payments.clock';
 import { PaymentsConfig } from '../payments.config';
 import { PaymentSettingsService } from '../settings/payment-settings.service';
+
+export const WEBHOOK_SIGNATURE_INVALID_MESSAGE =
+  'Chữ ký webhook không hợp lệ hoặc đã hết hạn. Yêu cầu bị từ chối.';
 
 export interface VerifiedPaymentContext { environment: 'TEST' | 'LIVE'; monitoredAccountIds: string[] }
 
@@ -141,7 +146,10 @@ export class SePayWebhookGuard implements CanActivate {
         method: 'signature',
         reason: 'Malformed signature or timestamp or rawBody',
       });
-      throw new UnauthorizedException('Invalid webhook signature');
+      throw new UnauthorizedApiException(
+        PaymentErrorCode.WEBHOOK_SIGNATURE_INVALID,
+        WEBHOOK_SIGNATURE_INVALID_MESSAGE,
+      );
     }
     // Chặn request quá cũ hoặc quá xa trong tương lai; retry hợp lệ cần chữ ký mới.
     if (
@@ -173,7 +181,10 @@ export class SePayWebhookGuard implements CanActivate {
         method: 'signature',
         reason: 'HMAC signature mismatch',
       });
-      throw new UnauthorizedException('Invalid webhook signature');
+      throw new UnauthorizedApiException(
+        PaymentErrorCode.WEBHOOK_SIGNATURE_INVALID,
+        WEBHOOK_SIGNATURE_INVALID_MESSAGE,
+      );
     }
     console.log('[DEBUG_CP02][WEBHOOK_GUARD_AUTH_PASSED]', { method: 'signature' });
     return true;

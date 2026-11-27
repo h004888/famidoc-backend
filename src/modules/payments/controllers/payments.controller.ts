@@ -30,6 +30,7 @@ import {
   type IPaymentsService,
 } from '../services/interfaces/payments.service.interface';
 import { JwtAuthGuard } from '../../../core/auth/jwt-auth.guard';
+import { ResponseMessage } from '../../../core/decorators/response-message.decorator';
 import { Roles, RolesGuard } from '../../../core/auth/roles.guard';
 import type { AuthenticatedRequest } from '../../../core/auth/authenticated-request';
 import { SePayWebhookEvents, SePayWebhookEventsQuery } from '../sepay/sepay-webhook-events';
@@ -116,10 +117,12 @@ export class PaymentsController {
   @Post('requests/:id/recheck-activation')
   @HttpCode(HttpStatus.OK)
   @Roles('FAMILY_REP', 'ADMIN')
+  @ResponseMessage('Đã kiểm tra lại thanh toán và kích hoạt hợp đồng thành công')
   @ApiOperation({ summary: 'Kích hoạt bù hợp đồng/phụ lục nếu webhook bị sót; family chủ hộ tự kiểm tra được khi đã PAID' })
   @ApiParam({ name: 'id', description: 'UUID của yêu cầu thanh toán' })
   @ApiResponse({ status: 200, description: 'Trả về kết quả kích hoạt: activated và blockingReasons (nếu chưa đủ điều kiện)' })
-  @ApiResponse({ status: 403, description: 'Family chỉ được recheck hóa đơn PAID của chính hộ mình' })
+  @ApiResponse({ status: 403, description: 'PAYMENT_RECHECK_FORBIDDEN — chỉ gia đình sở hữu thanh toán hoặc quản trị viên' })
+  @ApiResponse({ status: 400, description: 'PAYMENT_NOT_RECORDED — hệ thống chưa ghi nhận thanh toán' })
   async recheckPaymentActivation(
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
     @Req() req: AuthenticatedRequest,
