@@ -821,7 +821,7 @@ import {
           icd10Diagnosis: 'DEMO',
           treatmentPlan: 'DEMO',
           isFinalized: true,
-        },
+        } as any,
       });
       const rejected = await call(
         'patch',

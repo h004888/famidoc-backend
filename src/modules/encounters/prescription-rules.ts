@@ -27,9 +27,11 @@ export function eligibleForLongTermPrescription(value: string): boolean {
 }
 
 export function patientAgeMonths(
-  dateOfBirth: string | Date,
+  dateOfBirth: string | Date | null | undefined,
   date: string | Date,
 ): number | null {
+  if (dateOfBirth === null || dateOfBirth === undefined || dateOfBirth === '')
+    return null;
   const birth = new Date(dateOfBirth);
   const at = new Date(date);
   if (
@@ -66,9 +68,9 @@ export type PrescriptionSnapshot = {
   patient: {
     id: string;
     fullName: string;
-    dateOfBirth: string;
-    gender: string;
-    ageMonths: number;
+    dateOfBirth: string | null;
+    gender: string | null;
+    ageMonths: number | null;
   };
   doctorName: string;
   facility: { facilityName: string; address: string | null; phone: string };

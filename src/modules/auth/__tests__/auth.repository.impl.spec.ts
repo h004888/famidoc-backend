@@ -126,4 +126,29 @@ describe('AuthRepositoryImpl - auth_sessions', () => {
     await (repo as any).revokeAllUserAuthSessions('user-1');
     expect(prisma.authSession.updateMany).toHaveBeenCalledTimes(2);
   });
+
+  it('createFamilyRepEntities creates SELF patient with null dateOfBirth and gender', async () => {
+    const txMock = {
+      user: { create: jest.fn().mockResolvedValue({ id: 'user-1' }) },
+      familyUnit: { create: jest.fn().mockResolvedValue({ id: 'fam-1' }) },
+      patient: { create: jest.fn().mockResolvedValue({ id: 'pat-1' }) },
+      auditLog: { create: jest.fn().mockResolvedValue({ id: 'log-1' }) },
+    };
+
+    await (repo as any).createFamilyRepEntities(txMock, {
+      email: 'rep@example.com',
+      phone: '0901234567',
+      passwordHash: 'hash',
+      fullName: 'Nguyễn Văn A',
+      homeAddress: '123 Đường A',
+    });
+
+    expect(txMock.patient.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        relationshipToHead: 'SELF',
+        dateOfBirth: null,
+        gender: null,
+      }),
+    });
+  });
 });

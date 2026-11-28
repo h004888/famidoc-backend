@@ -1,3 +1,5 @@
+import { EncounterRecordErrorCode } from '../../../core/constants/error-codes.constant';
+import { BaseApiException } from '../../../core/exceptions/api.exception';
 import { PrescriptionsService } from '../services/prescriptions.service';
 
 describe('PrescriptionsService multi-member family visit', () => {
@@ -110,6 +112,8 @@ describe('PrescriptionsService multi-member family visit', () => {
         {
           medicationName: 'Tên thuốc mẫu',
           activeIngredient: 'Hoạt chất mẫu',
+          strength: '500mg',
+          administrationRoute: 'Uống',
           dosage: '1 viên',
           frequency: '1 lần/ngày',
           quantity: 10,
@@ -140,7 +144,7 @@ describe('PrescriptionsService multi-member family visit', () => {
     ]);
     expect(new Set(createdPrescriptions.map((p) => p.prescriptionCode)).size).toBe(2);
     expect(
-      mockTx.prescription.create.mock.calls.map(([{ data }]) => data.recordSnapshot.patient.id),
+      mockTx.prescription.create.mock.calls.map(([{ data }]: any[]) => data.recordSnapshot.patient.id),
     ).toEqual(['pat-1', 'pat-2']);
   });
 
@@ -297,7 +301,9 @@ describe('PrescriptionsService multi-member family visit', () => {
             exam,
           }),
         ).rejects.toMatchObject({
-          response: expect.objectContaining({ code: 'VISIT_LOCKED' }),
+          errorCode: EncounterRecordErrorCode.VISIT_RECORD_LOCKED,
+          status: 409,
+          conditions: [expect.objectContaining({ code: 'VISIT_LOCKED' })],
         });
 
         const whereArg = mockTx.encounter.findFirst.mock.calls[0][0].where;
@@ -384,18 +390,21 @@ describe('PrescriptionsService multi-member family visit', () => {
       );
     });
 
-    it('ném ConflictException nếu thành viên đã chốt hồ sơ (isFinalized === true)', async () => {
+    it('ném VISIT_RECORD_LOCKED (409) nếu thành viên đã chốt hồ sơ (isFinalized === true)', async () => {
       const { mockPrisma } = buildDraftPrisma([
         { id: 'emr-final-1', patientId: 'pat-1', isFinalized: true },
       ]);
       const service = new PrescriptionsService(mockPrisma) as any;
 
-      await expect(
-        service.saveVisitDraft(doctorActor, 'enc-1', {
-          patientId: 'pat-1',
-          exam: { chiefComplaint: 'Sửa lại' },
-        }),
-      ).rejects.toThrow('Trang khám đã được xác nhận.');
+      const promise = service.saveVisitDraft(doctorActor, 'enc-1', {
+        patientId: 'pat-1',
+        exam: { chiefComplaint: 'Sửa lại' },
+      });
+      await expect(promise).rejects.toBeInstanceOf(BaseApiException);
+      await expect(promise).rejects.toMatchObject({
+        errorCode: EncounterRecordErrorCode.VISIT_RECORD_LOCKED,
+        message: 'Trang khám đã được xác nhận, không thể chỉnh sửa.',
+      });
     });
   });
 });

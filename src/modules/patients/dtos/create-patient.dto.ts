@@ -13,10 +13,30 @@ import {
   Max,
   MaxLength,
   Min,
+  registerDecorator,
   ValidateIf,
   ValidateNested,
+  type ValidationOptions,
 } from 'class-validator';
+import { isFutureBirthDate } from '../utils/profile-completeness.util';
 import { CreateChronicConditionDto } from './create-chronic-condition.dto';
+
+function IsNotFutureDate(validationOptions?: ValidationOptions) {
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      name: 'isNotFutureDate',
+      target: object.constructor,
+      propertyName,
+      options: validationOptions,
+      validator: {
+        validate(value: unknown) {
+          if (typeof value !== 'string' || !value.trim()) return true;
+          return !isFutureBirthDate(value);
+        },
+      },
+    });
+  };
+}
 
 export class CreatePatientDto {
   @ApiProperty({ description: 'Họ và tên bệnh nhân', example: 'Nguyễn Văn Con' })
@@ -25,15 +45,16 @@ export class CreatePatientDto {
   @MaxLength(100)
   fullName!: string;
 
-  @ApiProperty({ description: 'Ngày tháng năm sinh (định dạng YYYY-MM-DD)', example: '2015-05-20' })
-  @IsNotEmpty()
-  @IsDateString()
-  dateOfBirth!: string;
+  @ApiPropertyOptional({ description: 'Ngày tháng năm sinh (định dạng YYYY-MM-DD)', example: '2015-05-20' })
+  @IsOptional()
+  @IsDateString({}, { message: 'Ngày sinh không đúng định dạng YYYY-MM-DD.' })
+  @IsNotFutureDate({ message: 'Ngày sinh không được ở tương lai.' })
+  dateOfBirth?: string;
 
-  @ApiProperty({ enum: Gender, description: 'Giới tính sinh học', example: Gender.MALE })
-  @IsNotEmpty()
-  @IsEnum(Gender)
-  gender!: Gender;
+  @ApiPropertyOptional({ enum: Gender, description: 'Giới tính sinh học', example: Gender.MALE })
+  @IsOptional()
+  @IsEnum(Gender, { message: 'Giới tính không hợp lệ.' })
+  gender?: Gender;
 
   @ApiPropertyOptional({
     description: 'Mối quan hệ nhân thân với chủ hộ / đại diện gia đình (BỐ, MẸ, CON, VỢ, CHỒNG, BẢN THÂN...)',

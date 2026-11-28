@@ -314,6 +314,64 @@ describe('Care Needs Summary & Document API (Task 6)', () => {
         service.getCareNeedsSummary(adminUser, 'non-existent-id'),
       ).rejects.toThrow(NotFoundException);
     });
+
+    it('returns null age/dateOfBirth/gender and UNKNOWN ageGroup when patient profile is incomplete', async () => {
+      sessionMock.findPatientsWithClinicalProfile.mockResolvedValueOnce([
+        {
+          ...mockPatientsWithProfile[0],
+        },
+        {
+          id: 'patient-incomplete',
+          familyId: 'fam-uuid-1',
+          fullName: 'Chủ hộ chưa cập nhật',
+          dateOfBirth: null,
+          gender: null,
+          relationshipToHead: 'SELF',
+          allergies: [],
+          chronicConditions: [],
+          documents: [],
+        },
+      ]);
+      sessionMock.findMedicalContractById.mockResolvedValueOnce({
+        ...mockContractDetail,
+        members: [
+          { patientId: 'patient-child', patient: mockPatientsWithProfile[0] },
+          {
+            patientId: 'patient-incomplete',
+            patient: {
+              id: 'patient-incomplete',
+              fullName: 'Chủ hộ chưa cập nhật',
+              dateOfBirth: null,
+              gender: null,
+              relationshipToHead: 'SELF',
+            },
+          },
+        ],
+      });
+
+      const summary = await service.getCareNeedsSummary(
+        assignedDoctorUser,
+        'contract-uuid-1',
+      );
+
+      const incomplete = summary.members.find(
+        (m: any) => m.patientId === 'patient-incomplete',
+      );
+      expect(incomplete).toMatchObject({
+        dateOfBirth: null,
+        age: null,
+        ageGroup: 'UNKNOWN',
+        gender: null,
+      });
+
+      const child = summary.members.find(
+        (m: any) => m.patientId === 'patient-child',
+      );
+      expect(child).toMatchObject({
+        ageGroup: 'CHILD',
+        gender: 'MALE',
+      });
+    });
   });
 
   describe('getContractDocument & ContractDocumentRendererService', () => {

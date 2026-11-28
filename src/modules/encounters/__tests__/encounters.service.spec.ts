@@ -2,8 +2,10 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpStatus,
   NotFoundException,
 } from '@nestjs/common';
+import { BaseApiException } from '../../../core/exceptions/api.exception';
 import { EncounterCategory, EncounterStatus, EncounterType } from '@prisma/client';
 import {
   EncountersServiceImpl,
@@ -14,6 +16,7 @@ import {
   parseTimeToDate,
 } from '../services/impl/encounters.service.impl';
 import { serializeEncounterScheduleMeta } from '../utils/encounter-schedule-meta.util';
+import * as encountersRepoInterface from '../repositories/interfaces/encounters.repository.interface';
 import type {
   EncountersSession,
   IEncountersRepository,
@@ -112,7 +115,6 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       decrementContractQuota: jest.fn().mockResolvedValue(undefined),
       holdTelehealthQuota: jest.fn().mockResolvedValue(undefined),
       releaseTelehealthQuota: jest.fn().mockResolvedValue(undefined),
-      consumeHeldTelehealthQuota: jest.fn().mockResolvedValue(undefined),
       findDoctorOverlappingEncounters: jest.fn().mockResolvedValue([]),
       findPendingRescheduleRequestByEncounter: jest.fn().mockResolvedValue(null),
       findRescheduleRequestById: jest.fn().mockResolvedValue(null),
@@ -923,7 +925,10 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       });
       await expect(
         (service as any).completeEncounter(doctorActor, 'encounter-1', {}),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toMatchObject({
+        status: HttpStatus.CONFLICT,
+        errorCode: 'VISIT_RECORD_NOT_FINALIZED',
+      });
 
       (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
         ...baseHomeVisit,
@@ -937,10 +942,13 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       });
       await expect(
         (service as any).completeEncounter(doctorActor, 'encounter-1', {}),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toMatchObject({
+        status: HttpStatus.CONFLICT,
+        errorCode: 'VISIT_RECORD_NOT_FINALIZED',
+      });
     });
 
-    it('Task 7: chặn completeEncounter với code ATTENDANCE_PENDING khi còn thành viên PLANNED', async () => {
+    it('Task 7: chặn completeEncounter với BaseApiException ATTENDANCE_PENDING khi còn PLANNED, và VISIT_RECORD_NOT_FINALIZED khi còn PRESENT chưa chốt EMR', async () => {
       (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
         ...baseHomeVisit,
         participants: [
@@ -952,15 +960,54 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
         ],
       });
 
-      await expect(
-        (service as any).completeEncounter(doctorActor, 'encounter-1', {}),
-      ).rejects.toMatchObject({
-        response: expect.objectContaining({
-          code: 'ATTENDANCE_PENDING',
-          message: 'Còn 1 thành viên chưa điểm danh (khám hoặc vắng).',
-        }),
+      let plannedErr: unknown;
+      try {
+        await (service as any).completeEncounter(doctorActor, 'encounter-1', {});
+      } catch (e) {
+        plannedErr = e;
+      }
+      expect(plannedErr).toBeInstanceOf(BaseApiException);
+      expect(plannedErr).toMatchObject({
+        status: HttpStatus.BAD_REQUEST,
+        errorCode: 'ATTENDANCE_PENDING',
+        conditions: [
+          expect.objectContaining({
+            code: 'ATTENDANCE_PENDING',
+            message: 'Còn 1 thành viên chưa điểm danh (có mặt hoặc vắng).',
+          }),
+        ],
       });
       expect(mockSession.updateEncounter).not.toHaveBeenCalled();
+
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...baseHomeVisit,
+        participants: [
+          { id: 'part-1', patientId: 'patient-1', attendanceStatus: 'EXAMINED' },
+          { id: 'part-2', patientId: 'patient-2', attendanceStatus: 'PRESENT' },
+        ],
+        clinicalEmrs: [
+          { id: 'emr-1', patientId: 'patient-1', isFinalized: true },
+        ],
+      });
+
+      let presentErr: unknown;
+      try {
+        await (service as any).completeEncounter(doctorActor, 'encounter-1', {});
+      } catch (e) {
+        presentErr = e;
+      }
+      expect(presentErr).toBeInstanceOf(BaseApiException);
+      expect(presentErr).toMatchObject({
+        status: HttpStatus.CONFLICT,
+        errorCode: 'VISIT_RECORD_NOT_FINALIZED',
+        conditions: [
+          expect.objectContaining({
+            code: 'VISIT_RECORD_NOT_FINALIZED',
+            message: expect.stringContaining('có mặt nhưng chưa khám và chốt hồ sơ'),
+          }),
+        ],
+      });
+      expect(String((presentErr as BaseApiException).detail)).not.toContain('chưa điểm danh');
 
       (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
         ...baseHomeVisit,
@@ -1058,14 +1105,19 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
     it('Task 6: updateParticipantAttendance hỗ trợ PLANNED/ABSENT + absenceReason và chặn ca kết thúc/khóa hoặc đã finalized', async () => {
       const { plainToInstance } = await import('class-transformer');
       const { validate } = await import('class-validator');
-      const { UpdateParticipantAttendanceDto } = await import(
-        '../dtos/update-participant-attendance.dto'
-      );
+      const { UpdateParticipantAttendanceDto } = (await import(
+        '../dtos/update-participant-attendance.dto' as string
+      )) as typeof import('../dtos/update-participant-attendance.dto');
 
       const examinedDto = plainToInstance(UpdateParticipantAttendanceDto, {
         attendanceStatus: 'EXAMINED',
       });
       expect((await validate(examinedDto)).length).toBeGreaterThan(0);
+
+      const presentDto = plainToInstance(UpdateParticipantAttendanceDto, {
+        attendanceStatus: 'PRESENT',
+      });
+      expect((await validate(presentDto)).length).toBe(0);
 
       const missingReasonDto = plainToInstance(UpdateParticipantAttendanceDto, {
         attendanceStatus: 'ABSENT',
@@ -1114,6 +1166,24 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
         'encounter-1',
         'patient-1',
         'PLANNED',
+        null,
+      );
+
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...baseHomeVisit,
+        participants: [{ id: 'part-1', patientId: 'patient-1', attendanceStatus: 'PLANNED' }],
+        clinicalEmrs: [],
+      });
+      await (service as any).updateParticipantAttendance(
+        doctorActor,
+        'encounter-1',
+        'patient-1',
+        { attendanceStatus: 'PRESENT' },
+      );
+      expect((mockSession as any).upsertParticipantAttendance).toHaveBeenLastCalledWith(
+        'encounter-1',
+        'patient-1',
+        'PRESENT',
         null,
       );
 
@@ -1321,6 +1391,90 @@ describe('EncountersService (Main Business Flow 2.3)', () => {
       expect(mockSession.ensureContractDefaultMembers).toHaveBeenCalledTimes(1);
       expect(result.id).toBe('encounter-1');
       expect(result.contract.members).toEqual([]);
+    });
+  });
+
+  describe('doctorReview isolation (X-case 6B)', () => {
+    it('ENCOUNTER_INCLUDE KHÔNG chứa doctorReview; FAMILY_ENCOUNTER_INCLUDE chứa select doctorReview', () => {
+      const repoModule = encountersRepoInterface as Record<string, unknown>;
+      const baseInclude = repoModule.ENCOUNTER_INCLUDE as Record<string, unknown>;
+      const familyInclude = repoModule.FAMILY_ENCOUNTER_INCLUDE as Record<string, unknown> | undefined;
+
+      expect(baseInclude).toBeDefined();
+      expect('doctorReview' in baseInclude).toBe(false);
+      expect(familyInclude).toBeDefined();
+      expect(familyInclude?.doctorReview).toEqual({
+        select: {
+          id: true,
+          ratingStars: true,
+          reviewComment: true,
+          createdAt: true,
+        },
+      });
+    });
+
+    it('getFamilyTimetable truyền { includeDoctorReview: true } và trả về doctorReview', async () => {
+      const review = {
+        id: 'rev-1',
+        ratingStars: 5,
+        reviewComment: 'Bác sĩ rất tận tâm',
+        createdAt: new Date('2026-11-28T10:00:00.000Z'),
+      };
+      (mockSession.findEncounters as jest.Mock).mockResolvedValueOnce([
+        [{ ...sampleEncounter, doctorReview: review }],
+        1,
+      ]);
+
+      const res = await service.getFamilyTimetable(familyActor, { page: 1, pageSize: 20 });
+
+      expect(mockSession.findEncounters).toHaveBeenCalledWith(
+        expect.anything(),
+        0,
+        20,
+        { includeDoctorReview: true },
+      );
+      expect((res.data[0] as any).doctorReview).toEqual(review);
+    });
+
+    it('getDoctorTimetable KHÔNG bật includeDoctorReview và không trả doctorReview', async () => {
+      (mockSession.findEncounters as jest.Mock).mockResolvedValueOnce([[sampleEncounter], 1]);
+
+      const res = await service.getDoctorTimetable(doctorActor, { page: 1, pageSize: 20 });
+
+      const calls = (mockSession.findEncounters as jest.Mock).mock.calls;
+      const lastCallOptions = calls[calls.length - 1]?.[3];
+      expect(lastCallOptions?.includeDoctorReview).not.toBe(true);
+      expect((res.data[0] as any).doctorReview).toBeUndefined();
+    });
+
+    it('getEncounterDetail ẩn doctorReview với DOCTOR và bật includeDoctorReview cho FAMILY_REP', async () => {
+      const leakedReview = {
+        id: 'rev-secret',
+        ratingStars: 2,
+        reviewComment: 'Ẩn với bác sĩ',
+        createdAt: new Date('2026-11-28T10:00:00.000Z'),
+      };
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...sampleEncounter,
+        doctorReview: leakedReview,
+      });
+
+      const docDetail = await service.getEncounterDetail(doctorActor, 'encounter-1');
+      expect(mockSession.findEncounter).toHaveBeenCalledWith('encounter-1', {
+        includeDoctorReview: false,
+      });
+      expect((docDetail as any).doctorReview).toBeUndefined();
+
+      (mockSession.findEncounter as jest.Mock).mockResolvedValueOnce({
+        ...sampleEncounter,
+        doctorReview: leakedReview,
+      });
+
+      const famDetail = await service.getEncounterDetail(familyActor, 'encounter-1');
+      expect(mockSession.findEncounter).toHaveBeenCalledWith('encounter-1', {
+        includeDoctorReview: true,
+      });
+      expect((famDetail as any).doctorReview).toEqual(leakedReview);
     });
   });
 });

@@ -250,7 +250,12 @@ describe('PatientsServiceImpl', () => {
       const result = await service.listFamilyMembers(mockFamilyRep);
 
       expect(repository.findByFamilyId).toHaveBeenCalledWith('family-uuid-1');
-      expect(result).toEqual([mockPatient]);
+      expect(result).toEqual([
+        {
+          ...mockPatient,
+          profileCompleteness: { isComplete: true, missing: [] },
+        },
+      ]);
     });
 
     it('ADMIN lấy toàn bộ danh sách bệnh nhân', async () => {
@@ -270,7 +275,10 @@ describe('PatientsServiceImpl', () => {
       const result = await service.getPatientById(mockFamilyRep, 'patient-uuid-1');
 
       expect(repository.findById).toHaveBeenCalledWith('patient-uuid-1');
-      expect(result).toEqual(mockPatient);
+      expect(result).toEqual({
+        ...mockPatient,
+        profileCompleteness: { isComplete: true, missing: [] },
+      });
     });
 
     it('FAMILY_REP truy cập bệnh nhân không thuộc hộ gia đình mình bị ném ForbiddenException', async () => {
@@ -289,7 +297,10 @@ describe('PatientsServiceImpl', () => {
       repository.findById.mockResolvedValue(mockOtherFamilyPatient);
 
       const result = await service.getPatientById(mockAdmin, 'patient-uuid-2');
-      expect(result).toEqual(mockOtherFamilyPatient);
+      expect(result).toEqual({
+        ...mockOtherFamilyPatient,
+        profileCompleteness: { isComplete: true, missing: [] },
+      });
     });
   });
 
@@ -770,6 +781,42 @@ describe('PatientsServiceImpl', () => {
       const deleted = await service.deleteVitalSign(mockFamilyRep, 'patient-uuid-1', 'vit-1');
       expect(repository.deleteVitalSign).toHaveBeenCalledWith('vit-1');
       expect(deleted.id).toBe('vit-1');
+    });
+  });
+
+  describe('optional dateOfBirth & gender and profileCompleteness', () => {
+    it('getPatientById returns profileCompleteness with missing dateOfBirth', async () => {
+      repository.findById.mockResolvedValue({
+        ...mockPatient,
+        dateOfBirth: null,
+        gender: Gender.FEMALE,
+      });
+
+      const result = await service.getPatientById(mockAdmin, 'patient-uuid-1');
+
+      expect((result as any).profileCompleteness).toEqual({
+        isComplete: false,
+        missing: ['dateOfBirth'],
+      });
+    });
+
+    it('createPatient succeeds without dateOfBirth/gender and still rejects future dateOfBirth', async () => {
+      const created = { ...mockPatient, dateOfBirth: null, gender: null };
+      repository.create.mockResolvedValue(created);
+
+      const result = await service.createPatient(mockFamilyRep, {
+        fullName: 'Nguyễn Văn B',
+        relationshipToHead: 'CHILD',
+      });
+      expect(result).toEqual(created);
+
+      await expect(
+        service.createPatient(mockFamilyRep, {
+          fullName: 'Nguyễn Văn B',
+          relationshipToHead: 'CHILD',
+          dateOfBirth: '2099-01-01',
+        }),
+      ).rejects.toThrow('Ngày sinh không thể là ngày trong tương lai');
     });
   });
 });

@@ -2571,6 +2571,30 @@ export class ContractsServiceImpl
     return refreshed ?? contract;
   }
 
+  private computeAgeGroup(dob: Date | null): {
+    age: number | null;
+    ageGroup: PatientCareSummaryDto['ageGroup'];
+  } {
+    if (!dob || Number.isNaN(dob.getTime())) {
+      return { age: null, ageGroup: 'UNKNOWN' };
+    }
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < dob.getDate())
+    ) {
+      age--;
+    }
+    if (age < 0) age = 0;
+
+    if (age < 13) return { age, ageGroup: 'CHILD' };
+    if (age < 18) return { age, ageGroup: 'ADOLESCENT' };
+    if (age < 60) return { age, ageGroup: 'ADULT' };
+    return { age, ageGroup: 'ELDERLY' };
+  }
+
   async getCareNeedsSummary(
     actor: AuthenticatedUser,
     id: string,
@@ -2629,7 +2653,6 @@ export class ContractsServiceImpl
         patients.map((p) => [p.id, p]),
       );
 
-      const today = new Date();
       const members: PatientCareSummaryDto[] = (contract.members || []).map(
         (m: any) => {
           const rawPatient =
@@ -2638,28 +2661,8 @@ export class ContractsServiceImpl
             {};
           const dob = rawPatient.dateOfBirth
             ? new Date(rawPatient.dateOfBirth)
-            : new Date();
-
-          let age = today.getFullYear() - dob.getFullYear();
-          const monthDiff = today.getMonth() - dob.getMonth();
-          if (
-            monthDiff < 0 ||
-            (monthDiff === 0 && today.getDate() < dob.getDate())
-          ) {
-            age--;
-          }
-          if (age < 0) age = 0;
-
-          let ageGroup: 'CHILD' | 'ADOLESCENT' | 'ADULT' | 'ELDERLY';
-          if (age < 13) {
-            ageGroup = 'CHILD';
-          } else if (age < 18) {
-            ageGroup = 'ADOLESCENT';
-          } else if (age < 60) {
-            ageGroup = 'ADULT';
-          } else {
-            ageGroup = 'ELDERLY';
-          }
+            : null;
+          const { age, ageGroup } = this.computeAgeGroup(dob);
 
           const allergies = (rawPatient.allergies || []).map((a: any) => ({
             id: a.id,
@@ -2692,7 +2695,7 @@ export class ContractsServiceImpl
             dateOfBirth: dob,
             age,
             ageGroup,
-            gender: rawPatient.gender || 'OTHER',
+            gender: rawPatient.gender ?? null,
             relationshipToHead: rawPatient.relationshipToHead || 'MEMBER',
             heightCm: rawPatient.heightCm != null ? Number(rawPatient.heightCm) : null,
             weightKg: rawPatient.weightKg != null ? Number(rawPatient.weightKg) : null,

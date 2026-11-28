@@ -170,8 +170,8 @@ export interface ContractsSession {
     Array<{
       id: string;
       fullName: string;
-      dateOfBirth: Date;
-      gender: string;
+      dateOfBirth: Date | null;
+      gender: string | null;
       relationshipToRep: string;
     }>
   >;

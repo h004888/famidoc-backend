@@ -4,6 +4,8 @@ import { AuthAccessModule } from '../../core/auth/auth-access.module';
 import { StorageModule } from '../../core/services/storage.module';
 import { FacilitiesDoctorsController } from './controllers/facilities-doctors.controller';
 import { DoctorsController } from './controllers/doctors.controller';
+import { DoctorFamiliesController } from './controllers/doctor-families.controller';
+import { DoctorFamiliesService } from './services/doctor-families.service';
 import { FacilitiesController } from './controllers/facilities.controller';
 import { AdminFacilitiesController } from './controllers/admin-facilities.controller';
 import { DoctorQuotaProposalsController } from './controllers/doctor-quota-proposals.controller';
@@ -15,6 +17,7 @@ import { DOCTORS_SERVICE_TOKEN } from './services/interfaces/doctors.service.int
   imports: [PrismaModule, AuthAccessModule, StorageModule],
   controllers: [
     FacilitiesDoctorsController,
+    DoctorFamiliesController,
     DoctorsController,
     FacilitiesController,
     AdminFacilitiesController,
@@ -26,6 +29,7 @@ import { DOCTORS_SERVICE_TOKEN } from './services/interfaces/doctors.service.int
       useClass: DoctorsServiceImpl,
     },
     DoctorQuotaProposalsService,
+    DoctorFamiliesService,
   ],
   exports: [DOCTORS_SERVICE_TOKEN, DoctorQuotaProposalsService],
 })

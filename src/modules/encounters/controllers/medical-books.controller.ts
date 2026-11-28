@@ -5,6 +5,7 @@ import {
   Header,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Put,
   Query,
@@ -38,6 +39,8 @@ import {
   TimelineQuery,
   UploadBookDocumentDto,
 } from '../dtos/share-prescription.dto';
+import { SaveHomeEnvironmentDto } from '../dtos/home-environment.dto';
+import { UpdateVisitPatientProfileDto } from '../dtos/update-visit-patient-profile.dto';
 import { MedicalBooksService } from '../services/medical-books.service';
 import { PrescriptionsService } from '../services/prescriptions.service';
 
@@ -236,5 +239,47 @@ export class MedicalBooksController {
     @Body() dto: ConfirmVisitRecordDto,
   ) {
     return this.prescriptions.confirmVisitRecord(req.user, id, dto);
+  }
+
+  @Patch('visits/:id/patient-profile')
+  @Roles('DOCTOR')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({
+    summary:
+      'Bác sĩ bổ sung ngày sinh hoặc giới tính cho thành viên trong buổi khám',
+  })
+  updatePatientProfile(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateVisitPatientProfileDto,
+  ) {
+    return this.prescriptions.updateVisitPatientProfile(req.user, id, dto);
+  }
+
+  @Get('visits/:id/home-environment')
+  @Roles('DOCTOR')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({
+    summary: 'Lấy thông tin môi trường sống và thành viên tham gia buổi khám',
+  })
+  homeEnvironment(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.books.homeEnvironment(req.user, id);
+  }
+
+  @Put('visits/:id/home-environment')
+  @Roles('DOCTOR')
+  @Header('Cache-Control', 'private, no-store')
+  @ApiOperation({
+    summary: 'Bác sĩ lưu thông tin môi trường sống và trạng thái tham gia buổi khám',
+  })
+  saveHomeEnvironment(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SaveHomeEnvironmentDto,
+  ) {
+    return this.books.saveHomeEnvironment(req.user, id, dto);
   }
 }

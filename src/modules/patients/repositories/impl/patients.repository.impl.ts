@@ -108,8 +108,8 @@ export class PatientsRepositoryImpl implements IPatientsRepository {
     return {
       familyId,
       fullName: data.fullName.trim(),
-      dateOfBirth: new Date(data.dateOfBirth),
-      gender: data.gender,
+      dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : null,
+      gender: data.gender ?? null,
       relationshipToHead: relationship,
       bloodType: data.bloodType?.trim() || null,
       heightCm: data.heightCm ?? null,

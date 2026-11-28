@@ -29,14 +29,12 @@ describe('ContractsServiceImpl - Staffing Contracts', () => {
   const adminUser: AuthenticatedUser = {
     id: 'admin-uuid-1',
     role: 'ADMIN',
-    email: 'admin@famidoc.vn',
     familyUnitId: null,
   };
 
   const facilityUser: AuthenticatedUser = {
     id: 'facility-user-uuid-1',
     role: 'HEALTHCARE_FACILITY',
-    email: 'facility@hoanmy.vn',
     familyUnitId: null,
   };
 
@@ -348,7 +346,7 @@ describe('ContractsServiceImpl - Staffing Contracts', () => {
     });
 
     it('allows ADMIN to sign PENDING_ADMIN_SIGNATURE and activate contract', async () => {
-      sessionMock.lockStaffingContractForUpdate!.mockResolvedValue({
+      (sessionMock.lockStaffingContractForUpdate as jest.Mock).mockResolvedValue({
         ...mockStaffingContract,
         status: 'PENDING_ADMIN_SIGNATURE' as const,
         facilitySignedAt: new Date(),
@@ -371,7 +369,7 @@ describe('ContractsServiceImpl - Staffing Contracts', () => {
     });
 
     it('allows ADMIN fallback Step 2 signing without signedPdfUrl when documensoEnvelopeId is null', async () => {
-      sessionMock.lockStaffingContractForUpdate!.mockResolvedValue({
+      (sessionMock.lockStaffingContractForUpdate as jest.Mock).mockResolvedValue({
         ...mockStaffingContract,
         documensoEnvelopeId: null,
         documensoItemId: null,
@@ -395,7 +393,7 @@ describe('ContractsServiceImpl - Staffing Contracts', () => {
       try {
         // 2026-11-18T16:30:00.000Z === 2026-11-18 23:30:00 UTC+7
         jest.setSystemTime(new Date('2026-11-18T16:30:00.000Z'));
-        sessionMock.lockStaffingContractForUpdate!.mockResolvedValue({
+        (sessionMock.lockStaffingContractForUpdate as jest.Mock).mockResolvedValue({
           ...mockStaffingContract,
           endDate: new Date('2026-11-18T00:00:00.000Z'),
         } as any);
@@ -547,11 +545,12 @@ describe('ContractsServiceImpl - Staffing Contracts', () => {
         ...mockStaffingContract,
         status: 'ACTIVE' as const,
       };
-      sessionMock.lockStaffingContractForUpdate!.mockResolvedValue(
+      (sessionMock.lockStaffingContractForUpdate as jest.Mock).mockResolvedValue(
         activeContract as any,
       );
-      sessionMock.updateStaffingContract!.mockImplementationOnce((_id, data) =>
-        Promise.resolve({ ...activeContract, ...data } as any),
+      (sessionMock.updateStaffingContract as jest.Mock).mockImplementationOnce(
+        (_id: string, data: Record<string, unknown>) =>
+          Promise.resolve({ ...activeContract, ...data } as any),
       );
 
       const result = await service.requestStaffingTermination(
@@ -572,11 +571,11 @@ describe('ContractsServiceImpl - Staffing Contracts', () => {
     });
 
     it('blocks ACTIVE termination with 409 when blocking dependencies exist unless force=true + handoverNotes', async () => {
-      sessionMock.lockStaffingContractForUpdate!.mockResolvedValue({
+      (sessionMock.lockStaffingContractForUpdate as jest.Mock).mockResolvedValue({
         ...mockStaffingContract,
         status: 'ACTIVE' as const,
       } as any);
-      sessionMock.getStaffingTerminationImpact!.mockResolvedValue({
+      (sessionMock.getStaffingTerminationImpact as jest.Mock).mockResolvedValue({
         ...zeroImpact,
         activeMedicalContracts: 2,
         openEncounters: 1,
@@ -614,7 +613,7 @@ describe('ContractsServiceImpl - Staffing Contracts', () => {
     });
 
     it('returns non-blocking settlements/doctors/complaints warnings on impact check', async () => {
-      sessionMock.getStaffingTerminationImpact!.mockResolvedValue({
+      (sessionMock.getStaffingTerminationImpact as jest.Mock).mockResolvedValue({
         ...zeroImpact,
         unsettledSettlements: 1,
         activeOrOnboardingDoctors: 3,

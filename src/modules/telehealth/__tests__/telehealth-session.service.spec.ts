@@ -68,6 +68,9 @@ describe('TelehealthService - Session Lifecycle', () => {
       durationSeconds: 0,
       networkQualityScore: null,
       isFallbackChat: false,
+      doctorJoinedAt: null,
+      familyJoinedAt: null,
+      closedByRole: null,
     });
 
     const result = await service.issueSessionToken('enc-1', {
@@ -145,6 +148,9 @@ describe('TelehealthService - Session Lifecycle', () => {
       durationSeconds: 65,
       networkQualityScore: null,
       isFallbackChat: false,
+      doctorJoinedAt: null,
+      familyJoinedAt: null,
+      closedByRole: null,
     });
 
     const ended = await service.endSession('enc-1', { id: 'doc-user-1', role: 'DOCTOR' });

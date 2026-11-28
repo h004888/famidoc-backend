@@ -109,7 +109,7 @@ const isolated = /^payment_settings_test_[a-f0-9]{16}$/.test(
       const row = await prisma.paymentSettingsRevision.findFirstOrThrow();
       await expect(
         prisma.paymentSettingsRevision.create({
-          data: { ...row, id: randomUUID() },
+          data: { ...row, id: randomUUID(), encryptedSecrets: row.encryptedSecrets as any },
         }),
       ).rejects.toThrow();
       const account = await prisma.paymentMonitoredAccount.findFirstOrThrow();

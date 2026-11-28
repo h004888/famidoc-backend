@@ -277,7 +277,10 @@ describe('Task 3: confirmVisitRecord ghi sinh hiệu + weightKg cùng transactio
         exam: validExam,
         vitals: { heartRate: 80 },
       }),
-    ).rejects.toThrow(new ConflictException('Trang khám đã được xác nhận.'));
+    ).rejects.toMatchObject({
+      errorCode: 'VISIT_RECORD_LOCKED',
+      status: 409,
+    });
 
     expect(tx.vitalSign.upsert).not.toHaveBeenCalled();
   });
@@ -301,7 +304,7 @@ describe('Task 3: confirmVisitRecord ghi sinh hiệu + weightKg cùng transactio
 });
 
 describe('Task 4: Phân biệt VISIT_NOT_STARTED và VISIT_LOCKED', () => {
-  it('(a) chưa tới giờ (CONFIRMED) ném ConflictException code VISIT_NOT_STARTED có giờ bắt đầu', async () => {
+  it('(a) chưa tới giờ (CONFIRMED) ném BaseApiException VISIT_NOT_STARTED có giờ bắt đầu', async () => {
     const { service, tx } = createHarness();
     tx.encounter.findFirst
       .mockResolvedValueOnce(null)
@@ -317,14 +320,14 @@ describe('Task 4: Phân biệt VISIT_NOT_STARTED và VISIT_LOCKED', () => {
         exam: { chiefComplaint: 'Ho' },
       }),
     ).rejects.toMatchObject({
-      response: expect.objectContaining({
-        code: 'VISIT_NOT_STARTED',
-        message: expect.stringContaining('14:00'),
-      }),
+      errorCode: 'VISIT_NOT_STARTED',
+      status: 409,
+      message: expect.stringContaining('14:00'),
+      conditions: [expect.objectContaining({ code: 'VISIT_NOT_STARTED' })],
     });
   });
 
-  it('(b) không tìm thấy cả hai lần vẫn ném NotFoundException', async () => {
+  it('(b) không tìm thấy cả hai lần vẫn ném BaseApiException VISIT_NOT_FOUND', async () => {
     const { service, tx } = createHarness();
     tx.encounter.findFirst.mockResolvedValue(null);
 
@@ -332,10 +335,13 @@ describe('Task 4: Phân biệt VISIT_NOT_STARTED và VISIT_LOCKED', () => {
       service.saveVisitDraft(doctorActor, 'enc-1', {
         patientId: 'pat-1',
       }),
-    ).rejects.toThrow(NotFoundException);
+    ).rejects.toMatchObject({
+      errorCode: 'VISIT_NOT_FOUND',
+      status: 404,
+    });
   });
 
-  it('(c) visit DISPUTED ném ConflictException code VISIT_LOCKED và không ghi EMR', async () => {
+  it('(c) visit DISPUTED ném BaseApiException VISIT_RECORD_LOCKED và không ghi EMR', async () => {
     const { service, tx } = createHarness({ encounterStatus: 'DISPUTED' });
 
     await expect(
@@ -345,9 +351,9 @@ describe('Task 4: Phân biệt VISIT_NOT_STARTED và VISIT_LOCKED', () => {
         exam: validExam,
       }),
     ).rejects.toMatchObject({
-      response: expect.objectContaining({
-        code: 'VISIT_LOCKED',
-      }),
+      errorCode: 'VISIT_RECORD_LOCKED',
+      status: 409,
+      conditions: [expect.objectContaining({ code: 'VISIT_LOCKED' })],
     });
 
     expect(tx.clinicalEmr.create).not.toHaveBeenCalled();
