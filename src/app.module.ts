@@ -23,6 +23,7 @@ import { TelehealthModule } from './modules/telehealth/telehealth.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { MatchingModule } from './modules/matching/matching.module';
 import { SupportCasesModule } from './modules/support-cases/support-cases.module';
+import { Icd10Module } from './modules/icd10/icd10.module';
 
 @Module({
   // Các module nghiệp vụ dùng chung Prisma và cơ chế xác thực của backend.
@@ -47,6 +48,7 @@ import { SupportCasesModule } from './modules/support-cases/support-cases.module
     AdminModule,
     MatchingModule,
     SupportCasesModule,
+    Icd10Module,
   ],
   controllers: [AppController, HealthController],
   providers: [AppService],

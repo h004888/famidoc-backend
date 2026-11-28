@@ -146,8 +146,18 @@ export class SlotLedgerService {
   async confirmContract(
     tx: Tx,
     contractId: string,
-    opts: { doctorId?: string; minDate?: string } = {},
+    opts: { doctorId?: string; minDate?: string; onlyVisitType?: SlotVisitType } = {},
   ): Promise<BookingRow[]> {
+    if (opts.onlyVisitType) {
+      // Nhả các ca HELD khác loại (vd: ca VIDEO giữ từ trước khi đổi rule chỉ tự xếp khám tại nhà).
+      await tx.$executeRawUnsafe(
+        `DELETE FROM doctor_slot_bookings
+         WHERE contract_id = $1::uuid AND status = 'HELD'
+           AND visit_type <> $2`,
+        contractId,
+        opts.onlyVisitType,
+      );
+    }
     if (opts.doctorId) {
       await tx.$executeRawUnsafe(
         `DELETE FROM doctor_slot_bookings

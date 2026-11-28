@@ -45,6 +45,8 @@ import {
   todayInVietnam,
 } from '../../../../core/business/business-helpers';
 import { moneyToNumber } from '../../../../core/database/prisma-transaction';
+import { BusinessConflictException } from '../../../../core/exceptions/api.exception';
+import { DoctorErrorCode } from '../../../../core/constants/error-codes.constant';
 import { calculateCarePackageQuote } from '../../../care-packages/pricing/calculate-care-package-quote';
 import { assertRemainingVisitsFit } from '../../../care-packages/rules/care-package-rules';
 import {
@@ -186,9 +188,9 @@ export class ContractsServiceImpl
     const tx = session.getTx?.();
     const doctorId = prepared.effectiveDoctorId;
     if (!this.slotLedger || !tx || !doctorId) return null;
+    // Chỉ giữ ca cho buổi khám tại nhà; buổi video do gia đình tự đặt với bác sĩ.
     const home = prepared.pkg.periodicVisitsQuota ?? 0;
-    const video = prepared.pkg.telehealthQuota ?? 0;
-    if (home + video === 0) return null;
+    if (home === 0) return null;
 
     const startIso = prepared.today.toISOString().slice(0, 10);
     const endIso = addContractMonths(prepared.today, prepared.pkg.durationMonths)
@@ -216,19 +218,27 @@ export class ContractsServiceImpl
       startDate: startIso,
       endDate: endIso,
       homeVisits: home,
-      videoVisits: video,
+      videoVisits: 0,
       occupied: occupied.map((o) => ({ date: o.date, slotWindow: o.slotWindow })),
       familyBusyDates,
       earliestDate: tomorrow,
     });
     if (!plan.ok) {
-      throw new ConflictException({
-        code: 'DOCTOR_SCHEDULE_FULL',
-        message:
-          'Lịch của bác sĩ không còn đủ ca trống cho gói này. Vui lòng chọn bác sĩ hoặc gói khác.',
-        needed: plan.needed,
-        available: plan.available,
-      });
+      throw new BusinessConflictException(
+        DoctorErrorCode.DOCTOR_SCHEDULE_FULL,
+        'Lịch của bác sĩ không còn đủ ca trống cho các buổi khám tại nhà của gói này. Vui lòng chọn bác sĩ hoặc gói khác.',
+        undefined,
+        {
+          conditions: [
+            {
+              code: 'HOME_SLOT_CAPACITY',
+              condition:
+                'Số ca trống của bác sĩ phải ≥ số buổi khám tại nhà của gói',
+              message: `Gói cần ${plan.needed} buổi khám tại nhà nhưng bác sĩ chỉ còn ${plan.available} ca trống trong thời hạn hợp đồng.`,
+            },
+          ],
+        },
+      );
     }
     return { tx, doctorId, visits: plan.visits };
   }
@@ -2561,6 +2571,30 @@ export class ContractsServiceImpl
     return refreshed ?? contract;
   }
 
+  private computeAgeGroup(dob: Date | null): {
+    age: number | null;
+    ageGroup: PatientCareSummaryDto['ageGroup'];
+  } {
+    if (!dob || Number.isNaN(dob.getTime())) {
+      return { age: null, ageGroup: 'UNKNOWN' };
+    }
+    const today = new Date();
+    let age = today.getFullYear() - dob.getFullYear();
+    const monthDiff = today.getMonth() - dob.getMonth();
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < dob.getDate())
+    ) {
+      age--;
+    }
+    if (age < 0) age = 0;
+
+    if (age < 13) return { age, ageGroup: 'CHILD' };
+    if (age < 18) return { age, ageGroup: 'ADOLESCENT' };
+    if (age < 60) return { age, ageGroup: 'ADULT' };
+    return { age, ageGroup: 'ELDERLY' };
+  }
+
   async getCareNeedsSummary(
     actor: AuthenticatedUser,
     id: string,
@@ -2619,7 +2653,6 @@ export class ContractsServiceImpl
         patients.map((p) => [p.id, p]),
       );
 
-      const today = new Date();
       const members: PatientCareSummaryDto[] = (contract.members || []).map(
         (m: any) => {
           const rawPatient =
@@ -2628,28 +2661,8 @@ export class ContractsServiceImpl
             {};
           const dob = rawPatient.dateOfBirth
             ? new Date(rawPatient.dateOfBirth)
-            : new Date();
-
-          let age = today.getFullYear() - dob.getFullYear();
-          const monthDiff = today.getMonth() - dob.getMonth();
-          if (
-            monthDiff < 0 ||
-            (monthDiff === 0 && today.getDate() < dob.getDate())
-          ) {
-            age--;
-          }
-          if (age < 0) age = 0;
-
-          let ageGroup: 'CHILD' | 'ADOLESCENT' | 'ADULT' | 'ELDERLY';
-          if (age < 13) {
-            ageGroup = 'CHILD';
-          } else if (age < 18) {
-            ageGroup = 'ADOLESCENT';
-          } else if (age < 60) {
-            ageGroup = 'ADULT';
-          } else {
-            ageGroup = 'ELDERLY';
-          }
+            : null;
+          const { age, ageGroup } = this.computeAgeGroup(dob);
 
           const allergies = (rawPatient.allergies || []).map((a: any) => ({
             id: a.id,
@@ -2682,7 +2695,7 @@ export class ContractsServiceImpl
             dateOfBirth: dob,
             age,
             ageGroup,
-            gender: rawPatient.gender || 'OTHER',
+            gender: rawPatient.gender ?? null,
             relationshipToHead: rawPatient.relationshipToHead || 'MEMBER',
             heightCm: rawPatient.heightCm != null ? Number(rawPatient.heightCm) : null,
             weightKg: rawPatient.weightKg != null ? Number(rawPatient.weightKg) : null,

@@ -169,4 +169,47 @@ describe('PatientsRepositoryImpl - atomic memberCount lock & metadata', () => {
       });
     });
   });
+
+  describe('create without dateOfBirth and gender', () => {
+    it('passes null dateOfBirth and gender to prisma.patient.create when omitted', async () => {
+      const create = jest.fn().mockResolvedValue({ id: 'pt-1', dateOfBirth: null, gender: null });
+      const prisma = { patient: { create } } as any;
+      const repo = new PatientsRepositoryImpl(prisma);
+
+      await repo.create(familyId, {
+        fullName: 'Nguyễn Văn B',
+        relationshipToHead: 'CHILD',
+      });
+
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            dateOfBirth: null,
+            gender: null,
+          }),
+        }),
+      );
+    });
+
+    it('converts dateOfBirth string to Date when provided', async () => {
+      const create = jest.fn().mockResolvedValue({ id: 'pt-2' });
+      const prisma = { patient: { create } } as any;
+      const repo = new PatientsRepositoryImpl(prisma);
+
+      await repo.create(familyId, {
+        fullName: 'Nguyễn Văn C',
+        relationshipToHead: 'CHILD',
+        dateOfBirth: '2022-05-01',
+      });
+
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            dateOfBirth: new Date('2022-05-01'),
+            gender: null,
+          }),
+        }),
+      );
+    });
+  });
 });

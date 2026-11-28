@@ -189,7 +189,7 @@ describe('Payment Renewal Activation (Case A & Case B, R8–R9)', () => {
           quotaPeriod: 'PER_TERM' as any,
           unlimitedMessaging: true,
         },
-      },
+      } as any,
       requirements: {
         familySigned: true,
         adminSigned: true,

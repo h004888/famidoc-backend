@@ -87,8 +87,8 @@ export class AuthRepositoryImpl
         familyId: family.id,
         fullName: data.fullName,
         relationshipToHead: 'SELF',
-        dateOfBirth: new Date('1990-01-01'),
-        gender: 'OTHER',
+        dateOfBirth: null,
+        gender: null,
         status: 'ACTIVE',
       },
     });

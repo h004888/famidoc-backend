@@ -115,7 +115,7 @@ describe('mua gói → lập kế hoạch và giữ chỗ ca', () => {
   });
   afterAll(() => jest.useRealTimers());
 
-  it('đủ ngày → hold 4 ca (2 khám nhà + 2 video) hết hạn sau 24h', async () => {
+  it('đủ ngày → chỉ hold 2 ca khám tại nhà (video do gia đình tự đặt), hết hạn sau 24h', async () => {
     const { service, slotLedger, createMedicalContract, tx } = buildService({});
     await service.createInitialMedicalContract(familyRep as any, {
       packageId: 'pkg-1',
@@ -129,10 +129,10 @@ describe('mua gói → lập kế hoạch và giữ chỗ ca', () => {
     expect(passedTx).toBe(tx);
     expect(input.doctorId).toBe('doc-1');
     expect(input.contractId).toBe('contract-1');
-    expect(input.slots).toHaveLength(4);
+    expect(input.slots).toHaveLength(2);
     expect(
-      input.slots.filter((s: any) => s.visitType === 'HOME_VISIT'),
-    ).toHaveLength(2);
+      input.slots.every((s: any) => s.visitType === 'HOME_VISIT'),
+    ).toBe(true);
     expect(input.expiresAt.getTime()).toBe(
       new Date('2026-12-02T03:00:00.000Z').getTime(),
     );
@@ -158,7 +158,8 @@ describe('mua gói → lập kế hoạch và giữ chỗ ca', () => {
         memberCount: 4,
       } as any),
     ).rejects.toMatchObject({
-      response: expect.objectContaining({ code: 'DOCTOR_SCHEDULE_FULL' }),
+      errorCode: 'DOCTOR_SCHEDULE_FULL',
+      conditions: [expect.objectContaining({ code: 'HOME_SLOT_CAPACITY' })],
     });
     expect(createMedicalContract).not.toHaveBeenCalled();
     expect(slotLedger.hold).not.toHaveBeenCalled();

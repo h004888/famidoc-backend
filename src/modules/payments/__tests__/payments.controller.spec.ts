@@ -70,8 +70,8 @@ describe('PaymentsController (recheck-activation HTTP route)', () => {
       maxMembers: 4,
       additionalMemberMonthlyPriceVnd: 100_000,
       quotaPeriod: QuotaPeriod.PER_TERM,
-      quotas: { videoConsultations: 1, homeVisits: 1, facilityVisits: 0 },
-    });
+      quotas: { videoConsultations: 1, homeVisits: 1 },
+    } as any);
     packageId = pkg.id;
 
     service = new PaymentTestService(repository, packages, config, clock);

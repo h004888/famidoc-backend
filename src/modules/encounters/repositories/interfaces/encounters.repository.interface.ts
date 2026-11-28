@@ -30,6 +30,16 @@ export const ENCOUNTER_INCLUDE = {
       id: true,
       patientId: true,
       isFinalized: true,
+      icd10Code: true,
+      icd10Diagnosis: true,
+      followUpDate: true,
+      prescriptions: {
+        select: {
+          id: true,
+          prescriptionCode: true,
+          status: true,
+        },
+      },
     },
   },
   doctor: {
@@ -41,9 +51,32 @@ export const ENCOUNTER_INCLUDE = {
   telehealthSession: true,
 } as const;
 
+export const FAMILY_ENCOUNTER_INCLUDE = {
+  ...ENCOUNTER_INCLUDE,
+  doctorReview: {
+    select: {
+      id: true,
+      ratingStars: true,
+      reviewComment: true,
+      createdAt: true,
+    },
+  },
+} as const;
+
+export type EncounterQueryOptions = {
+  includeDoctorReview?: boolean;
+};
+
 export type EncounterDetail = Prisma.EncounterGetPayload<{
   include: typeof ENCOUNTER_INCLUDE;
-}>;
+}> & {
+  doctorReview?: {
+    id: string;
+    ratingStars: number;
+    reviewComment: string | null;
+    createdAt: Date;
+  } | null;
+};
 
 export const ENCOUNTERS_REPOSITORY_TOKEN = Symbol('IEncountersRepository');
 
@@ -70,12 +103,12 @@ export interface EncountersSession {
   findFacilityByUserId(userId: string): Promise<Prisma.HealthcareFacilityGetPayload<Record<string, never>> | null>;
 
   createEncounter(data: Prisma.EncounterUncheckedCreateInput): Promise<Encounter>;
-  findEncounter(id: string): Promise<EncounterDetail | null>;
+  findEncounter(id: string, options?: EncounterQueryOptions): Promise<EncounterDetail | null>;
   updateEncounter(id: string, data: Prisma.EncounterUncheckedUpdateInput): Promise<Encounter>;
   upsertParticipantAttendance?(
     encounterId: string,
     patientId: string,
-    attendanceStatus: 'PLANNED' | 'EXAMINED' | 'ABSENT',
+    attendanceStatus: 'PLANNED' | 'PRESENT' | 'EXAMINED' | 'ABSENT',
     absenceReason?: string | null,
   ): Promise<unknown>;
   decrementContractQuota(contractId: string, type: EncounterType): Promise<void>;
@@ -108,6 +141,7 @@ export interface EncountersSession {
     where: Prisma.EncounterWhereInput,
     skip?: number,
     take?: number,
+    options?: EncounterQueryOptions,
   ): Promise<[EncounterDetail[], number]>;
 
   createNotification(data: Prisma.NotificationUncheckedCreateInput): Promise<void>;

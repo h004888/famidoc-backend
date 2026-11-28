@@ -5,7 +5,9 @@ import { serializable } from '../../../../core/database/prisma-transaction';
 import { writeBusinessAudit } from '../../../../core/business/business-helpers';
 import {
   ENCOUNTER_INCLUDE,
+  FAMILY_ENCOUNTER_INCLUDE,
   type EncounterDetail,
+  type EncounterQueryOptions,
   type EncountersSession,
   type IEncountersRepository,
 } from '../interfaces/encounters.repository.interface';
@@ -68,8 +70,8 @@ export class PrismaEncountersSession implements EncountersSession {
           familyId,
           fullName: representativeFullName || 'Chủ hộ',
           relationshipToHead: 'SELF',
-          dateOfBirth: new Date('1990-01-01'),
-          gender: 'OTHER',
+          dateOfBirth: null,
+          gender: null,
           status: 'ACTIVE',
         },
       });
@@ -114,10 +116,10 @@ export class PrismaEncountersSession implements EncountersSession {
     return this.tx.encounter.create({ data });
   }
 
-  findEncounter(id: string): Promise<EncounterDetail | null> {
+  findEncounter(id: string, options?: EncounterQueryOptions): Promise<EncounterDetail | null> {
     return this.tx.encounter.findUnique({
       where: { id },
-      include: ENCOUNTER_INCLUDE,
+      include: options?.includeDoctorReview ? FAMILY_ENCOUNTER_INCLUDE : ENCOUNTER_INCLUDE,
     });
   }
 
@@ -131,7 +133,7 @@ export class PrismaEncountersSession implements EncountersSession {
   upsertParticipantAttendance(
     encounterId: string,
     patientId: string,
-    attendanceStatus: 'PLANNED' | 'EXAMINED' | 'ABSENT',
+    attendanceStatus: 'PLANNED' | 'PRESENT' | 'EXAMINED' | 'ABSENT',
     absenceReason: string | null = null,
   ) {
     return this.tx.encounterParticipant.upsert({
@@ -301,13 +303,14 @@ export class PrismaEncountersSession implements EncountersSession {
     where: Prisma.EncounterWhereInput,
     skip = 0,
     take = 20,
+    options?: EncounterQueryOptions,
   ): Promise<[EncounterDetail[], number]> {
     const [items, total] = await Promise.all([
       this.tx.encounter.findMany({
         where,
         skip,
         take,
-        include: ENCOUNTER_INCLUDE,
+        include: options?.includeDoctorReview ? FAMILY_ENCOUNTER_INCLUDE : ENCOUNTER_INCLUDE,
         orderBy: [{ scheduledDate: 'asc' }, { scheduledTime: 'asc' }],
       }),
       this.tx.encounter.count({ where }),

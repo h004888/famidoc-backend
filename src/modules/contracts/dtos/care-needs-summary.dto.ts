@@ -61,21 +61,21 @@ export class PatientCareSummaryDto {
   @ApiProperty({ example: 'Nguyễn Văn Con' })
   fullName!: string;
 
-  @ApiProperty({ example: '2020-01-15' })
-  dateOfBirth!: Date;
+  @ApiProperty({ example: '2020-01-15', nullable: true })
+  dateOfBirth!: Date | null;
 
-  @ApiProperty({ example: 6 })
-  age!: number;
+  @ApiProperty({ example: 6, nullable: true })
+  age!: number | null;
 
   @ApiProperty({
     example: 'CHILD',
     description:
-      'Nhóm tuổi: CHILD (0-12), ADOLESCENT (13-17), ADULT (18-59), ELDERLY (>=60)',
+      'Nhóm tuổi: CHILD (0-12), ADOLESCENT (13-17), ADULT (18-59), ELDERLY (>=60), UNKNOWN (chưa có ngày sinh)',
   })
-  ageGroup!: 'CHILD' | 'ADOLESCENT' | 'ADULT' | 'ELDERLY';
+  ageGroup!: 'CHILD' | 'ADOLESCENT' | 'ADULT' | 'ELDERLY' | 'UNKNOWN';
 
-  @ApiProperty({ example: 'MALE' })
-  gender!: string;
+  @ApiProperty({ example: 'MALE', nullable: true })
+  gender!: string | null;
 
   @ApiProperty({ example: 'CON' })
   relationshipToHead!: string;

@@ -1,4 +1,6 @@
 import { ValidationPipe } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { CreatePatientDto } from '../dtos/create-patient.dto';
 import { Gender } from '@prisma/client';
 
@@ -116,5 +118,40 @@ describe('CreatePatientDto Validation', () => {
         { type: 'body', metatype: CreatePatientDto },
       ),
     ).rejects.toThrow();
+  });
+
+  it('cho phép thiếu dateOfBirth và gender khi tạo thành viên', async () => {
+    const dto = plainToInstance(CreatePatientDto, {
+      fullName: 'Nguyễn Văn A',
+      relationshipToHead: 'CHILD',
+    });
+    const errors = await validate(dto);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('từ chối dateOfBirth ở tương lai với thông báo tiếng Việt', async () => {
+    const dto = plainToInstance(CreatePatientDto, {
+      fullName: 'Nguyễn Văn A',
+      relationshipToHead: 'CHILD',
+      dateOfBirth: '2099-01-01',
+    });
+    const errors = await validate(dto);
+    expect(errors).toHaveLength(1);
+    expect(Object.values(errors[0].constraints ?? {})).toContain(
+      'Ngày sinh không được ở tương lai.',
+    );
+  });
+
+  it('từ chối dateOfBirth sai định dạng với thông báo tiếng Việt', async () => {
+    const dto = plainToInstance(CreatePatientDto, {
+      fullName: 'Nguyễn Văn A',
+      relationshipToHead: 'CHILD',
+      dateOfBirth: 'abc',
+    });
+    const errors = await validate(dto);
+    expect(errors).toHaveLength(1);
+    expect(Object.values(errors[0].constraints ?? {})).toContain(
+      'Ngày sinh không đúng định dạng YYYY-MM-DD.',
+    );
   });
 });

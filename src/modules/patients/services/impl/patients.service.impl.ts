@@ -34,6 +34,7 @@ import {
   computeVitalAbnormalAlert,
   hasAnyVitalMetric,
 } from '../../utils/vital-sign.util';
+import { computeProfileCompleteness } from '../../utils/profile-completeness.util';
 
 const DUPLICATE_CONFLICT_MESSAGES: Record<DuplicatePatientConflict, string> = {
   SELF: 'Hộ gia đình đã có hồ sơ chủ hộ (SELF) đang hoạt động',
@@ -150,7 +151,9 @@ export class PatientsServiceImpl implements IPatientsService {
   }
 
   async createPatient(user: AuthenticatedUser, dto: CreatePatientDto): Promise<Patient> {
-    this.validateDateOfBirth(dto.dateOfBirth);
+    if (dto.dateOfBirth) {
+      this.validateDateOfBirth(dto.dateOfBirth);
+    }
     const familyId = await this.resolveFamilyId(user, dto.familyId);
 
     if (this.repository.createWithActiveContractLock) {
@@ -200,16 +203,23 @@ export class PatientsServiceImpl implements IPatientsService {
     };
   }
 
+  private withCompleteness<T extends Patient>(patient: T) {
+    return {
+      ...patient,
+      profileCompleteness: computeProfileCompleteness(patient),
+    };
+  }
+
   async listFamilyMembers(user: AuthenticatedUser): Promise<Patient[]> {
     if (user.role === 'ADMIN') {
       const rows = await this.repository.findAll();
-      return rows.map((p) => this.serializePatient(p));
+      return rows.map((p) => this.withCompleteness(this.serializePatient(p)));
     }
 
     if (user.role === 'FAMILY_REP') {
       const familyId = await this.resolveFamilyId(user);
       const rows = await this.repository.findByFamilyId(familyId);
-      return rows.map((p) => this.serializePatient(p));
+      return rows.map((p) => this.withCompleteness(this.serializePatient(p)));
     }
 
     throw new ForbiddenException('Access denied');
@@ -217,7 +227,7 @@ export class PatientsServiceImpl implements IPatientsService {
 
   async getPatientById(user: AuthenticatedUser, id: string): Promise<PatientDetail> {
     const patient = await this.assertPatientAccess(user, id);
-    const serialized = this.serializePatient(patient);
+    const serialized = this.withCompleteness(this.serializePatient(patient));
     if (!serialized.documents) return serialized;
     return {
       ...serialized,

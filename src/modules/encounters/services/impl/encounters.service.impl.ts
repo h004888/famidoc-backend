@@ -2,12 +2,23 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpStatus,
   Inject,
   Injectable,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
 import type { AuthenticatedUser } from '../../../../core/auth/authenticated-request';
+import { isValidHomeVisitAddress } from '../../../../core/business/business-helpers';
+import {
+  AutoScheduleErrorCode,
+  ContractErrorCode,
+  EncounterRecordErrorCode,
+} from '../../../../core/constants/error-codes.constant';
+import {
+  BaseApiException,
+  ResourceNotFoundException,
+} from '../../../../core/exceptions/api.exception';
 import {
   ENCOUNTERS_REPOSITORY_TOKEN,
   type EncountersSession,
@@ -918,9 +929,39 @@ export class EncountersServiceImpl implements IEncountersService {
         (p: any) => p.attendanceStatus === 'PLANNED',
       );
       if (pendingParticipants.length > 0) {
-        throw new BadRequestException({
-          code: 'ATTENDANCE_PENDING',
-          message: `Còn ${pendingParticipants.length} thành viên chưa điểm danh (khám hoặc vắng).`,
+        const msg = `Còn ${pendingParticipants.length} thành viên chưa điểm danh (có mặt hoặc vắng).`;
+        throw new BaseApiException({
+          errorCode: EncounterRecordErrorCode.ATTENDANCE_PENDING,
+          status: HttpStatus.BAD_REQUEST,
+          message: msg,
+          detail: msg,
+          conditions: [
+            {
+              code: EncounterRecordErrorCode.ATTENDANCE_PENDING,
+              condition: 'Tất cả thành viên phải được điểm danh có mặt hoặc vắng trước khi hoàn tất ca khám',
+              message: msg,
+            },
+          ],
+        });
+      }
+
+      const presentUnfinalized = (encounter.participants ?? []).filter(
+        (p: any) => p.attendanceStatus === 'PRESENT',
+      );
+      if (presentUnfinalized.length > 0) {
+        const msg = `Còn ${presentUnfinalized.length} thành viên có mặt nhưng chưa khám và chốt hồ sơ.`;
+        throw new BaseApiException({
+          errorCode: EncounterRecordErrorCode.VISIT_RECORD_NOT_FINALIZED,
+          status: HttpStatus.CONFLICT,
+          message: msg,
+          detail: msg,
+          conditions: [
+            {
+              code: EncounterRecordErrorCode.VISIT_RECORD_NOT_FINALIZED,
+              condition: 'Mọi thành viên có mặt phải được khám và chốt hồ sơ trước khi hoàn tất ca khám',
+              message: msg,
+            },
+          ],
         });
       }
 
@@ -928,7 +969,20 @@ export class EncountersServiceImpl implements IEncountersService {
         (p: any) => p.attendanceStatus === 'EXAMINED',
       );
       if (examinedParticipants.length === 0) {
-        throw new BadRequestException('Cần ít nhất 1 thành viên được khám và chốt hồ sơ trước khi hoàn tất ca khám.');
+        const msg = 'Cần ít nhất 1 thành viên được khám và chốt hồ sơ trước khi hoàn tất ca khám.';
+        throw new BaseApiException({
+          errorCode: EncounterRecordErrorCode.VISIT_RECORD_NOT_FINALIZED,
+          status: HttpStatus.CONFLICT,
+          message: msg,
+          detail: msg,
+          conditions: [
+            {
+              code: EncounterRecordErrorCode.VISIT_RECORD_NOT_FINALIZED,
+              condition: 'Phải có ít nhất 1 thành viên đã khám và chốt hồ sơ',
+              message: msg,
+            },
+          ],
+        });
       }
       const finalizedPatientIds = new Set(
         (encounter.clinicalEmrs ?? [])
@@ -939,7 +993,20 @@ export class EncountersServiceImpl implements IEncountersService {
         (p: any) => !finalizedPatientIds.has(p.patientId),
       );
       if (missingFinalized) {
-        throw new BadRequestException('Vẫn còn thành viên tham gia khám chưa được chốt hồ sơ.');
+        const msg = 'Vẫn còn thành viên tham gia khám chưa được chốt hồ sơ.';
+        throw new BaseApiException({
+          errorCode: EncounterRecordErrorCode.VISIT_RECORD_NOT_FINALIZED,
+          status: HttpStatus.CONFLICT,
+          message: msg,
+          detail: msg,
+          conditions: [
+            {
+              code: EncounterRecordErrorCode.VISIT_RECORD_NOT_FINALIZED,
+              condition: 'Tất cả thành viên đã khám phải có hồ sơ lâm sàng đã chốt',
+              message: msg,
+            },
+          ],
+        });
       }
 
       const now = new Date();
@@ -1662,7 +1729,9 @@ export class EncountersServiceImpl implements IEncountersService {
       const skip = ((query.page ?? 1) - 1) * (query.pageSize ?? 20);
       const take = query.pageSize ?? 20;
 
-      const [items, total] = await session.findEncounters(where, skip, take);
+      const [items, total] = await session.findEncounters(where, skip, take, {
+        includeDoctorReview: true,
+      });
       return {
         data: items.map(enrichEncounterWithScheduleMeta),
         pagination: {
@@ -1719,8 +1788,11 @@ export class EncountersServiceImpl implements IEncountersService {
   }
 
   async getEncounterDetail(actor: AuthenticatedUser, encounterId: string) {
+    const canViewDoctorReview = actor.role === 'FAMILY_REP' || actor.role === 'ADMIN';
     return this.repository.transaction(async (session) => {
-      const encounter = await session.findEncounter(encounterId);
+      const encounter = await session.findEncounter(encounterId, {
+        includeDoctorReview: canViewDoctorReview,
+      });
       if (!encounter) throw new NotFoundException('Encounter not found');
 
       // Authorization check
@@ -1761,7 +1833,13 @@ export class EncountersServiceImpl implements IEncountersService {
         }
       }
 
-      return enrichEncounterWithScheduleMeta(encounter);
+      const enriched = enrichEncounterWithScheduleMeta(encounter);
+      if (!canViewDoctorReview && 'doctorReview' in enriched) {
+        const sanitized = { ...enriched };
+        delete (sanitized as { doctorReview?: unknown }).doctorReview;
+        return sanitized;
+      }
+      return enriched;
     });
   }
 
@@ -2522,7 +2600,64 @@ export class EncountersServiceImpl implements IEncountersService {
     return this.repository.transaction(async (session) => {
       const tx = (session as unknown as { tx?: Prisma.TransactionClient }).tx;
       if (!tx) {
-        throw new BadRequestException('Transaction client unavailable');
+        throw new BaseApiException({
+          errorCode: AutoScheduleErrorCode.AUTO_SCHEDULE_TRANSACTION_UNAVAILABLE,
+          status: HttpStatus.INTERNAL_SERVER_ERROR,
+          message:
+            'Không mở được phiên xử lý dữ liệu để xếp lịch. Vui lòng thử lại sau.',
+        });
+      }
+      const contract = await tx.medicalContract.findUnique({
+        where: { id: contractId },
+        select: {
+          contractStatus: true,
+          doctorId: true,
+          homeVisitAddress: true,
+          familyUnit: { select: { homeAddress: true } },
+        },
+      });
+      if (!contract) {
+        throw new ResourceNotFoundException(
+          ContractErrorCode.CONTRACT_NOT_FOUND,
+          'Không tìm thấy hợp đồng cần xếp lịch.',
+        );
+      }
+      if (contract.contractStatus !== 'ACTIVE') {
+        throw new BaseApiException({
+          errorCode: ContractErrorCode.CONTRACT_NOT_ACTIVE,
+          status: HttpStatus.BAD_REQUEST,
+          message: 'Hợp đồng chưa được kích hoạt nên chưa thể xếp lịch.',
+          conditions: [
+            {
+              code: 'CONTRACT_ACTIVE',
+              condition: 'Hợp đồng phải ở trạng thái ACTIVE',
+              message: `Hợp đồng đang ở trạng thái ${contract.contractStatus}.`,
+            },
+          ],
+        });
+      }
+      const missingReasons: string[] = [];
+      if (!contract.doctorId) missingReasons.push('Bác sĩ phụ trách');
+      if (
+        !isValidHomeVisitAddress(contract.homeVisitAddress) &&
+        !isValidHomeVisitAddress(contract.familyUnit?.homeAddress)
+      ) {
+        missingReasons.push('Địa chỉ khám tại nhà');
+      }
+      if (missingReasons.length > 0) {
+        throw new BaseApiException({
+          errorCode: AutoScheduleErrorCode.AUTO_SCHEDULE_MISSING_DATA,
+          status: HttpStatus.BAD_REQUEST,
+          message: `Hợp đồng còn thiếu: ${missingReasons.join(', ')}.`,
+          conditions: missingReasons.map((reason) => ({
+            code:
+              reason === 'Bác sĩ phụ trách'
+                ? 'CONTRACT_DOCTOR_REQUIRED'
+                : 'HOME_VISIT_ADDRESS_REQUIRED',
+            condition: `Hợp đồng phải có ${reason.toLowerCase()}`,
+            message: `Hợp đồng chưa có ${reason.toLowerCase()}.`,
+          })),
+        });
       }
       const autoScheduler = new AutoScheduleFirstVisitService(this.slotLedger);
       const created = await autoScheduler.scheduleOnContractActivated(tx, contractId);

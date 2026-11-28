@@ -50,7 +50,6 @@ describe('SePayApiClient', () => {
       return new Response(
         JSON.stringify({
           status: 'success',
-          meta: { pagination: { has_more: false } },
           data: [transaction],
           meta: { pagination: { current_page: 1, has_more: false } },
         }),

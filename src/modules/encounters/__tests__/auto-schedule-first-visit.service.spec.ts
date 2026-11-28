@@ -56,6 +56,7 @@ describe('AutoScheduleFirstVisitService (Two-Slot Auto-Confirm & Exceptions)', (
         findUnique: jest.fn().mockResolvedValue(baseContract),
       },
       encounter: {
+        count: jest.fn().mockResolvedValue(0),
         findFirst: jest.fn().mockResolvedValue(null),
         findMany: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockImplementation(({ data }) =>
@@ -75,7 +76,7 @@ describe('AutoScheduleFirstVisitService (Two-Slot Auto-Confirm & Exceptions)', (
     { id: 'bk-4', doctorId: 'doctor-1', contractId: 'contract-1', encounterId: null, status: 'BOOKED', date: '2026-01-27', slotWindow: 'AFTERNOON', visitType: 'VIDEO' },
   ];
 
-  it('(a) xác nhận 4 HELD → tạo 4 encounter đúng loại (HOME/VIDEO) rồi gắn vào booking', async () => {
+  it('(a) chỉ xác nhận ca khám tại nhà → tạo 2 encounter HOME_VISIT, bỏ qua ca video', async () => {
     ledger.confirmContract.mockResolvedValueOnce(heldBookings as any);
 
     const result = await service.scheduleOnContractActivated(mockTx, 'contract-1');
@@ -84,18 +85,17 @@ describe('AutoScheduleFirstVisitService (Two-Slot Auto-Confirm & Exceptions)', (
     expect(ledger.confirmContract).toHaveBeenCalledWith(mockTx, 'contract-1', {
       doctorId: 'doctor-1',
       minDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      onlyVisitType: 'HOME_VISIT',
     });
     expect(ledger.hold).not.toHaveBeenCalled();
-    expect(result).toHaveLength(4);
-    expect(mockTx.encounter.create).toHaveBeenCalledTimes(4);
-    expect(ledger.attachEncounter).toHaveBeenCalledTimes(4);
+    expect(result).toHaveLength(2);
+    expect(mockTx.encounter.create).toHaveBeenCalledTimes(2);
+    expect(ledger.attachEncounter).toHaveBeenCalledTimes(2);
 
     const datas = mockTx.encounter.create.mock.calls.map((c: any) => c[0].data);
     expect(datas.map((d: any) => d.encounterType)).toEqual([
       EncounterType.HOME_VISIT,
-      EncounterType.TELEHEALTH,
       EncounterType.HOME_VISIT,
-      EncounterType.TELEHEALTH,
     ]);
     expect(datas[0]).toEqual(
       expect.objectContaining({
@@ -108,17 +108,20 @@ describe('AutoScheduleFirstVisitService (Two-Slot Auto-Confirm & Exceptions)', (
         scheduledTime: new Date('1970-01-01T08:00:00.000Z'),
       }),
     );
-    expect(datas[1].slotWindow).toBe('AFTERNOON');
-    expect(datas[1].scheduledTime).toEqual(new Date('1970-01-01T13:30:00.000Z'));
+    expect(datas[1].scheduledDate.toISOString().slice(0, 10)).toBe('2026-01-20');
     expect(datas[0].scheduledDate.toISOString().slice(0, 10)).toBe('2026-01-06');
 
     const parsed = parseEncounterScheduleMeta(datas[0]);
     expect(parsed.scheduleStage).toBe('CONFIRMED');
     expect(parsed.milestoneIndex).toBe(1);
-    expect(parsed.totalMilestones).toBe(4);
+    expect(parsed.totalMilestones).toBe(2);
 
     const attachedPairs = ledger.attachEncounter.mock.calls.map((c) => c[1]);
-    expect(attachedPairs).toEqual(['bk-1', 'bk-2', 'bk-3', 'bk-4']);
+    expect(attachedPairs).toEqual(['bk-1', 'bk-3']);
+    expect(mockTx.notification.createMany).toHaveBeenCalledTimes(1);
+    expect(mockTx.notification.createMany.mock.calls[0][0].data.every(
+      (n: any) => n.type === 'ENCOUNTER_AUTO_CONFIRMED',
+    )).toBe(true);
   });
 
   it('(b) không còn HELD (hold hết hạn) → chạy lại planner, hold rồi confirmContract', async () => {
@@ -133,18 +136,13 @@ describe('AutoScheduleFirstVisitService (Two-Slot Auto-Confirm & Exceptions)', (
     const holdArg = ledger.hold.mock.calls[0][1];
     expect(holdArg.doctorId).toBe('doctor-1');
     expect(holdArg.contractId).toBe('contract-1');
-    expect(holdArg.slots).toHaveLength(4);
-    expect(
-      holdArg.slots.filter((s: any) => s.visitType === 'HOME_VISIT'),
-    ).toHaveLength(2);
-    expect(
-      holdArg.slots.filter((s: any) => s.visitType === 'VIDEO'),
-    ).toHaveLength(2);
+    expect(holdArg.slots).toHaveLength(2);
+    expect(holdArg.slots.every((s: any) => s.visitType === 'HOME_VISIT')).toBe(true);
     expect(ledger.confirmContract).toHaveBeenCalledTimes(2);
     expect(
       ledger.hold.mock.invocationCallOrder[0] < ledger.confirmContract.mock.invocationCallOrder[1],
     ).toBe(true);
-    expect(result).toHaveLength(4);
+    expect(result).toHaveLength(2);
   });
 
   it('(c) planner INSUFFICIENT_DAYS → không tạo encounter, báo MANUAL_SLOT_REQUIRED cho bác sĩ', async () => {
@@ -163,14 +161,22 @@ describe('AutoScheduleFirstVisitService (Two-Slot Auto-Confirm & Exceptions)', (
     expect(result).toEqual([]);
     expect(mockTx.encounter.create).not.toHaveBeenCalled();
     expect(ledger.hold).not.toHaveBeenCalled();
-    expect(mockTx.notification.createMany).toHaveBeenCalledWith({
-      data: expect.arrayContaining([
+    expect(mockTx.notification.createMany).toHaveBeenCalledTimes(1);
+    const notes = mockTx.notification.createMany.mock.calls[0][0].data;
+    expect(notes).toEqual(
+      expect.arrayContaining([
         expect.objectContaining({
           userId: 'user-doc-1',
           type: 'ENCOUNTER_MANUAL_SCHEDULE_REQUIRED',
         }),
+        expect.objectContaining({
+          userId: 'user-fam-1',
+          type: 'ENCOUNTER_MANUAL_SCHEDULE_REQUIRED',
+        }),
       ]),
-    });
+    );
+    expect(notes.some((n: any) => n.type === 'ENCOUNTER_AUTO_CONFIRMED')).toBe(false);
+    expect(notes[0].content).toContain('0/2');
   });
 
   it('(d) không truy vấn encounter theo từng ngày (hết N+1)', async () => {
@@ -178,8 +184,8 @@ describe('AutoScheduleFirstVisitService (Two-Slot Auto-Confirm & Exceptions)', (
 
     await service.scheduleOnContractActivated(mockTx, 'contract-1');
 
-    // findFirst chỉ được gọi 1 lần: kiểm tra idempotency theo hợp đồng
-    expect(mockTx.encounter.findFirst).toHaveBeenCalledTimes(1);
+    // count chỉ được gọi 1 lần: kiểm tra idempotency theo hợp đồng
+    expect(mockTx.encounter.count).toHaveBeenCalledTimes(1);
     expect(mockTx.encounter.findMany).not.toHaveBeenCalled();
   });
 
@@ -228,7 +234,7 @@ describe('AutoScheduleFirstVisitService (Two-Slot Auto-Confirm & Exceptions)', (
     ledger.confirmContract.mockResolvedValueOnce(heldBookings as any);
 
     const result = await service.scheduleOnContractActivated(mockTx, 'contract-1');
-    expect(result).toHaveLength(4);
+    expect(result).toHaveLength(2);
     expect(mockTx.notification.createMany).toHaveBeenCalledWith({
       data: expect.arrayContaining([
         expect.objectContaining({
@@ -241,12 +247,37 @@ describe('AutoScheduleFirstVisitService (Two-Slot Auto-Confirm & Exceptions)', (
     });
   });
 
-  it('EF2: is idempotent when non-cancelled PERIODIC_ROUTINE already exists', async () => {
-    mockTx.encounter.findFirst.mockResolvedValueOnce({ id: 'enc-existing' });
+  it('EF2: đã đủ buổi khám tại nhà đang hiệu lực → không xếp thêm', async () => {
+    mockTx.encounter.count.mockResolvedValueOnce(2);
 
     const result = await service.scheduleOnContractActivated(mockTx, 'contract-1');
     expect(result).toEqual([]);
     expect(mockTx.encounter.create).not.toHaveBeenCalled();
+    expect(ledger.confirmContract).not.toHaveBeenCalled();
+  });
+
+  it('R4: đã có 1/2 buổi → chỉ xếp tiếp 1 buổi, đánh số 2/2', async () => {
+    mockTx.encounter.count.mockResolvedValueOnce(1);
+    ledger.confirmContract.mockResolvedValueOnce(heldBookings as any);
+
+    const result = await service.scheduleOnContractActivated(mockTx, 'contract-1');
+    expect(result).toHaveLength(1);
+    const parsed = parseEncounterScheduleMeta(mockTx.encounter.create.mock.calls[0][0].data);
+    expect(parsed.milestoneIndex).toBe(2);
+    expect(parsed.totalMilestones).toBe(2);
+  });
+
+  it('R7: "ngày mai" tính theo giờ Việt Nam (03:00 sáng 28/11 VN → mốc 29/11)', async () => {
+    ledger.confirmContract.mockResolvedValueOnce(heldBookings as any);
+
+    await service.scheduleOnContractActivated(
+      mockTx,
+      'contract-1',
+      new Date('2026-11-27T20:00:00.000Z'),
+    );
+    expect(ledger.confirmContract.mock.calls[0][2]).toEqual(
+      expect.objectContaining({ minDate: '2026-11-29' }),
+    );
   });
 
   it('calculateCadenceDates rải đều 10 buổi trong gói 1 tháng (không dồn về endDate - 1) và không trùng ngày nghỉ/lễ', () => {
@@ -276,7 +307,7 @@ describe('AutoScheduleFirstVisitService (Two-Slot Auto-Confirm & Exceptions)', (
     expect(dates.every((d) => d.getUTCDay() !== 0)).toBe(true);
   });
 
-  it('(e) chỉ còn 2/4 booking (HELD kia bị giành) → chỉ lập lại phần thiếu, không nhân đôi', async () => {
+  it('(e) chỉ còn 1/2 ca khám tại nhà (HELD kia bị giành) → chỉ lập lại phần thiếu, không nhân đôi', async () => {
     ledger.confirmContract
       .mockResolvedValueOnce(heldBookings.slice(0, 2) as any)
       .mockResolvedValueOnce(heldBookings.slice(2) as any);
@@ -285,9 +316,9 @@ describe('AutoScheduleFirstVisitService (Two-Slot Auto-Confirm & Exceptions)', (
 
     expect(ledger.hold).toHaveBeenCalledTimes(1);
     const holdArg = ledger.hold.mock.calls[0][1];
-    expect(holdArg.slots).toHaveLength(2);
-    expect(holdArg.slots.map((s: any) => s.visitType).sort()).toEqual(['HOME_VISIT', 'VIDEO']);
-    expect(result).toHaveLength(4);
+    expect(holdArg.slots).toHaveLength(1);
+    expect(holdArg.slots[0].visitType).toBe('HOME_VISIT');
+    expect(result).toHaveLength(2);
   });
 
   it('(f) replan gặp SLOT_TAKEN → báo bác sĩ xếp tay, không ném lỗi', async () => {

@@ -10,13 +10,13 @@ import {
 
 export class UpdateParticipantAttendanceDto {
   @ApiProperty({
-    enum: ['PLANNED', 'ABSENT'],
+    enum: ['PLANNED', 'PRESENT', 'ABSENT'],
     description: 'Trạng thái tham gia thực tế của thành viên trong buổi khám',
   })
-  @IsIn(['PLANNED', 'ABSENT'], {
-    message: 'Trạng thái tham gia phải là PLANNED hoặc ABSENT.',
+  @IsIn(['PLANNED', 'PRESENT', 'ABSENT'], {
+    message: 'Trạng thái tham gia phải là PLANNED, PRESENT hoặc ABSENT.',
   })
-  attendanceStatus!: 'PLANNED' | 'ABSENT';
+  attendanceStatus!: 'PLANNED' | 'PRESENT' | 'ABSENT';
 
   @ApiPropertyOptional({
     description: 'Lý do vắng mặt (bắt buộc khi attendanceStatus = ABSENT)',

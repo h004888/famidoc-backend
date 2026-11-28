@@ -1,5 +1,7 @@
 import { ConflictException } from '@nestjs/common';
-import type { PaymentEnvironment, TransactionOutcome } from '@prisma/client';
+
+type PaymentEnvironment = 'TEST' | 'LIVE';
+type TransactionOutcome = string;
 import { SePayReconciliationService } from '../services/sepay-reconciliation.service';
 import { SePayReconciliationConfig } from '../../payments/sepay/sepay-reconciliation.config';
 import { PaymentsConfig } from '../../payments/payments.config';
@@ -171,11 +173,16 @@ function createHarness(
   };
 
   const api = {
-    listTransactions: jest.fn(async () => ({
-      transactions: [],
-      currentPage: 1,
-      hasMore: false,
-    })),
+    listTransactions: jest.fn(
+      async (
+        _env?: any,
+        _query?: any,
+      ): Promise<{ transactions: any[]; currentPage: number; hasMore: boolean }> => ({
+        transactions: [],
+        currentPage: 1,
+        hasMore: false,
+      }),
+    ),
   };
 
   const payments = {
@@ -259,10 +266,10 @@ describe('Payment settings per-account reconciliation', () => {
         return { transactions: [], currentPage: 1, hasMore: false };
       });
 
-      const batch = await h.service.runManual(
+      const batch = (await h.service.runManual(
         { id: 'admin-1', role: 'ADMIN' },
         { environment: 'TEST' },
-      );
+      )) as any;
 
       expect(batch.status).toBe('SUCCEEDED');
       expect(h.api.listTransactions).toHaveBeenNthCalledWith(
@@ -307,7 +314,7 @@ describe('Payment settings per-account reconciliation', () => {
         return { transactions: [], currentPage: 1, hasMore: false };
       });
 
-      const batch = await h.service.runScheduled();
+      const batch = (await h.service.runScheduled()) as any;
       expect(batch.status).toBe('PARTIAL');
       expect(h.api.listTransactions).toHaveBeenCalledTimes(2);
       expect(batch.runs[0].status).toBe('FAILED');
@@ -325,10 +332,10 @@ describe('Payment settings per-account reconciliation', () => {
       stateA.leaseOwner = 'other-worker';
       stateA.lockedUntil = new Date(Date.now() + 600_000);
 
-      const batch = await h.service.runManual(
+      const batch = (await h.service.runManual(
         { id: 'admin-1', role: 'ADMIN' },
         { environment: 'TEST' },
-      );
+      )) as any;
 
       expect(batch.status).toBe('FAILED');
       expect(h.api.listTransactions).not.toHaveBeenCalled();
@@ -404,10 +411,10 @@ describe('Payment settings per-account reconciliation', () => {
         };
       });
 
-      const batch = await h.service.runManual(
+      const batch = (await h.service.runManual(
         { id: 'admin-1', role: 'ADMIN' },
         { environment: 'TEST' },
-      );
+      )) as any;
 
       expect(batch.status).toBe('FAILED');
       expect(h.states.get('acc-a')?.cursor).toBe('cursor-old');
@@ -440,10 +447,10 @@ describe('Payment settings per-account reconciliation', () => {
         transaction: { outcome: 'IGNORED' as TransactionOutcome },
       });
 
-      const batch = await h.service.runManual(
+      const batch = (await h.service.runManual(
         { id: 'admin-1', role: 'ADMIN' },
         { environment: 'TEST' },
-      );
+      )) as any;
 
       expect(batch.status).toBe('SUCCEEDED');
       expect(batch.fetchedCount).toBe(0);

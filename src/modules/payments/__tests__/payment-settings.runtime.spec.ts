@@ -125,7 +125,7 @@ describe('Snapshot webhook authentication', () => {
         },
         benefits: {
           quotaPeriod: QuotaPeriod.PER_TERM,
-          quotas: { homeVisits: 0, facilityVisits: 0, videoConsultations: 1 },
+          quotas: { homeVisits: 0, videoConsultations: 1 },
           sharedAcrossMembers: true,
         },
       },

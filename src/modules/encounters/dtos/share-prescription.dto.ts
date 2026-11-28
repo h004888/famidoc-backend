@@ -4,6 +4,7 @@ import {
   ArrayMinSize,
   Equals,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -22,7 +23,13 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { PatientDocumentType } from '@prisma/client';
+import {
+  DiseaseProgression,
+  HomeMedicationAssessment,
+  HomeMedicationSource,
+  PatientDocumentType,
+  PrescriptionLineChange,
+} from '@prisma/client';
 
 const trim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
@@ -98,6 +105,12 @@ class PrescriptionLineDto {
   @Min(1, { message: 'Số ngày dùng thuốc phải từ 1 đến 90 ngày.' })
   @Max(90, { message: 'Số ngày dùng thuốc không được vượt quá 90 ngày.' })
   durationDays!: number;
+
+  @IsOptional()
+  @IsEnum(PrescriptionLineChange, {
+    message: 'Loại thay đổi thuốc không hợp lệ.',
+  })
+  changeType?: PrescriptionLineChange;
 }
 
 class PrescriptionExamDto {
@@ -237,6 +250,24 @@ class PrescriptionContextDto {
   caregiverName?: string;
 }
 
+class DiscontinuedMedicationDto {
+  @Transform(trim)
+  @IsString({ message: 'Tên thuốc ngừng dùng phải là chuỗi ký tự.' })
+  @IsNotEmpty({ message: 'Vui lòng nhập tên thuốc ngừng dùng.' })
+  @MaxLength(150, {
+    message: 'Tên thuốc ngừng dùng không được vượt quá 150 ký tự.',
+  })
+  medicationName!: string;
+
+  @Transform(trim)
+  @IsString({ message: 'Lý do ngừng thuốc phải là chuỗi ký tự.' })
+  @MinLength(3, { message: 'Lý do ngừng thuốc phải có ít nhất 3 ký tự.' })
+  @MaxLength(500, {
+    message: 'Lý do ngừng thuốc không được vượt quá 500 ký tự.',
+  })
+  reason!: string;
+}
+
 export class PrescriptionInputDto {
   @IsOptional()
   @IsObject({ message: 'Thông tin ngữ cảnh đơn thuốc không hợp lệ.' })
@@ -245,6 +276,25 @@ export class PrescriptionInputDto {
   })
   @Type(() => PrescriptionContextDto)
   clinicalContext?: PrescriptionContextDto;
+
+  @IsOptional()
+  @IsUUID(undefined, {
+    message: 'Mã đơn thuốc thay thế không đúng định dạng UUID.',
+  })
+  replacesPrescriptionId?: string;
+
+  @IsOptional()
+  @IsArray({ message: 'Danh sách thuốc ngừng dùng phải là một mảng.' })
+  @ArrayMaxSize(30, {
+    message: 'Danh sách thuốc ngừng dùng không được vượt quá 30 dòng.',
+  })
+  @IsObject({ each: true, message: 'Thuốc ngừng dùng không hợp lệ.' })
+  @ValidateNested({
+    each: true,
+    message: 'Từng dòng thuốc ngừng dùng phải là một đối tượng hợp lệ.',
+  })
+  @Type(() => DiscontinuedMedicationDto)
+  discontinuedMedications?: DiscontinuedMedicationDto[];
 
   @IsArray({ message: 'Danh sách thuốc phải là một mảng.' })
   @ArrayMinSize(1, { message: 'Đơn thuốc phải có ít nhất 1 dòng thuốc.' })
@@ -345,45 +395,55 @@ export class VisitVitalsDto {
   @Min(0.5, { message: 'Cân nặng phải từ 0.5 đến 300.' })
   @Max(300, { message: 'Cân nặng phải từ 0.5 đến 300.' })
   weightKg?: number;
+
+  @ApiPropertyOptional({ minimum: 30, maximum: 250 })
+  @IsOptional()
+  @IsNumber({}, { message: 'Chiều cao phải là số.' })
+  @Min(30, { message: 'Chiều cao phải từ 30 đến 250 cm.' })
+  @Max(250, { message: 'Chiều cao phải từ 30 đến 250 cm.' })
+  heightCm?: number;
 }
 
-export class ConfirmVisitRecordDto {
-  @ApiProperty({
-    format: 'uuid',
-    description: 'Thành viên đang mở trên sổ khám',
+export class DraftDiagnosisDto {
+  @Transform(trim)
+  @IsString({ message: 'Mã ICD-10 phải là chuỗi ký tự.' })
+  @IsNotEmpty({ message: 'Vui lòng nhập mã bệnh ICD-10.' })
+  @MaxLength(10, { message: 'Mã ICD-10 không được vượt quá 10 ký tự.' })
+  @Matches(/^[A-Z][0-9]{2}(\.[0-9A-Z]{1,4})?$/i, {
+    message: 'Mã ICD-10 không đúng định dạng (ví dụ J06.9, U07.1).',
   })
-  @IsUUID(undefined, { message: 'Mã bệnh nhân không đúng định dạng UUID.' })
-  patientId!: string;
+  icd10Code!: string;
 
-  @ApiProperty({
-    example: true,
-    description: 'Bác sĩ đã kiểm tra và xác nhận nội dung',
+  @IsBoolean({ message: 'Trạng thái bệnh chính phải là true hoặc false.' })
+  isPrimary!: boolean;
+}
+
+export class HomeMedicationDto {
+  @Transform(trim)
+  @IsString({ message: 'Tên thuốc đang dùng phải là chuỗi ký tự.' })
+  @IsNotEmpty({ message: 'Vui lòng nhập tên thuốc đang dùng.' })
+  @MaxLength(150, {
+    message: 'Tên thuốc đang dùng không được vượt quá 150 ký tự.',
   })
-  @Equals(true, { message: 'Vui lòng xác nhận nội dung trước khi gửi.' })
-  confirmed!: true;
+  medicationName!: string;
 
-  @ApiPropertyOptional({ type: PrescriptionExamDto })
-  @ValidateIf((_object, value) => value !== undefined)
-  @IsObject({ message: 'Thông tin khám không hợp lệ.' })
-  @ValidateNested({ message: 'Thông tin khám phải là một đối tượng hợp lệ.' })
-  @Type(() => PrescriptionExamDto)
-  exam?: PrescriptionExamDto;
-
-  @ApiPropertyOptional({ type: PrescriptionInputDto })
-  @ValidateIf((_object, value) => value !== undefined)
-  @IsObject({ message: 'Thông tin đơn thuốc không hợp lệ.' })
-  @ValidateNested({
-    message: 'Thông tin đơn thuốc phải là một đối tượng hợp lệ.',
+  @IsEnum(HomeMedicationSource, {
+    message: 'Nguồn thuốc đang dùng không hợp lệ.',
   })
-  @Type(() => PrescriptionInputDto)
-  prescription?: PrescriptionInputDto;
+  source!: HomeMedicationSource;
 
-  @ApiPropertyOptional({ type: VisitVitalsDto })
-  @ValidateIf((_object, value) => value !== undefined)
-  @IsObject({ message: 'Thông tin sinh hiệu không hợp lệ.' })
-  @ValidateNested({ message: 'Thông tin sinh hiệu phải là một đối tượng hợp lệ.' })
-  @Type(() => VisitVitalsDto)
-  vitals?: VisitVitalsDto;
+  @IsEnum(HomeMedicationAssessment, {
+    message: 'Đánh giá thuốc đang dùng không hợp lệ.',
+  })
+  assessment!: HomeMedicationAssessment;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString({ message: 'Ghi chú thuốc đang dùng phải là chuỗi ký tự.' })
+  @MaxLength(500, {
+    message: 'Ghi chú thuốc đang dùng không được vượt quá 500 ký tự.',
+  })
+  notes?: string;
 }
 
 class DraftExamDto {
@@ -392,6 +452,62 @@ class DraftExamDto {
   @IsString({ message: 'Lý do khám phải là chuỗi ký tự.' })
   @MaxLength(4000, { message: 'Lý do khám không được vượt quá 4000 ký tự.' })
   chiefComplaint?: string;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString({ message: 'Bệnh sử phải là chuỗi ký tự.' })
+  @MaxLength(4000, { message: 'Bệnh sử không được vượt quá 4000 ký tự.' })
+  anamnesis?: string;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString({ message: 'Tên người cung cấp thông tin phải là chuỗi ký tự.' })
+  @MaxLength(150, {
+    message: 'Tên người cung cấp thông tin không được vượt quá 150 ký tự.',
+  })
+  informantName?: string;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString({
+    message: 'Quan hệ người cung cấp thông tin phải là chuỗi ký tự.',
+  })
+  @MaxLength(50, {
+    message: 'Quan hệ người cung cấp thông tin không được vượt quá 50 ký tự.',
+  })
+  informantRelation?: string;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString({ message: 'Tiền sử bản thân phải là chuỗi ký tự.' })
+  @MaxLength(4000, {
+    message: 'Tiền sử bản thân không được vượt quá 4000 ký tự.',
+  })
+  personalHistory?: string;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString({ message: 'Tiền sử gia đình phải là chuỗi ký tự.' })
+  @MaxLength(4000, {
+    message: 'Tiền sử gia đình không được vượt quá 4000 ký tự.',
+  })
+  familyHistory?: string;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString({ message: 'Tuân thủ dùng thuốc phải là chuỗi ký tự.' })
+  @MaxLength(4000, {
+    message: 'Tuân thủ dùng thuốc không được vượt quá 4000 ký tự.',
+  })
+  medicationAdherence?: string;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString({ message: 'Khám toàn thân phải là chuỗi ký tự.' })
+  @MaxLength(4000, {
+    message: 'Khám toàn thân không được vượt quá 4000 ký tự.',
+  })
+  generalExam?: string;
 
   @IsOptional()
   @Transform(trim)
@@ -420,6 +536,126 @@ class DraftExamDto {
     message: 'Kế hoạch điều trị không được vượt quá 4000 ký tự.',
   })
   treatmentPlan?: string;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString({ message: 'Hướng dẫn tự chăm sóc phải là chuỗi ký tự.' })
+  @MaxLength(4000, {
+    message: 'Hướng dẫn tự chăm sóc không được vượt quá 4000 ký tự.',
+  })
+  selfCareNotes?: string;
+
+  @IsOptional()
+  @IsEnum(DiseaseProgression, { message: 'Diễn tiến bệnh không hợp lệ.' })
+  progression?: DiseaseProgression;
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'Ngày hẹn tái khám phải theo định dạng YYYY-MM-DD.',
+  })
+  @IsDateString(
+    { strict: true },
+    { message: 'Ngày hẹn tái khám phải theo định dạng YYYY-MM-DD.' },
+  )
+  followUpDate?: string;
+
+  @IsOptional()
+  @IsArray({ message: 'Danh sách chẩn đoán phải là một mảng.' })
+  @ArrayMaxSize(10, {
+    message: 'Mỗi trang khám không được vượt quá 10 chẩn đoán.',
+  })
+  @IsObject({ each: true, message: 'Chẩn đoán không hợp lệ.' })
+  @ValidateNested({
+    each: true,
+    message: 'Từng chẩn đoán phải là một đối tượng hợp lệ.',
+  })
+  @Type(() => DraftDiagnosisDto)
+  diagnoses?: DraftDiagnosisDto[];
+
+  @IsOptional()
+  @IsArray({ message: 'Danh sách thuốc đang dùng phải là một mảng.' })
+  @ArrayMaxSize(30, {
+    message: 'Danh sách thuốc đang dùng không được vượt quá 30 dòng.',
+  })
+  @IsObject({ each: true, message: 'Thuốc đang dùng không hợp lệ.' })
+  @ValidateNested({
+    each: true,
+    message: 'Từng dòng thuốc đang dùng phải là một đối tượng hợp lệ.',
+  })
+  @Type(() => HomeMedicationDto)
+  homeMedications?: HomeMedicationDto[];
+}
+
+class ConfirmExamDto extends DraftExamDto {
+  @Transform(trim)
+  @IsString({ message: 'Lý do khám phải là chuỗi ký tự.' })
+  @IsNotEmpty({ message: 'Vui lòng nhập lý do khám.' })
+  @MaxLength(4000, { message: 'Lý do khám không được vượt quá 4000 ký tự.' })
+  declare chiefComplaint: string;
+
+  @Transform(trim)
+  @IsString({ message: 'Kết quả thăm khám phải là chuỗi ký tự.' })
+  @IsNotEmpty({ message: 'Vui lòng nhập kết quả thăm khám.' })
+  @MaxLength(4000, {
+    message: 'Kết quả thăm khám không được vượt quá 4000 ký tự.',
+  })
+  declare clinicalFindings: string;
+
+  @IsOptional()
+  @Transform(trim)
+  @IsString({ message: 'Mã ICD-10 phải là chuỗi ký tự.' })
+  @MaxLength(10, { message: 'Mã ICD-10 không được vượt quá 10 ký tự.' })
+  @Matches(/^[A-Z][0-9]{2}(\.[0-9A-Z]{1,4})?$/i, {
+    message: 'Mã ICD-10 không đúng định dạng (ví dụ J06.9, U07.1).',
+  })
+  declare icd10Code?: string;
+
+  @Transform(trim)
+  @IsString({ message: 'Kế hoạch điều trị phải là chuỗi ký tự.' })
+  @IsNotEmpty({ message: 'Vui lòng nhập kế hoạch điều trị.' })
+  @MaxLength(4000, {
+    message: 'Kế hoạch điều trị không được vượt quá 4000 ký tự.',
+  })
+  declare treatmentPlan: string;
+}
+
+export class ConfirmVisitRecordDto {
+  @ApiProperty({
+    format: 'uuid',
+    description: 'Thành viên đang mở trên sổ khám',
+  })
+  @IsUUID(undefined, { message: 'Mã bệnh nhân không đúng định dạng UUID.' })
+  patientId!: string;
+
+  @ApiProperty({
+    example: true,
+    description: 'Bác sĩ đã kiểm tra và xác nhận nội dung',
+  })
+  @Equals(true, { message: 'Vui lòng xác nhận nội dung trước khi gửi.' })
+  confirmed!: true;
+
+  @ApiPropertyOptional({ type: ConfirmExamDto })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsObject({ message: 'Thông tin khám không hợp lệ.' })
+  @ValidateNested({ message: 'Thông tin khám phải là một đối tượng hợp lệ.' })
+  @Type(() => ConfirmExamDto)
+  exam?: ConfirmExamDto;
+
+  @ApiPropertyOptional({ type: PrescriptionInputDto })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsObject({ message: 'Thông tin đơn thuốc không hợp lệ.' })
+  @ValidateNested({
+    message: 'Thông tin đơn thuốc phải là một đối tượng hợp lệ.',
+  })
+  @Type(() => PrescriptionInputDto)
+  prescription?: PrescriptionInputDto;
+
+  @ApiPropertyOptional({ type: VisitVitalsDto })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsObject({ message: 'Thông tin sinh hiệu không hợp lệ.' })
+  @ValidateNested({ message: 'Thông tin sinh hiệu phải là một đối tượng hợp lệ.' })
+  @Type(() => VisitVitalsDto)
+  vitals?: VisitVitalsDto;
 }
 
 export class SaveVisitDraftDto {

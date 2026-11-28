@@ -8,12 +8,18 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpStatus,
   Inject,
   Injectable,
   NotFoundException,
   Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../../../core/database/prisma.service';
+import { PaymentErrorCode } from '../../../../core/constants/error-codes.constant';
+import {
+  BaseApiException,
+  ForbiddenApiException,
+} from '../../../../core/exceptions/api.exception';
 import { todayInVietnam } from '../../../../core/business/business-helpers';
 import { moneyToNumber } from '../../../../core/database/prisma-transaction';
 import { randomUUID } from 'node:crypto';
@@ -1016,13 +1022,24 @@ export class PaymentsServiceImpl implements IPaymentsService {
           actor.role !== 'FAMILY_REP' ||
           actor.familyUnitId !== payment.familyId
         )
-          throw new ForbiddenException(
-            'Only the payment owner family or an admin can recheck activation',
+          throw new ForbiddenApiException(
+            PaymentErrorCode.PAYMENT_RECHECK_FORBIDDEN,
+            'Chỉ gia đình sở hữu thanh toán hoặc quản trị viên mới được kiểm tra lại kích hoạt.',
           );
         if (payment.status !== PaymentRequestStatus.PAID)
-          throw new ForbiddenException(
-            'Activation can only be rechecked after the payment is recorded',
-          );
+          throw new BaseApiException({
+            errorCode: PaymentErrorCode.PAYMENT_NOT_RECORDED,
+            status: HttpStatus.BAD_REQUEST,
+            message:
+              'Chỉ có thể kiểm tra lại kích hoạt sau khi hệ thống đã ghi nhận thanh toán.',
+            conditions: [
+              {
+                code: 'PAYMENT_PAID',
+                condition: 'Thanh toán phải ở trạng thái PAID',
+                message: `Thanh toán đang ở trạng thái ${payment.status}, hệ thống chưa ghi nhận tiền về.`,
+              },
+            ],
+          });
       }
       return this.activateInTransaction(
         session,

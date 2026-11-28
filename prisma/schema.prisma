@@ -185,6 +185,7 @@ enum EncounterStatus {
 
 enum EncounterParticipantAttendance {
   PLANNED
+  PRESENT
   EXAMINED
   ABSENT
 }
@@ -279,6 +280,38 @@ enum MatchingQueueStatus {
   CONFIRMED
   CANCELLED
   EXPIRED
+}
+
+enum Icd10DaggerAsterisk {
+  NONE
+  DAGGER
+  ASTERISK
+}
+
+enum DiseaseProgression {
+  STABLE
+  IMPROVED
+  WORSENED
+}
+
+enum HomeMedicationSource {
+  FAMIDOC_PRESCRIPTION
+  OTHER_FACILITY
+  SELF_PURCHASED
+  SUPPLEMENT
+}
+
+enum HomeMedicationAssessment {
+  CONTINUE
+  ADJUST
+  STOP
+  CHECK
+}
+
+enum PrescriptionLineChange {
+  NEW
+  KEEP
+  DOSE_CHANGED
 }
 
 // =========================================================================
@@ -629,8 +662,8 @@ model Patient {
   id                    String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   familyId              String        @map("family_id") @db.Uuid
   fullName              String        @map("full_name") @db.VarChar(100)
-  dateOfBirth           DateTime      @map("date_of_birth") @db.Date
-  gender                Gender
+  dateOfBirth           DateTime?     @map("date_of_birth") @db.Date
+  gender                Gender?
   relationshipToHead String        @map("relationship_to_head") @db.VarChar(50)
   bloodType          String?       @map("blood_type") @db.VarChar(10)
   heightCm           Decimal?      @map("height_cm") @db.Decimal(5, 1)
@@ -933,6 +966,7 @@ model Encounter {
   rescheduleRequests EncounterRescheduleRequest[]
   telehealthSession  TelehealthSession?
   clinicalEmrs       ClinicalEmr[]
+  homeEnvironment    EncounterHomeEnvironment?
   invoices           Invoice[]
   doctorReview       DoctorReview?
   complaints         Complaint[]
@@ -1036,30 +1070,104 @@ model TelehealthMessage {
 // =========================================================================
 
 model ClinicalEmr {
-  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  encounterId         String    @map("encounter_id") @db.Uuid
-  patientId           String    @map("patient_id") @db.Uuid
-  chiefComplaint      String    @map("chief_complaint") @db.Text
-  anamnesis           String?   @db.Text
-  clinicalFindings    String    @map("clinical_findings") @db.Text
-  icd10Code           String    @map("icd10_code") @db.VarChar(10)
-  icd10Diagnosis      String    @map("icd10_diagnosis") @db.VarChar(255)
-  treatmentPlan       String    @map("treatment_plan") @db.Text
-  isFinalized         Boolean   @default(false) @map("is_finalized")
-  finalizedAt         DateTime? @map("finalized_at") @db.Timestamptz()
-  doctorSignatureHash String?   @map("doctor_signature_hash") @db.Text
-  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt           DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  id                  String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  encounterId         String              @map("encounter_id") @db.Uuid
+  patientId           String              @map("patient_id") @db.Uuid
+  chiefComplaint      String              @map("chief_complaint") @db.Text
+  anamnesis           String?             @db.Text
+  informantName       String?             @map("informant_name") @db.VarChar(150)
+  informantRelation   String?             @map("informant_relation") @db.VarChar(50)
+  personalHistory     String?             @map("personal_history") @db.Text
+  familyHistory       String?             @map("family_history") @db.Text
+  medicationAdherence String?             @map("medication_adherence") @db.Text
+  generalExam         String?             @map("general_exam") @db.Text
+  clinicalFindings    String              @map("clinical_findings") @db.Text
+  icd10Code           String              @map("icd10_code") @db.VarChar(10)
+  icd10Diagnosis      String              @map("icd10_diagnosis") @db.VarChar(255)
+  treatmentPlan       String              @map("treatment_plan") @db.Text
+  selfCareNotes       String?             @map("self_care_notes") @db.Text
+  progression         DiseaseProgression?
+  followUpDate        DateTime?           @map("follow_up_date") @db.Date
+  isFinalized         Boolean             @default(false) @map("is_finalized")
+  finalizedAt         DateTime?           @map("finalized_at") @db.Timestamptz()
+  doctorSignatureHash String?             @map("doctor_signature_hash") @db.Text
+  createdAt           DateTime            @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt           DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
 
   // Relations
-  encounter     Encounter      @relation(fields: [encounterId], references: [id], onDelete: Restrict)
-  patient       Patient        @relation(fields: [patientId], references: [id], onDelete: Restrict)
-  vitalSigns    VitalSign[]
-  prescriptions Prescription[]
-  referralOrder ReferralOrder?
+  encounter       Encounter              @relation(fields: [encounterId], references: [id], onDelete: Restrict)
+  patient         Patient                @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  vitalSigns      VitalSign[]
+  prescriptions   Prescription[]
+  referralOrder   ReferralOrder?
+  diagnoses       ClinicalEmrDiagnosis[]
+  homeMedications HomeMedication[]
 
   @@unique([encounterId, patientId], map: "idx_clinical_emr_encounter_patient")
   @@map("clinical_emr")
+}
+
+model Icd10Code {
+  code             String              @id @db.VarChar(10)
+  nameVi           String              @map("name_vi") @db.VarChar(500)
+  nameEn           String?             @map("name_en") @db.VarChar(500)
+  chapter          String              @db.VarChar(10)
+  daggerAsterisk   Icd10DaggerAsterisk @default(NONE) @map("dagger_asterisk")
+  allowedAsPrimary Boolean             @default(true) @map("allowed_as_primary")
+  longTermEligible Boolean             @default(false) @map("long_term_eligible")
+  isActive         Boolean             @default(true) @map("is_active")
+
+  diagnoses ClinicalEmrDiagnosis[]
+
+  @@index([nameVi])
+  @@map("icd10_codes")
+}
+
+model ClinicalEmrDiagnosis {
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  emrId        String  @map("emr_id") @db.Uuid
+  icd10Code    String  @map("icd10_code") @db.VarChar(10)
+  nameSnapshot String  @map("name_snapshot") @db.VarChar(500)
+  isPrimary    Boolean @default(false) @map("is_primary")
+  lineNumber   Int     @default(0) @map("line_number")
+
+  clinicalEmr ClinicalEmr @relation(fields: [emrId], references: [id], onDelete: Cascade)
+  icd10       Icd10Code   @relation(fields: [icd10Code], references: [code], onDelete: Restrict)
+
+  @@unique([emrId, icd10Code])
+  @@map("clinical_emr_diagnoses")
+}
+
+model HomeMedication {
+  id             String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  emrId          String                   @map("emr_id") @db.Uuid
+  medicationName String                   @map("medication_name") @db.VarChar(150)
+  source         HomeMedicationSource
+  assessment     HomeMedicationAssessment
+  notes          String?                  @db.VarChar(500)
+  lineNumber     Int                      @default(0) @map("line_number")
+
+  clinicalEmr ClinicalEmr @relation(fields: [emrId], references: [id], onDelete: Cascade)
+
+  @@map("home_medications")
+}
+
+model EncounterHomeEnvironment {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  encounterId          String   @unique @map("encounter_id") @db.Uuid
+  visitAddress         String?  @map("visit_address") @db.VarChar(500)
+  primaryInformantName String?  @map("primary_informant_name") @db.VarChar(150)
+  housingNotes         String?  @map("housing_notes") @db.Text
+  fallRisk             Boolean? @map("fall_risk")
+  waterSource          String?  @map("water_source") @db.VarChar(100)
+  smokingInHouse       Boolean? @map("smoking_in_house")
+  pets                 String?  @db.VarChar(200)
+  notes                String?  @db.Text
+  updatedAt            DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  encounter Encounter @relation(fields: [encounterId], references: [id], onDelete: Cascade)
+
+  @@map("encounter_home_environments")
 }
 
 model VitalSign {
@@ -1073,6 +1181,7 @@ model VitalSign {
   spo2             Int?
   respiratoryRate  Int?     @map("respiratory_rate")
   weightKg         Decimal? @map("weight_kg") @db.Decimal(5, 1)
+  heightCm         Decimal? @map("height_cm") @db.Decimal(4, 1)
   bloodGlucose     Decimal? @map("blood_glucose") @db.Decimal(5, 2)
   glucoseContext   String?  @map("glucose_context") @db.VarChar(30)
   measurementState String?  @map("measurement_state") @db.VarChar(30)
@@ -1097,10 +1206,11 @@ model Prescription {
   prescribedDate   DateTime           @map("prescribed_date") @db.Date
   validUntil       DateTime?          @map("valid_until") @db.Date
   recipientUserId  String?            @map("recipient_user_id") @db.Uuid
-  instructions     String?            @db.Text
-  clinicalContext  Json?              @map("clinical_context") @db.JsonB
-  recordSnapshot   Json?              @map("record_snapshot") @db.JsonB
-  replacesPrescriptionId String?      @unique @map("replaces_prescription_id") @db.Uuid
+  instructions            String?            @db.Text
+  clinicalContext         Json?              @map("clinical_context") @db.JsonB
+  recordSnapshot          Json?              @map("record_snapshot") @db.JsonB
+  discontinuedMedications Json?              @map("discontinued_medications") @db.JsonB
+  replacesPrescriptionId  String?            @unique @map("replaces_prescription_id") @db.Uuid
   replacementReason String?           @map("replacement_reason") @db.Text
   cancelledAt      DateTime?          @map("cancelled_at") @db.Timestamptz()
   status           PrescriptionStatus @default(ISSUED)
@@ -1130,8 +1240,9 @@ model PrescriptionDetail {
   dosage         String @db.VarChar(50)
   quantity       Int
   unit           String @db.VarChar(30)
-  frequency      String @db.VarChar(100)
-  durationDays   Int    @map("duration_days")
+  frequency      String                 @db.VarChar(100)
+  durationDays   Int                    @map("duration_days")
+  changeType     PrescriptionLineChange @default(NEW) @map("change_type")
 
   // Relations
   prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)

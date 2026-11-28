@@ -25,11 +25,13 @@ const OTHER_FAMILY_ACTOR: AuthenticatedUser = {
 const ADMIN_ACTOR: AuthenticatedUser = {
   id: '33333333-3333-4333-8333-333333333333',
   role: 'ADMIN',
+  familyUnitId: null,
 };
 
 const FACILITY_ACTOR: AuthenticatedUser = {
   id: '44444444-4444-4444-8444-444444444444',
   role: 'HEALTHCARE_FACILITY',
+  familyUnitId: null,
 };
 
 const CONTRACT_ID = '55555555-5555-4555-8555-555555555555';

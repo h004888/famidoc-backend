@@ -52,6 +52,7 @@ function createHarness(visit: any, latestVital: any = null) {
   const prisma: any = {
     encounter: { findFirst: jest.fn().mockResolvedValue(visit) },
     vitalSign: { findFirst: jest.fn().mockResolvedValue(latestVital) },
+    prescription: { findFirst: jest.fn().mockResolvedValue(null) },
     auditLog: { create: jest.fn().mockResolvedValue({ id: 'audit-1' }) },
   };
   const storage: any = {};

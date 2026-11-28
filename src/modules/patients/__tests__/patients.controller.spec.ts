@@ -35,6 +35,8 @@ describe('PatientsController', () => {
     gender: Gender.MALE,
     relationshipToHead: 'CON',
     bloodType: 'O+',
+    heightCm: null,
+    weightKg: null,
     chronicDiseases: null,
     status: 'ACTIVE' as const,
     createdAt: new Date(),
@@ -83,6 +85,10 @@ describe('PatientsController', () => {
       listVitalSigns: jest.fn(),
       updateVitalSign: jest.fn(),
       deleteVitalSign: jest.fn(),
+      addChronicCondition: jest.fn(),
+      listChronicConditions: jest.fn(),
+      updateChronicCondition: jest.fn(),
+      deleteChronicCondition: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -316,6 +322,11 @@ describe('PatientsController', () => {
       spo2: 98,
       respiratoryRate: 16,
       bloodGlucose: 5.4,
+      glucoseContext: null,
+      measurementState: null,
+      weightKg: null,
+      heightCm: null,
+      notes: null,
       isAbnormalAlert: false,
       recordedAt: new Date(),
     };

@@ -1,4 +1,5 @@
 import { ValidationPipe } from '@nestjs/common';
+import { BaseApiException } from '../../../../core/exceptions/api.exception';
 import type { PrismaService } from '../../../../core/database/prisma.service';
 import {
   ReplacePrescriptionDto,
@@ -129,7 +130,10 @@ describe('Prescription safety and versions', () => {
     const { service, tx } = setup();
     await expect(
       service.share(actor, 'visit-1', { ...body, clinicalContext }),
-    ).rejects.toMatchObject({ status: 400 });
+    ).rejects.toMatchObject({
+      status: 422,
+      errorCode: 'VALIDATION_FAILED',
+    });
     expect(tx.prescription.create).not.toHaveBeenCalled();
   });
 
@@ -139,7 +143,11 @@ describe('Prescription safety and versions', () => {
       const { service, visit, tx } = setup();
       visit.participants[0].patient.dateOfBirth = new Date('2025-01-22');
       await expect(service.share(actor, visit.id, body)).rejects.toMatchObject({
-        status: 400,
+        status: 422,
+        errorCode: 'VALIDATION_FAILED',
+        invalidParams: [
+          expect.objectContaining({ field: 'prescription.clinicalContext.weightKg' }),
+        ],
       });
       await service.share(actor, visit.id, {
         ...body,
@@ -190,6 +198,9 @@ describe('Prescription safety and versions', () => {
     expect(patientAgeMonths('2020-11-22', '2026-11-21')).toBe(71);
     expect(patientAgeMonths('2020-11-21', '2026-11-21')).toBe(72);
     expect(patientAgeMonths('2027-01-01', '2026-11-21')).toBeNull();
+    expect(patientAgeMonths(null, '2026-11-21')).toBeNull();
+    expect(patientAgeMonths(undefined, '2026-11-21')).toBeNull();
+    expect(patientAgeMonths('', '2026-11-21')).toBeNull();
   });
 
   it('captures the original header and computes expiry from prescription creation day', async () => {
@@ -276,5 +287,36 @@ describe('Prescription safety and versions', () => {
         { type: 'body', metatype: SharePrescriptionDto },
       ),
     ).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('rejects prescribing with PATIENT_PROFILE_INCOMPLETE when dateOfBirth is null', async () => {
+    const { service, tx } = setup();
+    const visit = await tx.encounter.findFirst();
+    visit.participants[0].patient.dateOfBirth = null;
+    tx.clinicalEmr.findUniqueOrThrow.mockResolvedValue({
+      ...exam,
+      patient: visit.participants[0].patient,
+    });
+
+    const err = await service.share(actor, 'visit-1', body).catch((e) => e);
+    expect(err).toBeInstanceOf(BaseApiException);
+    expect(err).toMatchObject({
+      errorCode: 'PATIENT_PROFILE_INCOMPLETE',
+      conditions: [expect.objectContaining({ code: 'DOB_REQUIRED' })],
+    });
+  });
+
+  it('allows prescribing when gender is null and records gender: null in snapshot', async () => {
+    const { service, tx } = setup();
+    const visit = await tx.encounter.findFirst();
+    visit.participants[0].patient.gender = null;
+    tx.clinicalEmr.findUniqueOrThrow.mockResolvedValue({
+      ...exam,
+      patient: visit.participants[0].patient,
+    });
+
+    await service.share(actor, 'visit-1', body);
+    const saved = tx.prescription.create.mock.calls[0][0].data;
+    expect(saved.recordSnapshot.patient.gender).toBeNull();
   });
 });

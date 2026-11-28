@@ -1,4 +1,6 @@
 import {
+  ConflictException,
+  HttpStatus,
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
@@ -6,9 +8,16 @@ import {
 import type { Prisma } from '@prisma/client';
 import type { AuthenticatedUser } from '../../../core/auth/authenticated-request';
 import { writeBusinessAudit } from '../../../core/business/business-helpers';
+import {
+  EncounterRecordErrorCode,
+  ValidationErrorCode,
+  ValidationIssue,
+} from '../../../core/constants/error-codes.constant';
 import { PrismaService } from '../../../core/database/prisma.service';
+import { BaseApiException } from '../../../core/exceptions/api.exception';
 import { StorageService } from '../../../core/services/storage.service';
 import { validateUploadedDocumentFile } from '../../../core/validation/document-file.validator';
+import type { SaveHomeEnvironmentDto } from '../dtos/home-environment.dto';
 import type { UploadBookDocumentDto } from '../dtos/share-prescription.dto';
 import {
   activePrescribingDoctor,
@@ -630,6 +639,24 @@ export class MedicalBooksService {
 
   async visitDetail(actor: AuthenticatedUser, id: string, patientId?: string) {
     const isDoctor = actor.role === 'DOCTOR';
+    const prescriptionSelect = {
+      id: true,
+      prescriptionCode: true,
+      status: true,
+      instructions: true,
+      clinicalContext: true,
+      prescribedDate: true,
+      validUntil: true,
+      recordSnapshot: true,
+      discontinuedMedications: true,
+      replacementReason: true,
+      replaces: { select: { id: true, prescriptionCode: true } },
+      replacedBy: { select: { id: true, prescriptionCode: true } },
+      details: {
+        omit: { prescriptionId: true, lineNumber: true },
+        orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+      },
+    } satisfies Prisma.PrescriptionSelect;
     const visit = await this.prisma.encounter.findFirst({
       where: { id, ...visitScope(actor) },
       select: {
@@ -671,12 +698,43 @@ export class MedicalBooksService {
             patientId: true,
             patient: { select: { ...patientSelect, familyId: true, gender: true } },
             chiefComplaint: true,
+            anamnesis: true,
+            informantName: true,
+            informantRelation: true,
+            personalHistory: true,
+            familyHistory: true,
+            medicationAdherence: true,
+            generalExam: true,
             clinicalFindings: true,
             icd10Code: true,
             icd10Diagnosis: true,
             treatmentPlan: true,
+            selfCareNotes: true,
+            progression: true,
+            followUpDate: true,
             isFinalized: true,
             finalizedAt: true,
+            diagnoses: {
+              orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+              select: {
+                id: true,
+                icd10Code: true,
+                nameSnapshot: true,
+                isPrimary: true,
+                lineNumber: true,
+              },
+            },
+            homeMedications: {
+              orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+              select: {
+                id: true,
+                medicationName: true,
+                source: true,
+                assessment: true,
+                notes: true,
+                lineNumber: true,
+              },
+            },
             vitalSigns: {
               orderBy: [{ recordedAt: 'desc' }],
               take: 1,
@@ -688,29 +746,14 @@ export class MedicalBooksService {
                 spo2: true,
                 respiratoryRate: true,
                 weightKg: true,
+                heightCm: true,
                 recordedAt: true,
               },
             },
             prescriptions: {
               where: isDoctor ? undefined : { recipientUserId: actor.id },
               orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-              select: {
-                id: true,
-                prescriptionCode: true,
-                status: true,
-                instructions: true,
-                clinicalContext: true,
-                prescribedDate: true,
-                validUntil: true,
-                recordSnapshot: true,
-                replacementReason: true,
-                replaces: { select: { id: true, prescriptionCode: true } },
-                replacedBy: { select: { id: true, prescriptionCode: true } },
-                details: {
-                  omit: { prescriptionId: true, lineNumber: true },
-                  orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
-                },
-              },
+              select: prescriptionSelect,
             },
           },
         },
@@ -740,6 +783,7 @@ export class MedicalBooksService {
         spo2: number | null;
         respiratoryRate: number | null;
         weightKg: unknown;
+        heightCm?: unknown;
         recordedAt: Date;
       },
       source: 'DRAFT' | 'PREVIOUS',
@@ -757,6 +801,12 @@ export class MedicalBooksService {
         row.weightKg !== null && row.weightKg !== undefined
           ? Number(row.weightKg)
           : null,
+      ...(row.heightCm !== undefined
+        ? {
+            heightCm:
+              row.heightCm !== null ? Number(row.heightCm) : null,
+          }
+        : {}),
       recordedAt: row.recordedAt,
       source,
     });
@@ -776,6 +826,7 @@ export class MedicalBooksService {
           spo2: true,
           respiratoryRate: true,
           weightKg: true,
+          heightCm: true,
           recordedAt: true,
         },
       });
@@ -783,6 +834,32 @@ export class MedicalBooksService {
         vitals = mapVitals(previousVital, 'PREVIOUS');
       }
     }
+    // Đơn đang dùng = đơn ISSUED gần nhất của người bệnh ở lần khám trước,
+    // chưa bị đơn nào thay (replacedBy = null). Dùng để kê đơn nối tiếp.
+    const activePrescriptionRecord = isDoctor
+      ? await this.prisma.prescription.findFirst({
+          where: {
+            status: 'ISSUED',
+            replacedBy: { is: null },
+            clinicalEmr: {
+              patientId: resolvedPatient.id,
+              encounterId: { not: visit.id },
+            },
+          },
+          orderBy: [{ prescribedDate: 'desc' }, { createdAt: 'desc' }],
+          select: {
+            id: true,
+            prescriptionCode: true,
+            status: true,
+            prescribedDate: true,
+            validUntil: true,
+            details: {
+              omit: { prescriptionId: true, lineNumber: true },
+              orderBy: [{ lineNumber: 'asc' }, { id: 'asc' }],
+            },
+          },
+        })
+      : null;
     if (clinicalEmr) {
       await writeBusinessAudit(
         this.prisma,
@@ -791,6 +868,38 @@ export class MedicalBooksService {
         'ClinicalEmr',
         clinicalEmr.id,
       );
+    }
+    const sameEmrHistory = clinicalEmr?.prescriptions.slice(1) ?? [];
+    const seenIds = new Set<string>();
+    const sameEmrById = new Map<string, NonNullable<typeof prescription>>();
+    if (prescription) {
+      seenIds.add(prescription.id);
+    }
+    for (const item of sameEmrHistory) {
+      seenIds.add(item.id);
+      sameEmrById.set(item.id, item);
+    }
+    const chainedPredecessors: NonNullable<typeof prescription>[] = [];
+    let cursorReplacesId: string | null = prescription?.replaces?.id ?? null;
+    while (cursorReplacesId && chainedPredecessors.length < 10) {
+      if (seenIds.has(cursorReplacesId)) {
+        const inSameEmr = sameEmrById.get(cursorReplacesId);
+        if (!inSameEmr) break;
+        cursorReplacesId = inSameEmr.replaces?.id ?? null;
+        continue;
+      }
+      const prev = await this.prisma.prescription.findFirst({
+        where: {
+          id: cursorReplacesId,
+          clinicalEmr: { patientId: resolvedPatient.id },
+          ...(isDoctor ? {} : { recipientUserId: actor.id }),
+        },
+        select: prescriptionSelect,
+      });
+      if (!prev) break;
+      seenIds.add(prev.id);
+      chainedPredecessors.push(prev);
+      cursorReplacesId = prev.replaces?.id ?? null;
     }
     const prescriptionView = (record: NonNullable<typeof prescription>) => ({
       ...record,
@@ -827,16 +936,308 @@ export class MedicalBooksService {
       exam: clinicalEmr
         ? {
             chiefComplaint: clinicalEmr.chiefComplaint,
+            anamnesis: clinicalEmr.anamnesis ?? null,
+            informantName: clinicalEmr.informantName ?? null,
+            informantRelation: clinicalEmr.informantRelation ?? null,
+            personalHistory: clinicalEmr.personalHistory ?? null,
+            familyHistory: clinicalEmr.familyHistory ?? null,
+            medicationAdherence: clinicalEmr.medicationAdherence ?? null,
+            generalExam: clinicalEmr.generalExam ?? null,
             clinicalFindings: clinicalEmr.clinicalFindings,
             icd10Code: clinicalEmr.icd10Code,
             icd10Diagnosis: clinicalEmr.icd10Diagnosis,
             treatmentPlan: clinicalEmr.treatmentPlan,
+            selfCareNotes: clinicalEmr.selfCareNotes ?? null,
           }
         : null,
+      diagnoses: clinicalEmr?.diagnoses ?? [],
+      homeMedications: clinicalEmr?.homeMedications ?? [],
+      followUpDate: clinicalEmr?.followUpDate ?? null,
+      progression: clinicalEmr?.progression ?? null,
       prescription: prescription ? prescriptionView(prescription) : null,
-      prescriptionHistory:
-        clinicalEmr?.prescriptions.slice(1).map(prescriptionView) ?? [],
+      prescriptionHistory: [...sameEmrHistory, ...chainedPredecessors].map(
+        prescriptionView,
+      ),
+      activePrescription: activePrescriptionRecord,
       vitals,
     };
+  }
+
+  private async resolveDoctorVisit(
+    tx: Prisma.TransactionClient,
+    actor: AuthenticatedUser,
+    encounterId: string,
+  ) {
+    const vietnamNow = new Date(Date.now() + 7 * 60 * 60 * 1000);
+    const visit = await tx.encounter.findFirst({
+      where: {
+        id: encounterId,
+        ...doctorVisitScope(actor.id, vietnamNow),
+      },
+      select: {
+        id: true,
+        contractId: true,
+        encounterStatus: true,
+        contract: { select: { familyId: true } },
+      },
+    });
+    if (!visit) {
+      const pendingVisit = await tx.encounter.findFirst({
+        where: {
+          id: encounterId,
+          doctor: activePrescribingDoctor(actor.id),
+        },
+        select: { encounterStatus: true },
+      });
+      if (pendingVisit?.encounterStatus === 'CONFIRMED') {
+        const msg = 'Chưa đến giờ khám, chưa thể ghi thông tin buổi khám.';
+        throw new BaseApiException({
+          errorCode: EncounterRecordErrorCode.VISIT_NOT_STARTED,
+          status: HttpStatus.CONFLICT,
+          message: msg,
+          detail: msg,
+          conditions: [
+            {
+              code: 'VISIT_NOT_STARTED',
+              condition: 'Buổi khám phải đến giờ bắt đầu',
+              message: msg,
+            },
+          ],
+        });
+      }
+      throw new NotFoundException(
+        'Không tìm thấy buổi khám trong phạm vi của bạn.',
+      );
+    }
+    if (
+      visit.encounterStatus === 'DISPUTED' ||
+      visit.encounterStatus === 'NO_SHOW' ||
+      visit.encounterStatus === 'CANCELLED'
+    ) {
+      throw new ConflictException({
+        code: 'VISIT_LOCKED',
+        message:
+          'Ca khám đang bị khóa (khiếu nại/vắng mặt), không thể ghi thông tin buổi khám.',
+      });
+    }
+    return visit;
+  }
+
+  async homeEnvironment(actor: AuthenticatedUser, encounterId: string) {
+    const visit = await this.prisma.encounter.findFirst({
+      where: {
+        id: encounterId,
+        doctor: activePrescribingDoctor(actor.id),
+      },
+      select: {
+        id: true,
+        homeEnvironment: {
+          select: {
+            id: true,
+            encounterId: true,
+            visitAddress: true,
+            primaryInformantName: true,
+            housingNotes: true,
+            fallRisk: true,
+            waterSource: true,
+            smokingInHouse: true,
+            pets: true,
+            notes: true,
+            updatedAt: true,
+          },
+        },
+        participants: {
+          select: {
+            patientId: true,
+            attendanceStatus: true,
+            absenceReason: true,
+            patient: {
+              select: { id: true, fullName: true },
+            },
+          },
+        },
+      },
+    });
+    if (!visit) {
+      throw new NotFoundException(
+        'Không tìm thấy buổi khám trong phạm vi của bạn.',
+      );
+    }
+    return {
+      encounterId: visit.id,
+      homeEnvironment: visit.homeEnvironment ?? null,
+      participants: visit.participants.map((p) => ({
+        patientId: p.patientId,
+        fullName: p.patient.fullName,
+        attendanceStatus: p.attendanceStatus,
+        absenceReason: p.absenceReason,
+      })),
+    };
+  }
+
+  async saveHomeEnvironment(
+    actor: AuthenticatedUser,
+    encounterId: string,
+    dto: SaveHomeEnvironmentDto,
+  ) {
+    const participantsInput = dto.participants ?? [];
+    for (let i = 0; i < participantsInput.length; i += 1) {
+      const p = participantsInput[i];
+      if (p.attendanceStatus === 'ABSENT') {
+        const reason = (p.absenceReason ?? '').trim();
+        if (reason.length < 3 || reason.length > 255) {
+          throw new BaseApiException({
+            errorCode: ValidationErrorCode.VALIDATION_FAILED,
+            status: HttpStatus.UNPROCESSABLE_ENTITY,
+            message: 'Vui lòng ghi lý do vắng mặt.',
+            detail: 'Vui lòng ghi lý do vắng mặt.',
+            invalidParams: [
+              {
+                field: `participants[${i}].absenceReason`,
+                issue:
+                  reason.length === 0
+                    ? ValidationIssue.REQUIRED
+                    : reason.length < 3
+                      ? ValidationIssue.MIN_LENGTH
+                      : ValidationIssue.MAX_LENGTH,
+                message: 'Vui lòng ghi lý do vắng mặt.',
+              },
+            ],
+          });
+        }
+      }
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const visit = await this.resolveDoctorVisit(tx, actor, encounterId);
+
+      const envFields = [
+        'visitAddress',
+        'primaryInformantName',
+        'housingNotes',
+        'fallRisk',
+        'waterSource',
+        'smokingInHouse',
+        'pets',
+        'notes',
+      ] as const;
+
+      const previousEnv = dto.copyFromPreviousVisit
+        ? await tx.encounterHomeEnvironment.findFirst({
+            where: {
+              encounter: {
+                contractId: visit.contractId,
+                id: { not: encounterId },
+              },
+            },
+            orderBy: [
+              { encounter: { scheduledDate: 'desc' } },
+              { encounter: { scheduledTime: 'desc' } },
+              { updatedAt: 'desc' },
+            ],
+            select: {
+              visitAddress: true,
+              primaryInformantName: true,
+              housingNotes: true,
+              fallRisk: true,
+              waterSource: true,
+              smokingInHouse: true,
+              pets: true,
+              notes: true,
+            },
+          })
+        : null;
+
+      const envPayload: Record<string, unknown> = {};
+      for (const field of envFields) {
+        if (dto[field] !== undefined) {
+          envPayload[field] = dto[field];
+        } else if (previousEnv && previousEnv[field] !== undefined) {
+          envPayload[field] = previousEnv[field];
+        }
+      }
+
+      const homeEnvironment = await tx.encounterHomeEnvironment.upsert({
+        where: { encounterId },
+        create: {
+          encounterId,
+          ...envPayload,
+        },
+        update: envPayload,
+      });
+
+      const savedParticipants = [];
+      if (participantsInput.length > 0) {
+        const patientIds = Array.from(
+          new Set(participantsInput.map((p) => p.patientId)),
+        );
+        const members = await tx.patient.findMany({
+          where: {
+            id: { in: patientIds },
+            familyId: visit.contract.familyId,
+          },
+          select: { id: true },
+        });
+        const memberSet = new Set(members.map((m) => m.id));
+        if (patientIds.some((pid) => !memberSet.has(pid))) {
+          throw new NotFoundException(
+            'Không tìm thấy thành viên trong gia đình của buổi khám này.',
+          );
+        }
+
+        const existingParticipants = await tx.encounterParticipant.findMany({
+          where: {
+            encounterId,
+            patientId: { in: patientIds },
+          },
+          select: { patientId: true, attendanceStatus: true },
+        });
+        const existingMap = new Map(
+          existingParticipants.map((e) => [e.patientId, e.attendanceStatus]),
+        );
+
+        for (const p of participantsInput) {
+          const existingStatus = existingMap.get(p.patientId);
+          if (p.attendanceStatus === 'ABSENT' && existingStatus === 'EXAMINED') {
+            throw new BaseApiException({
+              errorCode: EncounterRecordErrorCode.VISIT_RECORD_LOCKED,
+              status: HttpStatus.CONFLICT,
+              message: 'Thành viên đã được khám, không thể chuyển sang vắng mặt.',
+              detail: 'Thành viên đã được khám, không thể chuyển sang vắng mặt.',
+            });
+          }
+          if (
+            existingStatus === 'EXAMINED' &&
+            (p.attendanceStatus === 'PLANNED' || p.attendanceStatus === 'PRESENT')
+          ) {
+            // Giữ nguyên trạng thái EXAMINED của thành viên đã chốt hồ sơ khám
+            continue;
+          }
+          const absenceReason =
+            p.attendanceStatus === 'ABSENT' ? p.absenceReason!.trim() : null;
+          const saved = await tx.encounterParticipant.upsert({
+            where: {
+              encounterId_patientId: {
+                encounterId,
+                patientId: p.patientId,
+              },
+            },
+            create: {
+              encounterId,
+              patientId: p.patientId,
+              attendanceStatus: p.attendanceStatus,
+              absenceReason,
+            },
+            update: {
+              attendanceStatus: p.attendanceStatus,
+              absenceReason,
+            },
+          });
+          savedParticipants.push(saved);
+        }
+      }
+
+      return { homeEnvironment, participants: savedParticipants };
+    });
   }
 }
